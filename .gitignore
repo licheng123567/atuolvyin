@@ -1,0 +1,51 @@
+# 音频 / 压缩包
+*.rar
+*.zip
+*.mp3
+*.m4a
+*.amr
+*.wav
+*.aac
+*.ogg
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / frontend
+node_modules/
+.next/
+dist/
+.turbo/
+*.tsbuildinfo
+
+# Android
+*.apk
+*.aab
+*.keystore
+*.jks
+.gradle/
+local.properties
+poc/android/.idea/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Claude Code
+.claude/
