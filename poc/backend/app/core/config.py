@@ -6,6 +6,10 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://autoluyin:autoluyin_dev@postgres:5432/autoluyin"
 
+    jwt_secret_key: str = "dev-secret-change-in-prod-must-be-32-chars"
+    jwt_algorithm: str = "HS256"
+    jwt_expires_minutes: int = 1440  # 24 hours
+
     # ==== 录音存储后端：local / minio / oss ====
     storage_backend: str = "local"   # "local" | "minio" | "oss"
 
