@@ -1,7 +1,12 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
 
-from app.api import tasks, calls, devices, recordings
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from app.api import auth, calls, devices, recordings, tasks
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -18,6 +23,47 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ── CORS ─────────────────────────────────────────────────────
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",  # Vite dev server
+        "http://localhost:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ── Error handlers ────────────────────────────────────────────
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    if isinstance(exc.detail, dict):
+        return JSONResponse(status_code=exc.status_code, content=exc.detail)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"code": f"ERR_{exc.status_code}", "message": str(exc.detail)},
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    first = exc.errors()[0] if exc.errors() else {}
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "code": "ERR_VALIDATION",
+            "message": str(first.get("msg", "Validation error")),
+        },
+    )
+
+
+# ── Routers ───────────────────────────────────────────────────
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+# Legacy PoC routers (Sprint 1 migrates these to ORM + /api/v1/ prefix)
 app.include_router(devices.router, prefix="/api/devices", tags=["devices"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(calls.router, prefix="/api/calls", tags=["calls"])
@@ -25,5 +71,5 @@ app.include_router(recordings.router, prefix="/api/recordings", tags=["recording
 
 
 @app.get("/health")
-def health():
+def health() -> dict:
     return {"status": "ok"}

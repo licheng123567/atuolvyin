@@ -31,11 +31,19 @@ def engine(pg_container):
 
 @pytest.fixture
 def db_session(engine):
-    Session = sessionmaker(bind=engine)
+    # Outer connection + transaction: session.commit() hits SAVEPOINT, not real commit.
+    # trans.rollback() at teardown erases all test data regardless of session commits.
+    connection = engine.connect()
+    trans = connection.begin()
+    Session = sessionmaker(bind=connection)
     session = Session()
     yield session
-    session.rollback()
     session.close()
+    try:
+        trans.rollback()  # may already be rolled back if test raised IntegrityError
+    except Exception:
+        pass
+    connection.close()
 
 
 @pytest.fixture
