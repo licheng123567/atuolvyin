@@ -6,6 +6,7 @@ sqlalchemy==2.0.36
 psycopg[binary]==3.2.3
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.0.1  # passlib 1.7.4 is incompatible with bcrypt >= 5.x
 python-multipart==0.0.17
 minio==7.2.10
 oss2==2.19.1
