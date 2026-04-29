@@ -1,0 +1,50 @@
+from __future__ import annotations
+
+from typing import Optional
+
+import sqlalchemy as sa
+from sqlalchemy.orm import Mapped, mapped_column
+
+from .base import Base, TimestampMixin
+
+
+class WorkOrder(Base, TimestampMixin):
+    __tablename__ = "work_order"
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(
+        sa.BigInteger, sa.ForeignKey("tenant.id"), nullable=False
+    )
+    case_id: Mapped[Optional[int]] = mapped_column(
+        sa.BigInteger, sa.ForeignKey("collection_case.id")
+    )
+    call_id: Mapped[Optional[int]] = mapped_column(
+        sa.BigInteger, sa.ForeignKey("call_record.id")
+    )
+    order_type: Mapped[str] = mapped_column(
+        sa.Text, nullable=False
+    )  # quality / reduction / dispute / other
+    description: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    assigned_to: Mapped[Optional[int]] = mapped_column(
+        sa.BigInteger, sa.ForeignKey("user_account.id")
+    )
+    status: Mapped[str] = mapped_column(sa.Text, nullable=False, default="open")
+    resolution: Mapped[Optional[str]] = mapped_column(sa.Text)
+
+
+class LegalCase(Base, TimestampMixin):
+    __tablename__ = "legal_case"
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(
+        sa.BigInteger, sa.ForeignKey("tenant.id"), nullable=False
+    )
+    case_id: Mapped[int] = mapped_column(
+        sa.BigInteger, sa.ForeignKey("collection_case.id"), nullable=False
+    )
+    stage: Mapped[str] = mapped_column(sa.Text, nullable=False, default="pending_eval")
+    amount_disputed: Mapped[Optional[sa.Numeric]] = mapped_column(sa.Numeric(12, 2))
+    lawyer_name: Mapped[Optional[str]] = mapped_column(sa.Text)
+    law_firm: Mapped[Optional[str]] = mapped_column(sa.Text)
+    next_milestone: Mapped[Optional[str]] = mapped_column(sa.Text)
+    notes: Mapped[Optional[str]] = mapped_column(sa.Text)

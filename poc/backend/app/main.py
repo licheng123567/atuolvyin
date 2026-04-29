@@ -8,7 +8,15 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="autoluyin PoC", lifespan=lifespan)
+app = FastAPI(
+    title="有证慧催 API",
+    version="0.1.0",
+    description="autoluyin MVP backend",
+    openapi_url="/api/openapi.json",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    lifespan=lifespan,
+)
 
 app.include_router(devices.router, prefix="/api/devices", tags=["devices"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
