@@ -6,7 +6,7 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
-  const { mutate: login, isLoading } = useLogin<{
+  const { mutate: login, isPending: isLoading } = useLogin<{
     phone: string;
     password: string;
   }>();
