@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>有证慧催 — 项目负责人</title>
+  <link rel="stylesheet" href="assets/design-system.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    .page-section { display: none; }
+    .page-section.active { display: block; }
+
+    /* Recovery progress bar row */
+    .recovery-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--color-neutral-100); }
+    .recovery-row:last-child { border-bottom: none; }
+    .recovery-label { font-size: 13px; color: var(--color-neutral-700); min-width: 80px; }
+    .recovery-bar-wrap { flex: 1; height: 8px; background: var(--color-neutral-100); border-radius: 4px; overflow: hidden; }
+    .recovery-bar-fill { height: 100%; border-radius: 4px; background: var(--color-primary); }
+    .recovery-val { font-size: 13px; font-weight: 600; color: var(--color-neutral-900); min-width: 48px; text-align: right; }
+
+    /* KPI mini cards row */
+    .kpi-row { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .kpi-mini { background: white; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg); padding: 14px 18px; flex: 1; min-width: 120px; box-shadow: var(--shadow-sm); }
+    .kpi-mini-label { font-size: 11.5px; color: var(--color-neutral-500); margin-bottom: 4px; }
+    .kpi-mini-val { font-size: 22px; font-weight: 700; color: var(--color-neutral-900); line-height: 1.2; }
+    .kpi-mini-sub { font-size: 11.5px; color: var(--color-neutral-400); margin-top: 3px; }
+
+    /* Work order status indicator */
+    .wo-status-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; margin: 8px 0; }
+    .wo-seg { height: 100%; }
+
+    /* Legal stage timeline compact */
+    .legal-stage-list { display: flex; flex-direction: column; gap: 0; }
+    .legal-stage-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--color-neutral-100); font-size: 13px; }
+    .legal-stage-row:last-child { border-bottom: none; }
+    .legal-stage-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .legal-stage-name { flex: 1; color: var(--color-neutral-700); }
+    .legal-stage-count { font-weight: 600; color: var(--color-neutral-900); min-width: 36px; text-align: right; }
+    .legal-stage-pct { font-size: 11.5px; color: var(--color-neutral-400); min-width: 40px; text-align: right; }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+
+  <!-- TopBar -->
+  <header class="topbar">
+    <span class="topbar-logo">有证慧催</span>
+    <span class="topbar-sep"></span>
+    <span class="topbar-tenant">A区2026Q2催收</span>
+    <span class="badge badge-blue" style="font-size:12px;">项目负责人</span>
+    <div class="topbar-right">
+      <div class="topbar-icon-btn" title="通知">
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="topbar-avatar">刘</div>
+    </div>
+  </header>
+
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-item active" data-page="pm-overview">
+      <i data-lucide="layout-dashboard"></i>项目总览
+    </div>
+    <div class="sidebar-item" data-page="pm-cases">
+      <i data-lucide="list"></i>案件进展
+    </div>
+    <div class="sidebar-item" data-page="pm-workorders">
+      <i data-lucide="clipboard-list"></i>工单情况
+    </div>
+    <div class="sidebar-item" data-page="pm-legal">
+      <i data-lucide="scale"></i>法务进度
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+
+    <!-- ══════════════ pm-overview ══════════════ -->
+    <section id="pm-overview" class="page-section active">
+      <div class="page-header">
+        <div>
+          <div class="page-title">项目总览</div>
+          <div class="page-subtitle">绿城锦绣物业 · 2026-04-01 至 2026-06-30 · 截至 2026-04-28</div>
+        </div>
+        <div style="font-size:12.5px;color:var(--color-neutral-400);">只读视图 — 数据每 30 分钟更新</div>
+      </div>
+
+      <!-- 核心KPI -->
+      <div class="kpi-row">
+        <div class="kpi-mini">
+          <div class="kpi-mini-label">案件总数</div>
+          <div class="kpi-mini-val">412</div>
+          <div class="kpi-mini-sub">A区Q2物业费</div>
+        </div>
+        <div class="kpi-mini">
+          <div class="kpi-mini-label">已回款案件</div>
+          <div class="kpi-mini-val" style="color:var(--color-success);">156</div>
+          <div class="kpi-mini-sub">回款率 37.9%</div>
+        </div>
+        <div class="kpi-mini">
+          <div class="kpi-mini-label">回款金额</div>
+          <div class="kpi-mini-val" style="font-size:18px;">¥156,800</div>
+          <div class="kpi-mini-sub">目标 ¥420,000</div>
+        </div>
+        <div class="kpi-mini">
+          <div class="kpi-mini-label">本月接通率</div>
+          <div class="kpi-mini-val">74.3%</div>
+          <div class="kpi-mini-sub">↑ 3.1% 较上月</div>
+        </div>
+        <div class="kpi-mini">
+          <div class="kpi-mini-label">转工单</div>
+          <div class="kpi-mini-val">23</div>
+          <div class="kpi-mini-sub">处理中 15</div>
+        </div>
+        <div class="kpi-mini">
+          <div class="kpi-mini-label">转法务</div>
+          <div class="kpi-mini-val">8</div>
+          <div class="kpi-mini-sub">立案 3 · 待评估 5</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <!-- 回款进度 -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">回款进度分布</span>
+            <span style="font-size:12px;color:var(--color-neutral-400);">按欠款金额段</span>
+          </div>
+          <div class="card-body">
+            <!-- 总进度条 -->
+            <div style="margin-bottom:16px;">
+              <div style="display:flex;justify-content:space-between;font-size:12.5px;color:var(--color-neutral-600);margin-bottom:6px;">
+                <span>总体回款进度</span>
+                <span style="font-weight:600;color:var(--color-primary);">37.9%</span>
+              </div>
+              <div style="height:12px;background:var(--color-neutral-100);border-radius:6px;overflow:hidden;">
+                <div style="width:37.9%;height:100%;background:var(--color-primary);border-radius:6px;"></div>
+              </div>
+              <div style="font-size:11.5px;color:var(--color-neutral-400);margin-top:4px;">¥156,800 / ¥413,600 目标回款</div>
+            </div>
+            <div class="legal-stage-list">
+              <div class="recovery-row">
+                <span class="recovery-label">500元以下</span>
+                <div class="recovery-bar-wrap"><div class="recovery-bar-fill" style="width:62%;"></div></div>
+                <span class="recovery-val" style="color:var(--color-success);">62%</span>
+              </div>
+              <div class="recovery-row">
+                <span class="recovery-label">500~2000元</span>
+                <div class="recovery-bar-wrap"><div class="recovery-bar-fill" style="width:41%;"></div></div>
+                <span class="recovery-val">41%</span>
+              </div>
+              <div class="recovery-row">
+                <span class="recovery-label">2000~5000元</span>
+                <div class="recovery-bar-wrap"><div class="recovery-bar-fill" style="width:28%;"></div></div>
+                <span class="recovery-val" style="color:var(--color-warning);">28%</span>
+              </div>
+              <div class="recovery-row">
+                <span class="recovery-label">5000元以上</span>
+                <div class="recovery-bar-wrap"><div class="recovery-bar-fill" style="width:12%;background:var(--color-danger);"></div></div>
+                <span class="recovery-val" style="color:var(--color-danger);">12%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 近30天趋势 -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">近30天日回款趋势</span>
+            <span style="font-size:12px;color:var(--color-neutral-400);">按承诺付款日统计</span>
+          </div>
+          <div class="card-body">
+            <div style="display:flex;align-items:flex-end;gap:5px;height:100px;padding-bottom:4px;margin-bottom:8px;">
+              <!-- 简易条形图，高度按相对值 -->
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+                <div style="flex:1;width:100%;display:flex;align-items:flex-end;">
+                  <div style="width:100%;height:30%;background:#dbeafe;border-radius:3px 3px 0 0;"><div style="height:70%;background:var(--color-primary);border-radius:3px 3px 0 0;"></div></div>
+                </div>
+                <span style="font-size:10px;color:#9ca3af;">3/30</span>
+              </div>
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+                <div style="flex:1;width:100%;display:flex;align-items:flex-end;">
+                  <div style="width:100%;height:45%;background:#dbeafe;border-radius:3px 3px 0 0;"><div style="height:60%;background:var(--color-primary);border-radius:3px 3px 0 0;"></div></div>
+                </div>
+                <span style="font-size:10px;color:#9ca3af;">4/5</span>
+              </div>
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+                <div style="flex:1;width:100%;display:flex;align-items:flex-end;">
+                  <div style="width:100%;height:38%;background:#dbeafe;border-radius:3px 3px 0 0;"><div style="height:75%;background:var(--color-primary);border-radius:3px 3px 0 0;"></div></div>
+                </div>
+                <span style="font-size:10px;color:#9ca3af;">4/10</span>
+              </div>
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+                <div style="flex:1;width:100%;display:flex;align-items:flex-end;">
+                  <div style="width:100%;height:55%;background:#dbeafe;border-radius:3px 3px 0 0;"><div style="height:80%;background:var(--color-primary);border-radius:3px 3px 0 0;"></div></div>
+                </div>
+                <span style="font-size:10px;color:#9ca3af;">4/15</span>
+              </div>
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+                <div style="flex:1;width:100%;display:flex;align-items:flex-end;">
+                  <div style="width:100%;height:70%;background:#dbeafe;border-radius:3px 3px 0 0;"><div style="height:85%;background:var(--color-primary);border-radius:3px 3px 0 0;"></div></div>
+                </div>
+                <span style="font-size:10px;color:#9ca3af;">4/20</span>
+              </div>
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+                <div style="flex:1;width:100%;display:flex;align-items:flex-end;">
+                  <div style="width:100%;height:62%;background:#dbeafe;border-radius:3px 3px 0 0;"><div style="height:90%;background:var(--color-primary);border-radius:3px 3px 0 0;"></div></div>
+                </div>
+                <span style="font-size:10px;color:#9ca3af;">4/25</span>
+              </div>
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+                <div style="flex:1;width:100%;display:flex;align-items:flex-end;">
+                  <div style="width:100%;height:48%;background:#dbeafe;border-radius:3px 3px 0 0;"><div style="height:65%;background:var(--color-primary);border-radius:3px 3px 0 0;"></div></div>
+                </div>
+                <span style="font-size:10px;color:#9ca3af;">4/28</span>
+              </div>
+            </div>
+            <div style="display:flex;gap:12px;font-size:12px;color:var(--color-neutral-500);">
+              <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:var(--color-primary);border-radius:2px;display:inline-block;"></span>实际回款</span>
+              <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:#dbeafe;border-radius:2px;display:inline-block;"></span>承诺金额</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 快速跳转 -->
+      <div style="display:flex;gap:12px;margin-top:4px;flex-wrap:wrap;">
+        <button class="btn btn-secondary" onclick="document.querySelector('[data-page=pm-workorders]').click()">
+          <i data-lucide="clipboard-list" style="width:14px;height:14px;"></i>查看工单情况（23条）
+        </button>
+        <button class="btn btn-secondary" onclick="document.querySelector('[data-page=pm-legal]').click()">
+          <i data-lucide="scale" style="width:14px;height:14px;"></i>查看法务进度（8条）
+        </button>
+        <button class="btn btn-secondary" onclick="document.querySelector('[data-page=pm-cases]').click()">
+          <i data-lucide="list" style="width:14px;height:14px;"></i>查看案件列表（412条）
+        </button>
+      </div>
+    </section>
+
+    <!-- ══════════════ pm-cases ══════════════ -->
+    <section id="pm-cases" class="page-section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">案件进展</div>
+          <div class="page-subtitle">A区2026Q2催收 · 共 412 个案件 · 只读视图</div>
+        </div>
+        <button class="btn btn-secondary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          导出 Excel
+        </button>
+      </div>
+
+      <!-- 案件状态汇总 -->
+      <div class="stat-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:20px;">
+        <div class="stat-card"><div class="stat-label">未处理</div><div class="stat-value" style="font-size:22px;">187</div><div class="stat-change neutral">45.4%</div></div>
+        <div class="stat-card"><div class="stat-label">跟进中</div><div class="stat-value" style="font-size:22px;">61</div><div class="stat-change neutral">14.8%</div></div>
+        <div class="stat-card"><div class="stat-label">承诺缴费</div><div class="stat-value" style="font-size:22px;">8</div><div class="stat-change neutral">1.9%</div></div>
+        <div class="stat-card"><div class="stat-label">已回款</div><div class="stat-value" style="font-size:22px;color:var(--color-success);">156</div><div class="stat-change neutral">37.9%</div></div>
+        <div class="stat-card"><div class="stat-label">无法联系</div><div class="stat-value" style="font-size:22px;color:var(--color-warning);">31</div><div class="stat-change neutral">7.5%</div></div>
+      </div>
+
+      <div class="table-wrap">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:10px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input class="form-control" placeholder="搜索业主姓名 / 手机" style="padding-left:34px;">
+          </div>
+          <select class="form-control" style="width:110px;">
+            <option>全部状态</option><option>未处理</option><option>跟进中</option><option>承诺缴费</option><option>已回款</option><option>无法联系</option>
+          </select>
+          <select class="form-control" style="width:120px;">
+            <option>全部金额段</option><option>500元以下</option><option>500~2000元</option><option>2000~5000元</option><option>5000元以上</option>
+          </select>
+        </div>
+        <table>
+          <thead>
+            <tr><th>业主</th><th>欠款金额</th><th>欠款期数</th><th>催收员</th><th>通话次数</th><th>最近联系</th><th>状态</th><th>备注</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><div style="font-weight:600;">张大伟</div><div style="font-size:12px;color:#6b7280;">A区3栋802</div></td>
+              <td style="font-weight:600;">¥3,840</td>
+              <td>8期</td>
+              <td>李小红</td>
+              <td>4次</td>
+              <td style="font-size:12px;color:#6b7280;">2026-04-28</td>
+              <td><span class="badge badge-orange">跟进中</span></td>
+              <td style="font-size:12px;color:#6b7280;">下月有望还款</td>
+            </tr>
+            <tr>
+              <td><div style="font-weight:600;">刘美华</div><div style="font-size:12px;color:#6b7280;">A区1栋201</div></td>
+              <td style="font-weight:600;">¥1,200</td>
+              <td>3期</td>
+              <td>张建华</td>
+              <td>2次</td>
+              <td style="font-size:12px;color:#6b7280;">2026-04-27</td>
+              <td><span class="badge badge-gray">未处理</span></td>
+              <td style="font-size:12px;color:#6b7280;"></td>
+            </tr>
+            <tr>
+              <td><div style="font-weight:600;">王建国</div><div style="font-size:12px;color:#6b7280;">A区5栋1104</div></td>
+              <td style="font-weight:600;">¥6,720</td>
+              <td>14期</td>
+              <td>王芳芳</td>
+              <td>7次</td>
+              <td style="font-size:12px;color:#6b7280;">2026-04-26</td>
+              <td><span class="badge badge-red">无法联系</span></td>
+              <td style="font-size:12px;color:#6b7280;">已转工单</td>
+            </tr>
+            <tr>
+              <td><div style="font-weight:600;">陈小燕</div><div style="font-size:12px;color:#6b7280;">A区2栋301</div></td>
+              <td style="font-weight:600;">¥480</td>
+              <td>1期</td>
+              <td>李小红</td>
+              <td>1次</td>
+              <td style="font-size:12px;color:#6b7280;">2026-04-25</td>
+              <td><span class="badge badge-blue">承诺缴费</span></td>
+              <td style="font-size:12px;color:#6b7280;">承诺2026-05-01前付</td>
+            </tr>
+            <tr>
+              <td><div style="font-weight:600;">赵明轩</div><div style="font-size:12px;color:#6b7280;">A区4栋601</div></td>
+              <td style="font-weight:600;">¥960</td>
+              <td>2期</td>
+              <td>陈明远</td>
+              <td>3次</td>
+              <td style="font-size:12px;color:#6b7280;">2026-04-24</td>
+              <td><span class="badge badge-green">已回款</span></td>
+              <td style="font-size:12px;color:#6b7280;"></td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;font-size:13px;color:var(--color-neutral-500);border-top:1px solid var(--color-neutral-100);">
+          <span>显示第 1–5 条，共 412 条</span>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-ghost btn-sm" disabled>上一页</button>
+            <button class="btn btn-secondary btn-sm">1</button>
+            <button class="btn btn-ghost btn-sm">2</button>
+            <button class="btn btn-ghost btn-sm">3</button>
+            <span style="padding:0 4px;">...</span>
+            <button class="btn btn-ghost btn-sm">83</button>
+            <button class="btn btn-ghost btn-sm">下一页</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ pm-workorders ══════════════ -->
+    <section id="pm-workorders" class="page-section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">工单情况</div>
+          <div class="page-subtitle">A区2026Q2催收 · 共 23 条工单 · 只读视图</div>
+        </div>
+        <button class="btn btn-secondary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          导出 Excel
+        </button>
+      </div>
+
+      <!-- 工单状态汇总 -->
+      <div class="two-col" style="margin-bottom:20px;">
+        <div class="card">
+          <div class="card-header"><span class="card-title">工单状态分布</span></div>
+          <div class="card-body">
+            <div class="wo-status-bar" style="margin-bottom:10px;">
+              <div class="wo-seg" style="width:65%;background:#1A56DB;" title="处理中"></div>
+              <div class="wo-seg" style="width:22%;background:#059669;" title="已完结"></div>
+              <div class="wo-seg" style="width:8%;background:#d97706;" title="待回复"></div>
+              <div class="wo-seg" style="width:5%;background:#e5e7eb;" title="已关闭"></div>
+            </div>
+            <div style="display:flex;gap:16px;font-size:12.5px;flex-wrap:wrap;">
+              <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;background:#1A56DB;border-radius:2px;display:inline-block;"></span>处理中 15</span>
+              <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;background:#059669;border-radius:2px;display:inline-block;"></span>已完结 5</span>
+              <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;background:#d97706;border-radius:2px;display:inline-block;"></span>待回复 2</span>
+              <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;background:#e5e7eb;border-radius:2px;display:inline-block;"></span>已关闭 1</span>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">工单类型分布</span></div>
+          <div class="card-body">
+            <div class="legal-stage-list">
+              <div class="legal-stage-row">
+                <div class="legal-stage-dot" style="background:#7c3aed;"></div>
+                <span class="legal-stage-name">业主房屋质量投诉</span>
+                <span class="legal-stage-count">9</span>
+                <span class="legal-stage-pct">39%</span>
+              </div>
+              <div class="legal-stage-row">
+                <div class="legal-stage-dot" style="background:#d97706;"></div>
+                <span class="legal-stage-name">经济困难申请减免</span>
+                <span class="legal-stage-count">7</span>
+                <span class="legal-stage-pct">30%</span>
+              </div>
+              <div class="legal-stage-row">
+                <div class="legal-stage-dot" style="background:#1A56DB;"></div>
+                <span class="legal-stage-name">服务纠纷</span>
+                <span class="legal-stage-count">4</span>
+                <span class="legal-stage-pct">17%</span>
+              </div>
+              <div class="legal-stage-row">
+                <div class="legal-stage-dot" style="background:#9ca3af;"></div>
+                <span class="legal-stage-name">其他</span>
+                <span class="legal-stage-count">3</span>
+                <span class="legal-stage-pct">13%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 工单列表 -->
+      <div class="table-wrap">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:10px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input class="form-control" placeholder="搜索工单编号 / 业主姓名" style="padding-left:34px;">
+          </div>
+          <select class="form-control" style="width:110px;">
+            <option>全部状态</option><option>处理中</option><option>已完结</option><option>待回复</option>
+          </select>
+          <select class="form-control" style="width:130px;">
+            <option>全部类型</option><option>质量投诉</option><option>减免申请</option><option>服务纠纷</option>
+          </select>
+        </div>
+        <table>
+          <thead>
+            <tr><th>工单编号</th><th>业主</th><th>类型</th><th>摘要</th><th>创建时间</th><th>负责人</th><th>状态</th><th>最后更新</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="font-family:monospace;font-size:12px;">WO-2604-0023</td>
+              <td>王建国</td>
+              <td><span class="badge badge-purple" style="font-size:11px;">质量投诉</span></td>
+              <td style="font-size:12.5px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">A区5栋外墙渗水问题，多次催缴业主以此为由拒付</td>
+              <td style="font-size:12px;color:#6b7280;">04-20</td>
+              <td>刘婷</td>
+              <td><span class="badge badge-blue">处理中</span></td>
+              <td style="font-size:12px;color:#6b7280;">04-28</td>
+            </tr>
+            <tr>
+              <td style="font-family:monospace;font-size:12px;">WO-2604-0019</td>
+              <td>李广明</td>
+              <td><span class="badge badge-orange" style="font-size:11px;">减免申请</span></td>
+              <td style="font-size:12.5px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">业主反映家庭经济困难，申请延期分期支付</td>
+              <td style="font-size:12px;color:#6b7280;">04-18</td>
+              <td>刘婷</td>
+              <td><span class="badge badge-orange">待回复</span></td>
+              <td style="font-size:12px;color:#6b7280;">04-25</td>
+            </tr>
+            <tr>
+              <td style="font-family:monospace;font-size:12px;">WO-2604-0014</td>
+              <td>孙丽华</td>
+              <td><span class="badge badge-gray" style="font-size:11px;">服务纠纷</span></td>
+              <td style="font-size:12.5px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">业主投诉停车位管理问题，要求抵扣物业费</td>
+              <td style="font-size:12px;color:#6b7280;">04-12</td>
+              <td>刘婷</td>
+              <td><span class="badge badge-green">已完结</span></td>
+              <td style="font-size:12px;color:#6b7280;">04-22</td>
+            </tr>
+            <tr>
+              <td style="font-family:monospace;font-size:12px;">WO-2604-0008</td>
+              <td>张大伟</td>
+              <td><span class="badge badge-purple" style="font-size:11px;">质量投诉</span></td>
+              <td style="font-size:12.5px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">A区3栋楼道照明长期损坏，物业未及时维修</td>
+              <td style="font-size:12px;color:#6b7280;">04-05</td>
+              <td>刘婷</td>
+              <td><span class="badge badge-blue">处理中</span></td>
+              <td style="font-size:12px;color:#6b7280;">04-27</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;font-size:13px;color:var(--color-neutral-500);border-top:1px solid var(--color-neutral-100);">
+          <span>显示第 1–4 条，共 23 条</span>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-ghost btn-sm" disabled>上一页</button>
+            <button class="btn btn-secondary btn-sm">1</button>
+            <button class="btn btn-ghost btn-sm">2</button>
+            <button class="btn btn-ghost btn-sm">下一页</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ pm-legal ══════════════ -->
+    <section id="pm-legal" class="page-section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">法务进度</div>
+          <div class="page-subtitle">A区2026Q2催收 · 共 8 条法务案件 · 只读视图</div>
+        </div>
+        <button class="btn btn-secondary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          导出 Excel
+        </button>
+      </div>
+
+      <!-- 法务阶段汇总 -->
+      <div class="two-col" style="margin-bottom:20px;">
+        <div class="card">
+          <div class="card-header"><span class="card-title">案件阶段分布</span><span style="font-size:12px;color:var(--color-neutral-400);">共 8 条</span></div>
+          <div class="card-body">
+            <div class="legal-stage-list">
+              <div class="legal-stage-row">
+                <div class="legal-stage-dot" style="background:#9ca3af;"></div>
+                <span class="legal-stage-name">待评估</span>
+                <span class="legal-stage-count">3</span>
+                <span class="legal-stage-pct">37.5%</span>
+              </div>
+              <div class="legal-stage-row">
+                <div class="legal-stage-dot" style="background:#7c3aed;"></div>
+                <span class="legal-stage-name">已立案</span>
+                <span class="legal-stage-count">3</span>
+                <span class="legal-stage-pct">37.5%</span>
+              </div>
+              <div class="legal-stage-row">
+                <div class="legal-stage-dot" style="background:#1A56DB;"></div>
+                <span class="legal-stage-name">开庭中</span>
+                <span class="legal-stage-count">1</span>
+                <span class="legal-stage-pct">12.5%</span>
+              </div>
+              <div class="legal-stage-row">
+                <div class="legal-stage-dot" style="background:#059669;"></div>
+                <span class="legal-stage-name">已判决/执行</span>
+                <span class="legal-stage-count">1</span>
+                <span class="legal-stage-pct">12.5%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">涉案金额汇总</span></div>
+          <div class="card-body">
+            <div class="kpi-row" style="flex-direction:column;gap:8px;">
+              <div style="display:flex;justify-content:space-between;font-size:13.5px;padding:8px 0;border-bottom:1px solid var(--color-neutral-100);">
+                <span style="color:var(--color-neutral-600);">涉案总金额</span>
+                <span style="font-weight:700;font-size:16px;">¥52,640</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--color-neutral-100);">
+                <span style="color:var(--color-neutral-500);">已执行回款</span>
+                <span style="font-weight:600;color:var(--color-success);">¥8,200</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--color-neutral-100);">
+                <span style="color:var(--color-neutral-500);">判决中金额</span>
+                <span style="font-weight:600;color:var(--color-primary);">¥14,800</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;">
+                <span style="color:var(--color-neutral-500);">待评估金额</span>
+                <span style="font-weight:600;color:var(--color-neutral-500);">¥29,640</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 法务案件列表 -->
+      <div class="table-wrap">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:10px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input class="form-control" placeholder="搜索案件编号 / 业主姓名" style="padding-left:34px;">
+          </div>
+          <select class="form-control" style="width:130px;">
+            <option>全部阶段</option><option>待评估</option><option>已立案</option><option>开庭中</option><option>已判决</option>
+          </select>
+        </div>
+        <table>
+          <thead>
+            <tr><th>案件编号</th><th>业主</th><th>欠款金额</th><th>欠款期数</th><th>当前阶段</th><th>转入法务日期</th><th>律师</th><th>下次关键节点</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="font-family:monospace;font-size:12px;">LG-2604-001</td>
+              <td>王建国</td>
+              <td style="font-weight:600;">¥6,720</td>
+              <td>14期</td>
+              <td><span class="badge badge-blue" style="font-size:11px;">开庭中</span></td>
+              <td style="font-size:12px;color:#6b7280;">2026-03-15</td>
+              <td>李律师（盛和律所）</td>
+              <td style="font-size:12px;color:#d97706;font-weight:600;">2026-05-08 开庭</td>
+            </tr>
+            <tr>
+              <td style="font-family:monospace;font-size:12px;">LG-2604-002</td>
+              <td>赵振宇</td>
+              <td style="font-weight:600;">¥9,600</td>
+              <td>20期</td>
+              <td><span class="badge badge-purple" style="font-size:11px;">已立案</span></td>
+              <td style="font-size:12px;color:#6b7280;">2026-04-01</td>
+              <td>李律师（盛和律所）</td>
+              <td style="font-size:12px;color:#6b7280;">等待法院排期</td>
+            </tr>
+            <tr>
+              <td style="font-family:monospace;font-size:12px;">LG-2604-003</td>
+              <td>钱国强</td>
+              <td style="font-weight:600;">¥4,320</td>
+              <td>9期</td>
+              <td><span class="badge badge-purple" style="font-size:11px;">已立案</span></td>
+              <td style="font-size:12px;color:#6b7280;">2026-04-10</td>
+              <td>陈律师（盛和律所）</td>
+              <td style="font-size:12px;color:#6b7280;">等待法院排期</td>
+            </tr>
+            <tr>
+              <td style="font-family:monospace;font-size:12px;">LG-2604-004</td>
+              <td>孙建平</td>
+              <td style="font-weight:600;">¥8,200</td>
+              <td>17期</td>
+              <td><span class="badge badge-green" style="font-size:11px;">已执行</span></td>
+              <td style="font-size:12px;color:#6b7280;">2026-01-20</td>
+              <td>李律师（盛和律所）</td>
+              <td style="font-size:12px;color:var(--color-success);font-weight:600;">2026-04-20 已回款 ¥8,200</td>
+            </tr>
+            <tr>
+              <td style="font-family:monospace;font-size:12px;">LG-2604-005</td>
+              <td>周晓丽</td>
+              <td style="font-weight:600;">¥5,760</td>
+              <td>12期</td>
+              <td><span class="badge badge-gray" style="font-size:11px;">待评估</span></td>
+              <td style="font-size:12px;color:#6b7280;">2026-04-22</td>
+              <td>待分配</td>
+              <td style="font-size:12px;color:#6b7280;">律师评估中</td>
+            </tr>
+            <tr>
+              <td style="font-family:monospace;font-size:12px;">LG-2604-006</td>
+              <td>吴长远</td>
+              <td style="font-weight:600;">¥11,040</td>
+              <td>23期</td>
+              <td><span class="badge badge-gray" style="font-size:11px;">待评估</span></td>
+              <td style="font-size:12px;color:#6b7280;">2026-04-25</td>
+              <td>待分配</td>
+              <td style="font-size:12px;color:#6b7280;">律师评估中</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;font-size:13px;color:var(--color-neutral-500);border-top:1px solid var(--color-neutral-100);">
+          <span>显示第 1–6 条，共 8 条</span>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-ghost btn-sm" disabled>上一页</button>
+            <button class="btn btn-secondary btn-sm">1</button>
+            <button class="btn btn-ghost btn-sm">下一页</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+lucide.createIcons();
+document.querySelectorAll('.sidebar-item[data-page]').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+    document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
+    item.classList.add('active');
+    document.getElementById(item.dataset.page).classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

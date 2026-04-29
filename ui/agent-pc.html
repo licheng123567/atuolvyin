@@ -1,0 +1,2075 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>有证慧催 — 催收工作台</title>
+  <link rel="stylesheet" href="assets/design-system.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    /* ── Workstation Layout Override ────────────────── */
+    #workstation.active {
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+      overflow: hidden;
+      height: calc(100vh - var(--topbar-height));
+    }
+    .workstation-grid {
+      display: grid;
+      grid-template-columns: 280px 240px 1fr 340px;
+      gap: 0;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* ── Scrollbar unified style ─────────────────────── */
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: #cbd5e1 transparent;
+    }
+    *::-webkit-scrollbar { width: 5px; height: 5px; }
+    *::-webkit-scrollbar-track { background: transparent; }
+    *::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+    /* ══════════════════════════════════════════════════
+       LEFT COLUMN: 浅色案件列表
+    ══════════════════════════════════════════════════ */
+    .col-cases {
+      border-right: 1px solid #c9d3de;
+      box-shadow: 2px 0 8px rgba(0,0,0,0.06);
+      background: #eef2f7;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 1;
+    }
+    .col-cases-header {
+      padding: 12px;
+      border-bottom: 1px solid #dde3ea;
+    }
+    .col-cases-header .search-box {
+      width: 100%;
+      background: #ffffff;
+      border-radius: var(--radius-md);
+      border: 1px solid #d0d7de;
+      position: relative;
+    }
+    .col-cases-header .search-box svg {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      stroke: var(--color-neutral-400, #94a3b8);
+    }
+    .col-cases-header .search-box input {
+      min-width: unset;
+      width: 100%;
+      padding: 7px 10px 7px 34px;
+      background: transparent;
+      border: none;
+      color: var(--color-neutral-900);
+      font-size: 13px;
+    }
+    .col-cases-header .search-box input::placeholder {
+      color: var(--color-neutral-400, #94a3b8);
+    }
+    .col-cases-header .search-box input:focus {
+      outline: none;
+      box-shadow: none;
+    }
+    .cases-meta-bar {
+      padding: 8px 12px 4px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #dde3ea;
+    }
+    .cases-meta-bar span {
+      font-size: 12px;
+      color: var(--color-neutral-600);
+    }
+    .cases-meta-bar strong {
+      color: var(--color-neutral-900);
+    }
+    .cases-meta-bar select {
+      background: #f8fafc;
+      border: 1px solid var(--color-neutral-200);
+      color: var(--color-neutral-700);
+      font-size: 12px;
+      padding: 3px 6px;
+      border-radius: 4px;
+    }
+    .case-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+    .case-card {
+      padding: 11px 12px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      margin-bottom: 4px;
+      border: 1px solid transparent;
+      border-left: 3px solid transparent;
+      transition: all 0.15s;
+    }
+    .case-card:hover {
+      background: rgba(255,255,255,0.7);
+      border-color: #d8dfe7;
+    }
+    .case-card.active {
+      background: #ffffff;
+      border-color: #c6d6f0;
+      border-left: 3px solid var(--color-primary, #1A56DB);
+      box-shadow: 0 1px 4px rgba(26,86,219,0.08);
+    }
+    .case-card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 5px;
+    }
+    .case-owner-name {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--color-neutral-900);
+    }
+    .case-amount {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--color-danger, #dc2626);
+    }
+    .case-card-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .case-room {
+      font-size: 12px;
+      color: var(--color-neutral-600);
+      margin-bottom: 5px;
+    }
+    .case-phone {
+      font-size: 12px;
+      color: var(--color-neutral-600);
+      font-family: var(--font-mono);
+    }
+
+    /* ══════════════════════════════════════════════════
+       2nd COLUMN: 案件画像 (240px)
+    ══════════════════════════════════════════════════ */
+    .col-profile {
+      border-right: 1px solid #e8ecf1;
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #cbd5e1 transparent;
+    }
+
+    /* ══════════════════════════════════════════════════
+       MIDDLE COLUMN: 通话转写
+    ══════════════════════════════════════════════════ */
+    .col-transcript {
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+    .call-control-bar {
+      background: #ffffff;
+      border-bottom: 1px solid #e8ecf1;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    .caller-avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: var(--color-primary);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .call-info-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--color-neutral-900);
+    }
+    .call-info-meta {
+      font-size: 12px;
+      color: var(--color-neutral-600);
+    }
+    .call-duration {
+      background: #eff6ff;
+      color: #1d4ed8;
+      border: 1px solid #bfdbfe;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--font-mono);
+      padding: 3px 10px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .call-duration::before {
+      content: '';
+      width: 7px;
+      height: 7px;
+      background: #3b82f6;
+      border-radius: 50%;
+      animation: blink 1.2s ease-in-out infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .call-ctrl-actions {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ── Recording Mode & Network badges ─────── */
+    .rec-mode-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-size: 11.5px;
+      font-weight: 600;
+    }
+    .rec-mode-badge.live {
+      background: #f0fdf4;
+      color: #057a55;
+      border: 1px solid #bbf7d0;
+    }
+    .rec-mode-badge.degraded {
+      background: #fffbeb;
+      color: #b45309;
+      border: 1px solid #fde68a;
+    }
+    .rec-mode-badge.post {
+      background: #f3f4f6;
+      color: #6b7280;
+      border: 1px solid #e5e7eb;
+    }
+    .network-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-size: 11.5px;
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+    }
+    .signal-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 14px;
+    }
+    .signal-bars span {
+      width: 3px;
+      border-radius: 1px;
+      background: #d1d5db;
+    }
+    .signal-bars span:nth-child(1) { height: 4px; }
+    .signal-bars span:nth-child(2) { height: 7px; }
+    .signal-bars span:nth-child(3) { height: 10px; }
+    .signal-bars span:nth-child(4) { height: 13px; }
+    .signal-bars.good span { background: #059669; }
+    .signal-bars.fair span:nth-child(1),
+    .signal-bars.fair span:nth-child(2) { background: #d97706; }
+    .signal-bars.poor span:nth-child(1) { background: #dc2626; }
+
+    /* Hangup button upgraded */
+    .btn-hangup-red {
+      background: #dc2626;
+      color: white;
+      border: none;
+      box-shadow: 0 2px 6px rgba(220,38,38,0.35);
+    }
+    .btn-hangup-red:hover {
+      background: #b91c1c;
+      box-shadow: 0 3px 8px rgba(220,38,38,0.4);
+    }
+
+    .transcript-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .bubble-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+    }
+    .bubble-row.agent {
+      flex-direction: row-reverse;
+    }
+    .bubble-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--color-primary);
+      color: white;
+      font-size: 11px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .bubble-avatar.owner {
+      background: #94a3b8;
+    }
+    .bubble-meta {
+      font-size: 11px;
+      color: #6b7280;
+      margin-bottom: 3px;
+    }
+    .bubble-row.agent .bubble-meta {
+      text-align: right;
+    }
+    .bubble {
+      max-width: 75%;
+      padding: 10px 14px;
+      border-radius: 14px;
+      font-size: 14px;
+      line-height: 1.55;
+      position: relative;
+    }
+    .bubble.agent {
+      background: #EFF6FF;
+      border: 1px solid #BFDBFE;
+      color: #1e3a5f;
+      border-bottom-right-radius: 4px;
+    }
+    .bubble.owner {
+      background: #F1F5F9;
+      border: 1px solid #E2E8F0;
+      color: #334155;
+      border-bottom-left-radius: 4px;
+    }
+    .bubble-timestamp {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-top: 3px;
+      font-family: var(--font-mono);
+      text-align: right;
+    }
+    .bubble-row .bubble-timestamp {
+      text-align: left;
+    }
+    .typing-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: white;
+      border-radius: 14px;
+      border: 1px solid var(--color-neutral-200);
+      width: fit-content;
+      font-size: 12.5px;
+      color: var(--color-neutral-600);
+    }
+    .typing-dots {
+      display: flex;
+      gap: 3px;
+    }
+    .typing-dots span {
+      width: 5px;
+      height: 5px;
+      background: var(--color-primary);
+      border-radius: 50%;
+      animation: typingBounce 1.2s ease-in-out infinite;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typingBounce {
+      0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+      40% { transform: translateY(-4px); opacity: 1; }
+    }
+
+    /* ── ASR voice typing indicator ──────────────── */
+    @keyframes dot-pulse { 0%,80%,100%{opacity:.3} 40%{opacity:1} }
+    .asr-typing-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #9ca3af;
+      animation: dot-pulse 1.4s infinite;
+    }
+
+    /* ══════════════════════════════════════════════════
+       RIGHT COLUMN: AI 面板 (360px)
+    ══════════════════════════════════════════════════ */
+    .col-ai {
+      border-left: 1px solid #e2e8f0;
+      background: #f7f9fc;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── ① 案件画像卡（顶部固定）──────────────────── */
+    .case-portrait-card {
+      flex-shrink: 0;
+      background: #ffffff;
+      border-bottom: 1px solid #e8ecf1;
+      padding: 14px 16px 12px;
+    }
+    .portrait-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 9px;
+    }
+    .portrait-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 700;
+      color: white;
+      flex-shrink: 0;
+    }
+    .portrait-avatar.overdue-high  { background: #dc2626; }
+    .portrait-avatar.overdue-mid   { background: #f97316; }
+    .portrait-avatar.overdue-low   { background: #3b82f6; }
+    .portrait-identity {
+      flex: 1;
+      min-width: 0;
+    }
+    .portrait-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: #111827;
+      line-height: 1.3;
+    }
+    .portrait-room {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-top: 1px;
+    }
+    .portrait-amount-block {
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .portrait-amount {
+      font-size: 18px;
+      font-weight: 700;
+      color: #dc2626;
+      line-height: 1.2;
+    }
+    .portrait-months {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-top: 1px;
+    }
+    .portrait-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-bottom: 9px;
+    }
+    .portrait-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 7px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 1.5;
+    }
+    .portrait-tag.tag-complaint   { background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; }
+    .portrait-tag.tag-economic    { background: #fefce8; color: #92400e; border: 1px solid #fde68a; }
+    .portrait-tag.tag-noshow      { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+    .portrait-tag.tag-reachable   { background: #f0fdf4; color: #15803d; border: 1px solid #86efac; }
+    .portrait-tag.tag-firsttouch  { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    .portrait-stats {
+      display: flex;
+      gap: 0;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .portrait-stat {
+      flex: 1;
+      text-align: center;
+      padding: 6px 4px;
+      font-size: 11px;
+      color: #6b7280;
+      border-right: 1px solid #e2e8f0;
+    }
+    .portrait-stat:last-child { border-right: none; }
+    .portrait-stat-num {
+      font-size: 14px;
+      font-weight: 700;
+      color: #374151;
+      display: block;
+      line-height: 1.3;
+    }
+
+    /* ── ② 欠费 + 通话记录抽屉（可折叠）──────────── */
+    .detail-drawer {
+      flex-shrink: 0;
+      background: #ffffff;
+      border-bottom: 1px solid #e8ecf1;
+      overflow: hidden;
+      transition: max-height 0.28s ease;
+    }
+    .detail-drawer.collapsed .drawer-body { display: none; }
+    .drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .drawer-header-title {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #374151;
+    }
+    .drawer-toggle-btn {
+      font-size: 11px;
+      color: #6b7280;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .drawer-toggle-btn:hover { background: #f3f4f6; }
+    .drawer-body {
+      padding: 0 16px 12px;
+    }
+
+    /* Arrears mini table */
+    .arrears-table {
+      width: 100%;
+      font-size: 12px;
+      border-collapse: collapse;
+      margin-bottom: 12px;
+    }
+    .arrears-table td {
+      padding: 4px 0;
+      color: #6b7280;
+      vertical-align: top;
+    }
+    .arrears-table td:first-child {
+      color: #9ca3af;
+      width: 68px;
+    }
+    .arrears-table td.amount-cell {
+      font-weight: 600;
+      color: #dc2626;
+    }
+    .arrears-table tr.total-row td {
+      font-weight: 700;
+      color: #111827;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 6px;
+    }
+    .arrears-table tr.total-row td.amount-cell {
+      color: #dc2626;
+    }
+
+    /* Call timeline */
+    .call-timeline-label {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 8px;
+    }
+    .call-timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+    .timeline-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 6px 0;
+      position: relative;
+    }
+    .timeline-item:not(:last-child)::before {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: 18px;
+      bottom: -6px;
+      width: 1px;
+      background: #e2e8f0;
+    }
+    .timeline-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 4px;
+    }
+    .timeline-dot.result-ongoing   { background: #3b82f6; }
+    .timeline-dot.result-missed    { background: #9ca3af; }
+    .timeline-dot.result-followup  { background: #f59e0b; }
+    .timeline-dot.result-promise   { background: #10b981; }
+    .timeline-content {
+      flex: 1;
+      min-width: 0;
+    }
+    .timeline-top {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .timeline-date {
+      font-size: 12px;
+      font-weight: 600;
+      color: #374151;
+      font-family: var(--font-mono);
+    }
+    .timeline-duration {
+      font-size: 11.5px;
+      color: #9ca3af;
+      font-family: var(--font-mono);
+    }
+    .timeline-result-badge {
+      font-size: 10.5px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 10px;
+    }
+    .timeline-result-badge.ongoing  { background: #eff6ff; color: #1d4ed8; }
+    .timeline-result-badge.missed   { background: #f3f4f6; color: #6b7280; }
+    .timeline-result-badge.followup { background: #fffbeb; color: #b45309; }
+    .timeline-result-badge.promise  { background: #f0fdf4; color: #15803d; }
+    .timeline-ai-hint {
+      font-size: 11.5px;
+      color: #6b7280;
+      margin-top: 2px;
+      line-height: 1.5;
+    }
+    .timeline-ai-hint strong { color: #374151; }
+
+    /* ── ③ AI 建议区（可滚动，占据剩余空间）──────── */
+    .ai-scrollable-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 16px;
+    }
+    .ai-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .ai-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--color-neutral-900);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .confidence-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--color-success-light);
+      color: var(--color-success);
+    }
+
+    /* ── Risk Alert Bars ──────────────────────────── */
+    @keyframes pulse-red { 0%,100%{opacity:1} 50%{opacity:.6} }
+    .risk-pulse { animation: pulse-red 1.5s infinite; }
+
+    .risk-bar {
+      border-radius: 6px;
+      padding: 7px 10px;
+      margin-bottom: 8px;
+      font-size: 12.5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .risk-bar .risk-bar-close {
+      margin-left: auto;
+      cursor: pointer;
+      opacity: 0.6;
+      font-size: 15px;
+      line-height: 1;
+      background: none;
+      border: none;
+      padding: 0 2px;
+    }
+    .risk-bar .risk-bar-close:hover { opacity: 1; }
+    .risk-bar.l1 {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      color: #92400e;
+    }
+    .risk-bar.l2 {
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      color: #991b1b;
+    }
+
+    /* AI Suggestion Cards — upgraded color coding */
+    .ai-suggestion-card {
+      border: 1px solid #e2e8f0;
+      border-radius: var(--radius-md);
+      padding: 12px;
+      margin-bottom: 10px;
+      background: white;
+      transition: all 0.3s;
+      overflow: hidden;
+    }
+    .ai-suggestion-card.objection {
+      border-left: 3px solid #3b82f6;
+      background: #f0f9ff;
+    }
+    .ai-suggestion-card.script {
+      border-left: 3px solid #059669;
+      background: #f0fdf4;
+    }
+    .ai-suggestion-card.risk {
+      border-left: 3px solid #f59e0b;
+      background: #fffbeb;
+    }
+    .ai-card-type {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--color-neutral-600);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: 5px;
+    }
+    .ai-card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-neutral-900);
+      margin-bottom: 6px;
+    }
+    .ai-card-body {
+      font-size: 12.5px;
+      color: var(--color-neutral-700);
+      line-height: 1.6;
+      margin-bottom: 6px;
+    }
+    .ai-card-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    /* ── Card confidence & trigger-word row ──── */
+    .ai-card-meta-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .trigger-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      background: #fff7ed;
+      color: #c2410c;
+      border: 1px solid #fed7aa;
+      border-radius: 4px;
+      font-size: 11.5px;
+      padding: 2px 7px;
+    }
+    .confidence-ring {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: var(--color-neutral-600);
+      font-weight: 600;
+    }
+    .confidence-ring .ring-val {
+      background: #eff6ff;
+      color: #1d4ed8;
+      border-radius: 20px;
+      padding: 1px 6px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    /* ── Adopt / dismiss buttons ──────────────── */
+    .adopt-btn {
+      background: #f0fdf4;
+      color: #057a55;
+      border: 1px solid #bbf7d0;
+      flex: 1;
+    }
+    .adopt-btn:hover { background: #dcfce7; }
+    .dismiss-btn {
+      background: #f9fafb;
+      color: #6b7280;
+      border: 1px solid #e5e7eb;
+      flex: 1;
+    }
+    .dismiss-btn:hover { background: #f3f4f6; }
+
+    /* ── ④ 快捷操作底部固定区 ─────────────────────── */
+    .quick-actions-bar {
+      flex-shrink: 0;
+      background: #ffffff;
+      border-top: 1px solid #e2e8f0;
+      padding: 10px 16px;
+      min-height: 52px;
+    }
+    .quick-btn-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+    }
+    .quick-btn {
+      padding: 8px 10px;
+      border-radius: var(--radius-md);
+      border: 1px solid #e2e8f0;
+      background: #f1f5f9;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--color-neutral-700);
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+    }
+    .quick-btn:hover {
+      background: #e2e8f0;
+      border-color: #cbd5e1;
+    }
+    .quick-btn.danger {
+      color: var(--color-danger);
+      border-color: #fca5a5;
+      background: #fef2f2;
+    }
+    .quick-btn.danger:hover {
+      background: #fee2e2;
+    }
+
+    /* ── Workstation: page-section override ─────── */
+    #my-cases.active,
+    #call-history.active,
+    #my-profile.active {
+      display: block;
+      padding: 24px;
+    }
+
+    /* ── Profile Page ─────────────────────────────── */
+    .profile-card {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 24px;
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      margin-bottom: 24px;
+      box-shadow: var(--shadow-sm);
+    }
+    .profile-avatar-lg {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: var(--color-primary);
+      color: white;
+      font-size: 28px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .profile-name {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .profile-meta {
+      font-size: 13px;
+      color: var(--color-neutral-600);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--color-success);
+      display: inline-block;
+    }
+    .status-dot.offline { background: var(--color-neutral-400); }
+
+    /* ── Follow-up note modal ─────────────────────── */
+    .note-form { display: none; }
+
+    /* ── Call history result cell ─────────────────── */
+    .result-success { color: var(--color-success); font-weight: 500; }
+    .result-pending { color: var(--color-warning); font-weight: 500; }
+    .result-fail { color: var(--color-danger); font-weight: 500; }
+
+    /* ── After-call panel ─────────────────────────── */
+    .after-call-panel {
+      position: absolute;
+      bottom: -100%;
+      left: 0; right: 0;
+      background: white;
+      border-top: 2px solid var(--color-primary);
+      padding: 20px;
+      transition: bottom 0.3s ease;
+      z-index: 50;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+      border-radius: 12px 12px 0 0;
+    }
+    .after-call-panel.show { bottom: 0; }
+    .after-call-tag-btn {
+      padding: 7px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--color-neutral-300);
+      background: white;
+      font-size: 12.5px;
+      cursor: pointer;
+      transition: all 0.15s;
+      color: var(--color-neutral-700);
+    }
+    .after-call-tag-btn:hover {
+      border-color: var(--color-primary);
+      color: var(--color-primary);
+      background: var(--color-primary-light);
+    }
+    .after-call-tag-btn.selected {
+      background: var(--color-primary);
+      color: white;
+      border-color: var(--color-primary);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Top Bar ─────────────────────────────────────── -->
+<header class="topbar">
+  <span class="topbar-logo">有证慧催</span>
+  <span class="topbar-sep"></span>
+  <span class="topbar-tenant">绿城锦绣物业</span>
+  <span class="topbar-sep"></span>
+  <span style="font-size:13px;color:var(--color-neutral-600);">催收员</span>
+  <div class="topbar-right">
+    <div style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--color-neutral-700);">
+      <span class="status-dot"></span>在线
+    </div>
+    <div class="topbar-icon-btn" title="通知">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      <span class="badge-dot"></span>
+    </div>
+    <div class="topbar-avatar">刘</div>
+  </div>
+</header>
+
+<!-- ── App Layout ──────────────────────────────────── -->
+<div class="app-layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-item active" data-page="workstation">
+      <i data-lucide="headphones"></i>
+      工作台
+    </div>
+    <div class="sidebar-item" data-page="my-cases">
+      <i data-lucide="clipboard-list"></i>
+      我的案件
+      <span class="sidebar-badge">12</span>
+    </div>
+    <div class="sidebar-item" data-page="call-history">
+      <i data-lucide="phone-call"></i>
+      通话记录
+    </div>
+    <div class="sidebar-item" data-page="my-profile">
+      <i data-lucide="user"></i>
+      个人信息
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content" style="padding:0; overflow:hidden;">
+
+    <!-- ═══════════════════════════════════════════════
+         PAGE 1: 实时通话工作台
+    ════════════════════════════════════════════════ -->
+    <section id="workstation" class="page-section active">
+      <div class="workstation-grid">
+
+        <!-- LEFT: 案件列表 (浅色) -->
+        <div class="col-cases">
+          <div class="col-cases-header">
+            <div class="search-box" style="width:100%;position:relative;">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);stroke:#94a3b8;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" placeholder="搜索业主/楼栋..." style="min-width:unset;width:100%;padding:7px 10px 7px 34px;background:transparent;border:none;border-radius:6px;color:var(--color-neutral-900);font-size:13px;outline:none;">
+            </div>
+          </div>
+          <div class="cases-meta-bar">
+            <span>今日分配 <strong>18</strong> 件</span>
+            <select>
+              <option>全部状态</option>
+              <option>待跟进</option>
+              <option>通话中</option>
+            </select>
+          </div>
+          <div class="case-list">
+
+            <!-- Case 1 (ACTIVE) -->
+            <div class="case-card active">
+              <div class="case-card-top">
+                <span class="case-owner-name">张建国</span>
+                <span class="case-amount">¥3,200</span>
+              </div>
+              <div class="case-room">3栋2单元1201室</div>
+              <div class="case-card-bottom">
+                <span class="case-phone">138****4521</span>
+                <span class="badge badge-red">通话中</span>
+              </div>
+            </div>
+
+            <!-- Case 2 -->
+            <div class="case-card">
+              <div class="case-card-top">
+                <span class="case-owner-name">李秀梅</span>
+                <span class="case-amount">¥1,800</span>
+              </div>
+              <div class="case-room">1栋3单元502室</div>
+              <div class="case-card-bottom">
+                <span class="case-phone">135****8872</span>
+                <span class="badge badge-orange">待跟进</span>
+              </div>
+            </div>
+
+            <!-- Case 3 -->
+            <div class="case-card">
+              <div class="case-card-top">
+                <span class="case-owner-name">王大军</span>
+                <span class="case-amount">¥5,400</span>
+              </div>
+              <div class="case-room">5栋1单元303室</div>
+              <div class="case-card-bottom">
+                <span class="case-phone">186****2033</span>
+                <span class="badge badge-orange">承诺缴费</span>
+              </div>
+            </div>
+
+            <!-- Case 4 -->
+            <div class="case-card">
+              <div class="case-card-top">
+                <span class="case-owner-name">陈丽华</span>
+                <span class="case-amount">¥2,400</span>
+              </div>
+              <div class="case-room">2栋4单元801室</div>
+              <div class="case-card-bottom">
+                <span class="case-phone">159****6610</span>
+                <span class="badge badge-gray">未接通</span>
+              </div>
+            </div>
+
+            <!-- Case 5 -->
+            <div class="case-card">
+              <div class="case-card-top">
+                <span class="case-owner-name">周明亮</span>
+                <span class="case-amount">¥6,000</span>
+              </div>
+              <div class="case-room">4栋2单元1001室</div>
+              <div class="case-card-bottom">
+                <span class="case-phone">177****9901</span>
+                <span class="badge badge-purple">升级处理</span>
+              </div>
+            </div>
+
+            <!-- Case 6: 频次已达上限 -->
+            <div class="case-card" style="opacity:0.55; cursor:not-allowed;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span class="case-owner-name">何敏华</span>
+                <span style="font-size:12px;color:#f87171;">&#128274; 今日已达上限</span>
+              </div>
+              <div class="case-room">4栋2002 · ¥18,480</div>
+              <div style="background:rgba(254,242,242,0.15);border:1px solid rgba(252,165,165,0.3);border-radius:4px;padding:4px 8px;margin-top:6px;font-size:11.5px;color:#f87171;">
+                今日联系次数已达上限（2次/天），明日 09:00 后可继续拨打
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- PROFILE: 案件画像 (240px) -->
+        <div class="col-profile">
+
+          <!-- 画像卡 -->
+          <div class="case-portrait-card">
+            <div class="portrait-top">
+              <div class="portrait-avatar overdue-high">张</div>
+              <div class="portrait-identity">
+                <div class="portrait-name">张建国</div>
+                <div class="portrait-room">3栋2单元1201室 · 138****4521</div>
+              </div>
+              <div class="portrait-amount-block">
+                <div class="portrait-amount">¥3,200</div>
+                <div class="portrait-months">欠 8 个月</div>
+              </div>
+            </div>
+            <div class="portrait-tags">
+              <span class="portrait-tag tag-complaint">投诉型 &#128308;</span>
+              <span class="portrait-tag tag-economic">经济困难 &#128993;</span>
+              <span class="portrait-tag tag-noshow">爽约历史 &#128992;</span>
+            </div>
+            <div class="portrait-stats">
+              <div class="portrait-stat">
+                <span class="portrait-stat-num">3</span>
+                联系次数
+              </div>
+              <div class="portrait-stat">
+                <span class="portrait-stat-num">1</span>
+                承诺次数
+              </div>
+              <div class="portrait-stat">
+                <span class="portrait-stat-num">1</span>
+                工单数量
+              </div>
+            </div>
+          </div>
+
+          <!-- 欠费详情 + 通话记录 -->
+          <div class="detail-drawer" id="detail-drawer">
+            <div class="drawer-header" onclick="toggleDrawer()">
+              <span class="drawer-header-title">欠费详情 &amp; 通话记录</span>
+              <button class="drawer-toggle-btn" id="drawer-toggle-btn">收起 ▲</button>
+            </div>
+            <div class="drawer-body">
+              <table class="arrears-table">
+                <tr>
+                  <td>欠费月份</td>
+                  <td>2025-09 至 2026-04（8个月）</td>
+                </tr>
+                <tr>
+                  <td>物业费</td>
+                  <td>¥400 × 8 = <span style="font-weight:600;color:#dc2626;">¥3,200</span></td>
+                </tr>
+                <tr>
+                  <td>滞纳金</td>
+                  <td style="color:#059669;">¥0（暂免）</td>
+                </tr>
+                <tr class="total-row">
+                  <td>合计</td>
+                  <td class="amount-cell">¥3,200</td>
+                </tr>
+              </table>
+
+              <div class="call-timeline-label">最近通话记录</div>
+              <div class="call-timeline">
+                <div class="timeline-item">
+                  <div class="timeline-dot result-ongoing"></div>
+                  <div class="timeline-content">
+                    <div class="timeline-top">
+                      <span class="timeline-date">04-27</span>
+                      <span class="timeline-duration">03:42</span>
+                      <span class="timeline-result-badge ongoing">跟进中</span>
+                    </div>
+                    <div class="timeline-ai-hint"><strong>AI:</strong> 提出渗水异议，建议72h跟进</div>
+                  </div>
+                </div>
+                <div class="timeline-item">
+                  <div class="timeline-dot result-missed"></div>
+                  <div class="timeline-content">
+                    <div class="timeline-top">
+                      <span class="timeline-date">04-20</span>
+                      <span class="timeline-duration">01:18</span>
+                      <span class="timeline-result-badge missed">未接通</span>
+                    </div>
+                    <div class="timeline-ai-hint"><strong>AI:</strong> 建议换时间段拨打</div>
+                  </div>
+                </div>
+                <div class="timeline-item">
+                  <div class="timeline-dot result-followup"></div>
+                  <div class="timeline-content">
+                    <div class="timeline-top">
+                      <span class="timeline-date">04-15</span>
+                      <span class="timeline-duration">02:09</span>
+                      <span class="timeline-result-badge followup">需跟进</span>
+                    </div>
+                    <div class="timeline-ai-hint"><strong>AI:</strong> 月底承诺未兑现，建议升级处理</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /col-profile -->
+
+        <!-- MIDDLE: 通话转写 -->
+        <div class="col-transcript">
+          <!-- Call Control Bar -->
+          <div class="call-control-bar">
+            <div class="caller-avatar">张</div>
+            <div>
+              <div class="call-info-name">张建国</div>
+              <div class="call-info-meta">3栋2单元1201室 &nbsp;·&nbsp; 138****4521</div>
+            </div>
+            <div class="call-duration" id="call-timer">03:42</div>
+            <!-- Recording Mode Badge -->
+            <div class="rec-mode-badge live" title="当前录音模式">
+              <span style="width:7px;height:7px;border-radius:50%;background:#059669;display:inline-block;animation:blink 1.2s ease-in-out infinite;"></span>
+              实时推流
+            </div>
+            <!-- Network Quality Badge -->
+            <div class="network-badge" title="网络质量：良好">
+              <div class="signal-bars good">
+                <span></span><span></span><span></span><span></span>
+              </div>
+              <span style="font-size:11px;color:#059669;font-weight:600;">良好</span>
+            </div>
+            <div class="call-ctrl-actions">
+              <button class="btn btn-sm btn-secondary" style="gap:5px;">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V4a3 3 0 00-5.94-.6"/><path d="M17 16.95A7 7 0 015 12v-2m14 0v2a7 7 0 01-.11 1.23M12 19v4M8 23h8"/></svg>
+                静音
+              </button>
+              <button class="btn btn-sm btn-secondary">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                暂停
+              </button>
+              <button class="btn btn-sm btn-hangup-red" style="gap:5px;" id="btn-hangup" onclick="showAfterCallPanel()">
+                <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
+                挂断
+              </button>
+            </div>
+          </div>
+
+          <!-- Transcript Bubbles -->
+          <div class="transcript-area">
+            <div style="text-align:center;margin-bottom:4px;">
+              <span style="font-size:11.5px;color:#9ca3af;background:#f1f5f9;padding:3px 12px;border-radius:20px;border:1px solid #e2e8f0;">通话开始 14:28</span>
+            </div>
+
+            <!-- Agent -->
+            <div class="bubble-row agent">
+              <div class="bubble-avatar">刘</div>
+              <div>
+                <div class="bubble-meta">催收员</div>
+                <div class="bubble agent">您好，我是绿城锦绣物业的工作人员，请问是张建国先生吗？</div>
+                <div class="bubble-timestamp">14:28:03</div>
+              </div>
+            </div>
+
+            <!-- Owner -->
+            <div class="bubble-row">
+              <div class="bubble-avatar owner">张</div>
+              <div>
+                <div class="bubble-meta">张建国</div>
+                <div class="bubble owner">是的，什么事？</div>
+                <div class="bubble-timestamp">14:28:09</div>
+              </div>
+            </div>
+
+            <!-- Agent -->
+            <div class="bubble-row agent">
+              <div class="bubble-avatar">刘</div>
+              <div>
+                <div class="bubble-meta">催收员</div>
+                <div class="bubble agent">您好张先生，您的3栋2单元1201室有8个月物业费共3200元未缴，请问您方便什么时候来缴纳？</div>
+                <div class="bubble-timestamp">14:28:15</div>
+              </div>
+            </div>
+
+            <!-- Owner -->
+            <div class="bubble-row">
+              <div class="bubble-avatar owner">张</div>
+              <div>
+                <div class="bubble-meta">张建国</div>
+                <div class="bubble owner">最近手头有点紧，而且你们房子质量也有问题，我不想交。</div>
+                <div class="bubble-timestamp">14:28:38</div>
+              </div>
+            </div>
+
+            <!-- Agent -->
+            <div class="bubble-row agent">
+              <div class="bubble-avatar">刘</div>
+              <div>
+                <div class="bubble-meta">催收员</div>
+                <div class="bubble agent">理解您的顾虑，关于房屋问题我们可以为您提交工单处理，物业费方面...</div>
+                <div class="bubble-timestamp">14:29:05</div>
+              </div>
+            </div>
+
+            <!-- ASR voice typing indicator -->
+            <div style="display:flex;gap:6px;align-items:center;padding:8px 0;color:#9ca3af;font-size:12.5px;">
+              <div style="display:flex;gap:3px;align-items:center;">
+                <span class="asr-typing-dot" style="animation-delay:0s;"></span>
+                <span class="asr-typing-dot" style="animation-delay:.2s;"></span>
+                <span class="asr-typing-dot" style="animation-delay:.4s;"></span>
+              </div>
+              AI 正在识别语音...
+            </div>
+
+            <!-- Typing Indicator -->
+            <div class="bubble-row">
+              <div class="typing-indicator">
+                <svg width="13" height="13" fill="none" stroke="var(--color-primary)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+                AI正在分析...
+                <div class="typing-dots">
+                  <span></span><span></span><span></span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- After-call panel (hidden by default, slides up on hangup) -->
+          <div class="after-call-panel" id="after-call-panel">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+              <div style="font-size:14px;font-weight:700;color:var(--color-neutral-900);">&#128203; 通话小结 — 张建国 · <span id="panel-duration">3分52秒</span></div>
+              <button onclick="hideAfterCallPanel()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--color-neutral-500);">×</button>
+            </div>
+            <div style="background:#f0f9ff;border-radius:6px;padding:10px 12px;margin-bottom:14px;font-size:12.5px;color:#0369a1;line-height:1.7;">
+              <div><strong>AI 分析：</strong>推托（置信度 0.87）</div>
+              <div><strong>关键内容：</strong>家庭困难，老人生病，月底考虑缴费</div>
+            </div>
+            <div style="font-size:12.5px;font-weight:600;color:var(--color-neutral-700);margin-bottom:8px;">快速标记（单选）：</div>
+            <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px;">
+              <button class="after-call-tag-btn" onclick="selectTag(this)" data-tag="承诺缴费">承诺缴费</button>
+              <button class="after-call-tag-btn" onclick="selectTag(this)" data-tag="拒绝缴费">拒绝缴费</button>
+              <button class="after-call-tag-btn" onclick="selectTag(this)" data-tag="需建工单">需建工单</button>
+              <button class="after-call-tag-btn" onclick="selectTag(this)" data-tag="再次跟进">再次跟进</button>
+              <button class="after-call-tag-btn" onclick="selectTag(this)" data-tag="无人接听">无人接听</button>
+            </div>
+            <div id="promise-date-row" style="display:none;margin-bottom:10px;">
+              <label style="font-size:12px;color:var(--color-neutral-600);display:block;margin-bottom:4px;">承诺日期：</label>
+              <input type="date" class="form-control" value="2026-05-01" style="width:160px;font-size:13px;">
+            </div>
+            <div style="margin-bottom:14px;">
+              <label style="font-size:12px;color:var(--color-neutral-600);display:block;margin-bottom:4px;">跟进备注：</label>
+              <input type="text" class="form-control" placeholder="输入备注..." style="font-size:13px;">
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:10px;">
+              <button class="btn btn-secondary btn-sm" onclick="hideAfterCallPanel()">跳过</button>
+              <button class="btn btn-primary btn-sm" onclick="hideAfterCallPanel()">保存并进入下一通话</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: AI 面板 (360px) — 4层结构 -->
+        <div class="col-ai">
+
+          <!-- AI 建议卡（可滚动，剩余空间） -->
+          <div class="ai-scrollable-body">
+
+            <!-- AI Header -->
+            <div class="ai-header">
+              <div class="ai-title">
+                <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2a10 10 0 110 20A10 10 0 0112 2z"/><path d="M12 8v4l3 3"/></svg>
+                AI 实时建议
+              </div>
+              <div class="confidence-badge">● 高置信度</div>
+            </div>
+
+            <!-- Call Context Box -->
+            <div style="background:#f0f9ff;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12.5px;color:#0369a1;border:1px solid #bfdbfe;">
+              <div style="font-weight:600;margin-bottom:2px;">&#128203; 本次通话背景</div>
+              <div>欠费 ¥3,200（8个月）· 历史通话 3次 · 上次：04-20</div>
+            </div>
+
+            <!-- L1 Risk Bar (default visible as demo) -->
+            <div class="risk-bar l1" id="risk-bar-l1">
+              <span>&#9888;&#65039; L1 检测到"不想交"情绪词，建议平复情绪</span>
+              <button class="risk-bar-close" onclick="document.getElementById('risk-bar-l1').style.display='none'" title="关闭">×</button>
+            </div>
+
+            <!-- L2 Risk Bar (hidden by default, toggle with 2 key) -->
+            <div class="risk-bar l2 risk-pulse" id="risk-bar-l2" style="display:none;">
+              <span>&#128308; L2 警告：业主情绪激动，建议转接督导</span>
+              <button class="btn btn-sm" style="margin-left:auto;background:#dc2626;color:white;border:none;padding:3px 10px;font-size:11.5px;cursor:pointer;border-radius:4px;" onclick="alert('已通知督导，请保持冷静')">通知督导</button>
+            </div>
+
+            <!-- Card 1: 异议识别 -->
+            <div class="ai-suggestion-card objection">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+                <div class="ai-card-type">&#128161; 异议识别</div>
+                <div class="confidence-ring"><span class="ring-val">置信度 84%</span></div>
+              </div>
+              <div class="ai-card-title">异议类型：房屋质量投诉</div>
+              <div class="ai-card-body">
+                业主提及"房子质量有问题"，属于典型服务投诉型异议。建议先安抚情绪，承诺工单处理，再回到缴费议题，避免直接争论。
+              </div>
+              <div style="margin-bottom:8px;">
+                <span class="trigger-tag">触发词："房子质量有问题"</span>
+              </div>
+              <div style="display:flex;gap:6px;">
+                <button class="btn btn-sm adopt-btn" onclick="adoptScript(this)">&#10003; 采纳</button>
+                <button class="btn btn-sm dismiss-btn" onclick="dismissScript(this)">&#10007; 忽略</button>
+              </div>
+            </div>
+
+            <!-- Card 2: 话术推荐 -->
+            <div class="ai-suggestion-card script">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+                <div class="ai-card-type">&#128203; 话术推荐</div>
+                <div class="confidence-ring"><span class="ring-val">置信度 87%</span></div>
+              </div>
+              <div class="ai-card-title">安抚 + 工单 + 引导缴费</div>
+              <div class="ai-card-body">
+                "张先生，我完全理解您的感受。关于房屋问题，您可以告诉我具体情况，我现在就帮您提交一个紧急工单，专人跟进处理。而物业费方面，我们能否先..."
+              </div>
+              <div style="margin-bottom:8px;">
+                <span class="trigger-tag">触发词："不想交"</span>
+              </div>
+              <div style="display:flex;gap:6px;">
+                <button class="btn btn-sm adopt-btn" onclick="adoptScript(this)">&#10003; 采纳</button>
+                <button class="btn btn-sm dismiss-btn" onclick="dismissScript(this)">&#10007; 忽略</button>
+              </div>
+            </div>
+
+            <!-- Card 3: 风控提示 -->
+            <div class="ai-suggestion-card risk">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+                <div class="ai-card-type">&#9888;&#65039; 风控提示 L1</div>
+                <div class="confidence-ring"><span class="ring-val" style="background:#fffbeb;color:#b45309;border:1px solid #fde68a;">置信度 79%</span></div>
+              </div>
+              <div class="ai-card-title">情绪关键词检测</div>
+              <div class="ai-card-body">
+                检测到"不想交"负面情绪词，当前情绪指数：<strong>偏激动</strong>。建议立即换用安抚话术，避免语气强硬。
+              </div>
+              <div style="margin-bottom:8px;">
+                <span class="trigger-tag">触发词："不想交"</span>
+              </div>
+              <div style="display:flex;gap:6px;">
+                <button class="btn btn-sm" style="background:var(--color-danger);color:white;font-size:12px;padding:4px 10px;" onclick="dismissScript(this)">知道了</button>
+              </div>
+            </div>
+
+          </div><!-- /ai-scrollable-body -->
+
+          <!-- ④ 快捷操作（底部固定 52px） -->
+          <div class="quick-actions-bar">
+            <div class="quick-btn-grid">
+              <button class="quick-btn">
+                &#128242; 发送缴费二维码
+              </button>
+              <button class="quick-btn">
+                &#128295; 创建工单
+              </button>
+              <button class="quick-btn">
+                &#9989; 标记承诺缴费
+              </button>
+              <button class="quick-btn danger">
+                &#128314; 升级督导
+              </button>
+            </div>
+          </div>
+
+        </div><!-- /col-ai -->
+
+      </div><!-- /workstation-grid -->
+    </section>
+
+
+    <!-- ═══════════════════════════════════════════════
+         PAGE 2: 我的案件
+    ════════════════════════════════════════════════ -->
+    <section id="my-cases" class="page-section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">我的案件</div>
+          <div class="page-subtitle">共 18 件分配案件，今日已跟进 6 件</div>
+        </div>
+        <div class="filters-bar">
+          <div class="search-box">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" class="form-control" placeholder="搜索业主姓名...">
+          </div>
+          <select class="form-control" style="width:auto;">
+            <option>全部状态</option>
+            <option>待跟进</option>
+            <option>承诺缴费</option>
+            <option>已缴清</option>
+            <option>升级处理</option>
+          </select>
+          <button class="btn btn-secondary btn-sm">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
+            筛选
+          </button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>业主姓名</th>
+              <th>楼栋/房号</th>
+              <th>欠费金额</th>
+              <th>欠费月数</th>
+              <th>状态</th>
+              <th>最近联系</th>
+              <th>下次跟进</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>张建国</strong></td>
+              <td>3栋2单元1201室</td>
+              <td style="color:var(--color-danger);font-weight:600;">¥3,200</td>
+              <td>8个月</td>
+              <td><span class="badge badge-red">通话中</span></td>
+              <td>今天 14:28</td>
+              <td>—</td>
+              <td><button class="btn btn-sm btn-primary">进入工作台</button></td>
+            </tr>
+            <tr>
+              <td><strong>李秀梅</strong></td>
+              <td>1栋3单元502室</td>
+              <td style="color:var(--color-danger);font-weight:600;">¥1,800</td>
+              <td>5个月</td>
+              <td><span class="badge badge-orange">待跟进</span></td>
+              <td>2026-04-26</td>
+              <td>今天 16:00</td>
+              <td>
+                <button class="btn btn-sm btn-secondary" onclick="document.getElementById('note-modal').style.display='flex'">记录跟进</button>
+              </td>
+            </tr>
+            <tr>
+              <td><strong>王大军</strong></td>
+              <td>5栋1单元303室</td>
+              <td style="color:var(--color-danger);font-weight:600;">¥5,400</td>
+              <td>15个月</td>
+              <td><span class="badge badge-blue">承诺缴费</span></td>
+              <td>2026-04-27</td>
+              <td>2026-05-01</td>
+              <td><button class="btn btn-sm btn-secondary" onclick="document.getElementById('note-modal').style.display='flex'">记录跟进</button></td>
+            </tr>
+            <tr>
+              <td><strong>陈丽华</strong></td>
+              <td>2栋4单元801室</td>
+              <td style="color:var(--color-danger);font-weight:600;">¥2,400</td>
+              <td>6个月</td>
+              <td><span class="badge badge-gray">未接通</span></td>
+              <td>2026-04-28</td>
+              <td>明天 09:30</td>
+              <td><button class="btn btn-sm btn-secondary" onclick="document.getElementById('note-modal').style.display='flex'">记录跟进</button></td>
+            </tr>
+            <tr>
+              <td><strong>周明亮</strong></td>
+              <td>4栋2单元1001室</td>
+              <td style="color:var(--color-danger);font-weight:600;">¥6,000</td>
+              <td>20个月</td>
+              <td><span class="badge badge-purple">升级处理</span></td>
+              <td>2026-04-25</td>
+              <td>督导处理中</td>
+              <td><button class="btn btn-sm btn-ghost">查看详情</button></td>
+            </tr>
+            <tr>
+              <td><strong>赵小燕</strong></td>
+              <td>6栋1单元101室</td>
+              <td style="color:var(--color-danger);font-weight:600;">¥800</td>
+              <td>2个月</td>
+              <td><span class="badge badge-orange">待跟进</span></td>
+              <td>—</td>
+              <td>今天 15:00</td>
+              <td><button class="btn btn-sm btn-secondary" onclick="document.getElementById('note-modal').style.display='flex'">记录跟进</button></td>
+            </tr>
+            <tr>
+              <td><strong>孙建平</strong></td>
+              <td>2栋1单元602室</td>
+              <td style="color:var(--color-success);font-weight:600;">已缴清</td>
+              <td>3个月</td>
+              <td><span class="badge badge-green">已结清</span></td>
+              <td>2026-04-27</td>
+              <td>—</td>
+              <td><button class="btn btn-sm btn-ghost">查看详情</button></td>
+            </tr>
+            <tr>
+              <td><strong>吴菊芳</strong></td>
+              <td>3栋4单元301室</td>
+              <td style="color:var(--color-danger);font-weight:600;">¥4,000</td>
+              <td>10个月</td>
+              <td><span class="badge badge-orange">待跟进</span></td>
+              <td>2026-04-20</td>
+              <td>今天 17:00</td>
+              <td><button class="btn btn-sm btn-secondary" onclick="document.getElementById('note-modal').style.display='flex'">记录跟进</button></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="pagination">
+          <span class="pagination-info">共 18 条 · 第 1 / 3 页</span>
+          <div class="pagination-pages">
+            <button class="page-btn active">1</button>
+            <button class="page-btn">2</button>
+            <button class="page-btn">3</button>
+            <button class="page-btn">›</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ═══════════════════════════════════════════════
+         PAGE 3: 通话记录
+    ════════════════════════════════════════════════ -->
+    <section id="call-history" class="page-section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">通话记录</div>
+          <div class="page-subtitle">今日通话 12 次，总时长 87 分钟</div>
+        </div>
+        <div class="filters-bar">
+          <input type="date" class="form-control" value="2026-04-28" style="width:auto;">
+          <select class="form-control" style="width:auto;">
+            <option>全部结果</option>
+            <option>承诺缴费</option>
+            <option>已缴费</option>
+            <option>拒绝</option>
+            <option>未接通</option>
+          </select>
+          <button class="btn btn-secondary btn-sm">导出记录</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>通话时间</th>
+              <th>业主姓名</th>
+              <th>楼栋/房号</th>
+              <th>通话时长</th>
+              <th>通话结果</th>
+              <th>AI分析摘要</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="font-family:var(--font-mono);font-size:12.5px;">14:28:01</td>
+              <td><strong>张建国</strong></td>
+              <td>3栋2单元1201室</td>
+              <td>03:42（进行中）</td>
+              <td><span class="badge badge-red">通话中</span></td>
+              <td style="color:var(--color-neutral-600);font-size:12.5px;">检测到房屋投诉异议，AI建议已推送</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td style="font-family:var(--font-mono);font-size:12.5px;">13:15:22</td>
+              <td><strong>孙建平</strong></td>
+              <td>2栋1单元602室</td>
+              <td>04:51</td>
+              <td><span class="badge badge-green">已缴费</span></td>
+              <td style="color:var(--color-neutral-600);font-size:12.5px;">业主态度友好，承诺当天线上缴纳，AI推荐话术被采纳2次</td>
+              <td><button class="btn btn-sm btn-ghost">查看转写</button></td>
+            </tr>
+            <tr>
+              <td style="font-family:var(--font-mono);font-size:12.5px;">11:44:08</td>
+              <td><strong>赵小燕</strong></td>
+              <td>6栋1单元101室</td>
+              <td>01:23</td>
+              <td><span class="badge badge-gray">未接通</span></td>
+              <td style="color:var(--color-neutral-600);font-size:12.5px;">无人接听，已留言，建议下午15:00再次拨打</td>
+              <td><button class="btn btn-sm btn-ghost">查看详情</button></td>
+            </tr>
+            <tr>
+              <td style="font-family:var(--font-mono);font-size:12.5px;">10:30:15</td>
+              <td><strong>陈丽华</strong></td>
+              <td>2栋4单元801室</td>
+              <td>06:17</td>
+              <td><span class="badge badge-blue">承诺缴费</span></td>
+              <td style="color:var(--color-neutral-600);font-size:12.5px;">业主承诺5月3日前缴纳，AI情绪分析：情绪稳定，可信度高</td>
+              <td><button class="btn btn-sm btn-ghost">查看转写</button></td>
+            </tr>
+            <tr>
+              <td style="font-family:var(--font-mono);font-size:12.5px;">09:58:44</td>
+              <td><strong>吴菊芳</strong></td>
+              <td>3栋4单元301室</td>
+              <td>08:35</td>
+              <td><span class="badge badge-orange">待确认</span></td>
+              <td style="color:var(--color-neutral-600);font-size:12.5px;">业主表示需要和家人商量，AI风控L1提示情绪偏激动，已采纳安抚话术</td>
+              <td><button class="btn btn-sm btn-ghost">查看转写</button></td>
+            </tr>
+            <tr>
+              <td style="font-family:var(--font-mono);font-size:12.5px;">09:22:11</td>
+              <td><strong>李秀梅</strong></td>
+              <td>1栋3单元502室</td>
+              <td>03:04</td>
+              <td><span class="badge badge-gray">未接通</span></td>
+              <td style="color:var(--color-neutral-600);font-size:12.5px;">拨通后挂断，建议发送缴费短信</td>
+              <td><button class="btn btn-sm btn-ghost">查看详情</button></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="pagination">
+          <span class="pagination-info">共 12 条 · 第 1 / 2 页</span>
+          <div class="pagination-pages">
+            <button class="page-btn active">1</button>
+            <button class="page-btn">2</button>
+            <button class="page-btn">›</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ═══════════════════════════════════════════════
+         PAGE 4: 个人信息
+    ════════════════════════════════════════════════ -->
+    <section id="my-profile" class="page-section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">个人信息</div>
+          <div class="page-subtitle">账号管理 &amp; 绩效概览</div>
+        </div>
+        <button class="btn btn-secondary btn-sm">编辑信息</button>
+      </div>
+
+      <!-- Profile Card -->
+      <div class="profile-card">
+        <div class="profile-avatar-lg">刘</div>
+        <div>
+          <div class="profile-name">刘晓雯</div>
+          <div class="profile-meta">
+            <span class="status-dot"></span>
+            在线
+            <span class="topbar-sep" style="margin:0 4px;"></span>
+            催收员 · 绿城锦绣物业
+            <span class="topbar-sep" style="margin:0 4px;"></span>
+            工号：LJ-2024-088
+          </div>
+          <div style="font-size:12.5px;color:var(--color-neutral-600);margin-top:6px;">入职日期：2024-03-15 &nbsp;·&nbsp; 工龄：1年1个月</div>
+        </div>
+        <div style="margin-left:auto;text-align:right;">
+          <div style="font-size:12px;color:var(--color-neutral-600);">今日登录</div>
+          <div style="font-size:14px;font-weight:600;color:var(--color-neutral-900);">09:02:14</div>
+          <div style="font-size:12px;color:var(--color-neutral-600);margin-top:4px;">在线时长 <strong>5h 26m</strong></div>
+        </div>
+      </div>
+
+      <!-- Today Stats -->
+      <div class="stat-grid" style="margin-bottom:24px;">
+        <div class="stat-card">
+          <div class="stat-label">今日通话</div>
+          <div class="stat-value">12</div>
+          <div class="stat-change neutral">次</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">接通率</div>
+          <div class="stat-value">75%</div>
+          <div class="stat-change up">↑ +5% vs 昨日</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">今日承诺缴费</div>
+          <div class="stat-value">3</div>
+          <div class="stat-change up">↑ +1 vs 昨日</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">今日催收金额</div>
+          <div class="stat-value" style="font-size:22px;">¥8,400</div>
+          <div class="stat-change up">↑ 已结清 1 件</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">AI话术采纳率</div>
+          <div class="stat-value">68%</div>
+          <div class="stat-change neutral">今日 11/16 次</div>
+        </div>
+      </div>
+
+      <!-- Monthly Performance -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">本月绩效摘要 (2026年4月)</span>
+          <span class="badge badge-blue">评级：良好</span>
+        </div>
+        <div class="card-body">
+          <div class="info-grid" style="margin-bottom:20px;">
+            <div class="info-item">
+              <div class="info-label">总通话量</div>
+              <div class="info-value">187 次</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">平均接通率</div>
+              <div class="info-value">71.6%</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">承诺缴费笔数</div>
+              <div class="info-value">42 笔</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">实际缴费转化</div>
+              <div class="info-value">28 笔 (66.7%)</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">催收总金额</div>
+              <div class="info-value" style="color:var(--color-success);">¥112,600</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">AI话术采纳率</div>
+              <div class="info-value">62.4%</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">平均通话时长</div>
+              <div class="info-value">4分32秒</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">升级案件数</div>
+              <div class="info-value">3 件</div>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:13px;font-weight:600;margin-bottom:10px;">综合评分</div>
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+              <span style="font-size:12.5px;color:var(--color-neutral-600);width:80px;">通话效率</span>
+              <div class="progress-bar" style="flex:1;">
+                <div class="progress-fill" style="width:78%;"></div>
+              </div>
+              <span style="font-size:12.5px;font-weight:600;width:32px;">78</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+              <span style="font-size:12.5px;color:var(--color-neutral-600);width:80px;">转化能力</span>
+              <div class="progress-bar" style="flex:1;">
+                <div class="progress-fill" style="width:72%;background:var(--color-success);"></div>
+              </div>
+              <span style="font-size:12.5px;font-weight:600;width:32px;">72</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+              <span style="font-size:12.5px;color:var(--color-neutral-600);width:80px;">AI协作度</span>
+              <div class="progress-bar" style="flex:1;">
+                <div class="progress-fill" style="width:62%;background:var(--color-purple);"></div>
+              </div>
+              <span style="font-size:12.5px;font-weight:600;width:32px;">62</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;">
+              <span style="font-size:12.5px;color:var(--color-neutral-600);width:80px;">综合得分</span>
+              <div class="progress-bar" style="flex:1;">
+                <div class="progress-fill" style="width:74%;background:var(--color-warning);"></div>
+              </div>
+              <span style="font-size:12.5px;font-weight:700;width:32px;color:var(--color-warning);">74</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ── Follow-up Note Modal ──────────────────────── -->
+<div id="note-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">记录跟进备注</span>
+      <button class="modal-close" onclick="document.getElementById('note-modal').style.display='none'">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">跟进结果 <span class="req">*</span></label>
+        <select class="form-control">
+          <option>请选择</option>
+          <option>承诺缴费</option>
+          <option>拒绝缴费</option>
+          <option>未接通</option>
+          <option>已部分缴费</option>
+          <option>需要上门</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">下次跟进时间</label>
+        <input type="datetime-local" class="form-control" value="2026-05-01T09:00">
+      </div>
+      <div class="form-group">
+        <label class="form-label">备注说明</label>
+        <textarea class="form-control" rows="3" placeholder="输入跟进备注，如业主反馈、承诺内容等..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="document.getElementById('note-modal').style.display='none'">取消</button>
+      <button class="btn btn-primary" onclick="document.getElementById('note-modal').style.display='none'">保存备注</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── FORCE LOGOUT Modal ─────────────────────────── -->
+<div id="modal-force-logout" style="display:none; position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,0.8); flex-direction:column; align-items:center; justify-content:center;" onclick="if(event.target===this)return;">
+  <div style="background:white; border-radius:12px; padding:32px; max-width:400px; width:90%; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <div style="width:64px;height:64px;border-radius:50%;background:#fef2f2;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+      <svg width="32" height="32" fill="none" stroke="#dc2626" stroke-width="2" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/></svg>
+    </div>
+    <div style="font-size:18px;font-weight:700;color:#111827;margin-bottom:8px;">账号已在其他设备登录</div>
+    <div style="font-size:13.5px;color:#6b7280;line-height:1.6;margin-bottom:24px;">您的账号于 14:35 在另一台设备登录，当前设备已被退出登录。<br>如非本人操作，请立即修改密码。</div>
+    <button onclick="window.location.href='login.html'" style="width:100%;padding:12px;background:#1A56DB;color:white;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;">重新登录</button>
+    <div style="font-size:12px;color:#9ca3af;margin-top:12px;">如有疑问请联系系统管理员</div>
+  </div>
+</div>
+
+<!-- ── L3 全屏告警覆盖层 ────────────────────────── -->
+<div id="l3-overlay" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(220,38,38,0.97); flex-direction:column; align-items:center; justify-content:center; color:white; text-align:center; padding:32px;">
+  <div style="font-size:64px;margin-bottom:16px;animation:pulse-red 1s infinite;">&#128680;</div>
+  <div style="font-size:32px;font-weight:800;margin-bottom:10px;letter-spacing:1px;">L3 紧急风控</div>
+  <div style="font-size:16px;opacity:.9;margin-bottom:20px;background:rgba(0,0,0,0.2);padding:10px 24px;border-radius:8px;">
+    检测到威胁语言：「我要找你麻烦」
+  </div>
+  <div style="font-size:14px;opacity:.85;margin-bottom:8px;">&#128245; 通话已自动挂断</div>
+  <div style="font-size:13px;opacity:.7;margin-bottom:32px;">如尚未挂断，建议立即结束通话</div>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-bottom:28px;">
+    <button id="btn-l3-close" style="padding:12px 28px;background:white;color:#dc2626;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">知道了，继续工作</button>
+    <button onclick="alert('风控详情功能开发中')" style="padding:12px 28px;background:rgba(255,255,255,0.15);color:white;border:2px solid rgba(255,255,255,0.5);border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;">查看风控详情</button>
+  </div>
+  <div style="font-size:12px;opacity:.6;" id="l3-timestamp">此事件已自动上报督导 · 14:31:07</div>
+</div>
+
+
+<script>
+  lucide.createIcons();
+  /* ── Page navigation ──────────────────────────── */
+  document.querySelectorAll('.sidebar-item[data-page]').forEach(item => {
+    item.addEventListener('click', () => {
+      document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+      document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
+      item.classList.add('active');
+      document.getElementById(item.dataset.page).classList.add('active');
+    });
+  });
+
+  /* ── Call timer ───────────────────────────────── */
+  let callSeconds = 222; // starts at 3:42
+  const timerEl = document.getElementById('call-timer');
+  if (timerEl) {
+    setInterval(() => {
+      callSeconds++;
+      const m = Math.floor(callSeconds / 60);
+      const s = callSeconds % 60;
+      timerEl.textContent = m + ':' + s.toString().padStart(2, '0');
+    }, 1000);
+  }
+
+  /* ── AI card: adopt ───────────────────────────── */
+  function adoptScript(btn) {
+    const card = btn.closest('.ai-suggestion-card');
+    card.style.transition = 'all 0.3s';
+    card.style.background = '#f0fdf4';
+    card.style.borderLeftColor = '#057a55';
+    setTimeout(() => {
+      card.style.opacity = '0';
+      card.style.maxHeight = '0';
+      card.style.paddingTop = '0';
+      card.style.paddingBottom = '0';
+      card.style.marginBottom = '0';
+      card.style.overflow = 'hidden';
+    }, 300);
+  }
+
+  /* ── AI card: dismiss ─────────────────────────── */
+  function dismissScript(btn) {
+    const card = btn.closest('.ai-suggestion-card');
+    card.style.transition = 'opacity 0.2s';
+    card.style.opacity = '0';
+    setTimeout(() => { card.style.display = 'none'; }, 200);
+  }
+
+  /* ── After-call panel ─────────────────────────── */
+  function showAfterCallPanel() {
+    const panel = document.getElementById('after-call-panel');
+    if (panel) {
+      const m = Math.floor(callSeconds / 60);
+      const s = callSeconds % 60;
+      const dur = document.getElementById('panel-duration');
+      if (dur) dur.textContent = m + '分' + s + '秒';
+      panel.classList.add('show');
+    }
+  }
+
+  function hideAfterCallPanel() {
+    const panel = document.getElementById('after-call-panel');
+    if (panel) panel.classList.remove('show');
+  }
+
+  function selectTag(btn) {
+    btn.closest('div').querySelectorAll('.after-call-tag-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    const promiseRow = document.getElementById('promise-date-row');
+    if (promiseRow) {
+      promiseRow.style.display = (btn.dataset.tag === '承诺缴费') ? 'block' : 'none';
+    }
+  }
+
+  /* ── Detail drawer toggle ─────────────────────── */
+  function toggleDrawer() {
+    const drawer = document.getElementById('detail-drawer');
+    const toggleBtn = document.getElementById('drawer-toggle-btn');
+    if (!drawer) return;
+    const isCollapsed = drawer.classList.toggle('collapsed');
+    toggleBtn.textContent = isCollapsed ? '展开 ▼' : '收起 ▲';
+  }
+
+  /* ── L3 overlay ───────────────────────────────── */
+  document.addEventListener('keydown', e => {
+    if (e.key === 'l' || e.key === 'L') {
+      const overlay = document.getElementById('l3-overlay');
+      if (overlay) {
+        const now = new Date();
+        const ts = now.getHours().toString().padStart(2,'0') + ':' +
+                   now.getMinutes().toString().padStart(2,'0') + ':' +
+                   now.getSeconds().toString().padStart(2,'0');
+        const tsEl = document.getElementById('l3-timestamp');
+        if (tsEl) tsEl.textContent = '此事件已自动上报督导 · ' + ts;
+        overlay.style.display = 'flex';
+      }
+    }
+    /* ── F key: force logout demo ───────────────── */
+    if (e.key === 'f' || e.key === 'F') {
+      const modal = document.getElementById('modal-force-logout');
+      if (modal) modal.style.display = 'flex';
+    }
+    /* ── 2 key: toggle L2 bar demo ──────────────── */
+    if (e.key === '2') {
+      const bar = document.getElementById('risk-bar-l2');
+      if (bar) bar.style.display = (bar.style.display === 'none') ? 'flex' : 'none';
+    }
+  });
+
+  document.getElementById('btn-l3-close')?.addEventListener('click', () => {
+    document.getElementById('l3-overlay').style.display = 'none';
+  });
+</script>
+
+</body>
+</html>

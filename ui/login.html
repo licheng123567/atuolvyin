@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登录 — 有证慧催</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;display:flex;background:#f0f4f8;}
+.left-panel{width:480px;flex-shrink:0;background:linear-gradient(160deg,#0f172a 0%,#1e3a6e 50%,#1A56DB 100%);display:flex;flex-direction:column;justify-content:space-between;padding:48px 48px 40px;position:relative;overflow:hidden;}
+.left-panel::before{content:'';position:absolute;top:-60px;right:-60px;width:320px;height:320px;border-radius:50%;background:rgba(255,255,255,.04);}
+.left-panel::after{content:'';position:absolute;bottom:-80px;left:-40px;width:280px;height:280px;border-radius:50%;background:rgba(255,255,255,.03);}
+.brand{position:relative;z-index:1;}
+.brand-logo{font-size:28px;font-weight:800;color:white;letter-spacing:-0.5px;margin-bottom:8px;}
+.brand-logo span{background:linear-gradient(90deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.brand-tagline{font-size:13px;color:rgba(255,255,255,.6);}
+.feature-list{position:relative;z-index:1;display:flex;flex-direction:column;gap:20px;}
+.feature-item{display:flex;align-items:flex-start;gap:14px;}
+.feature-icon{width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;}
+.feature-text .title{font-size:14px;font-weight:600;color:white;margin-bottom:2px;}
+.feature-text .desc{font-size:12.5px;color:rgba(255,255,255,.5);}
+.left-footer{position:relative;z-index:1;font-size:12px;color:rgba(255,255,255,.3);}
+
+.right-panel{flex:1;display:flex;align-items:center;justify-content:center;padding:40px 20px;}
+.login-card{width:100%;max-width:440px;}
+.login-card-title{font-size:26px;font-weight:700;color:#111827;margin-bottom:6px;}
+.login-card-subtitle{font-size:14px;color:#6b7280;margin-bottom:32px;}
+
+/* Entry tabs */
+.entry-tabs{display:flex;gap:0;margin-bottom:28px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;}
+.entry-tab{flex:1;padding:10px;text-align:center;font-size:13.5px;font-weight:500;color:#6b7280;cursor:pointer;transition:all .15s;background:white;}
+.entry-tab.active{background:#1A56DB;color:white;font-weight:600;}
+
+.form-group{margin-bottom:18px;}
+.form-label{display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:6px;}
+.form-label .req{color:#e02424;margin-left:2px;}
+.form-control{width:100%;padding:10px 14px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;color:#111827;background:white;transition:border-color .15s;outline:none;}
+.form-control:focus{border-color:#1A56DB;box-shadow:0 0 0 3px rgba(26,86,219,.1);}
+.form-control.error{border-color:#e02424;}
+.form-error{font-size:12px;color:#e02424;margin-top:4px;}
+.password-wrap{position:relative;}
+.password-wrap .form-control{padding-right:44px;}
+.pwd-toggle{position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;color:#9ca3af;border:none;background:none;padding:2px;}
+.pwd-toggle:hover{color:#374151;}
+
+.form-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;}
+.remember-wrap{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#374151;}
+.forgot-link{font-size:13px;color:#1A56DB;cursor:pointer;}
+.forgot-link:hover{color:#1E429F;}
+
+.btn-login{width:100%;padding:12px;background:#1A56DB;color:white;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;transition:background .15s;display:flex;align-items:center;justify-content:center;gap:8px;}
+.btn-login:hover{background:#1E429F;}
+.btn-login:active{background:#1e40af;}
+
+.divider{display:flex;align-items:center;gap:12px;margin:20px 0;font-size:12.5px;color:#9ca3af;}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:#e5e7eb;}
+
+/* MFA step */
+.mfa-step{display:none;}
+.mfa-step.show{display:block;}
+.otp-wrap{display:flex;gap:8px;margin-bottom:8px;}
+.otp-input{width:48px;height:56px;text-align:center;font-size:24px;font-weight:700;border:2px solid #d1d5db;border-radius:8px;outline:none;transition:border-color .15s;}
+.otp-input:focus{border-color:#1A56DB;}
+.mfa-hint{font-size:12.5px;color:#6b7280;margin-bottom:20px;}
+
+/* Force password change step */
+.pwd-change-step{display:none;}
+.pwd-change-step.show{display:block;}
+.pwd-strength{height:4px;border-radius:2px;background:#e5e7eb;margin-top:6px;overflow:hidden;}
+.pwd-strength-fill{height:100%;border-radius:2px;transition:all .2s;}
+.pwd-rules{display:flex;flex-direction:column;gap:4px;margin-top:8px;}
+.pwd-rule{display:flex;align-items:center;gap:6px;font-size:12px;color:#9ca3af;}
+.pwd-rule.ok{color:#057a55;}
+.pwd-rule svg{flex-shrink:0;}
+
+/* Error alert */
+.error-alert{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:10px;margin-bottom:18px;font-size:13.5px;color:#991b1b;}
+
+/* Success message */
+.success-msg{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;font-size:13.5px;color:#065f46;margin-bottom:18px;}
+
+/* Loading spinner */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.3);border-top-color:white;border-radius:50%;animation:spin .7s linear infinite;}
+
+/* Security badge */
+.security-badge{display:inline-flex;align-items:center;gap:6px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:20px;padding:4px 12px;font-size:12px;color:#065f46;margin-bottom:20px;}
+
+/* Platform admin indicator */
+.platform-badge{background:linear-gradient(90deg,#fef3c7,#fde68a);border:1px solid #f59e0b;border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:8px;font-size:13px;color:#92400e;margin-bottom:20px;}
+
+@media(max-width:860px){.left-panel{display:none;}.right-panel{padding:20px;background:white;}.login-card{max-width:400px;}}
+</style>
+</head>
+<body>
+
+<!-- Left Panel -->
+<div class="left-panel">
+  <div class="brand">
+    <div class="brand-logo">有证<span>慧催</span></div>
+    <div class="brand-tagline">AI 辅助物业费催收系统</div>
+  </div>
+  <div class="feature-list">
+    <div class="feature-item">
+      <div class="feature-icon">🎙️</div>
+      <div class="feature-text">
+        <div class="title">实时 AI 话术辅助</div>
+        <div class="desc">通话中即时识别业主异议，推送应对话术，延迟 ≤ 3 秒</div>
+      </div>
+    </div>
+    <div class="feature-item">
+      <div class="feature-icon">📊</div>
+      <div class="feature-text">
+        <div class="title">智能 CRM 管理</div>
+        <div class="desc">公海/私海自动流转，优先级评分，联系频次合规管控</div>
+      </div>
+    </div>
+    <div class="feature-item">
+      <div class="feature-icon">⚖️</div>
+      <div class="feature-text">
+        <div class="title">合规留证</div>
+        <div class="desc">通话录音区块链存证，催收行为合规月报，法务无缝转接</div>
+      </div>
+    </div>
+    <div class="feature-item">
+      <div class="feature-icon">📱</div>
+      <div class="feature-text">
+        <div class="title">App-PC 联动</div>
+        <div class="desc">手机拨打 + PC 实时监控，督导远程辅助，团队效率最大化</div>
+      </div>
+    </div>
+  </div>
+  <div class="left-footer">© 2026 有证慧催 · v2.3.1</div>
+</div>
+
+<!-- Right Panel -->
+<div class="right-panel">
+  <div class="login-card">
+    <div class="login-card-title">欢迎回来</div>
+    <div class="login-card-subtitle">请登录您的账号</div>
+
+    <!-- Entry type tabs -->
+    <div class="entry-tabs" id="entry-tabs">
+      <div class="entry-tab active" onclick="switchEntry('tenant')">物业公司 / 服务商</div>
+      <div class="entry-tab" onclick="switchEntry('platform')">平台管理后台</div>
+    </div>
+
+    <!-- Platform indicator (hidden by default) -->
+    <div id="platform-indicator" class="platform-badge" style="display:none;">
+      🔐 平台管理后台 — 仅限授权 IP 访问，所有操作记录审计日志
+    </div>
+
+    <!-- Step 1: Username + Password -->
+    <div id="step-login">
+      <div id="error-alert" class="error-alert" style="display:none;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        <span id="error-text">手机号或密码不正确，还有 4 次尝试机会。</span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">手机号 / 账号<span class="req">*</span></label>
+        <input type="text" class="form-control" id="input-phone" placeholder="请输入手机号" maxlength="11">
+      </div>
+      <div class="form-group">
+        <label class="form-label">密码<span class="req">*</span></label>
+        <div class="password-wrap">
+          <input type="password" class="form-control" id="input-password" placeholder="请输入密码">
+          <button class="pwd-toggle" onclick="togglePwd()" title="显示/隐藏密码">
+            <svg id="eye-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="form-row">
+        <label class="remember-wrap">
+          <input type="checkbox" id="remember-device">
+          <span>记住此设备（7 天内免登录）</span>
+        </label>
+        <span class="forgot-link" onclick="showForgot()">忘记密码？</span>
+      </div>
+      <button class="btn-login" id="btn-login" onclick="handleLogin()">
+        <span id="btn-login-text">登 录</span>
+      </button>
+
+      <div style="margin-top:16px;text-align:center;font-size:12.5px;color:#9ca3af;">
+        登录即表示您同意
+        <a href="#" style="color:#1A56DB;">服务条款</a> 和
+        <a href="#" style="color:#1A56DB;">隐私政策</a>
+      </div>
+    </div>
+
+    <!-- Step 2: MFA (for platform_superadmin) -->
+    <div id="step-mfa" class="mfa-step">
+      <div class="security-badge">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        平台超管双因素验证
+      </div>
+      <div style="font-size:14px;font-weight:600;color:#111827;margin-bottom:6px;">输入验证码</div>
+      <div class="mfa-hint">验证码已发送至 138****0001，有效期 5 分钟</div>
+      <div class="otp-wrap" id="otp-wrap">
+        <input type="text" class="otp-input" maxlength="1" oninput="otpNext(this,0)">
+        <input type="text" class="otp-input" maxlength="1" oninput="otpNext(this,1)">
+        <input type="text" class="otp-input" maxlength="1" oninput="otpNext(this,2)">
+        <input type="text" class="otp-input" maxlength="1" oninput="otpNext(this,3)">
+        <input type="text" class="otp-input" maxlength="1" oninput="otpNext(this,4)">
+        <input type="text" class="otp-input" maxlength="1" oninput="otpNext(this,5)">
+      </div>
+      <button class="btn-login" onclick="handleMFA()" style="margin-top:8px;">
+        验证并登录
+      </button>
+      <div style="margin-top:12px;text-align:center;font-size:13px;color:#6b7280;">
+        没收到？<span style="color:#1A56DB;cursor:pointer;" id="resend-btn" onclick="resendOTP()">重新发送（60s）</span>
+      </div>
+      <div style="margin-top:16px;text-align:center;">
+        <span style="color:#6b7280;font-size:13px;cursor:pointer;" onclick="backToLogin()">← 返回上一步</span>
+      </div>
+    </div>
+
+    <!-- Step 3: Force password change (first login) -->
+    <div id="step-pwd-change" class="pwd-change-step">
+      <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:12px 14px;display:flex;align-items:center;gap:10px;margin-bottom:20px;font-size:13.5px;color:#92400e;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        首次登录需要修改密码，新密码不能与初始密码相同
+      </div>
+      <div class="form-group">
+        <label class="form-label">新密码<span class="req">*</span></label>
+        <div class="password-wrap">
+          <input type="password" class="form-control" id="new-pwd" placeholder="8位以上，包含大小写字母+数字+特殊字符" oninput="checkPwdStrength(this.value)">
+          <button class="pwd-toggle" onclick="togglePwd2()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+        <div class="pwd-strength"><div id="pwd-strength-bar" class="pwd-strength-fill" style="width:0%;"></div></div>
+        <div class="pwd-rules">
+          <div class="pwd-rule" id="rule-len"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>至少 8 位字符</div>
+          <div class="pwd-rule" id="rule-upper"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>包含大写字母</div>
+          <div class="pwd-rule" id="rule-num"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>包含数字</div>
+          <div class="pwd-rule" id="rule-special"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>包含特殊字符（!@#$%等）</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">确认新密码<span class="req">*</span></label>
+        <input type="password" class="form-control" id="confirm-pwd" placeholder="再次输入新密码">
+        <div id="pwd-match-error" class="form-error" style="display:none;">两次输入的密码不一致</div>
+      </div>
+      <button class="btn-login" onclick="handlePwdChange()">确认修改并进入系统</button>
+    </div>
+
+    <!-- Forgot password flow -->
+    <div id="step-forgot" style="display:none;">
+      <div style="font-size:14px;font-weight:600;color:#111827;margin-bottom:6px;">重置密码</div>
+      <div style="font-size:13px;color:#6b7280;margin-bottom:20px;">输入您注册的手机号，系统将发送验证码</div>
+      <div class="form-group">
+        <label class="form-label">手机号<span class="req">*</span></label>
+        <input type="text" class="form-control" placeholder="请输入注册手机号">
+      </div>
+      <div style="display:flex;gap:10px;">
+        <input type="text" class="form-control" placeholder="验证码" style="flex:1;">
+        <button style="padding:10px 16px;background:white;border:1px solid #d1d5db;border-radius:8px;font-size:13px;cursor:pointer;white-space:nowrap;color:#374151;">获取验证码</button>
+      </div>
+      <div style="margin-top:6px;font-size:12px;color:#9ca3af;">验证码10分钟内有效 · 来自"有证慧催"</div>
+      <button class="btn-login" style="margin-top:20px;">发送重置链接</button>
+      <div style="margin-top:14px;text-align:center;"><span style="color:#6b7280;font-size:13px;cursor:pointer;" onclick="backToLogin()">← 返回登录</span></div>
+    </div>
+
+    <!-- Account locked state -->
+    <div id="step-locked" style="display:none;">
+      <div style="text-align:center;padding:24px 0;">
+        <div style="width:64px;height:64px;border-radius:50%;background:#fef2f2;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e02424" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <div style="font-size:18px;font-weight:700;color:#111827;margin-bottom:8px;">账号已锁定</div>
+        <div style="font-size:13.5px;color:#6b7280;line-height:1.6;margin-bottom:20px;">连续 5 次密码错误，账号已被锁定 30 分钟。<br>请稍后再试或联系管理员解锁。</div>
+        <div style="background:#fef2f2;border-radius:8px;padding:12px;font-size:13px;color:#991b1b;margin-bottom:20px;">解锁时间：14:58（剩余 28 分钟）</div>
+        <button style="width:100%;padding:10px;background:white;border:1px solid #d1d5db;border-radius:8px;font-size:14px;cursor:pointer;color:#374151;" onclick="showForgot()">联系管理员解锁</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentEntry = 'tenant';
+let currentStep = 'login'; // login | mfa | pwd-change | forgot | locked
+
+function switchEntry(type) {
+  currentEntry = type;
+  document.querySelectorAll('.entry-tab').forEach((t,i) => {
+    t.classList.toggle('active', (type==='tenant'&&i===0)||(type==='platform'&&i===1));
+  });
+  document.getElementById('platform-indicator').style.display = type==='platform' ? 'flex' : 'none';
+  const phoneEl = document.getElementById('input-phone');
+  if(type==='platform') {
+    phoneEl.placeholder = '请输入运营员账号（手机号）';
+  } else {
+    phoneEl.placeholder = '请输入手机号';
+  }
+}
+
+function handleLogin() {
+  const phone = document.getElementById('input-phone').value.trim();
+  const pwd = document.getElementById('input-password').value;
+  const btn = document.getElementById('btn-login');
+  const btnText = document.getElementById('btn-login-text');
+  const errorAlert = document.getElementById('error-alert');
+
+  if(!phone || !pwd) {
+    errorAlert.style.display = 'flex';
+    document.getElementById('error-text').textContent = '请填写手机号和密码';
+    return;
+  }
+
+  // Loading state
+  btn.disabled = true;
+  btnText.innerHTML = '<div class="spinner"></div>';
+
+  setTimeout(() => {
+    btn.disabled = false;
+    btnText.textContent = '登 录';
+
+    // Simulate different scenarios
+    if(phone === '13800000001' && pwd === 'Admin@2026') {
+      // Superadmin: go to MFA
+      showStep('mfa');
+    } else if(phone === '13800000002' && pwd === 'Agent@2026') {
+      // First login: force password change
+      showStep('pwd-change');
+    } else if(phone === '00000000000') {
+      // Locked account
+      showStep('locked');
+    } else if(phone.startsWith('138')) {
+      // Normal login
+      errorAlert.style.display = 'none';
+      window.location.href = 'admin.html';
+    } else {
+      // Error
+      errorAlert.style.display = 'flex';
+      document.getElementById('error-text').textContent = '手机号或密码不正确，还有 4 次尝试机会。';
+      document.getElementById('input-phone').classList.add('error');
+      document.getElementById('input-password').classList.add('error');
+    }
+  }, 800);
+}
+
+function showStep(step) {
+  ['step-login','step-mfa','step-pwd-change','step-forgot','step-locked'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.style.display = 'none';
+  });
+  const target = document.getElementById('step-' + step.replace('-',''));
+  if(target) target.style.display = 'block';
+  if(step==='mfa') document.getElementById('step-mfa').style.display='block';
+  if(step==='pwd-change') document.getElementById('step-pwd-change').style.display='block';
+  currentStep = step;
+}
+
+function backToLogin() {
+  showStep('login');
+  document.getElementById('step-login').style.display = 'block';
+}
+function showForgot() { showStep('forgot'); document.getElementById('step-forgot').style.display='block'; }
+
+function togglePwd() {
+  const input = document.getElementById('input-password');
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+function togglePwd2() {
+  const input = document.getElementById('new-pwd');
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+function otpNext(el, idx) {
+  if(el.value && idx < 5) {
+    document.querySelectorAll('.otp-input')[idx+1].focus();
+  }
+  // Auto-verify when all 6 digits entered
+  const all = [...document.querySelectorAll('.otp-input')].every(i => i.value);
+  if(all) setTimeout(handleMFA, 300);
+}
+
+let resendTimer;
+function resendOTP() {
+  let secs = 60;
+  const btn = document.getElementById('resend-btn');
+  btn.style.color = '#9ca3af';
+  btn.style.cursor = 'default';
+  resendTimer = setInterval(() => {
+    secs--;
+    btn.textContent = `重新发送（${secs}s）`;
+    if(secs<=0) { clearInterval(resendTimer); btn.textContent='重新发送'; btn.style.color='#1A56DB'; btn.style.cursor='pointer'; }
+  }, 1000);
+}
+
+function handleMFA() {
+  const otp = [...document.querySelectorAll('.otp-input')].map(i=>i.value).join('');
+  if(otp.length < 6) return;
+  window.location.href = 'platform-superadmin.html';
+}
+
+function checkPwdStrength(pwd) {
+  const len = pwd.length >= 8;
+  const upper = /[A-Z]/.test(pwd);
+  const num = /[0-9]/.test(pwd);
+  const special = /[!@#$%^&*]/.test(pwd);
+  const setRule = (id, ok) => {
+    const el = document.getElementById(id);
+    el.classList.toggle('ok', ok);
+    el.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${ok ? '<polyline points="20 6 9 17 4 12"/>' : '<circle cx="12" cy="12" r="10"/>'}</svg>${el.textContent.trim().replace(/^[✓⚬]/,'').trim()}`;
+  };
+  setRule('rule-len', len);
+  setRule('rule-upper', upper);
+  setRule('rule-num', num);
+  setRule('rule-special', special);
+  const score = [len,upper,num,special].filter(Boolean).length;
+  const bar = document.getElementById('pwd-strength-bar');
+  const colors = ['','#e02424','#d97706','#1A56DB','#057a55'];
+  bar.style.width = (score*25) + '%';
+  bar.style.background = colors[score];
+}
+
+function handlePwdChange() {
+  const p1 = document.getElementById('new-pwd').value;
+  const p2 = document.getElementById('confirm-pwd').value;
+  if(p1 !== p2) { document.getElementById('pwd-match-error').style.display='block'; return; }
+  document.getElementById('pwd-match-error').style.display='none';
+  window.location.href = 'agent-pc.html';
+}
+
+// Enter key submit
+document.addEventListener('keydown', e => {
+  if(e.key==='Enter' && currentStep==='login') handleLogin();
+});
+
+// Demo: show different states via keyboard shortcuts
+// Press 1 = error, 2 = MFA, 3 = first login, 4 = locked, 5 = forgot
+document.addEventListener('keydown', e => {
+  if(e.target.tagName==='INPUT') return;
+  const demos = {'1':()=>{document.getElementById('error-alert').style.display='flex';document.getElementById('step-login').style.display='block';},'2':()=>{showStep('mfa');document.getElementById('step-mfa').style.display='block';},'3':()=>{showStep('pwd-change');document.getElementById('step-pwd-change').style.display='block';},'4':()=>{showStep('locked');document.getElementById('step-locked').style.display='block';},'5':()=>showForgot()};
+  if(demos[e.key]) demos[e.key]();
+});
+
+// Password input auto-clear error
+['input-phone','input-password'].forEach(id => {
+  document.getElementById(id)?.addEventListener('input', () => {
+    document.getElementById('error-alert').style.display='none';
+    document.getElementById('input-phone').classList.remove('error');
+    document.getElementById('input-password').classList.remove('error');
+  });
+});
+</script>
+</body>
+</html>

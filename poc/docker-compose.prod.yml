@@ -1,0 +1,57 @@
+# 生产覆盖文件：与 docker-compose.yml 合并使用
+# 启动：docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# 与 base 的差异：
+#   - 加 Caddy 反代，自动 HTTPS（Let's Encrypt）
+#   - 撤销所有内部服务的公网端口暴露：postgres / backend / minio 都不直连
+#   - MinIO 控制台 :9001 彻底不暴露（即便 minio profile 启用也只走内网）
+#   - 全部 restart: unless-stopped
+#   - 后端 uvicorn 关 --reload，跑生产 worker
+#
+# 部署前请确认：
+#   1. caddy/Caddyfile 中的域名替换成你的；DNS 已指向服务器
+#   2. .env 改密：POSTGRES 密码、MINIO 密码、RECORDING_SIGN_SECRET
+#   3. 服务器安全组只放 22 / 80 / 443
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: autoluyin-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"             # HTTP/3
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - caddy_logs:/var/log/caddy
+    depends_on:
+      - backend
+
+  postgres:
+    restart: unless-stopped
+    ports: []                     # 撤销公网暴露；只在 docker 网络内可达
+
+  backend:
+    restart: unless-stopped
+    ports: []                     # 撤销公网 8000；外部访问只能经 caddy
+    expose:
+      - "8000"
+    volumes:                      # 覆盖 base 里的 ./backend:/app（不再 bind 源码）
+      - recordings_data:/data/recordings
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+
+  minio:
+    restart: unless-stopped
+    ports: []                     # 9001 控制台彻底不暴露；9000 数据口走 caddy
+    expose:
+      - "9000"
+
+  # minio-init 在 base 里已是 profile=minio，这里无需改
+
+volumes:
+  caddy_data:
+  caddy_config:
+  caddy_logs:

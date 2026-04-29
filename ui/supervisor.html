@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>有证慧催 — 督导工作台</title>
+  <link rel="stylesheet" href="assets/design-system.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    /* Lucide icon sizing */
+    .topbar svg { width: 16px; height: 16px; stroke-width: 1.5; vertical-align: middle; flex-shrink: 0; }
+    /* ── Supervisor-specific styles ── */
+    .modal-overlay { display: none; }
+
+    /* Status bar */
+    .status-bar {
+      display: inline-flex;
+      align-items: center;
+      gap: 20px;
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: 10px 20px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow-sm);
+      flex-wrap: wrap;
+    }
+    .status-bar-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--color-neutral-700);
+    }
+    .dot-green { width: 9px; height: 9px; border-radius: 50%; background: var(--color-success); display: inline-block; }
+    .dot-gray  { width: 9px; height: 9px; border-radius: 50%; background: var(--color-neutral-400); display: inline-block; }
+    .dot-red   { width: 9px; height: 9px; border-radius: 50%; background: var(--color-danger); display: inline-block; }
+
+    /* Workspace grid */
+    .workspace-grid {
+      display: grid;
+      grid-template-columns: 60% 40%;
+      gap: 20px;
+    }
+
+    /* Agent cards */
+    .agent-card {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 10px;
+      box-shadow: var(--shadow-sm);
+      transition: box-shadow 0.15s;
+    }
+    .agent-card:hover { box-shadow: var(--shadow-md); }
+    .agent-card.risk-l2 { border-left: 3px solid var(--color-danger); }
+    .agent-info { flex: 1; min-width: 0; }
+    .agent-name { font-size: 14px; font-weight: 600; color: var(--color-neutral-900); }
+    .agent-detail { font-size: 12.5px; color: var(--color-neutral-600); margin-top: 3px; }
+    .agent-timer { font-size: 13px; font-weight: 600; color: var(--color-primary); font-variant-numeric: tabular-nums; }
+    .agent-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+    /* Right column panels */
+    .panel-alert {
+      background: var(--color-warning-light);
+      border: 1px solid #FCD34D;
+      border-radius: var(--radius-lg);
+      padding: 16px 18px;
+      margin-bottom: 16px;
+    }
+    .panel-alert-title { font-size: 14px; font-weight: 600; color: var(--color-warning); display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+    .panel-risk {
+      background: var(--color-danger-light);
+      border: 1px solid #FECACA;
+      border-radius: var(--radius-lg);
+      padding: 16px 18px;
+      margin-bottom: 16px;
+    }
+    .panel-risk-title { font-size: 14px; font-weight: 600; color: var(--color-danger); display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+    .risk-event-item { font-size: 13px; color: var(--color-neutral-700); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .panel-stat {
+      background: var(--color-success-light);
+      border: 1px solid #A7F3D0;
+      border-radius: var(--radius-lg);
+      padding: 16px 18px;
+    }
+    .panel-stat-title { font-size: 14px; font-weight: 600; color: var(--color-success); display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+
+    /* P1 Banner */
+    .p1-banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--color-neutral-100);
+      border: 1px dashed var(--color-neutral-300);
+      border-radius: var(--radius-lg);
+      padding: 40px 24px;
+      color: var(--color-neutral-500);
+      font-size: 14px;
+      flex-direction: column;
+    }
+    .p1-banner-label { font-size: 18px; font-weight: 700; color: var(--color-neutral-400); }
+    .p1-banner-desc { font-size: 13px; color: var(--color-neutral-400); }
+
+    /* Review modal wider */
+    .modal-review { max-width: 680px; }
+
+    /* Transcript bubbles */
+    .transcript-box { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; max-height: 240px; overflow-y: auto; padding: 4px; }
+    .bubble { max-width: 80%; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.6; }
+    .bubble.agent { background: var(--color-agent-bubble); color: var(--color-neutral-900); align-self: flex-start; border-bottom-left-radius: 4px; }
+    .bubble.owner { background: var(--color-owner-bubble); color: var(--color-neutral-900); align-self: flex-end; border-bottom-right-radius: 4px; }
+    .bubble-label { font-size: 11px; color: var(--color-neutral-400); margin-bottom: 4px; }
+
+    /* Analysis box */
+    .analysis-box { background: var(--color-neutral-50); border: 1px solid var(--color-neutral-200); border-radius: var(--radius-md); padding: 14px 16px; margin-bottom: 20px; }
+    .analysis-row { display: flex; gap: 20px; font-size: 13px; flex-wrap: wrap; }
+    .analysis-item { display: flex; gap: 6px; align-items: baseline; }
+    .analysis-label { color: var(--color-neutral-600); }
+    .analysis-val { font-weight: 600; color: var(--color-neutral-900); }
+
+    /* Review form */
+    .review-form-section { border-top: 1px solid var(--color-neutral-200); padding-top: 16px; margin-top: 4px; }
+    .review-form-title { font-size: 13.5px; font-weight: 600; color: var(--color-neutral-800); margin-bottom: 14px; }
+    .radio-group { display: flex; gap: 14px; flex-wrap: wrap; }
+    .radio-item { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+    .radio-item input { cursor: pointer; }
+    .speaker-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--color-neutral-100); font-size: 13px; gap: 10px; }
+    .speaker-row:last-child { border-bottom: none; }
+    .speaker-warn { background: var(--color-warning-light); border: 1px solid #FCD34D; border-radius: var(--radius-sm); padding: 4px 10px; font-size: 12px; color: var(--color-warning); margin-top: 8px; }
+
+    /* Team monitoring */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+
+    /* Cases assignment */
+    .cases-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .case-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--color-neutral-100); }
+    .case-row:last-child { border-bottom: none; }
+    .case-row input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
+    .priority-score { font-size: 13px; font-weight: 700; color: var(--color-danger); }
+    .workload-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--color-neutral-100); font-size: 13.5px; }
+    .workload-row:last-child { border-bottom: none; }
+    .workload-bar { background: var(--color-neutral-200); border-radius: 4px; height: 6px; width: 80px; overflow: hidden; margin-top: 2px; }
+    .workload-fill { background: var(--color-primary); height: 100%; border-radius: 4px; }
+
+    /* Risk events */
+    .risk-l2-row { background: #FFF5F5; }
+    .risk-l2-row td:first-child { border-left: 3px solid var(--color-danger); }
+    .risk-l1-row td:first-child { border-left: 3px solid var(--color-warning); }
+
+    /* Scripts */
+    .script-excerpt { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+    .adopt-bar { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+    .adopt-bg { background: var(--color-neutral-200); border-radius: 4px; height: 6px; width: 60px; overflow: hidden; }
+    .adopt-fill { background: var(--color-success); height: 100%; border-radius: 4px; }
+
+    .page-section { display: none; }
+    .page-section.active { display: block; }
+
+    /* Notification bell count */
+    .bell-count {
+      position: absolute;
+      top: 2px; right: 2px;
+      background: var(--color-danger);
+      color: white;
+      font-size: 10px;
+      font-weight: 700;
+      min-width: 16px;
+      height: 16px;
+      border-radius: 8px;
+      padding: 0 3px;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid white;
+    }
+
+    /* section title in team */
+    .section-subtitle { font-size: 15px; font-weight: 600; color: var(--color-neutral-800); margin-bottom: 14px; }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+
+  <!-- ── TopBar ── -->
+  <header class="topbar">
+    <span class="topbar-logo">有证慧催</span>
+    <span class="topbar-sep"></span>
+    <span class="topbar-tenant">绿城锦绣物业</span>
+    <span class="badge badge-orange" style="font-size:12px;">督导</span>
+    <div class="topbar-right">
+      <div class="topbar-icon-btn" title="通知">
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="bell-count">2</span>
+      </div>
+      <div class="topbar-avatar">赵</div>
+    </div>
+  </header>
+
+  <!-- ── Sidebar ── -->
+  <nav class="sidebar">
+    <div class="sidebar-item active" data-page="sv-workspace">
+      <i data-lucide="layout-dashboard"></i>
+      督导工作台
+    </div>
+    <div class="sidebar-item" data-page="sv-review">
+      <i data-lucide="shield-check"></i>
+      质检复核
+      <span class="sidebar-badge">3</span>
+    </div>
+    <div class="sidebar-item" data-page="sv-team">
+      <i data-lucide="activity"></i>
+      团队监控
+    </div>
+    <div class="sidebar-item" data-page="sv-cases">
+      <i data-lucide="clipboard-list"></i>
+      案件分配
+    </div>
+    <div class="sidebar-item" data-page="sv-scripts">
+      <i data-lucide="message-circle"></i>
+      话术反馈
+    </div>
+    <div class="sidebar-item" data-page="sv-stats">
+      <i data-lucide="bar-chart-2"></i>
+      团队报表
+      <span class="sidebar-badge-p1">P1</span>
+    </div>
+    <div class="sidebar-item" data-page="sv-risk">
+      <i data-lucide="alert-triangle"></i>
+      风控事件
+      <span class="sidebar-badge">1</span>
+    </div>
+  </nav>
+
+  <!-- ── Main Content ── -->
+  <main class="main-content">
+
+    <!-- ══════════════ sv-workspace ══════════════ -->
+    <section id="sv-workspace" class="page-section active">
+      <div class="page-header">
+        <div>
+          <div class="page-title">督导工作台</div>
+          <div class="page-subtitle">实时监控团队通话状态与风控事件</div>
+        </div>
+        <div style="font-size:12.5px;color:var(--color-neutral-500);">最后更新 14:31:08</div>
+      </div>
+
+      <!-- Status Bar -->
+      <div class="status-bar">
+        <div class="status-bar-item"><span class="dot-green"></span> 通话中 <strong>8人</strong></div>
+        <div class="status-bar-item"><span class="dot-green"></span> 空闲 <strong>12人</strong></div>
+        <div class="status-bar-item"><span class="dot-gray"></span> 离线 <strong>3人</strong></div>
+        <div class="status-bar-item" style="color:var(--color-danger);"><span class="dot-red"></span> ⚠ 风控告警 <strong>1条</strong></div>
+      </div>
+
+      <div class="workspace-grid">
+        <!-- Left: Agent Cards -->
+        <div>
+          <div class="section-subtitle">员工实时状态</div>
+
+          <!-- 李小红 - risk L2 -->
+          <div class="agent-card risk-l2">
+            <div style="flex-shrink:0;">
+              <div class="topbar-avatar" style="background:#FEE2E2;color:var(--color-danger);width:38px;height:38px;font-size:14px;">李</div>
+            </div>
+            <div class="agent-info">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span class="agent-name">李小红</span>
+                <span class="badge badge-blue">IN_CALL</span>
+                <span class="agent-timer">03:42</span>
+              </div>
+              <div class="agent-detail">对方：张大伟 / 3-1201</div>
+              <div style="margin-top:4px;display:flex;align-items:center;gap:6px;">
+                <span class="badge badge-red" style="font-size:11px;">风险 L2</span>
+                <span style="font-size:12px;color:var(--color-danger);">检测到"不想交"</span>
+              </div>
+            </div>
+            <div class="agent-actions">
+              <button class="btn btn-sm btn-secondary" onclick="alert('已开始监听李小红通话')">监听</button>
+              <button class="btn btn-sm btn-danger" onclick="openModal('modal-transfer')">强制转接</button>
+            </div>
+          </div>
+
+          <!-- 王芳芳 -->
+          <div class="agent-card">
+            <div style="flex-shrink:0;">
+              <div class="topbar-avatar" style="background:var(--color-primary-light);color:var(--color-primary);width:38px;height:38px;font-size:14px;">王</div>
+            </div>
+            <div class="agent-info">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span class="agent-name">王芳芳</span>
+                <span class="badge badge-blue">IN_CALL</span>
+                <span class="agent-timer">01:18</span>
+              </div>
+              <div class="agent-detail">对方：王建国 / 5-2201</div>
+              <div style="margin-top:4px;"><span class="badge badge-green" style="font-size:11px;">无风险</span></div>
+            </div>
+            <div class="agent-actions">
+              <button class="btn btn-sm btn-secondary" onclick="alert('已开始监听王芳芳通话')">监听</button>
+            </div>
+          </div>
+
+          <!-- 张建华 -->
+          <div class="agent-card">
+            <div style="flex-shrink:0;">
+              <div class="topbar-avatar" style="background:var(--color-neutral-100);color:var(--color-neutral-600);width:38px;height:38px;font-size:14px;">张</div>
+            </div>
+            <div class="agent-info">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span class="agent-name">张建华</span>
+                <span class="badge badge-gray">刚挂断</span>
+                <span style="font-size:12px;color:var(--color-neutral-500);">2分钟前</span>
+              </div>
+              <div class="agent-detail">上通电话：刘美华</div>
+            </div>
+            <div class="agent-actions">
+              <button class="btn btn-sm btn-secondary" onclick="openModal('modal-review')">查看摘要</button>
+            </div>
+          </div>
+
+          <!-- 陈明远 -->
+          <div class="agent-card">
+            <div style="flex-shrink:0;">
+              <div class="topbar-avatar" style="background:var(--color-success-light);color:var(--color-success);width:38px;height:38px;font-size:14px;">陈</div>
+            </div>
+            <div class="agent-info">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span class="agent-name">陈明远</span>
+                <span class="badge badge-green">IDLE</span>
+              </div>
+              <div class="agent-detail">今日已完成 18通</div>
+            </div>
+            <div class="agent-actions">
+              <button class="btn btn-sm btn-primary" onclick="alert('已为陈明远分配新任务')">分配任务</button>
+            </div>
+          </div>
+
+          <!-- 刘晓娟 -->
+          <div class="agent-card">
+            <div style="flex-shrink:0;">
+              <div class="topbar-avatar" style="background:var(--color-primary-light);color:var(--color-primary);width:38px;height:38px;font-size:14px;">刘</div>
+            </div>
+            <div class="agent-info">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span class="agent-name">刘晓娟</span>
+                <span class="badge badge-blue">IN_CALL</span>
+                <span class="agent-timer">00:45</span>
+              </div>
+              <div class="agent-detail">对方：孙志远 / 4-1504</div>
+              <div style="margin-top:4px;"><span class="badge badge-green" style="font-size:11px;">无风险</span></div>
+            </div>
+            <div class="agent-actions">
+              <button class="btn btn-sm btn-secondary" onclick="alert('已开始监听刘晓娟通话')">监听</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Panels -->
+        <div>
+          <!-- Pending review -->
+          <div class="panel-alert">
+            <div class="panel-alert-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              待复核 <strong>3条</strong>
+            </div>
+            <div style="font-size:13px;color:var(--color-neutral-700);margin-bottom:12px;">有3条通话等待人工质检复核，其中含1条说话人异常标注。</div>
+            <button class="btn btn-sm" style="background:var(--color-warning);color:white;" onclick="document.querySelector('[data-page=sv-review]').click()">立即复核 →</button>
+          </div>
+
+          <!-- Risk event -->
+          <div class="panel-risk">
+            <div class="panel-risk-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+              今日风控告警
+            </div>
+            <div class="risk-event-item">
+              <div>
+                <span class="badge badge-red" style="font-size:11px;">L2</span>
+                <span style="margin-left:8px;font-weight:500;">李小红</span> 通话中检测到"<span style="color:var(--color-danger);font-weight:600;">不想交</span>"
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;white-space:nowrap;">
+                <span style="font-size:12px;color:var(--color-neutral-500);">14:28</span>
+                <button class="btn btn-sm btn-secondary" onclick="document.querySelector('[data-page=sv-risk]').click()" style="font-size:11.5px;padding:3px 8px;">查看</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Script adoption -->
+          <div class="panel-stat">
+            <div class="panel-stat-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              今日话术推送效果
+            </div>
+            <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;">
+              <span style="font-size:28px;font-weight:700;color:var(--color-neutral-900);">82%</span>
+              <span style="font-size:13px;font-weight:600;color:var(--color-success);">↑5%</span>
+              <span style="font-size:13px;color:var(--color-neutral-600);">团队采用率</span>
+            </div>
+            <div style="background:var(--color-neutral-200);border-radius:6px;height:8px;overflow:hidden;">
+              <div style="background:var(--color-success);height:100%;width:82%;border-radius:6px;"></div>
+            </div>
+            <div style="font-size:12px;color:var(--color-neutral-600);margin-top:8px;">今日推送话术 34条，催收员采用 28条</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ sv-review ══════════════ -->
+    <section id="sv-review" class="page-section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">质检复核</div>
+          <div class="page-subtitle">对AI自动质检结果进行人工复核与修正</div>
+        </div>
+        <div class="filters-bar">
+          <select class="form-control" style="width:auto;">
+            <option>待复核</option>
+            <option>全部</option>
+            <option>已确认</option>
+            <option>已修正</option>
+          </select>
+          <select class="form-control" style="width:auto;">
+            <option>全部催收员</option>
+            <option>李小红</option>
+            <option>王芳芳</option>
+            <option>张建华</option>
+            <option>陈明远</option>
+            <option>刘晓娟</option>
+          </select>
+          <input type="date" class="form-control" style="width:auto;" value="2026-04-28">
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>通话时间</th>
+              <th>催收员</th>
+              <th>业主/房号</th>
+              <th>时长</th>
+              <th>AI判断</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>14:32</td>
+              <td>李小红</td>
+              <td>张大伟 / 3-1201</td>
+              <td>3:42</td>
+              <td>推托 <span style="color:var(--color-neutral-500);font-size:12px;">(0.87)</span></td>
+              <td><span class="badge badge-orange">待复核</span></td>
+              <td><button class="btn btn-sm btn-primary" onclick="openModal('modal-review')">复核</button></td>
+            </tr>
+            <tr>
+              <td>13:15</td>
+              <td>张建华</td>
+              <td>刘美华 / 1-0803</td>
+              <td>1:12</td>
+              <td>无效通话 <span style="color:var(--color-neutral-500);font-size:12px;">(0.95)</span></td>
+              <td><span class="badge badge-green">已确认</span></td>
+              <td><button class="btn btn-sm btn-secondary" onclick="openModal('modal-review')">查看</button></td>
+            </tr>
+            <tr>
+              <td>11:42</td>
+              <td>王芳芳</td>
+              <td>王建国 / 5-2201</td>
+              <td>4:28</td>
+              <td>承诺缴费 <span style="color:var(--color-neutral-500);font-size:12px;">(0.79)</span></td>
+              <td><span class="badge badge-orange">⚠ 说话人异常</span></td>
+              <td><button class="btn btn-sm btn-primary" onclick="openModal('modal-review')">复核</button></td>
+            </tr>
+            <tr>
+              <td>昨天 16:30</td>
+              <td>陈明远</td>
+              <td>何敏华 / 4-2002</td>
+              <td>5:15</td>
+              <td>拒缴 <span style="color:var(--color-neutral-500);font-size:12px;">(0.88)</span></td>
+              <td><span class="badge badge-blue">已修正→推托</span></td>
+              <td><button class="btn btn-sm btn-secondary" onclick="openModal('modal-review')">查看</button></td>
+            </tr>
+            <tr>
+              <td>昨天 14:22</td>
+              <td>刘晓娟</td>
+              <td>孙志远 / 4-1504</td>
+              <td>2:33</td>
+              <td>承诺缴费 <span style="color:var(--color-neutral-500);font-size:12px;">(0.91)</span></td>
+              <td><span class="badge badge-green">已确认</span></td>
+              <td><button class="btn btn-sm btn-secondary" onclick="openModal('modal-review')">查看</button></td>
+            </tr>
+            <tr>
+              <td>2天前</td>
+              <td>李小红</td>
+              <td>赵云霞 / 6-0901</td>
+              <td>8:42</td>
+              <td>建议升级法务 <span style="color:var(--color-neutral-500);font-size:12px;">(0.84)</span></td>
+              <td><span class="badge badge-orange">待复核</span></td>
+              <td><button class="btn btn-sm btn-primary" onclick="openModal('modal-review')">复核</button></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="pagination">
+          <span class="pagination-info">共 6 条记录</span>
+          <div class="pagination-pages">
+            <span class="page-btn active">1</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ sv-team ══════════════ -->
+    <section id="sv-team" class="page-section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">团队监控</div>
+          <div class="page-subtitle">今日团队整体绩效概览</div>
+        </div>
+        <div style="font-size:12.5px;color:var(--color-neutral-500);">统计日期：2026-04-28</div>
+      </div>
+
+      <!-- KPI -->
+      <div class="kpi-grid">
+        <div class="stat-card">
+          <div class="stat-label">今日总通话量</div>
+          <div class="stat-value">142</div>
+          <div class="stat-change up">↑ 12% 较昨日</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">接通率</div>
+          <div class="stat-value">68.3%</div>
+          <div class="stat-change up">↑ 3.1%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">今日承诺数</div>
+          <div class="stat-value">38</div>
+          <div class="stat-change up">↑ 8条</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">平均AI采用率</div>
+          <div class="stat-value">82%</div>
+          <div class="stat-change up">↑ 5%</div>
+        </div>
+      </div>
+
+      <!-- Agent table -->
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>催收员</th>
+              <th>今日状态</th>
+              <th>通话次数</th>
+              <th>接通次数</th>
+              <th>承诺数</th>
+              <th>AI采用率</th>
+              <th>私海数</th>
+              <th>风险事件</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>李小红</strong></td>
+              <td><span class="badge badge-blue">通话中</span></td>
+              <td>22</td>
+              <td>15</td>
+              <td>7</td>
+              <td><span style="color:var(--color-success);font-weight:600;">89%</span></td>
+              <td>48</td>
+              <td><span class="badge badge-red">L2×1</span></td>
+            </tr>
+            <tr>
+              <td><strong>王芳芳</strong></td>
+              <td><span class="badge badge-blue">通话中</span></td>
+              <td>18</td>
+              <td>12</td>
+              <td>5</td>
+              <td>76%</td>
+              <td>39</td>
+              <td><span class="badge badge-gray">无</span></td>
+            </tr>
+            <tr>
+              <td><strong>张建华</strong></td>
+              <td><span class="badge badge-gray">空闲</span></td>
+              <td>21</td>
+              <td>14</td>
+              <td>6</td>
+              <td>83%</td>
+              <td>41</td>
+              <td><span class="badge badge-gray">无</span></td>
+            </tr>
+            <tr>
+              <td><strong>陈明远</strong></td>
+              <td><span class="badge badge-green">空闲</span></td>
+              <td>18</td>
+              <td>11</td>
+              <td>4</td>
+              <td>72%</td>
+              <td>55</td>
+              <td><span class="badge badge-gray">无</span></td>
+            </tr>
+            <tr>
+              <td><strong>刘晓娟</strong></td>
+              <td><span class="badge badge-blue">通话中</span></td>
+              <td>16</td>
+              <td>10</td>
+              <td>6</td>
+              <td>85%</td>
+              <td>32</td>
+              <td><span class="badge badge-gray">无</span></td>
+            </tr>
+            <tr>
+              <td><strong>周海燕</strong></td>
+              <td><span class="badge badge-gray">空闲</span></td>
+              <td>14</td>
+              <td>9</td>
+              <td>4</td>
+              <td>79%</td>
+              <td>28</td>
+              <td><span class="badge badge-gray">无</span></td>
+            </tr>
+            <tr>
+              <td><strong>赵志远</strong></td>
+              <td><span class="badge badge-blue">通话中</span></td>
+              <td>13</td>
+              <td>8</td>
+              <td>3</td>
+              <td>68%</td>
+              <td>24</td>
+              <td><span class="badge badge-orange">L1×1</span></td>
+            </tr>
+            <tr>
+              <td><strong>孙倩倩</strong></td>
+              <td><span class="badge badge-gray">离线</span></td>
+              <td>20</td>
+              <td>13</td>
+              <td>3</td>
+              <td>74%</td>
+              <td>36</td>
+              <td><span class="badge badge-gray">无</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══════════════ sv-cases ══════════════ -->
+    <section id="sv-cases" class="page-section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">案件分配</div>
+          <div class="page-subtitle">从公海选取案件，分配给催收员</div>
+        </div>
+      </div>
+
+      <div class="cases-grid">
+        <!-- Public sea list -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">公海案件</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:12.5px;color:var(--color-neutral-600);">已选 <span id="selected-count">0</span> 条</span>
+              <button class="btn btn-sm btn-primary" onclick="openModal('modal-assign')">批量分配</button>
+            </div>
+          </div>
+          <div id="cases-list">
+            <div class="case-row">
+              <input type="checkbox" id="c1" onchange="updateCount()">
+              <div style="flex:1;">
+                <div style="font-size:13.5px;font-weight:600;">梁建国 / 7-2301</div>
+                <div style="font-size:12px;color:var(--color-neutral-600);">欠费4个月 ¥6,840 · 上次联系：3天前</div>
+              </div>
+              <span class="priority-score">97</span>
+            </div>
+            <div class="case-row">
+              <input type="checkbox" id="c2" onchange="updateCount()">
+              <div style="flex:1;">
+                <div style="font-size:13.5px;font-weight:600;">吴雪梅 / 2-1105</div>
+                <div style="font-size:12px;color:var(--color-neutral-600);">欠费3个月 ¥4,920 · 上次联系：5天前</div>
+              </div>
+              <span class="priority-score">91</span>
+            </div>
+            <div class="case-row">
+              <input type="checkbox" id="c3" onchange="updateCount()">
+              <div style="flex:1;">
+                <div style="font-size:13.5px;font-weight:600;">徐明华 / 1-0402</div>
+                <div style="font-size:12px;color:var(--color-neutral-600);">欠费6个月 ¥9,360 · 上次联系：7天前</div>
+              </div>
+              <span class="priority-score">88</span>
+            </div>
+            <div class="case-row">
+              <input type="checkbox" id="c4" onchange="updateCount()">
+              <div style="flex:1;">
+                <div style="font-size:13.5px;font-weight:600;">郑丽娟 / 4-1801</div>
+                <div style="font-size:12px;color:var(--color-neutral-600);">欠费2个月 ¥3,280 · 上次联系：2天前</div>
+              </div>
+              <span class="priority-score">82</span>
+            </div>
+            <div class="case-row">
+              <input type="checkbox" id="c5" onchange="updateCount()">
+              <div style="flex:1;">
+                <div style="font-size:13.5px;font-weight:600;">黄志强 / 6-0306</div>
+                <div style="font-size:12px;color:var(--color-neutral-600);">欠费5个月 ¥8,200 · 上次联系：10天前</div>
+              </div>
+              <span class="priority-score">78</span>
+            </div>
+            <div class="case-row">
+              <input type="checkbox" id="c6" onchange="updateCount()">
+              <div style="flex:1;">
+                <div style="font-size:13.5px;font-weight:600;">曹秀英 / 3-0902</div>
+                <div style="font-size:12px;color:var(--color-neutral-600);">欠费2个月 ¥2,640 · 上次联系：1天前</div>
+              </div>
+              <span class="priority-score">71</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Agent workload -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">催收员工作量</span>
+            <span style="font-size:12px;color:var(--color-neutral-500);">容量 = 私海上限 60</span>
+          </div>
+          <div>
+            <div class="workload-row">
+              <div>
+                <div style="font-weight:600;font-size:13.5px;">陈明远</div>
+                <div class="workload-bar"><div class="workload-fill" style="width:92%;"></div></div>
+              </div>
+              <div style="text-align:right;font-size:12.5px;color:var(--color-neutral-600);">55/60<br><span style="color:var(--color-warning);font-size:12px;">已满</span></div>
+            </div>
+            <div class="workload-row">
+              <div>
+                <div style="font-weight:600;font-size:13.5px;">李小红</div>
+                <div class="workload-bar"><div class="workload-fill" style="width:80%;"></div></div>
+              </div>
+              <div style="text-align:right;font-size:12.5px;color:var(--color-neutral-600);">48/60<br><span style="color:var(--color-success);font-size:12px;">可接12</span></div>
+            </div>
+            <div class="workload-row">
+              <div>
+                <div style="font-weight:600;font-size:13.5px;">张建华</div>
+                <div class="workload-bar"><div class="workload-fill" style="width:68%;"></div></div>
+              </div>
+              <div style="text-align:right;font-size:12.5px;color:var(--color-neutral-600);">41/60<br><span style="color:var(--color-success);font-size:12px;">可接19</span></div>
+            </div>
+            <div class="workload-row">
+              <div>
+                <div style="font-weight:600;font-size:13.5px;">刘晓娟</div>
+                <div class="workload-bar"><div class="workload-fill" style="width:53%;"></div></div>
+              </div>
+              <div style="text-align:right;font-size:12.5px;color:var(--color-neutral-600);">32/60<br><span style="color:var(--color-success);font-size:12px;">可接28</span></div>
+            </div>
+            <div class="workload-row">
+              <div>
+                <div style="font-weight:600;font-size:13.5px;">王芳芳</div>
+                <div class="workload-bar"><div class="workload-fill" style="width:65%;"></div></div>
+              </div>
+              <div style="text-align:right;font-size:12.5px;color:var(--color-neutral-600);">39/60<br><span style="color:var(--color-success);font-size:12px;">可接21</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ sv-scripts ══════════════ -->
+    <section id="sv-scripts" class="page-section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">话术反馈</div>
+          <div class="page-subtitle">对AI推送话术进行标注与评价，优化推荐策略</div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>话术内容</th>
+              <th>异议类型</th>
+              <th>组内采用率</th>
+              <th>督导标注</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="script-excerpt">"理解您的困难，我们可以为您申请3个月分期缴费方案，每月只需还 ¥820，不影响您的...</td>
+              <td><span class="badge badge-orange">经济困难</span></td>
+              <td>
+                <div class="adopt-bar">
+                  <div class="adopt-bg"><div class="adopt-fill" style="width:86%;"></div></div>
+                  <span>86%</span>
+                </div>
+              </td>
+              <td><span class="badge badge-green">好话术</span></td>
+              <td><button class="btn btn-sm btn-secondary" onclick="openModal('modal-script-comment')">写点评</button></td>
+            </tr>
+            <tr>
+              <td class="script-excerpt">"您好，房屋质量问题已提交工单，预计5个工作日处理。物业费与维修服务是分开的账目...</td>
+              <td><span class="badge badge-blue">房屋质量</span></td>
+              <td>
+                <div class="adopt-bar">
+                  <div class="adopt-bg"><div class="adopt-fill" style="width:72%;"></div></div>
+                  <span>72%</span>
+                </div>
+              </td>
+              <td><span class="badge badge-green">好话术</span></td>
+              <td><button class="btn btn-sm btn-secondary" onclick="openModal('modal-script-comment')">写点评</button></td>
+            </tr>
+            <tr>
+              <td class="script-excerpt">"您的物业费已逾期超过6个月，如仍未缴清我们将不得不采取相应法律措施，请您尽快处...</td>
+              <td><span class="badge badge-red">拒缴</span></td>
+              <td>
+                <div class="adopt-bar">
+                  <div class="adopt-bg"><div class="adopt-fill" style="width:34%;background:var(--color-danger);"></div></div>
+                  <span style="color:var(--color-danger);">34%</span>
+                </div>
+              </td>
+              <td><span class="badge badge-red">差话术</span></td>
+              <td><button class="btn btn-sm btn-secondary" onclick="openModal('modal-script-comment')">写点评</button></td>
+            </tr>
+            <tr>
+              <td class="script-excerpt">"感谢您的理解，我们已为您备注下周一上午10点回访，如有变化可随时联系我们客服热线...</td>
+              <td><span class="badge badge-gray">暂缓</span></td>
+              <td>
+                <div class="adopt-bar">
+                  <div class="adopt-bg"><div class="adopt-fill" style="width:79%;"></div></div>
+                  <span>79%</span>
+                </div>
+              </td>
+              <td><span class="badge badge-gray">待标注</span></td>
+              <td>
+                <div style="display:flex;gap:4px;">
+                  <button class="btn btn-sm btn-secondary" onclick="this.closest('tr').querySelector('.badge-gray:last-of-type').className='badge badge-green';this.closest('tr').querySelector('.badge-gray:last-of-type').textContent='好话术'">好话术</button>
+                  <button class="btn btn-sm btn-secondary" onclick="openModal('modal-script-comment')">差话术</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td class="script-excerpt">"根据合同第9条规定，逾期物业费将产生每日万分之五的违约金，当前累计违约金 ¥124...</td>
+              <td><span class="badge badge-red">拒缴</span></td>
+              <td>
+                <div class="adopt-bar">
+                  <div class="adopt-bg"><div class="adopt-fill" style="width:45%;"></div></div>
+                  <span>45%</span>
+                </div>
+              </td>
+              <td><span class="badge badge-gray">待标注</span></td>
+              <td>
+                <div style="display:flex;gap:4px;">
+                  <button class="btn btn-sm btn-secondary" onclick="openModal('modal-script-comment')">好话术</button>
+                  <button class="btn btn-sm btn-secondary" onclick="openModal('modal-script-comment')">差话术</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td class="script-excerpt">"我完全理解您的心情，如果方便的话，能告诉我您最近遇到的主要困难吗？我们可以一起...</td>
+              <td><span class="badge badge-orange">情绪激动</span></td>
+              <td>
+                <div class="adopt-bar">
+                  <div class="adopt-bg"><div class="adopt-fill" style="width:91%;"></div></div>
+                  <span style="color:var(--color-success);">91%</span>
+                </div>
+              </td>
+              <td><span class="badge badge-green">好话术</span></td>
+              <td><button class="btn btn-sm btn-secondary" onclick="openModal('modal-script-comment')">写点评</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══════════════ sv-stats (P1) ══════════════ -->
+    <section id="sv-stats" class="page-section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">团队报表</div>
+          <div class="page-subtitle">周期性绩效统计与数据导出</div>
+        </div>
+      </div>
+      <div class="p1-banner">
+        <div class="p1-banner-label">P1 — 功能建设中</div>
+        <div class="p1-banner-desc">团队报表模块正在开发中，预计 v1.1 上线。包含：周报/月报导出、成员排名、趋势图表、目标达成率等功能。</div>
+        <div style="font-size:13px;color:var(--color-neutral-400);">如有紧急需求，请联系平台运营团队提取原始数据。</div>
+      </div>
+    </section>
+
+    <!-- ══════════════ sv-risk ══════════════ -->
+    <section id="sv-risk" class="page-section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">风控事件记录</div>
+          <div class="page-subtitle">AI实时检测触发词及合规风险事件</div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>触发时间</th>
+              <th>员工</th>
+              <th>级别</th>
+              <th>触发词/场景</th>
+              <th>处置状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="risk-l2-row">
+              <td>14:28 今日</td>
+              <td>李小红</td>
+              <td><span class="badge badge-red">L2</span></td>
+              <td>业主说："<strong>不想交</strong>" — 情绪抵触升级</td>
+              <td><span class="badge badge-orange">处理中</span></td>
+              <td><button class="btn btn-sm btn-primary" onclick="openModal('modal-review')">查看处置</button></td>
+            </tr>
+            <tr class="risk-l1-row">
+              <td>11:02 今日</td>
+              <td>赵志远</td>
+              <td><span class="badge badge-orange">L1</span></td>
+              <td>催收员语速过快、语气强硬（语音分析）</td>
+              <td><span class="badge badge-blue">已提醒</span></td>
+              <td><button class="btn btn-sm btn-secondary" onclick="openModal('modal-review')">查看</button></td>
+            </tr>
+            <tr>
+              <td>09:34 今日</td>
+              <td>王芳芳</td>
+              <td><span class="badge badge-orange">L1</span></td>
+              <td>通话中出现"法院""起诉"等字样（业主提及）</td>
+              <td><span class="badge badge-green">已关闭</span></td>
+              <td><button class="btn btn-sm btn-secondary" onclick="openModal('modal-review')">查看</button></td>
+            </tr>
+            <tr>
+              <td>昨天 16:45</td>
+              <td>张建华</td>
+              <td><span class="badge badge-orange">L1</span></td>
+              <td>AI识别到业主情绪评分低于阈值 (0.21)</td>
+              <td><span class="badge badge-green">已关闭</span></td>
+              <td><button class="btn btn-sm btn-secondary" onclick="openModal('modal-review')">查看</button></td>
+            </tr>
+            <tr class="risk-l2-row">
+              <td>昨天 14:12</td>
+              <td>陈明远</td>
+              <td><span class="badge badge-red">L2</span></td>
+              <td>业主说："<strong>你们这是骚扰</strong>" — 投诉风险</td>
+              <td><span class="badge badge-green">已处置</span></td>
+              <td><button class="btn btn-sm btn-secondary" onclick="openModal('modal-review')">查看报告</button></td>
+            </tr>
+            <tr>
+              <td>2天前</td>
+              <td>李小红</td>
+              <td><span class="badge badge-orange">L1</span></td>
+              <td>AI推荐话术被跳过，使用了自定义话术</td>
+              <td><span class="badge badge-green">已关闭</span></td>
+              <td><button class="btn btn-sm btn-secondary" onclick="openModal('modal-review')">查看</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ══════════════ MODALS ══════════════ -->
+
+<!-- Force Transfer AlertDialog -->
+<div class="modal-overlay alert-dialog" id="modal-transfer">
+  <div class="modal">
+    <div class="modal-body">
+      <div class="alert-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" stroke-width="2" style="display:inline;margin-right:6px;vertical-align:-3px;"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        确认强制接管通话？
+      </div>
+      <div class="alert-desc">确认强制接管<strong>李小红</strong>与<strong>张大伟</strong>的通话？此操作将向李小红 App 推送转接请求，并在其屏幕显示通知。</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-transfer')">取消</button>
+      <button class="btn btn-danger" onclick="closeModal('modal-transfer');alert('已向李小红App推送强制转接请求')">确认强制转接</button>
+    </div>
+  </div>
+</div>
+
+<!-- Review Modal -->
+<div class="modal-overlay" id="modal-review">
+  <div class="modal modal-review">
+    <div class="modal-header">
+      <span class="modal-title">复核通话：李小红 × 张大伟 &nbsp;3:42</span>
+      <button class="modal-close" onclick="closeModal('modal-review')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <!-- Transcript -->
+      <div style="font-size:13px;font-weight:600;color:var(--color-neutral-700);margin-bottom:10px;">通话记录</div>
+      <div class="transcript-box">
+        <div>
+          <div class="bubble-label" style="padding-left:4px;">催收员</div>
+          <div class="bubble agent">张先生您好，我是绿城物业工作人员，请问您方便聊一下物业费的事吗？</div>
+        </div>
+        <div style="align-self:flex-end;">
+          <div class="bubble-label" style="text-align:right;padding-right:4px;">业主</div>
+          <div class="bubble owner">最近手头紧，再说吧</div>
+        </div>
+        <div>
+          <div class="bubble-label" style="padding-left:4px;">催收员</div>
+          <div class="bubble agent">理解您的困难，我们可以分期或者申请缓交，您看一下我们的方案？</div>
+        </div>
+        <div style="align-self:flex-end;">
+          <div class="bubble-label" style="text-align:right;padding-right:4px;">业主</div>
+          <div class="bubble owner" style="background:#FEE2E2;">房子质量有问题我不想交</div>
+        </div>
+      </div>
+
+      <!-- AI Analysis -->
+      <div style="font-size:13px;font-weight:600;color:var(--color-neutral-700);margin-bottom:8px;">AI 分析结果</div>
+      <div class="analysis-box">
+        <div class="analysis-row">
+          <div class="analysis-item"><span class="analysis-label">意图：</span><span class="analysis-val"><span class="badge badge-orange">推托</span></span></div>
+          <div class="analysis-item"><span class="analysis-label">原因：</span><span class="analysis-val">经济困难 + 房屋质量异议</span></div>
+          <div class="analysis-item"><span class="analysis-label">置信度：</span><span class="analysis-val" style="color:var(--color-success);">0.87</span></div>
+        </div>
+      </div>
+
+      <!-- Review form -->
+      <div class="review-form-section">
+        <div class="review-form-title">督导复核</div>
+
+        <div class="form-group">
+          <label class="form-label">AI 判断是否正确</label>
+          <div class="radio-group">
+            <label class="radio-item"><input type="radio" name="ai-correct" checked> 正确 ✓</label>
+            <label class="radio-item">
+              <input type="radio" name="ai-correct"> 修正为
+              <select class="form-control" style="width:auto;display:inline;margin-left:6px;padding:4px 8px;">
+                <option>承诺缴费</option>
+                <option>拒缴</option>
+                <option>无效通话</option>
+                <option>建议升级法务</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">说话人标注核查</label>
+          <div style="background:var(--color-neutral-50);border-radius:var(--radius-md);border:1px solid var(--color-neutral-200);padding:2px 12px;">
+            <div class="speaker-row">
+              <span>第1句：<em>"张先生您好..."</em></span>
+              <select class="form-control" style="width:auto;padding:4px 8px;">
+                <option selected>催收员</option><option>业主</option><option>unknown</option>
+              </select>
+            </div>
+            <div class="speaker-row">
+              <span>第2句：<em>"最近手头紧..."</em></span>
+              <select class="form-control" style="width:auto;padding:4px 8px;">
+                <option>催收员</option><option selected>业主</option><option>unknown</option>
+              </select>
+            </div>
+            <div class="speaker-row">
+              <span>第3句：<em>"理解您的困难..."</em></span>
+              <select class="form-control" style="width:auto;padding:4px 8px;">
+                <option selected>催收员</option><option>业主</option><option>unknown</option>
+              </select>
+            </div>
+            <div class="speaker-row">
+              <span>第4句：<em>"房子质量有问题..."</em></span>
+              <select class="form-control" style="width:auto;padding:4px 8px;">
+                <option>催收员</option><option selected>业主</option><option>unknown</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">综合评价</label>
+          <div class="radio-group">
+            <label class="radio-item"><input type="radio" name="eval"> 优秀</label>
+            <label class="radio-item"><input type="radio" name="eval" checked> 良好</label>
+            <label class="radio-item"><input type="radio" name="eval"> 待改进</label>
+            <label class="radio-item"><input type="radio" name="eval"> 需整改</label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">复核备注</label>
+          <textarea class="form-control" rows="3" placeholder="可填写复核意见或指导建议..."></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-review')">取消</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-review');alert('复核结果已提交')">提交复核</button>
+    </div>
+  </div>
+</div>
+
+<!-- Assign Modal -->
+<div class="modal-overlay alert-dialog" id="modal-assign">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">批量分配案件</span>
+      <button class="modal-close" onclick="closeModal('modal-assign')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:16px;font-size:13.5px;color:var(--color-neutral-700);">已选择 <strong id="modal-selected-count">0</strong> 条案件，分配给：</div>
+      <div class="form-group">
+        <label class="form-label">选择催收员<span class="req">*</span></label>
+        <select class="form-control">
+          <option value="">请选择催收员</option>
+          <option>张建华（可接19条）</option>
+          <option>刘晓娟（可接28条）</option>
+          <option>王芳芳（可接21条）</option>
+          <option>李小红（可接12条）</option>
+        </select>
+      </div>
+      <div style="background:var(--color-neutral-50);border-radius:var(--radius-md);padding:12px;font-size:13px;color:var(--color-neutral-600);">
+        分配后案件将进入催收员私海，系统将自动推送任务通知。
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-assign')">取消</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-assign');alert('案件已成功分配')">确认分配</button>
+    </div>
+  </div>
+</div>
+
+<!-- Script Comment Modal -->
+<div class="modal-overlay alert-dialog" id="modal-script-comment">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">话术点评</span>
+      <button class="modal-close" onclick="closeModal('modal-script-comment')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">标注结果</label>
+        <div class="radio-group">
+          <label class="radio-item"><input type="radio" name="script-tag" checked> 好话术</label>
+          <label class="radio-item"><input type="radio" name="script-tag"> 差话术</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">点评内容</label>
+        <textarea class="form-control" rows="4" placeholder="请填写具体点评意见，将反馈到话术优化模型..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-script-comment')">取消</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-script-comment');alert('点评已提交')">提交点评</button>
+    </div>
+  </div>
+</div>
+
+<script>
+lucide.createIcons();
+document.querySelectorAll('.sidebar-item[data-page]').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+    document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
+    item.classList.add('active');
+    document.getElementById(item.dataset.page).classList.add('active');
+  });
+});
+function openModal(id){ document.getElementById(id).style.display='flex'; }
+function closeModal(id){ document.getElementById(id).style.display='none'; }
+document.querySelectorAll('.modal-overlay').forEach(o => o.addEventListener('click', e => { if(e.target===o) o.style.display='none'; }));
+
+function updateCount() {
+  const checked = document.querySelectorAll('#cases-list input[type=checkbox]:checked').length;
+  document.getElementById('selected-count').textContent = checked;
+  const el = document.getElementById('modal-selected-count');
+  if (el) el.textContent = checked;
+}
+</script>
+</body>
+</html>

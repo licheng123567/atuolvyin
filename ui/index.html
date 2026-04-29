@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>有证慧催 — UI 设计稿</title>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: linear-gradient(135deg, #0f172a 0%, #1a3a6e 60%, #0f172a 100%);
+  min-height: 100vh;
+  color: white;
+  padding: 40px 20px 60px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Header ── */
+.header {
+  text-align: center;
+  max-width: 960px;
+  margin: 0 auto 36px;
+}
+.header-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.logo-badge {
+  width: 48px; height: 48px;
+  background: linear-gradient(135deg, #1A56DB, #7E3AF2);
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 900; color: white;
+  box-shadow: 0 4px 16px rgba(26, 86, 219, 0.5);
+  letter-spacing: -1px;
+}
+.header-title {
+  font-size: 36px;
+  font-weight: 800;
+  color: white;
+  letter-spacing: -1px;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.3);
+}
+.header-tagline {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.65);
+  margin-top: 6px;
+  letter-spacing: 0.3px;
+}
+.header-sep {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  max-width: 960px;
+  margin: 28px auto;
+}
+.header-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.5);
+  margin-top: 12px;
+}
+.header-meta-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 12.5px;
+  color: rgba(255,255,255,0.7);
+}
+
+/* ── Grid ── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+@media (max-width: 768px) {
+  .grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 520px) {
+  .grid { grid-template-columns: 1fr; }
+}
+
+/* ── Role Card ── */
+.role-card {
+  background: rgba(255, 255, 255, 0.97);
+  border-radius: 12px;
+  padding: 22px 22px 20px;
+  text-decoration: none;
+  display: block;
+  color: #111827;
+  transition: transform 0.2s, box-shadow 0.2s;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+.role-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  color: #111827;
+}
+.role-card::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 0;
+  background: linear-gradient(90deg, transparent, rgba(26,86,219,0.03));
+  transition: width 0.2s;
+}
+.role-card:hover::after { width: 100%; }
+
+/* ── Card inner ── */
+.card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.card-icon {
+  font-size: 28px;
+  line-height: 1;
+  margin-bottom: 0;
+}
+.card-icon svg { width: 28px; height: 28px; stroke-width: 1.5; color: inherit; }
+.card-top-right { text-align: right; }
+.card-role-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.3;
+  margin-bottom: 2px;
+}
+.card-role-code {
+  font-size: 11px;
+  color: #9CA3AF;
+  font-family: "JetBrains Mono", "Courier New", monospace;
+}
+.card-desc {
+  font-size: 12.5px;
+  color: #6B7280;
+  line-height: 1.55;
+  margin-top: 8px;
+  min-height: 36px;
+}
+.card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #F3F4F6;
+}
+.page-count-badge {
+  display: inline-flex; align-items: center;
+  background: #EBF5FF;
+  color: #1A56DB;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+.card-link {
+  font-size: 12.5px;
+  color: #1A56DB;
+  font-weight: 500;
+  display: flex; align-items: center; gap: 3px;
+  transition: gap 0.15s;
+}
+.role-card:hover .card-link { gap: 6px; }
+
+/* ── Footer ── */
+.footer {
+  max-width: 960px;
+  margin: 44px auto 0;
+  text-align: center;
+}
+.footer-text {
+  font-size: 13px;
+  color: rgba(255,255,255,0.35);
+  letter-spacing: 0.3px;
+}
+.footer-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+  margin-bottom: 20px;
+}
+
+/* ── Stars background decoration ── */
+.bg-dots {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+.bg-dot {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.04);
+}
+body > * { position: relative; z-index: 1; }
+</style>
+</head>
+<body>
+
+<!-- Background decoration -->
+<div class="bg-dots" aria-hidden="true">
+  <div class="bg-dot" style="width:300px;height:300px;top:-80px;right:-60px;"></div>
+  <div class="bg-dot" style="width:200px;height:200px;bottom:10%;left:-40px;"></div>
+  <div class="bg-dot" style="width:150px;height:150px;top:40%;right:5%;"></div>
+</div>
+
+<!-- ── Header ── -->
+<div class="header">
+  <div class="header-logo">
+    <div class="logo-badge">催</div>
+    <h1 class="header-title">有证慧催</h1>
+  </div>
+  <p class="header-tagline">AI 辅助物业费催收系统 — UI 交互原型 v1.0</p>
+  <div class="header-meta">
+    <span class="header-meta-chip">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+      shadcn/ui + Refine.dev
+    </span>
+    <span class="header-meta-chip">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      9 个角色视图
+    </span>
+    <span class="header-meta-chip">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+      80 个交互页面
+    </span>
+  </div>
+</div>
+
+<div class="header-sep"></div>
+
+<!-- ── Cards Grid ── -->
+<div class="grid">
+
+  <!-- 1. 平台超管 -->
+  <a class="role-card" href="platform-superadmin.html" style="border-left: 4px solid #E02424;">
+    <div class="card-top">
+      <div class="card-icon" style="color:#E02424"><i data-lucide="shield-check"></i></div>
+      <div class="card-top-right">
+        <div class="card-role-name">平台超管</div>
+        <div class="card-role-code">platform_superadmin</div>
+      </div>
+    </div>
+    <div class="card-desc">系统技术安全，IP 白名单 + MFA 双因素认证管理</div>
+    <div class="card-footer">
+      <span class="page-count-badge">9 个页面</span>
+      <span class="card-link">
+        查看设计稿
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </span>
+    </div>
+  </a>
+
+  <!-- 2. 平台运营员 -->
+  <a class="role-card" href="platform-ops.html" style="border-left: 4px solid #1A56DB;">
+    <div class="card-top">
+      <div class="card-icon" style="color:#1A56DB"><i data-lucide="users"></i></div>
+      <div class="card-top-right">
+        <div class="card-role-name">平台运营员</div>
+        <div class="card-role-code">platform_ops</div>
+      </div>
+    </div>
+    <div class="card-desc">客户开通、续费跟进、服务商审核与平台运营管理</div>
+    <div class="card-footer">
+      <span class="page-count-badge">14 个页面</span>
+      <span class="card-link">
+        查看设计稿
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </span>
+    </div>
+  </a>
+
+  <!-- 3. 服务商管理员 -->
+  <a class="role-card" href="provider-admin.html" style="border-left: 4px solid #7E3AF2;">
+    <div class="card-top">
+      <div class="card-icon" style="color:#7E3AF2"><i data-lucide="landmark"></i></div>
+      <div class="card-top-right">
+        <div class="card-role-name">服务商管理员</div>
+        <div class="card-role-code">provider_admin</div>
+      </div>
+    </div>
+    <div class="card-desc">律所 / 催收团队负责人，管理团队成员与结算账单</div>
+    <div class="card-footer">
+      <span class="page-count-badge">7 个页面</span>
+      <span class="card-link">
+        查看设计稿
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </span>
+    </div>
+  </a>
+
+  <!-- 4. 物业公司管理员 -->
+  <a class="role-card" href="admin.html" style="border-left: 4px solid #1A56DB;">
+    <div class="card-top">
+      <div class="card-icon" style="color:#1A56DB"><i data-lucide="building-2"></i></div>
+      <div class="card-top-right">
+        <div class="card-role-name">物业公司管理员</div>
+        <div class="card-role-code">admin</div>
+      </div>
+    </div>
+    <div class="card-desc">全公司数据总览、CRM 管理、人员配置与系统设置</div>
+    <div class="card-footer">
+      <span class="page-count-badge">14 个页面</span>
+      <span class="card-link">
+        查看设计稿
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </span>
+    </div>
+  </a>
+
+  <!-- 5. 主管/督导 -->
+  <a class="role-card" href="supervisor.html" style="border-left: 4px solid #D97706;">
+    <div class="card-top">
+      <div class="card-icon" style="color:#D97706"><i data-lucide="activity"></i></div>
+      <div class="card-top-right">
+        <div class="card-role-name">主管 / 督导</div>
+        <div class="card-role-code">supervisor</div>
+      </div>
+    </div>
+    <div class="card-desc">团队质检监控、实时席位看板、AI 分析结果人工复核</div>
+    <div class="card-footer">
+      <span class="page-count-badge">7 个页面</span>
+      <span class="card-link">
+        查看设计稿
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </span>
+    </div>
+  </a>
+
+  <!-- 6. 催收员 PC端 -->
+  <a class="role-card" href="agent-pc.html" style="border-left: 4px solid #057A55;">
+    <div class="card-top">
+      <div class="card-icon" style="color:#057A55"><i data-lucide="monitor"></i></div>
+      <div class="card-top-right">
+        <div class="card-role-name">催收员 PC 端</div>
+        <div class="card-role-code">agent_internal</div>
+      </div>
+    </div>
+    <div class="card-desc">三栏实时 AI 辅助外呼工作台，转写 + 话术 + 画像同屏</div>
+    <div class="card-footer">
+      <span class="page-count-badge">4 个页面</span>
+      <span class="card-link">
+        查看设计稿
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </span>
+    </div>
+  </a>
+
+  <!-- 7. 催收员 Android App -->
+  <a class="role-card" href="app-agent.html" style="border-left: 4px solid #057A55;">
+    <div class="card-top">
+      <div class="card-icon" style="color:#057A55"><i data-lucide="smartphone"></i></div>
+      <div class="card-top-right">
+        <div class="card-role-name">催收员 Android App</div>
+        <div class="card-role-code">agent_mobile</div>
+      </div>
+    </div>
+    <div class="card-desc">移动端外呼录音、AI 实时提示、通话记录与任务管理</div>
+    <div class="card-footer">
+      <span class="page-count-badge">8 个页面</span>
+      <span class="card-link">
+        查看设计稿
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </span>
+    </div>
+  </a>
+
+  <!-- 8. 法务专员 -->
+  <a class="role-card" href="legal.html" style="border-left: 4px solid #7E3AF2;">
+    <div class="card-top">
+      <div class="card-icon" style="color:#7E3AF2"><i data-lucide="scale"></i></div>
+      <div class="card-top-right">
+        <div class="card-role-name">法务专员</div>
+        <div class="card-role-code">legal</div>
+      </div>
+    </div>
+    <div class="card-desc">法务案件跟进、诉讼阶段管理、区块链存证与文档管理</div>
+    <div class="card-footer">
+      <span class="page-count-badge">5 个页面</span>
+      <span class="card-link">
+        查看设计稿
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </span>
+    </div>
+  </a>
+
+  <!-- 9. 工单处理员 -->
+  <a class="role-card" href="workorder.html" style="border-left: 4px solid #9CA3AF;">
+    <div class="card-top">
+      <div class="card-icon" style="color:#9CA3AF"><i data-lucide="wrench"></i></div>
+      <div class="card-top-right">
+        <div class="card-role-name">工单处理员</div>
+        <div class="card-role-code">workorder</div>
+      </div>
+    </div>
+    <div class="card-desc">设备报修工单处理（隔离视图，无法查看通话数据）</div>
+    <div class="card-footer">
+      <span class="page-count-badge">4 个页面</span>
+      <span class="card-link">
+        查看设计稿
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </span>
+    </div>
+  </a>
+
+</div>
+
+<!-- ── Divider ── -->
+<div class="header-sep" style="max-width:960px;margin:28px auto 20px;"></div>
+<div style="max-width:960px;margin:0 auto 20px;text-align:center;">
+  <span style="font-size:13px;color:rgba(255,255,255,0.45);letter-spacing:.5px;">附加页面</span>
+</div>
+
+<!-- ── Supplemental Pages Grid ── -->
+<div class="grid" style="max-width:960px;margin:0 auto;">
+
+  <!-- Login -->
+  <a class="role-card" href="login.html" style="border-left: 4px solid #374151;">
+    <div class="card-top">
+      <div class="card-icon" style="color:#374151"><i data-lucide="key-round"></i></div>
+      <div class="card-top-right">
+        <div class="card-role-name">登录 / 认证流程</div>
+        <div class="card-role-code">login · mfa · first_login</div>
+      </div>
+    </div>
+    <div class="card-desc">多角色统一登录入口，含 MFA 验证、首次修改密码、账号锁定状态</div>
+    <div class="card-footer">
+      <span class="page-count-badge">4 步骤</span>
+      <span class="card-link">
+        查看设计稿
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </span>
+    </div>
+  </a>
+
+  <!-- Payment H5 -->
+  <a class="role-card" href="payment-h5.html" style="border-left: 4px solid #D97706;">
+    <div class="card-top">
+      <div class="card-icon" style="color:#D97706"><i data-lucide="credit-card"></i></div>
+      <div class="card-top-right">
+        <div class="card-role-name">业主缴费 H5</div>
+        <div class="card-role-code">homeowner · payment_h5</div>
+      </div>
+    </div>
+    <div class="card-desc">业主收到短信后打开的手机缴费页面，含转账信息、二维码与公证提存说明</div>
+    <div class="card-footer">
+      <span class="page-count-badge">3 种状态</span>
+      <span class="card-link">
+        查看设计稿
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </span>
+    </div>
+  </a>
+
+</div>
+
+<!-- ── Footer ── -->
+<div class="footer">
+  <div class="footer-divider"></div>
+  <p class="footer-text">共 80 个交互页面 · 9 个角色 · 设计规范基于 shadcn/ui + Refine.dev</p>
+</div>
+
+<script>lucide.createIcons();</script>
+</body>
+</html>

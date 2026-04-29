@@ -1,0 +1,10 @@
+[
+    {
+        "merged": "com.autoluyin.demo.app-mergeDebugResources-40:/layout/item_task.xml",
+        "source": "com.autoluyin.demo.app-main-43:/layout/item_task.xml"
+    },
+    {
+        "merged": "com.autoluyin.demo.app-mergeDebugResources-40:/layout/activity_main.xml",
+        "source": "com.autoluyin.demo.app-main-43:/layout/activity_main.xml"
+    }
+]

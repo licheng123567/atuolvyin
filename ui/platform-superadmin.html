@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>有证慧催 — 平台超管后台</title>
+  <link rel="stylesheet" href="assets/design-system.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    /* ── Superadmin-specific styles ── */
+    .service-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    .service-card { background: white; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg); padding: 16px 20px; box-shadow: var(--shadow-sm); }
+    .service-card-title { font-size: 12px; color: var(--color-neutral-600); margin-bottom: 6px; }
+    .service-card-status { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--color-success); }
+    .service-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); flex-shrink: 0; }
+    .service-meta { font-size: 12px; color: var(--color-neutral-600); margin-top: 4px; }
+
+    .chart-section { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+    .chart-card { background: white; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow-sm); }
+    .chart-title { font-size: 14px; font-weight: 600; margin-bottom: 16px; color: var(--color-neutral-900); }
+    .chart-svg-wrap { width: 100%; }
+
+    .v11-banner { display: flex; align-items: center; gap: 10px; background: var(--color-warning-light); border: 1px solid #FCD34D; border-radius: var(--radius-md); padding: 12px 16px; margin-bottom: 20px; color: var(--color-warning); font-size: 13.5px; font-weight: 500; }
+    .v11-banner svg { flex-shrink: 0; }
+
+    .disabled-section { opacity: 0.45; pointer-events: none; }
+
+    .package-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .package-card { background: white; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg); padding: 24px; box-shadow: var(--shadow-sm); position: relative; }
+    .package-card.recommended { border-color: var(--color-primary); }
+    .package-name { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+    .package-price { font-size: 24px; font-weight: 700; color: var(--color-primary); margin-bottom: 4px; }
+    .package-price-unit { font-size: 13px; color: var(--color-neutral-600); font-weight: 400; }
+    .package-divider { height: 1px; background: var(--color-neutral-200); margin: 16px 0; }
+    .package-features { list-style: none; margin-bottom: 20px; }
+    .package-features li { font-size: 13px; color: var(--color-neutral-700); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+    .package-features li svg { color: var(--color-success); flex-shrink: 0; }
+    .package-footer { display: flex; align-items: center; justify-content: space-between; }
+
+    .storage-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+    .storage-card { background: white; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow-sm); }
+    .storage-label { font-size: 13px; color: var(--color-neutral-600); margin-bottom: 4px; }
+    .storage-value { font-size: 20px; font-weight: 700; margin-bottom: 12px; }
+    .storage-meta { font-size: 12px; color: var(--color-neutral-600); margin-top: 8px; }
+
+    .keyword-tab-content { display: none; }
+    .keyword-tab-content.active { display: block; }
+
+    .version-hero { background: linear-gradient(135deg, var(--color-primary-light) 0%, #DBEAFE 100%); border: 1px solid #BFDBFE; border-radius: var(--radius-lg); padding: 24px; margin-bottom: 24px; display: flex; align-items: flex-start; justify-content: space-between; }
+    .version-hero-left .version-number { font-size: 28px; font-weight: 700; color: var(--color-primary); }
+    .version-hero-left .version-label { font-size: 13px; color: var(--color-neutral-600); margin-top: 4px; }
+    .version-hero-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 32px; margin-top: 16px; }
+    .version-meta-item .meta-key { font-size: 12px; color: var(--color-neutral-600); }
+    .version-meta-item .meta-val { font-size: 13.5px; font-weight: 500; color: var(--color-neutral-900); margin-top: 2px; }
+
+    .storage-notice { background: var(--color-neutral-50); border: 1px solid var(--color-neutral-200); border-radius: var(--radius-md); padding: 12px 16px; font-size: 12.5px; color: var(--color-neutral-600); text-align: center; margin-top: 16px; }
+
+    /* modal hidden by default */
+    .modal-overlay { display: none; }
+    .modal-overlay.open { display: flex; }
+
+    .alert-dialog-overlay { display: none; }
+    .alert-dialog-overlay.open { display: flex; }
+
+    .topbar-user { display: flex; align-items: center; gap: 8px; }
+    .topbar-user-name { font-size: 13px; color: var(--color-neutral-700); }
+
+    .info-alert { display: flex; align-items: center; gap: 10px; background: var(--color-primary-light); border: 1px solid #BFDBFE; border-radius: var(--radius-md); padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: var(--color-primary); }
+    .warning-alert { display: flex; align-items: center; gap: 10px; background: var(--color-warning-light); border: 1px solid #FCD34D; border-radius: var(--radius-md); padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: var(--color-warning); }
+    .danger-alert { display: flex; align-items: center; gap: 10px; background: var(--color-danger-light); border: 1px solid #FCA5A5; border-radius: var(--radius-md); padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: var(--color-danger); }
+
+    .blockchain-disabled { background: var(--color-neutral-100); border-radius: var(--radius-lg); padding: 48px; text-align: center; color: var(--color-neutral-400); font-size: 15px; font-weight: 500; border: 1px dashed var(--color-neutral-300); }
+
+    .topbar-avatar.gray-avatar { background: var(--color-neutral-200); color: var(--color-neutral-600); }
+  </style>
+</head>
+<body>
+<!-- ═══════════════════════════════════════════════════════════
+     TOP BAR
+════════════════════════════════════════════════════════════ -->
+<div class="topbar">
+  <span class="topbar-logo">有证慧催</span>
+  <div class="topbar-sep"></div>
+  <span class="topbar-tenant">平台超管后台</span>
+  <div class="topbar-right">
+    <div class="topbar-icon-btn" title="通知">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    </div>
+    <div class="topbar-user">
+      <div class="topbar-avatar gray-avatar">超</div>
+      <span class="topbar-user-name">系统超管</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SIDEBAR
+════════════════════════════════════════════════════════════ -->
+<div class="sidebar">
+  <div class="sidebar-item active" data-page="p-health">
+    <i data-lucide="activity"></i>
+    系统健康监控
+  </div>
+  <div class="sidebar-item" data-page="p-ops-accounts">
+    <i data-lucide="user-cog"></i>
+    运营员账号管理
+  </div>
+  <div class="sidebar-item" data-page="p-packages">
+    <i data-lucide="package"></i>
+    套餐配置
+  </div>
+  <div class="sidebar-item" data-page="p-prompt">
+    <i data-lucide="bot"></i>
+    LLM Prompt管理
+  </div>
+  <div class="sidebar-item" data-page="p-keywords">
+    <i data-lucide="flag"></i>
+    全局风控关键词
+  </div>
+  <div class="sidebar-item" data-page="p-app-version">
+    <i data-lucide="smartphone"></i>
+    App版本管理
+  </div>
+  <div class="sidebar-item" data-page="p-blockchain">
+    <i data-lucide="link-2"></i>
+    区块链存证配置
+  </div>
+  <div class="sidebar-item" data-page="p-audit">
+    <i data-lucide="file-text"></i>
+    平台审计日志
+  </div>
+  <div class="sidebar-item" data-page="p-storage">
+    <i data-lucide="database"></i>
+    数据库与存储管理
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MAIN CONTENT
+════════════════════════════════════════════════════════════ -->
+<div class="main-content">
+
+  <!-- ─────────────────────────────────────────────────────
+       PAGE 1: 系统健康监控
+  ───────────────────────────────────────────────────────── -->
+  <div id="p-health" class="page-section active">
+    <div class="page-header">
+      <div>
+        <div class="page-title">系统健康监控</div>
+        <div class="page-subtitle">实时查看各服务运行状态与性能指标</div>
+      </div>
+      <div style="font-size:12px;color:var(--color-neutral-400);">
+        最后刷新：2026-04-28 14:30:05
+      </div>
+    </div>
+
+    <!-- Service Status Cards -->
+    <div class="service-cards">
+      <div class="service-card">
+        <div class="service-card-title">ASR 识别服务</div>
+        <div class="service-card-status"><span class="service-dot"></span>正常</div>
+        <div class="service-meta">DashScope paraformer-realtime-v2</div>
+        <div class="service-meta" style="margin-top:6px;">延迟 <strong>142ms</strong></div>
+      </div>
+      <div class="service-card">
+        <div class="service-card-title">LLM 推理服务</div>
+        <div class="service-card-status"><span class="service-dot"></span>正常</div>
+        <div class="service-meta">Qwen-Plus</div>
+        <div class="service-meta" style="margin-top:6px;">延迟 <strong>680ms</strong></div>
+      </div>
+      <div class="service-card">
+        <div class="service-card-title">WebSocket 信令服务</div>
+        <div class="service-card-status"><span class="service-dot"></span>正常</div>
+        <div class="service-meta">在线连接数</div>
+        <div class="service-meta" style="margin-top:6px;"><strong>847</strong> 个连接</div>
+      </div>
+      <div class="service-card">
+        <div class="service-card-title">数据库集群</div>
+        <div class="service-card-status"><span class="service-dot"></span>正常</div>
+        <div class="service-meta">PostgreSQL 主从集群</div>
+        <div class="service-meta" style="margin-top:6px;">连接池使用率 <strong>68%</strong></div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="chart-section">
+      <!-- P90 Response Time -->
+      <div class="chart-card">
+        <div class="chart-title">接口响应时间 P90（近7天，ms）</div>
+        <div class="chart-svg-wrap">
+          <svg width="100%" height="180" viewBox="0 0 480 180" style="overflow:visible;">
+            <!-- Y axis labels -->
+            <text x="36" y="14" font-size="10" fill="#9CA3AF" text-anchor="end">3000</text>
+            <text x="36" y="54" font-size="10" fill="#9CA3AF" text-anchor="end">2000</text>
+            <text x="36" y="94" font-size="10" fill="#9CA3AF" text-anchor="end">1000</text>
+            <text x="36" y="134" font-size="10" fill="#9CA3AF" text-anchor="end">0</text>
+            <!-- Grid lines -->
+            <line x1="42" y1="10" x2="475" y2="10" stroke="#E5E7EB" stroke-width="1"/>
+            <line x1="42" y1="50" x2="475" y2="50" stroke="#E5E7EB" stroke-width="1"/>
+            <line x1="42" y1="90" x2="475" y2="90" stroke="#E5E7EB" stroke-width="1"/>
+            <line x1="42" y1="130" x2="475" y2="130" stroke="#E5E7EB" stroke-width="1"/>
+            <!-- Y axis -->
+            <line x1="42" y1="10" x2="42" y2="130" stroke="#E5E7EB" stroke-width="1"/>
+            <!--
+              Values: 1240/980/1100/1050/890/1180/1320 ms
+              Scale: 0->130px(y=130), 3000->0px(y=10). range=120px for 3000ms => 0.04px/ms
+              y = 130 - (val/3000)*120
+              1240 -> 130-49.6=80.4
+              980  -> 130-39.2=90.8
+              1100 -> 130-44=86
+              1050 -> 130-42=88
+              890  -> 130-35.6=94.4
+              1180 -> 130-47.2=82.8
+              1320 -> 130-52.8=77.2
+            -->
+            <!-- X positions: 7 pts evenly spaced in [60,460] => step=66.7 -->
+            <!-- pts: (60,80), (127,91), (193,86), (260,88), (327,94), (393,83), (460,77) -->
+            <polyline points="60,80 127,91 193,86 260,88 327,94 393,83 460,77"
+              fill="none" stroke="#1A56DB" stroke-width="2" stroke-linejoin="round"/>
+            <!-- area fill -->
+            <polygon points="60,80 127,91 193,86 260,88 327,94 393,83 460,77 460,130 60,130"
+              fill="rgba(26,86,219,0.07)"/>
+            <!-- dots -->
+            <circle cx="60" cy="80" r="3" fill="#1A56DB"/>
+            <circle cx="127" cy="91" r="3" fill="#1A56DB"/>
+            <circle cx="193" cy="86" r="3" fill="#1A56DB"/>
+            <circle cx="260" cy="88" r="3" fill="#1A56DB"/>
+            <circle cx="327" cy="94" r="3" fill="#1A56DB"/>
+            <circle cx="393" cy="83" r="3" fill="#1A56DB"/>
+            <circle cx="460" cy="77" r="3" fill="#1A56DB"/>
+            <!-- X labels -->
+            <text x="60" y="148" font-size="10" fill="#9CA3AF" text-anchor="middle">4/22</text>
+            <text x="127" y="148" font-size="10" fill="#9CA3AF" text-anchor="middle">4/23</text>
+            <text x="193" y="148" font-size="10" fill="#9CA3AF" text-anchor="middle">4/24</text>
+            <text x="260" y="148" font-size="10" fill="#9CA3AF" text-anchor="middle">4/25</text>
+            <text x="327" y="148" font-size="10" fill="#9CA3AF" text-anchor="middle">4/26</text>
+            <text x="393" y="148" font-size="10" fill="#9CA3AF" text-anchor="middle">4/27</text>
+            <text x="460" y="148" font-size="10" fill="#9CA3AF" text-anchor="middle">4/28</text>
+            <!-- Value labels on dots -->
+            <text x="60" y="72" font-size="9" fill="#1A56DB" text-anchor="middle">1240</text>
+            <text x="127" y="83" font-size="9" fill="#1A56DB" text-anchor="middle">980</text>
+            <text x="193" y="78" font-size="9" fill="#1A56DB" text-anchor="middle">1100</text>
+            <text x="260" y="80" font-size="9" fill="#1A56DB" text-anchor="middle">1050</text>
+            <text x="327" y="86" font-size="9" fill="#1A56DB" text-anchor="middle">890</text>
+            <text x="393" y="75" font-size="9" fill="#1A56DB" text-anchor="middle">1180</text>
+            <text x="460" y="69" font-size="9" fill="#1A56DB" text-anchor="middle">1320</text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Error Rate -->
+      <div class="chart-card">
+        <div class="chart-title">错误率趋势（近7天，%）</div>
+        <div class="chart-svg-wrap">
+          <svg width="100%" height="180" viewBox="0 0 480 180" style="overflow:visible;">
+            <!-- Y axis labels -->
+            <text x="36" y="14" font-size="10" fill="#9CA3AF" text-anchor="end">0.20%</text>
+            <text x="36" y="54" font-size="10" fill="#9CA3AF" text-anchor="end">0.10%</text>
+            <text x="36" y="94" font-size="10" fill="#9CA3AF" text-anchor="end">0.05%</text>
+            <text x="36" y="134" font-size="10" fill="#9CA3AF" text-anchor="end">0%</text>
+            <!-- Grid lines -->
+            <line x1="42" y1="10" x2="475" y2="10" stroke="#E5E7EB" stroke-width="1"/>
+            <line x1="42" y1="50" x2="475" y2="50" stroke="#E5E7EB" stroke-width="1"/>
+            <line x1="42" y1="90" x2="475" y2="90" stroke="#E5E7EB" stroke-width="1"/>
+            <line x1="42" y1="130" x2="475" y2="130" stroke="#E5E7EB" stroke-width="1"/>
+            <line x1="42" y1="10" x2="42" y2="130" stroke="#E5E7EB" stroke-width="1"/>
+            <!--
+              Values: 0.12/0.08/0.15/0.09/0.06/0.11/0.07%
+              Scale: 0->130, 0.20->10. range=120px for 0.20 => 600px/%
+              y = 130 - (val/0.20)*120
+              0.12 -> 130-72=58
+              0.08 -> 130-48=82
+              0.15 -> 130-90=40
+              0.09 -> 130-54=76
+              0.06 -> 130-36=94
+              0.11 -> 130-66=64
+              0.07 -> 130-42=88
+            -->
+            <polyline points="60,58 127,82 193,40 260,76 327,94 393,64 460,88"
+              fill="none" stroke="#D97706" stroke-width="2" stroke-linejoin="round"/>
+            <polygon points="60,58 127,82 193,40 260,76 327,94 393,64 460,88 460,130 60,130"
+              fill="rgba(217,119,6,0.07)"/>
+            <circle cx="60" cy="58" r="3" fill="#D97706"/>
+            <circle cx="127" cy="82" r="3" fill="#D97706"/>
+            <circle cx="193" cy="40" r="3" fill="#D97706"/>
+            <circle cx="260" cy="76" r="3" fill="#D97706"/>
+            <circle cx="327" cy="94" r="3" fill="#D97706"/>
+            <circle cx="393" cy="64" r="3" fill="#D97706"/>
+            <circle cx="460" cy="88" r="3" fill="#D97706"/>
+            <text x="60" y="148" font-size="10" fill="#9CA3AF" text-anchor="middle">4/22</text>
+            <text x="127" y="148" font-size="10" fill="#9CA3AF" text-anchor="middle">4/23</text>
+            <text x="193" y="148" font-size="10" fill="#9CA3AF" text-anchor="middle">4/24</text>
+            <text x="260" y="148" font-size="10" fill="#9CA3AF" text-anchor="middle">4/25</text>
+            <text x="327" y="148" font-size="10" fill="#9CA3AF" text-anchor="middle">4/26</text>
+            <text x="393" y="148" font-size="10" fill="#9CA3AF" text-anchor="middle">4/27</text>
+            <text x="460" y="148" font-size="10" fill="#9CA3AF" text-anchor="middle">4/28</text>
+            <text x="60" y="50" font-size="9" fill="#D97706" text-anchor="middle">0.12%</text>
+            <text x="127" y="74" font-size="9" fill="#D97706" text-anchor="middle">0.08%</text>
+            <text x="193" y="32" font-size="9" fill="#D97706" text-anchor="middle">0.15%</text>
+            <text x="260" y="68" font-size="9" fill="#D97706" text-anchor="middle">0.09%</text>
+            <text x="327" y="86" font-size="9" fill="#D97706" text-anchor="middle">0.06%</text>
+            <text x="393" y="56" font-size="9" fill="#D97706" text-anchor="middle">0.11%</text>
+            <text x="460" y="80" font-size="9" fill="#D97706" text-anchor="middle">0.07%</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Blockchain status -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">区块链存证状态</span>
+        <span class="badge badge-gray">v1.1 功能</span>
+      </div>
+      <div class="card-body">
+        <div class="blockchain-disabled">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:12px;color:var(--color-neutral-300);display:block;margin-left:auto;margin-right:auto;"><rect x="2" y="7" width="6" height="6"/><rect x="16" y="7" width="6" height="6"/><rect x="9" y="14" width="6" height="6"/></svg>
+          区块链存证功能尚未启用（v1.1 版本上线）
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────
+       PAGE 2: 运营员账号管理
+  ───────────────────────────────────────────────────────── -->
+  <div id="p-ops-accounts" class="page-section">
+    <div class="page-header">
+      <div>
+        <div class="page-title">运营员账号管理</div>
+        <div class="page-subtitle">管理平台运营员账号，分配租户和服务商</div>
+      </div>
+      <button class="btn btn-primary" onclick="openModal('modal-new-ops')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新建运营员
+      </button>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-toolbar">
+        <div class="search-box">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" class="form-control" placeholder="搜索姓名或手机号" style="min-width:200px;padding-left:34px;">
+        </div>
+        <select class="form-control" style="width:140px;">
+          <option>全部状态</option>
+          <option>正常</option>
+          <option>已停用</option>
+        </select>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>姓名</th>
+            <th>手机号</th>
+            <th>负责租户数</th>
+            <th>负责服务商数</th>
+            <th>状态</th>
+            <th>创建时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>张明涛</strong></td>
+            <td>138****6621</td>
+            <td>12 个租户</td>
+            <td>5 个服务商</td>
+            <td><span class="badge badge-green">正常</span></td>
+            <td>2025-11-02</td>
+            <td>
+              <button class="btn btn-sm btn-secondary">查看分配</button>
+              <button class="btn btn-sm btn-ghost" style="color:var(--color-warning);" onclick="openAlert('alert-disable-ops', '张明涛')">停用</button>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>李佳欣</strong></td>
+            <td>139****2208</td>
+            <td>8 个租户</td>
+            <td>3 个服务商</td>
+            <td><span class="badge badge-green">正常</span></td>
+            <td>2025-12-15</td>
+            <td>
+              <button class="btn btn-sm btn-secondary">查看分配</button>
+              <button class="btn btn-sm btn-ghost" style="color:var(--color-warning);" onclick="openAlert('alert-disable-ops', '李佳欣')">停用</button>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>王俊杰</strong></td>
+            <td>137****8843</td>
+            <td>6 个租户</td>
+            <td>2 个服务商</td>
+            <td><span class="badge badge-green">正常</span></td>
+            <td>2026-01-20</td>
+            <td>
+              <button class="btn btn-sm btn-secondary">查看分配</button>
+              <button class="btn btn-sm btn-ghost" style="color:var(--color-warning);" onclick="openAlert('alert-disable-ops', '王俊杰')">停用</button>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>陈晓燕</strong></td>
+            <td>136****1190</td>
+            <td>0 个租户</td>
+            <td>0 个服务商</td>
+            <td><span class="badge badge-gray">已停用</span></td>
+            <td>2026-03-01</td>
+            <td>
+              <button class="btn btn-sm btn-secondary">查看分配</button>
+              <button class="btn btn-sm btn-ghost" style="color:var(--color-success);">恢复</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────
+       PAGE 3: 套餐配置
+  ───────────────────────────────────────────────────────── -->
+  <div id="p-packages" class="page-section">
+    <div class="page-header">
+      <div>
+        <div class="page-title">套餐配置</div>
+        <div class="page-subtitle">管理平台对外销售的订阅套餐</div>
+      </div>
+      <button class="btn btn-primary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新建套餐
+      </button>
+    </div>
+
+    <div class="package-grid">
+      <!-- Trial -->
+      <div class="package-card">
+        <div class="package-name">试用版</div>
+        <div class="package-price">免费 <span class="package-price-unit">/ 14天</span></div>
+        <div class="package-divider"></div>
+        <ul class="package-features">
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>最多 5 个用户</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>最多 50 个案件</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--color-neutral-300);"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span style="color:var(--color-neutral-400);">不含服务商功能</span></li>
+        </ul>
+        <div class="package-footer">
+          <span class="badge badge-green">已发布</span>
+          <button class="btn btn-sm btn-secondary">编辑</button>
+        </div>
+      </div>
+      <!-- Basic -->
+      <div class="package-card">
+        <div class="package-name">基础版</div>
+        <div class="package-price">¥2,999 <span class="package-price-unit">/ 月</span></div>
+        <div class="package-divider"></div>
+        <ul class="package-features">
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>最多 100 个用户</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>最多 2,000 个案件</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>含服务商基础功能</li>
+        </ul>
+        <div class="package-footer">
+          <span class="badge badge-green">已发布</span>
+          <button class="btn btn-sm btn-secondary">编辑</button>
+        </div>
+      </div>
+      <!-- Pro -->
+      <div class="package-card recommended">
+        <div style="position:absolute;top:-1px;right:16px;background:var(--color-primary);color:white;font-size:11px;font-weight:600;padding:3px 10px;border-radius:0 0 6px 6px;">推荐</div>
+        <div class="package-name">专业版</div>
+        <div class="package-price">¥8,999 <span class="package-price-unit">/ 月</span></div>
+        <div class="package-divider"></div>
+        <ul class="package-features">
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>无限用户</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>无限案件</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>全功能 + 区块链存证（v1.1）</li>
+        </ul>
+        <div class="package-footer">
+          <span class="badge badge-green">已发布</span>
+          <button class="btn btn-sm btn-primary">编辑</button>
+        </div>
+      </div>
+      <!-- Custom -->
+      <div class="package-card" style="border-style:dashed;background:var(--color-neutral-50);">
+        <div class="package-name" style="color:var(--color-neutral-400);">定制版</div>
+        <div class="package-price" style="color:var(--color-neutral-400);">面议</div>
+        <div class="package-divider"></div>
+        <ul class="package-features">
+          <li style="color:var(--color-neutral-400);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--color-neutral-300);"><polyline points="20 6 9 17 4 12"/></svg>按需定制功能模块</li>
+          <li style="color:var(--color-neutral-400);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--color-neutral-300);"><polyline points="20 6 9 17 4 12"/></svg>专属技术支持</li>
+          <li style="color:var(--color-neutral-400);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--color-neutral-300);"><polyline points="20 6 9 17 4 12"/></svg>私有化部署选项</li>
+        </ul>
+        <div class="package-footer">
+          <span class="badge badge-gray">未发布</span>
+          <button class="btn btn-sm btn-secondary">编辑</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────
+       PAGE 4: LLM Prompt管理
+  ───────────────────────────────────────────────────────── -->
+  <div id="p-prompt" class="page-section">
+    <div class="page-header">
+      <div>
+        <div class="page-title">LLM Prompt 管理</div>
+        <div class="page-subtitle">管理外呼对话使用的系统提示词版本</div>
+      </div>
+    </div>
+
+    <div class="v11-banner">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      该功能将在 <strong style="margin:0 4px;">v1.1</strong> 版本上线，当前版本仅供预览，不可操作。
+    </div>
+
+    <div class="disabled-section">
+      <div class="card mb-4">
+        <div class="card-header">
+          <span class="card-title">Prompt 版本列表</span>
+          <button class="btn btn-sm btn-primary">新建版本</button>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <table>
+            <thead>
+              <tr>
+                <th>版本号</th>
+                <th>场景</th>
+                <th>创建时间</th>
+                <th>状态</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>v1.0.2</td>
+                <td>投票邀请</td>
+                <td>2026-04-01</td>
+                <td><span class="badge badge-green">生产中</span></td>
+                <td><button class="btn btn-sm btn-secondary">查看</button></td>
+              </tr>
+              <tr>
+                <td>v1.0.1</td>
+                <td>物业费催收</td>
+                <td>2026-03-15</td>
+                <td><span class="badge badge-green">生产中</span></td>
+                <td><button class="btn btn-sm btn-secondary">查看</button></td>
+              </tr>
+              <tr>
+                <td>v1.0.0</td>
+                <td>投票邀请</td>
+                <td>2026-02-01</td>
+                <td><span class="badge badge-gray">历史版本</span></td>
+                <td><button class="btn btn-sm btn-secondary">查看</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Prompt 编辑器</span></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">场景</label>
+            <select class="form-control"><option>投票邀请</option><option>物业费催收</option></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">System Prompt</label>
+            <textarea class="form-control" rows="6" placeholder="在此编辑 System Prompt...">你是一名专业的物业服务客服代表，负责邀请业主参与小区改造投票...</textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────
+       PAGE 5: 全局风控关键词
+  ───────────────────────────────────────────────────────── -->
+  <div id="p-keywords" class="page-section">
+    <div class="page-header">
+      <div>
+        <div class="page-title">全局风控关键词</div>
+        <div class="page-subtitle">管理全平台通话录音中的敏感词检测规则</div>
+      </div>
+      <button class="btn btn-primary" onclick="openModal('modal-new-keyword')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新增关键词
+      </button>
+    </div>
+
+    <div class="tabs" id="keyword-tabs">
+      <div class="tab active" data-ktab="kw-abuse" onclick="switchKwTab(this, 'kw-abuse')">业主辱骂 <span class="badge badge-red" style="margin-left:6px;">24</span></div>
+      <div class="tab" data-ktab="kw-threat" onclick="switchKwTab(this, 'kw-threat')">威胁恐吓 <span class="badge badge-orange" style="margin-left:6px;">18</span></div>
+      <div class="tab" data-ktab="kw-staff" onclick="switchKwTab(this, 'kw-staff')">员工违规 <span class="badge badge-gray" style="margin-left:6px;">12</span></div>
+    </div>
+
+    <div id="kw-abuse" class="keyword-tab-content active">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>关键词</th><th>分类</th><th>风控级别</th><th>生效范围</th><th>添加时间</th><th>操作</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code style="background:var(--color-neutral-100);padding:2px 6px;border-radius:4px;font-size:13px;">你妈</code></td>
+              <td>业主辱骂</td>
+              <td><span class="badge badge-red">L2</span></td>
+              <td>全部租户</td>
+              <td>2026-01-10</td>
+              <td><button class="btn btn-sm btn-ghost" style="color:var(--color-danger);" onclick="openAlert('alert-del-kw','关键词「你妈」')">删除</button></td>
+            </tr>
+            <tr>
+              <td><code style="background:var(--color-neutral-100);padding:2px 6px;border-radius:4px;font-size:13px;">操你</code></td>
+              <td>业主辱骂</td>
+              <td><span class="badge" style="background:var(--color-danger);color:white;">L3</span></td>
+              <td>全部租户</td>
+              <td>2026-01-10</td>
+              <td><button class="btn btn-sm btn-ghost" style="color:var(--color-danger);" onclick="openAlert('alert-del-kw','关键词「操你」')">删除</button></td>
+            </tr>
+            <tr>
+              <td><code style="background:var(--color-neutral-100);padding:2px 6px;border-radius:4px;font-size:13px;">我要投诉你们</code></td>
+              <td>业主辱骂</td>
+              <td><span class="badge badge-orange">L1</span></td>
+              <td>全部租户</td>
+              <td>2026-01-15</td>
+              <td><button class="btn btn-sm btn-ghost" style="color:var(--color-danger);" onclick="openAlert('alert-del-kw','关键词「我要投诉你们」')">删除</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="kw-threat" class="keyword-tab-content">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>关键词</th><th>分类</th><th>风控级别</th><th>生效范围</th><th>添加时间</th><th>操作</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code style="background:var(--color-neutral-100);padding:2px 6px;border-radius:4px;font-size:13px;">我要打死你</code></td>
+              <td>威胁恐吓</td>
+              <td><span class="badge badge-red">L3</span></td>
+              <td>全部租户</td>
+              <td>2026-02-01</td>
+              <td><button class="btn btn-sm btn-ghost" style="color:var(--color-danger);" onclick="openAlert('alert-del-kw','关键词「我要打死你」')">删除</button></td>
+            </tr>
+            <tr>
+              <td><code style="background:var(--color-neutral-100);padding:2px 6px;border-radius:4px;font-size:13px;">我知道你住哪</code></td>
+              <td>威胁恐吓</td>
+              <td><span class="badge badge-red">L2</span></td>
+              <td>全部租户</td>
+              <td>2026-02-01</td>
+              <td><button class="btn btn-sm btn-ghost" style="color:var(--color-danger);" onclick="openAlert('alert-del-kw','关键词「我知道你住哪」')">删除</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="kw-staff" class="keyword-tab-content">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>关键词</th><th>分类</th><th>风控级别</th><th>生效范围</th><th>添加时间</th><th>操作</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code style="background:var(--color-neutral-100);padding:2px 6px;border-radius:4px;font-size:13px;">私下转账</code></td>
+              <td>员工违规</td>
+              <td><span class="badge" style="background:var(--color-danger);color:white;">L3</span></td>
+              <td>全部租户</td>
+              <td>2026-02-15</td>
+              <td><button class="btn btn-sm btn-ghost" style="color:var(--color-danger);" onclick="openAlert('alert-del-kw','关键词「私下转账」')">删除</button></td>
+            </tr>
+            <tr>
+              <td><code style="background:var(--color-neutral-100);padding:2px 6px;border-radius:4px;font-size:13px;">不用系统</code></td>
+              <td>员工违规</td>
+              <td><span class="badge badge-orange">L2</span></td>
+              <td>全部租户</td>
+              <td>2026-02-20</td>
+              <td><button class="btn btn-sm btn-ghost" style="color:var(--color-danger);" onclick="openAlert('alert-del-kw','关键词「不用系统」')">删除</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────
+       PAGE 6: App版本管理
+  ───────────────────────────────────────────────────────── -->
+  <div id="p-app-version" class="page-section">
+    <div class="page-header">
+      <div>
+        <div class="page-title">App 版本管理</div>
+        <div class="page-subtitle">管理 Android 外呼 App 的版本发布与强制更新策略</div>
+      </div>
+      <button class="btn btn-primary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        上传新版本
+      </button>
+    </div>
+
+    <!-- Current Production Version -->
+    <div class="version-hero section-gap">
+      <div class="version-hero-left">
+        <div style="font-size:12px;color:var(--color-primary);font-weight:600;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;">当前生产版本</div>
+        <div class="version-number">v2.3.1</div>
+        <div class="version-meta">
+          <div class="version-hero-meta">
+            <div class="version-meta-item">
+              <div class="meta-key">发布日期</div>
+              <div class="meta-val">2026-04-15</div>
+            </div>
+            <div class="version-meta-item">
+              <div class="meta-key">最低兼容版本</div>
+              <div class="meta-val">v2.1.0</div>
+            </div>
+            <div class="version-meta-item">
+              <div class="meta-key">强制更新范围</div>
+              <div class="meta-val"><span class="badge badge-red">v2.0.x 及以下</span></div>
+            </div>
+            <div class="version-meta-item">
+              <div class="meta-key">累计下载量</div>
+              <div class="meta-val">1,247 次</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <button class="btn btn-secondary">查看更新日志</button>
+      </div>
+    </div>
+
+    <!-- Version History -->
+    <div class="table-wrap">
+      <div class="table-toolbar" style="font-size:14px;font-weight:600;color:var(--color-neutral-900);">历史版本</div>
+      <table>
+        <thead>
+          <tr>
+            <th>版本号</th>
+            <th>发布日期</th>
+            <th>APK 大小</th>
+            <th>最低兼容</th>
+            <th>强制更新范围</th>
+            <th>状态</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="background:var(--color-primary-light);">
+            <td><strong>v2.3.1</strong> <span class="badge badge-blue" style="margin-left:6px;">当前</span></td>
+            <td>2026-04-15</td>
+            <td>28.4 MB</td>
+            <td>v2.1.0</td>
+            <td>v2.0.x 及以下</td>
+            <td><span class="badge badge-green">生产中</span></td>
+            <td><button class="btn btn-sm btn-secondary">详情</button></td>
+          </tr>
+          <tr>
+            <td>v2.2.0</td>
+            <td>2026-02-28</td>
+            <td>27.1 MB</td>
+            <td>v2.0.0</td>
+            <td>v1.x.x 及以下</td>
+            <td><span class="badge badge-gray">历史版本</span></td>
+            <td><button class="btn btn-sm btn-secondary">详情</button></td>
+          </tr>
+          <tr>
+            <td>v2.1.0</td>
+            <td>2026-01-10</td>
+            <td>25.8 MB</td>
+            <td>v2.0.0</td>
+            <td>无</td>
+            <td><span class="badge badge-gray">历史版本</span></td>
+            <td><button class="btn btn-sm btn-secondary">详情</button></td>
+          </tr>
+          <tr>
+            <td>v2.0.0</td>
+            <td>2025-11-20</td>
+            <td>23.2 MB</td>
+            <td>—</td>
+            <td>—</td>
+            <td><span class="badge badge-gray">已下线</span></td>
+            <td><button class="btn btn-sm btn-ghost" disabled>已下线</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────
+       PAGE 7: 区块链存证配置
+  ───────────────────────────────────────────────────────── -->
+  <div id="p-blockchain" class="page-section">
+    <div class="page-header">
+      <div>
+        <div class="page-title">区块链存证配置</div>
+        <div class="page-subtitle">配置链上存证合作服务商及 API 接入</div>
+      </div>
+    </div>
+
+    <div class="v11-banner">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      该功能将在 <strong style="margin:0 4px;">v1.1</strong> 版本上线，当前版本仅供预览，不可操作。
+    </div>
+
+    <div class="disabled-section">
+      <div class="card mb-4">
+        <div class="card-header"><span class="card-title">链上合作方选择</span></div>
+        <div class="card-body">
+          <div style="display:flex;gap:20px;">
+            <label style="display:flex;align-items:center;gap:10px;padding:16px 24px;border:2px solid var(--color-primary);border-radius:8px;cursor:pointer;background:var(--color-primary-light);">
+              <input type="radio" name="chain" checked> <strong>蚂蚁链</strong> <span style="font-size:12px;color:var(--color-neutral-600);">支持司法级存证</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;padding:16px 24px;border:1px solid var(--color-neutral-300);border-radius:8px;cursor:pointer;">
+              <input type="radio" name="chain"> <strong>至信链</strong> <span style="font-size:12px;color:var(--color-neutral-600);">腾讯生态</span>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">API 接入配置</span></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">App ID</label>
+            <input type="text" class="form-control" placeholder="请输入蚂蚁链 App ID">
+          </div>
+          <div class="form-group">
+            <label class="form-label">API Key</label>
+            <input type="password" class="form-control" placeholder="请输入 API Key">
+          </div>
+          <div class="form-group">
+            <label class="form-label">私钥文件（PEM）</label>
+            <div style="border:1px dashed var(--color-neutral-300);border-radius:8px;padding:24px;text-align:center;color:var(--color-neutral-400);font-size:13px;">点击或拖拽上传 .pem 文件</div>
+          </div>
+          <button class="btn btn-primary">保存配置</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────
+       PAGE 8: 平台审计日志
+  ───────────────────────────────────────────────────────── -->
+  <div id="p-audit" class="page-section">
+    <div class="page-header">
+      <div>
+        <div class="page-title">平台审计日志</div>
+        <div class="page-subtitle">记录所有超管和运营员的关键操作，仅可查看不可删除</div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-toolbar">
+        <input type="date" class="form-control" style="width:140px;" value="2026-04-28">
+        <span style="font-size:13px;color:var(--color-neutral-600);">至</span>
+        <input type="date" class="form-control" style="width:140px;" value="2026-04-28">
+        <select class="form-control" style="width:140px;">
+          <option>全部操作人</option>
+          <option>系统超管</option>
+          <option>张明涛</option>
+          <option>李佳欣</option>
+        </select>
+        <select class="form-control" style="width:160px;">
+          <option>全部操作类型</option>
+          <option>开通租户</option>
+          <option>创建账号</option>
+          <option>审核服务商</option>
+          <option>停用账号</option>
+          <option>修改配置</option>
+        </select>
+        <div class="search-box">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" class="form-control" placeholder="搜索操作内容" style="padding-left:34px;">
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>操作人</th>
+            <th>角色</th>
+            <th>操作类型</th>
+            <th>操作内容</th>
+            <th>IP 地址</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="font-size:12.5px;color:var(--color-neutral-600);">2026-04-28 14:23:11</td>
+            <td>张明涛</td>
+            <td><span class="badge badge-blue">运营员</span></td>
+            <td>开通租户</td>
+            <td>为「XX物业管理有限公司」开通基础版账号</td>
+            <td style="font-size:12px;color:var(--color-neutral-600);">123.45.67.89</td>
+          </tr>
+          <tr>
+            <td style="font-size:12.5px;color:var(--color-neutral-600);">2026-04-28 13:45:02</td>
+            <td>系统超管</td>
+            <td><span class="badge badge-purple">超管</span></td>
+            <td>创建账号</td>
+            <td>创建运营员账号 张明涛 (138****6621)</td>
+            <td style="font-size:12px;color:var(--color-neutral-600);">10.0.0.1</td>
+          </tr>
+          <tr>
+            <td style="font-size:12.5px;color:var(--color-neutral-600);">2026-04-28 11:30:22</td>
+            <td>李佳欣</td>
+            <td><span class="badge badge-blue">运营员</span></td>
+            <td>审核服务商</td>
+            <td>通过「聚英催收团队」入驻申请</td>
+            <td style="font-size:12px;color:var(--color-neutral-600);">123.45.67.90</td>
+          </tr>
+          <tr>
+            <td style="font-size:12.5px;color:var(--color-neutral-600);">2026-04-28 10:15:44</td>
+            <td>系统超管</td>
+            <td><span class="badge badge-purple">超管</span></td>
+            <td>修改配置</td>
+            <td>更新全局风控关键词：新增「私下转账」(L3)</td>
+            <td style="font-size:12px;color:var(--color-neutral-600);">10.0.0.1</td>
+          </tr>
+          <tr>
+            <td style="font-size:12.5px;color:var(--color-neutral-600);">2026-04-27 16:52:33</td>
+            <td>张明涛</td>
+            <td><span class="badge badge-blue">运营员</span></td>
+            <td>续费处理</td>
+            <td>为「城投置业集团」处理基础版续费 12 个月</td>
+            <td style="font-size:12px;color:var(--color-neutral-600);">123.45.67.89</td>
+          </tr>
+          <tr>
+            <td style="font-size:12.5px;color:var(--color-neutral-600);">2026-04-27 14:08:20</td>
+            <td>王俊杰</td>
+            <td><span class="badge badge-blue">运营员</span></td>
+            <td>停用账号</td>
+            <td>停用租户「恒大物业管理」（客户主动申请注销）</td>
+            <td style="font-size:12px;color:var(--color-neutral-600);">121.33.24.11</td>
+          </tr>
+          <tr>
+            <td style="font-size:12.5px;color:var(--color-neutral-600);">2026-04-27 09:30:05</td>
+            <td>系统超管</td>
+            <td><span class="badge badge-purple">超管</span></td>
+            <td>发布版本</td>
+            <td>发布 App v2.3.1，设置强制更新范围：v2.0.x 及以下</td>
+            <td style="font-size:12px;color:var(--color-neutral-600);">10.0.0.1</td>
+          </tr>
+          <tr>
+            <td style="font-size:12.5px;color:var(--color-neutral-600);">2026-04-26 17:22:48</td>
+            <td>李佳欣</td>
+            <td><span class="badge badge-blue">运营员</span></td>
+            <td>开通租户</td>
+            <td>为「绿城物业服务」开通基础版账号</td>
+            <td style="font-size:12px;color:var(--color-neutral-600);">123.45.67.90</td>
+          </tr>
+          <tr>
+            <td style="font-size:12.5px;color:var(--color-neutral-600);">2026-04-26 11:05:17</td>
+            <td>张明涛</td>
+            <td><span class="badge badge-blue">运营员</span></td>
+            <td>变更套餐</td>
+            <td>为「华润万象生活」从基础版升级至专业版</td>
+            <td style="font-size:12px;color:var(--color-neutral-600);">123.45.67.89</td>
+          </tr>
+          <tr>
+            <td style="font-size:12.5px;color:var(--color-neutral-600);">2026-04-25 15:40:09</td>
+            <td>系统超管</td>
+            <td><span class="badge badge-purple">超管</span></td>
+            <td>创建账号</td>
+            <td>创建运营员账号 王俊杰 (137****8843)</td>
+            <td style="font-size:12px;color:var(--color-neutral-600);">10.0.0.1</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="pagination">
+        <span class="pagination-info">共 248 条记录</span>
+        <div class="pagination-pages">
+          <div class="page-btn active">1</div>
+          <div class="page-btn">2</div>
+          <div class="page-btn">3</div>
+          <div class="page-btn">…</div>
+          <div class="page-btn">25</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────
+       PAGE 9: 数据库与存储管理
+  ───────────────────────────────────────────────────────── -->
+  <div id="p-storage" class="page-section">
+    <div class="page-header">
+      <div>
+        <div class="page-title">数据库与存储管理</div>
+        <div class="page-subtitle">查看存储使用情况和数据保留策略（只读）</div>
+      </div>
+    </div>
+
+    <div class="storage-cards">
+      <!-- DB Storage -->
+      <div class="storage-card">
+        <div class="storage-label">数据库存储</div>
+        <div class="storage-value">234 <span style="font-size:14px;font-weight:400;color:var(--color-neutral-600);">GB / 500 GB</span></div>
+        <div class="progress-bar"><div class="progress-fill" style="width:46.8%;background:#1A56DB;"></div></div>
+        <div class="storage-meta">已使用 46.8%</div>
+      </div>
+      <!-- File Storage -->
+      <div class="storage-card">
+        <div class="storage-label">文件存储（MinIO）</div>
+        <div class="storage-value">1.2 <span style="font-size:14px;font-weight:400;color:var(--color-neutral-600);">TB / 5 TB</span></div>
+        <div class="progress-bar"><div class="progress-fill" style="width:24%;background:#057A55;"></div></div>
+        <div class="storage-meta">已使用 24.0%</div>
+      </div>
+      <!-- Last Backup -->
+      <div class="storage-card">
+        <div class="storage-label">最近备份</div>
+        <div class="storage-value" style="font-size:16px;font-weight:600;color:var(--color-success);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg>
+          备份成功
+        </div>
+        <div style="font-size:13px;color:var(--color-neutral-700);margin-top:6px;">2026-04-28 03:00</div>
+        <div class="storage-meta">下次备份：2026-04-29 03:00</div>
+      </div>
+    </div>
+
+    <!-- Data Retention Policy -->
+    <div class="card section-gap">
+      <div class="card-header">
+        <span class="card-title">数据保留策略</span>
+        <span class="badge badge-gray">只读</span>
+      </div>
+      <div class="card-body" style="padding:0;">
+        <table>
+          <thead>
+            <tr>
+              <th>数据类型</th>
+              <th>保留期限</th>
+              <th>存储位置</th>
+              <th>备注</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>录音文件（MP3/WAV）</td>
+              <td><strong>12 个月</strong></td>
+              <td>MinIO 对象存储</td>
+              <td style="color:var(--color-neutral-600);">到期后自动归档压缩</td>
+            </tr>
+            <tr>
+              <td>通话转写文本</td>
+              <td><strong>24 个月</strong></td>
+              <td>PostgreSQL</td>
+              <td style="color:var(--color-neutral-600);">支持全文检索</td>
+            </tr>
+            <tr>
+              <td>案件数据</td>
+              <td><strong>法定期限</strong></td>
+              <td>PostgreSQL</td>
+              <td style="color:var(--color-neutral-600);">依据催收相关法规</td>
+            </tr>
+            <tr>
+              <td>审计日志</td>
+              <td><strong>永久保留</strong></td>
+              <td>PostgreSQL（冷热分层）</td>
+              <td style="color:var(--color-neutral-600);">合规要求，不可删除</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="storage-notice">
+      存储管理操作（扩容、迁移、清理）由运维团队执行，此页面仅供查看监控数据。如需扩容请联系运维团队（ops@youzheng.ai）。
+    </div>
+  </div>
+
+</div><!-- /main-content -->
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     MODALS
+════════════════════════════════════════════════════════════ -->
+
+<!-- Modal: 新建运营员 -->
+<div id="modal-new-ops" class="modal-overlay" onclick="handleOverlayClick(event, 'modal-new-ops')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">新建运营员</span>
+      <button class="modal-close" onclick="closeModal('modal-new-ops')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">姓名 <span class="req">*</span></label>
+        <input type="text" class="form-control" placeholder="请输入真实姓名">
+      </div>
+      <div class="form-group">
+        <label class="form-label">手机号 <span class="req">*</span></label>
+        <input type="tel" class="form-control" placeholder="用于登录及接收通知">
+      </div>
+      <div class="form-group">
+        <label class="form-label">初始密码 <span class="req">*</span></label>
+        <input type="password" class="form-control" placeholder="8位以上，含大小写字母、数字和特殊字符">
+        <div class="form-hint">首次登录后须修改密码</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">备注</label>
+        <textarea class="form-control" rows="3" placeholder="可填写负责区域、备注信息等"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-ops')">取消</button>
+      <button class="btn btn-primary">保存并创建</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: 新增关键词 -->
+<div id="modal-new-keyword" class="modal-overlay" onclick="handleOverlayClick(event, 'modal-new-keyword')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">新增风控关键词</span>
+      <button class="modal-close" onclick="closeModal('modal-new-keyword')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">关键词 <span class="req">*</span></label>
+        <input type="text" class="form-control" placeholder="请输入敏感词">
+      </div>
+      <div class="form-group">
+        <label class="form-label">分类 <span class="req">*</span></label>
+        <select class="form-control">
+          <option>业主辱骂</option>
+          <option>威胁恐吓</option>
+          <option>员工违规</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">风控级别 <span class="req">*</span></label>
+        <select class="form-control">
+          <option>L1 — 提示（橙色）</option>
+          <option>L2 — 警告（红色）</option>
+          <option>L3 — 严重（红色实心）</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">生效范围</label>
+        <select class="form-control" disabled>
+          <option>全部租户（平台级，不可更改）</option>
+        </select>
+        <div class="form-hint">全局风控关键词对所有租户生效</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-keyword')">取消</button>
+      <button class="btn btn-primary">添加关键词</button>
+    </div>
+  </div>
+</div>
+
+<!-- AlertDialog: 停用运营员 -->
+<div id="alert-disable-ops" class="alert-dialog-overlay modal-overlay" onclick="handleOverlayClick(event, 'alert-disable-ops')">
+  <div class="modal" style="max-width:400px;" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title" style="color:var(--color-warning);">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        确认停用运营员
+      </span>
+      <button class="modal-close" onclick="closeModal('alert-disable-ops')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13.5px;color:var(--color-neutral-700);line-height:1.6;">
+        确认停用运营员 <strong id="alert-ops-name">张明涛</strong> 的账号？<br>
+        停用后该运营员将无法登录，其负责的租户和服务商将处于无人跟进状态，请提前完成交接。
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('alert-disable-ops')">取消</button>
+      <button class="btn btn-danger">确认停用</button>
+    </div>
+  </div>
+</div>
+
+<!-- AlertDialog: 删除关键词 -->
+<div id="alert-del-kw" class="alert-dialog-overlay modal-overlay" onclick="handleOverlayClick(event, 'alert-del-kw')">
+  <div class="modal" style="max-width:400px;" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title" style="color:var(--color-danger);">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        确认删除关键词
+      </span>
+      <button class="modal-close" onclick="closeModal('alert-del-kw')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13.5px;color:var(--color-neutral-700);line-height:1.6;">
+        确认删除 <strong id="alert-kw-name"></strong>？<br>
+        删除后该关键词将立即对全平台停止检测，此操作不可撤销。
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('alert-del-kw')">取消</button>
+      <button class="btn btn-danger">确认删除</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  lucide.createIcons();
+  // ── Sidebar page switching ──────────────────────────────
+  document.querySelectorAll('.sidebar-item').forEach(item => {
+    item.addEventListener('click', () => {
+      document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+      document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
+      item.classList.add('active');
+      document.getElementById(item.dataset.page).classList.add('active');
+    });
+  });
+
+  // ── Modal helpers ───────────────────────────────────────
+  function openModal(id) {
+    document.getElementById(id).classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeModal(id) {
+    document.getElementById(id).classList.remove('open');
+    document.body.style.overflow = '';
+  }
+  function handleOverlayClick(event, id) {
+    if (event.target === event.currentTarget) closeModal(id);
+  }
+
+  // ── Alert dialog helpers ────────────────────────────────
+  function openAlert(alertId, name) {
+    if (alertId === 'alert-disable-ops') {
+      document.getElementById('alert-ops-name').textContent = name;
+    }
+    if (alertId === 'alert-del-kw') {
+      document.getElementById('alert-kw-name').textContent = name;
+    }
+    openModal(alertId);
+  }
+
+  // ── Keyword tabs ────────────────────────────────────────
+  function switchKwTab(el, tabId) {
+    document.querySelectorAll('#keyword-tabs .tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.keyword-tab-content').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById(tabId).classList.add('active');
+  }
+
+  // ESC to close modals
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal-overlay.open').forEach(m => {
+        m.classList.remove('open');
+        document.body.style.overflow = '';
+      });
+    }
+  });
+</script>
+</body>
+</html>

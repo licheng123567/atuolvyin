@@ -1,0 +1,67 @@
+package com.autoluyin.demo
+
+import android.content.Context
+import android.content.SharedPreferences
+
+/**
+ * 三层配置：
+ *   L1 [backendUrl]      —— 后端地址；首次启动用户输入或扫码注入，存 SharedPreferences。
+ *   L2 [runtime]         —— 运行时业务配置（候选录音目录、扫描超时、prompt 版本等），
+ *                            自检后从 /api/devices/{id}/config 拉取。
+ *   L3 第三方 API key    —— 仅在服务端 .env，APK 永远不持有。
+ */
+object AppConfig {
+    private const val PREFS = "autoluyin_cfg"
+    private const val KEY_BACKEND_URL = "backend_url"
+    private const val KEY_RUNTIME_JSON = "runtime_json"
+
+    @Volatile private var cached: SharedPreferences? = null
+    private fun prefs(ctx: Context): SharedPreferences =
+        cached ?: ctx.applicationContext
+            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .also { cached = it }
+
+    // -------- L1：后端地址 --------
+    fun backendUrl(ctx: Context): String? {
+        val v = prefs(ctx).getString(KEY_BACKEND_URL, null)
+        return v?.takeIf { it.isNotBlank() }
+    }
+
+    fun saveBackendUrl(ctx: Context, url: String) {
+        val normalized = url.trim().trimEnd('/')
+        prefs(ctx).edit().putString(KEY_BACKEND_URL, normalized).apply()
+        ApiClient.invalidate()
+    }
+
+    fun clearBackendUrl(ctx: Context) {
+        prefs(ctx).edit().remove(KEY_BACKEND_URL).apply()
+        ApiClient.invalidate()
+    }
+
+    // -------- L2：运行时业务配置 --------
+    @Volatile var runtime: Runtime = Runtime()
+
+    data class Runtime(
+        val scanTimeoutSec: Int = 30,
+        val uploadMaxSizeMb: Int = 50,
+        val selfCheckIntervalMin: Int = 60,
+        val promptVersion: String = "v1",
+        val candidateDirs: List<String> = RecordingScanner.defaultCandidateDirs,
+    )
+
+    fun applyRuntime(ctx: Context, raw: Map<String, Any?>) {
+        @Suppress("UNCHECKED_CAST")
+        val dirs = (raw["candidate_dirs"] as? List<String>)
+            ?: RecordingScanner.defaultCandidateDirs
+        runtime = Runtime(
+            scanTimeoutSec = (raw["scan_timeout_sec"] as? Number)?.toInt() ?: 30,
+            uploadMaxSizeMb = (raw["upload_max_size_mb"] as? Number)?.toInt() ?: 50,
+            selfCheckIntervalMin = (raw["self_check_interval_min"] as? Number)?.toInt() ?: 60,
+            promptVersion = raw["prompt_version"] as? String ?: "v1",
+            candidateDirs = dirs,
+        )
+        prefs(ctx).edit()
+            .putString(KEY_RUNTIME_JSON, runtime.toString())
+            .apply()
+    }
+}

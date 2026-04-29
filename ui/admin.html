@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>物业公司管理员 — 有证慧催</title>
+<link rel="stylesheet" href="assets/design-system.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+.kanban-board { display:flex; gap:16px; overflow-x:auto; padding-bottom:12px; min-height:500px; }
+.kanban-col { min-width:230px; flex-shrink:0; }
+.kanban-col-header { padding:10px 14px; border-radius:8px 8px 0 0; font-weight:600; font-size:13px; display:flex; align-items:center; justify-content:space-between; }
+.kanban-col-body { background:#f3f4f6; border-radius:0 0 8px 8px; padding:10px; display:flex; flex-direction:column; gap:8px; min-height:400px; }
+.kanban-card { background:white; border-radius:6px; padding:12px; box-shadow:0 1px 3px rgba(0,0,0,.08); cursor:pointer; transition:box-shadow .15s; border-left:3px solid transparent; }
+.kanban-card:hover { box-shadow:0 4px 12px rgba(0,0,0,.12); }
+.kanban-card .owner { font-weight:600; font-size:13.5px; }
+.kanban-card .unit { font-size:12px; color:#6b7280; margin-top:2px; }
+.kanban-card .amount { color:#e02424; font-weight:700; font-size:14px; margin-top:6px; }
+.kanban-card .meta { font-size:11.5px; color:#9ca3af; margin-top:4px; }
+.col-pending .kanban-col-header { background:#f3f4f6; color:#374151; }
+.col-follow .kanban-col-header { background:#eff6ff; color:#1d4ed8; }
+.col-promise .kanban-col-header { background:#fffbeb; color:#b45309; }
+.col-paid .kanban-col-header { background:#f0fdf4; color:#065f46; }
+.col-escalate .kanban-col-header { background:#f5f3ff; color:#6d28d9; }
+.col-closed .kanban-col-header { background:#f3f4f6; color:#6b7280; }
+.detail-grid { display:grid; grid-template-columns:340px 1fr; gap:24px; align-items:start; }
+.upload-zone { border:2px dashed var(--color-neutral-300); border-radius:8px; padding:48px 24px; text-align:center; cursor:pointer; transition:all .15s; background:white; }
+.upload-zone:hover { border-color:var(--color-primary); background:var(--color-primary-light); }
+.file-list-item { display:flex; align-items:center; gap:12px; padding:10px 14px; border-bottom:1px solid var(--color-neutral-100); }
+.file-status-ok { color:var(--color-success); }
+.file-status-loading { color:var(--color-primary); }
+.file-status-error { color:var(--color-danger); }
+.toggle { position:relative; display:inline-flex; align-items:center; gap:10px; cursor:pointer; }
+.toggle input { opacity:0; width:0; height:0; position:absolute; }
+.toggle-track { width:40px; height:22px; background:var(--color-neutral-300); border-radius:11px; transition:.2s; position:relative; flex-shrink:0; }
+.toggle input:checked ~ .toggle-track { background:var(--color-primary); }
+.toggle-thumb { position:absolute; width:16px; height:16px; background:white; border-radius:50%; top:3px; left:3px; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+.toggle input:checked ~ .toggle-track .toggle-thumb { transform:translateX(18px); }
+.tag-input-wrap { display:flex; flex-wrap:wrap; gap:6px; padding:8px; border:1px solid var(--color-neutral-300); border-radius:6px; min-height:44px; background:white; }
+.keyword-tag { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; background:var(--color-primary-light); color:var(--color-primary); border-radius:20px; font-size:12px; }
+.keyword-tag .remove { cursor:pointer; opacity:.6; }
+.score-a { color:#057A55; font-weight:700; }
+.score-b { color:#1A56DB; font-weight:700; }
+.score-c { color:#D97706; font-weight:700; }
+.score-d { color:#E02424; font-weight:700; }
+.bar-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.bar-label { width:120px; font-size:12.5px; color:#4b5563; text-align:right; flex-shrink:0; }
+.bar-track { flex:1; height:16px; background:#f3f4f6; border-radius:8px; overflow:hidden; }
+.bar-fill { height:100%; border-radius:8px; background:var(--color-primary); transition:width .3s; }
+.config-section { background:white; border:1px solid var(--color-neutral-200); border-radius:8px; padding:20px; margin-bottom:20px; }
+.config-section-title { font-size:14px; font-weight:600; margin-bottom:16px; padding-bottom:10px; border-bottom:1px solid var(--color-neutral-100); color:#111827; }
+.setting-row { display:flex; align-items:flex-start; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--color-neutral-100); gap:20px; }
+.setting-row:last-child { border-bottom:none; }
+.setting-label { font-size:13.5px; font-weight:500; }
+.setting-hint { font-size:12px; color:#6b7280; margin-top:2px; }
+.radio-group { display:flex; gap:16px; }
+.radio-option { display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13.5px; }
+.p1-banner { background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:16px 20px; display:flex; align-items:center; gap:12px; color:#92400e; font-size:13.5px; margin-bottom:20px; }
+.debt-table { width:100%; border-collapse:collapse; margin-top:8px; }
+.debt-table th { font-size:12px; color:#6b7280; padding:6px 8px; text-align:left; border-bottom:1px solid #e5e7eb; }
+.debt-table td { font-size:13px; padding:7px 8px; border-bottom:1px solid #f3f4f6; }
+.agent-load { display:flex; align-items:center; gap:8px; font-size:13px; }
+.load-bar-wrap { flex:1; height:8px; background:#f3f4f6; border-radius:4px; overflow:hidden; }
+.load-bar { height:100%; border-radius:4px; background:var(--color-primary); }
+.load-bar.over { background:var(--color-danger); }
+.tab-content { display:none; }
+.tab-content.active { display:block; }
+</style>
+</head>
+<body>
+<!-- TopBar -->
+<div class="topbar">
+  <div class="topbar-logo">有证慧催</div>
+  <div class="topbar-sep"></div>
+  <div class="topbar-tenant">绿城锦绣物业</div>
+  <span class="badge badge-blue" style="font-size:12px;padding:3px 10px;">管理员</span>
+  <div class="topbar-right">
+    <div class="topbar-icon-btn" title="通知">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span class="badge-dot"></span>
+    </div>
+    <div class="topbar-avatar">陈</div>
+    <span style="font-size:13px;color:#374151;">陈建国</span>
+  </div>
+</div>
+
+<div class="app-layout">
+<!-- Sidebar -->
+<div class="sidebar">
+  <div class="sidebar-section-label">工作台</div>
+  <div class="sidebar-item active" data-page="a-dashboard">
+    <i data-lucide="layout-dashboard"></i>管理看板
+  </div>
+  <div class="sidebar-section-label">CRM</div>
+  <div class="sidebar-item" data-page="a-cases">
+    <i data-lucide="list"></i>案件列表
+  </div>
+  <div class="sidebar-item" data-page="a-kanban">
+    <i data-lucide="kanban"></i>案件看板
+  </div>
+  <div class="sidebar-item" data-page="a-case-detail">
+    <i data-lucide="file-search"></i>案件详情
+  </div>
+  <div class="sidebar-item" data-page="a-pool">
+    <i data-lucide="inbox"></i>公海管理
+  </div>
+  <div class="sidebar-section-label">数据管理</div>
+  <div class="sidebar-item" data-page="a-import">
+    <i data-lucide="upload"></i>业主名单导入
+  </div>
+  <div class="sidebar-item" data-page="a-batch">
+    <i data-lucide="mic"></i>录音批量上传
+  </div>
+  <div class="sidebar-section-label">项目管理</div>
+  <div class="sidebar-item" data-page="a-projects">
+    <i data-lucide="folder-open"></i>项目列表
+  </div>
+  <div class="sidebar-section-label">人员管理</div>
+  <div class="sidebar-item" data-page="a-users">
+    <i data-lucide="users"></i>用户管理
+  </div>
+  <div class="sidebar-item" data-page="a-partners">
+    <i data-lucide="briefcase"></i>服务商合作 <span class="badge badge-gray" style="font-size:10px;margin-left:auto;">P1</span>
+  </div>
+  <div class="sidebar-section-label">结算与配置</div>
+  <div class="sidebar-item" data-page="a-settlement">
+    <i data-lucide="receipt"></i>结算管理
+  </div>
+  <div class="sidebar-item" data-page="a-scripts">
+    <i data-lucide="message-square"></i>话术库管理
+  </div>
+  <div class="sidebar-item" data-page="a-reports">
+    <i data-lucide="bar-chart-2"></i>数据报表 <span class="badge badge-gray" style="font-size:10px;margin-left:auto;">P1</span>
+  </div>
+  <div class="sidebar-item" data-page="a-compliance">
+    <i data-lucide="shield"></i>合规月报 <span class="badge badge-gray" style="font-size:10px;margin-left:auto;">P1</span>
+  </div>
+  <div class="sidebar-item" data-page="a-settings">
+    <i data-lucide="settings"></i>系统配置
+  </div>
+</div>
+
+<!-- Main -->
+<div class="main-content">
+
+<!-- ═══════════ 管理看板 ═══════════ -->
+<div id="a-dashboard" class="page-section active">
+  <div class="page-header">
+    <div><div class="page-title">管理看板</div><div class="page-subtitle">2026年4月28日 星期二</div></div>
+  </div>
+  <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);">
+    <div class="stat-card"><div class="stat-label">今日外呼</div><div class="stat-value">247</div><div class="stat-change up"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>较昨日 +12%</div></div>
+    <div class="stat-card"><div class="stat-label">今日接通</div><div class="stat-value">198</div><div class="stat-change neutral">接通率 80.2%</div></div>
+    <div class="stat-card"><div class="stat-label">今日承诺缴费</div><div class="stat-value">34</div><div class="stat-change neutral">金额 ¥156,800</div></div>
+    <div class="stat-card"><div class="stat-label">今日实际回款</div><div class="stat-value" style="font-size:22px;">¥89,400</div><div class="stat-change up"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>较昨日 +23%</div></div>
+  </div>
+  <div class="two-col">
+    <div class="card">
+      <div class="card-header"><span class="card-title">全员今日排名</span><span class="text-sm text-muted">实时更新</span></div>
+      <div class="table-wrap" style="border:none;box-shadow:none;border-radius:0;">
+        <table><thead><tr><th>排名</th><th>姓名</th><th>通话数</th><th>承诺数</th><th>回款金额</th><th>AI采用率</th></tr></thead>
+        <tbody>
+          <tr><td><span style="background:#fbbf24;color:white;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;">1</span></td><td>李小红</td><td>32次</td><td>8单</td><td>¥24,600</td><td><span class="badge badge-green">78%</span></td></tr>
+          <tr><td><span style="background:#9ca3af;color:white;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;">2</span></td><td>张建华</td><td>28次</td><td>6单</td><td>¥18,900</td><td><span class="badge badge-blue">65%</span></td></tr>
+          <tr><td><span style="background:#cd7c2c;color:white;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;">3</span></td><td>王芳芳</td><td>26次</td><td>5单</td><td>¥15,200</td><td><span class="badge badge-green">82%</span></td></tr>
+          <tr><td style="color:#6b7280;padding-left:12px;">4</td><td>陈明远</td><td>24次</td><td>4单</td><td>¥12,800</td><td><span class="badge badge-blue">71%</span></td></tr>
+          <tr><td style="color:#6b7280;padding-left:12px;">5</td><td>刘晓娟</td><td>22次</td><td>3单</td><td>¥9,400</td><td><span class="badge badge-green">88%</span></td></tr>
+        </tbody></table>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      <div class="card" style="background:#fff7ed;border-color:#fed7aa;">
+        <div class="card-body" style="display:flex;align-items:center;justify-content:space-between;">
+          <div><div style="font-size:12px;color:#92400e;font-weight:600;">公海待分配案件</div><div style="font-size:32px;font-weight:700;color:#ea580c;">156</div><div style="font-size:12px;color:#92400e;">个</div></div>
+          <button class="btn btn-primary" onclick="document.querySelector('[data-page=a-pool]').click()">立即分配</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">AI话术采用率（本周）</span></div>
+        <div class="card-body">
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:12px;"><span style="font-size:28px;font-weight:700;color:#1A56DB;">76%</span><span class="badge badge-green" style="font-size:11px;">↑4%</span></div>
+          <div style="display:flex;gap:4px;align-items:flex-end;height:48px;">
+            <div style="flex:1;background:#dbeafe;border-radius:3px 3px 0 0;" title="周一 68%"><div style="height:68%;background:#1A56DB;border-radius:3px 3px 0 0;"></div></div>
+            <div style="flex:1;background:#dbeafe;border-radius:3px 3px 0 0;"><div style="height:71%;background:#1A56DB;border-radius:3px 3px 0 0;"></div></div>
+            <div style="flex:1;background:#dbeafe;border-radius:3px 3px 0 0;"><div style="height:75%;background:#1A56DB;border-radius:3px 3px 0 0;"></div></div>
+            <div style="flex:1;background:#dbeafe;border-radius:3px 3px 0 0;"><div style="height:73%;background:#1A56DB;border-radius:3px 3px 0 0;"></div></div>
+            <div style="flex:1;background:#dbeafe;border-radius:3px 3px 0 0;"><div style="height:79%;background:#1A56DB;border-radius:3px 3px 0 0;"></div></div>
+            <div style="flex:1;background:#dbeafe;border-radius:3px 3px 0 0;"><div style="height:82%;background:#1A56DB;border-radius:3px 3px 0 0;"></div></div>
+            <div style="flex:1;background:#dbeafe;border-radius:3px 3px 0 0;"><div style="height:84%;background:#1A56DB;border-radius:3px 3px 0 0;"></div></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:#9ca3af;margin-top:4px;"><span>周一</span><span>今天</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">本周风控告警</span></div>
+        <div class="card-body" style="display:flex;gap:16px;">
+          <div style="text-align:center;"><div style="font-size:22px;font-weight:700;color:#d97706;">12</div><div style="font-size:12px;color:#6b7280;">L1 注意</div></div>
+          <div style="text-align:center;"><div style="font-size:22px;font-weight:700;color:#e02424;">3</div><div style="font-size:12px;color:#6b7280;">L2 警告</div></div>
+          <div style="text-align:center;"><div style="font-size:22px;font-weight:700;color:#6b7280;">0</div><div style="font-size:12px;color:#6b7280;">L3 紧急</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ CRM案件列表 ═══════════ -->
+<div id="a-cases" class="page-section">
+  <div class="page-header">
+    <div><div class="page-title">CRM 案件列表</div><div class="page-subtitle">共 186 个案件</div></div>
+    <button class="btn btn-secondary" onclick="openModal('modal-batch')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> 批量操作</button>
+  </div>
+  <div class="table-wrap">
+    <div class="table-toolbar">
+      <div class="search-box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:10px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" class="form-control" placeholder="搜索业主姓名/房号/案件编号" style="padding-left:34px;min-width:240px;"></div>
+      <select class="form-control" style="width:120px;"><option>全部阶段</option><option>待联系</option><option>跟进中</option><option>承诺缴费</option><option>已缴费</option><option>升级中</option></select>
+      <select class="form-control" style="width:120px;"><option>全部员工</option><option>李小红</option><option>张建华</option><option>王芳芳</option><option>陈明远</option></select>
+      <select class="form-control" style="width:120px;"><option>全部楼栋</option><option>1栋</option><option>2栋</option><option>3栋</option><option>4栋</option></select>
+    </div>
+    <table>
+      <thead><tr><th><input type="checkbox"></th><th>案件编号</th><th>业主</th><th>房号</th><th>欠费金额</th><th>欠费月数</th><th>阶段</th><th>负责员工</th><th>最后联系</th><th>操作</th></tr></thead>
+      <tbody>
+        <tr><td><input type="checkbox"></td><td style="font-family:monospace;font-size:12px;">CC-0421</td><td>张大伟</td><td>3栋1201</td><td style="color:#e02424;font-weight:600;">¥8,420</td><td>7个月</td><td><span class="badge badge-blue">跟进中</span></td><td>李小红</td><td>3天前</td><td><button class="btn btn-ghost btn-sm" onclick="document.querySelector('[data-page=a-case-detail]').click()">详情</button><button class="btn btn-ghost btn-sm">拨打</button></td></tr>
+        <tr><td><input type="checkbox"></td><td style="font-family:monospace;font-size:12px;">CC-0418</td><td>刘美华</td><td>1栋0803</td><td style="color:#e02424;font-weight:600;">¥12,600</td><td>10个月</td><td><span class="badge badge-gray">待联系</span></td><td><span class="text-muted">—</span></td><td><span class="text-muted">—</span></td><td><button class="btn btn-ghost btn-sm" onclick="document.querySelector('[data-page=a-case-detail]').click()">详情</button><button class="btn btn-ghost btn-sm">分配</button></td></tr>
+        <tr><td><input type="checkbox"></td><td style="font-family:monospace;font-size:12px;">CC-0415</td><td>王建国</td><td>5栋2201</td><td style="color:#e02424;font-weight:600;">¥5,040</td><td>4个月</td><td><span class="badge badge-orange">承诺缴费</span></td><td>王芳芳</td><td>1天前</td><td><button class="btn btn-ghost btn-sm" onclick="document.querySelector('[data-page=a-case-detail]').click()">详情</button></td></tr>
+        <tr><td><input type="checkbox"></td><td style="font-family:monospace;font-size:12px;">CC-0410</td><td>陈小燕</td><td>2栋0601</td><td style="color:#e02424;font-weight:600;">¥21,000</td><td>17个月</td><td><span class="badge badge-purple">升级中</span></td><td>张建华</td><td>5天前</td><td><button class="btn btn-ghost btn-sm" onclick="document.querySelector('[data-page=a-case-detail]').click()">详情</button></td></tr>
+        <tr><td><input type="checkbox"></td><td style="font-family:monospace;font-size:12px;">CC-0408</td><td>孙志远</td><td>4栋1504</td><td style="color:#e02424;font-weight:600;">¥3,360</td><td>3个月</td><td><span class="badge badge-blue">跟进中</span></td><td>刘晓娟</td><td>今天</td><td><button class="btn btn-ghost btn-sm" onclick="document.querySelector('[data-page=a-case-detail]').click()">详情</button><button class="btn btn-ghost btn-sm">拨打</button></td></tr>
+        <tr><td><input type="checkbox"></td><td style="font-family:monospace;font-size:12px;">CC-0405</td><td>赵云霞</td><td>6栋0901</td><td style="color:#e02424;font-weight:600;">¥16,800</td><td>14个月</td><td><span class="badge badge-purple">法务处理</span></td><td><span class="text-muted">—</span></td><td>2周前</td><td><button class="btn btn-ghost btn-sm" onclick="document.querySelector('[data-page=a-case-detail]').click()">详情</button></td></tr>
+        <tr><td><input type="checkbox"></td><td style="font-family:monospace;font-size:12px;">CC-0402</td><td>李建明</td><td>1栋0302</td><td style="color:#057a55;font-weight:600;">¥2,520</td><td>2个月</td><td><span class="badge badge-green">已缴费</span></td><td>陈明远</td><td>昨天</td><td><button class="btn btn-ghost btn-sm" onclick="document.querySelector('[data-page=a-case-detail]').click()">详情</button></td></tr>
+        <tr><td><input type="checkbox"></td><td style="font-family:monospace;font-size:12px;">CC-0399</td><td>周晓敏</td><td>3栋0704</td><td style="color:#e02424;font-weight:600;">¥6,300</td><td>5个月</td><td><span class="badge badge-gray">待联系</span></td><td><span class="text-muted">—</span></td><td><span class="text-muted">—</span></td><td><button class="btn btn-ghost btn-sm" onclick="document.querySelector('[data-page=a-case-detail]').click()">详情</button><button class="btn btn-ghost btn-sm">分配</button></td></tr>
+        <tr><td><input type="checkbox"></td><td style="font-family:monospace;font-size:12px;">CC-0397</td><td>吴大强</td><td>7栋1801</td><td style="color:#e02424;font-weight:600;">¥25,200</td><td>21个月</td><td><span class="badge badge-blue">跟进中</span></td><td>李小红</td><td>2天前</td><td><button class="btn btn-ghost btn-sm" onclick="document.querySelector('[data-page=a-case-detail]').click()">详情</button><button class="btn btn-ghost btn-sm">拨打</button></td></tr>
+        <tr><td><input type="checkbox"></td><td style="font-family:monospace;font-size:12px;">CC-0395</td><td>马晓芳</td><td>2栋1103</td><td style="color:#e02424;font-weight:600;">¥4,200</td><td>3个月</td><td><span class="badge badge-orange">承诺缴费</span></td><td>张建华</td><td>1天前</td><td><button class="btn btn-ghost btn-sm" onclick="document.querySelector('[data-page=a-case-detail]').click()">详情</button></td></tr>
+        <tr><td><input type="checkbox"></td><td style="font-family:monospace;font-size:12px;">CC-0392</td><td>郑海涛</td><td>5栋0506</td><td style="color:#e02424;font-weight:600;">¥9,660</td><td>8个月</td><td><span class="badge badge-blue">跟进中</span></td><td>王芳芳</td><td>今天</td><td><button class="btn btn-ghost btn-sm" onclick="document.querySelector('[data-page=a-case-detail]').click()">详情</button><button class="btn btn-ghost btn-sm">拨打</button></td></tr>
+        <tr><td><input type="checkbox"></td><td style="font-family:monospace;font-size:12px;">CC-0388</td><td>何敏华</td><td>4栋2002</td><td style="color:#e02424;font-weight:600;">¥18,480</td><td>15个月</td><td><span class="badge badge-purple">升级中</span></td><td>陈明远</td><td>3天前</td><td><button class="btn btn-ghost btn-sm" onclick="document.querySelector('[data-page=a-case-detail]').click()">详情</button></td></tr>
+      </tbody>
+    </table>
+    <div class="pagination"><span class="pagination-info">共 186 条，第 1/8 页</span><div class="pagination-pages"><div class="page-btn active">1</div><div class="page-btn">2</div><div class="page-btn">3</div><div class="page-btn">…</div><div class="page-btn">8</div><div class="page-btn">›</div></div></div>
+  </div>
+</div>
+
+<!-- ═══════════ 案件看板 ═══════════ -->
+<div id="a-kanban" class="page-section">
+  <div class="page-header"><div class="page-title">案件看板</div><div><button class="btn btn-secondary btn-sm">按员工筛选</button></div></div>
+  <div class="kanban-board">
+    <div class="kanban-col col-pending">
+      <div class="kanban-col-header">待联系 <span class="badge badge-gray">32</span></div>
+      <div class="kanban-col-body">
+        <div class="kanban-card" style="border-left-color:#9ca3af;"><div class="owner">刘美华</div><div class="unit">1栋0803</div><div class="amount">¥12,600</div><div class="meta">10个月欠费 · 未分配</div></div>
+        <div class="kanban-card" style="border-left-color:#9ca3af;"><div class="owner">周晓敏</div><div class="unit">3栋0704</div><div class="amount">¥6,300</div><div class="meta">5个月欠费 · 未分配</div></div>
+        <div class="kanban-card" style="border-left-color:#9ca3af;"><div class="owner">许大明</div><div class="unit">8栋1601</div><div class="amount">¥31,500</div><div class="meta">25个月欠费 · 未分配</div></div>
+      </div>
+    </div>
+    <div class="kanban-col col-follow">
+      <div class="kanban-col-header">跟进中 <span class="badge badge-blue">58</span></div>
+      <div class="kanban-col-body">
+        <div class="kanban-card" style="border-left-color:#1A56DB;"><div class="owner">张大伟</div><div class="unit">3栋1201</div><div class="amount">¥8,420</div><div class="meta">李小红 · 3天前联系</div></div>
+        <div class="kanban-card" style="border-left-color:#1A56DB;"><div class="owner">孙志远</div><div class="unit">4栋1504</div><div class="amount">¥3,360</div><div class="meta">刘晓娟 · 今天联系</div></div>
+        <div class="kanban-card" style="border-left-color:#1A56DB;"><div class="owner">吴大强</div><div class="unit">7栋1801</div><div class="amount">¥25,200</div><div class="meta">李小红 · 2天前联系</div></div>
+      </div>
+    </div>
+    <div class="kanban-col col-promise">
+      <div class="kanban-col-header">承诺缴费 <span class="badge badge-orange">24</span></div>
+      <div class="kanban-col-body">
+        <div class="kanban-card" style="border-left-color:#d97706;"><div class="owner">王建国</div><div class="unit">5栋2201</div><div class="amount">¥5,040</div><div class="meta">王芳芳 · 承诺5月底缴</div></div>
+        <div class="kanban-card" style="border-left-color:#d97706;"><div class="owner">马晓芳</div><div class="unit">2栋1103</div><div class="amount">¥4,200</div><div class="meta">张建华 · 承诺5月5日</div></div>
+      </div>
+    </div>
+    <div class="kanban-col col-paid">
+      <div class="kanban-col-header">已缴费 <span class="badge badge-green">41</span></div>
+      <div class="kanban-col-body">
+        <div class="kanban-card" style="border-left-color:#057a55;"><div class="owner">李建明</div><div class="unit">1栋0302</div><div class="amount" style="color:#057a55;">¥2,520 ✓</div><div class="meta">陈明远 · 昨天完成</div></div>
+        <div class="kanban-card" style="border-left-color:#057a55;"><div class="owner">黄晓玲</div><div class="unit">6栋0403</div><div class="amount" style="color:#057a55;">¥7,200 ✓</div><div class="meta">王芳芳 · 3天前完成</div></div>
+      </div>
+    </div>
+    <div class="kanban-col col-escalate">
+      <div class="kanban-col-header">升级中 <span class="badge badge-purple">8</span></div>
+      <div class="kanban-col-body">
+        <div class="kanban-card" style="border-left-color:#7e3af2;"><div class="owner">陈小燕</div><div class="unit">2栋0601</div><div class="amount">¥21,000</div><div class="meta">张建华 · 转法务处理</div></div>
+        <div class="kanban-card" style="border-left-color:#7e3af2;"><div class="owner">何敏华</div><div class="unit">4栋2002</div><div class="amount">¥18,480</div><div class="meta">陈明远 · 待升级法务</div></div>
+      </div>
+    </div>
+    <div class="kanban-col col-closed">
+      <div class="kanban-col-header">已关闭 <span class="badge badge-gray">23</span></div>
+      <div class="kanban-col-body">
+        <div class="kanban-card" style="border-left-color:#9ca3af;opacity:.7;"><div class="owner">赵云霞</div><div class="unit">6栋0901</div><div class="amount" style="color:#9ca3af;">¥16,800</div><div class="meta">法务介入 · 已关闭</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ 案件详情 ═══════════ -->
+<div id="a-case-detail" class="page-section">
+  <div class="breadcrumb"><span>CRM案件</span><span class="sep">›</span><span class="current">CC-2026-0421</span></div>
+  <div class="detail-grid">
+    <div>
+      <div class="card section-gap">
+        <div class="card-header"><span class="card-title">业主信息</span><span class="badge badge-blue">跟进中</span></div>
+        <div class="card-body">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;"><div style="width:48px;height:48px;border-radius:50%;background:#dbeafe;color:#1A56DB;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;">张</div><div><div style="font-size:16px;font-weight:700;">张大伟</div><div style="font-size:13px;color:#6b7280;">3栋1单元1201室</div></div></div>
+          <div class="info-grid" style="margin-bottom:16px;">
+            <div class="info-item"><div class="info-label">手机号</div><div class="info-value" style="font-family:monospace;">138****6621</div></div>
+            <div class="info-item"><div class="info-label">负责员工</div><div class="info-value">李小红</div></div>
+          </div>
+          <div style="background:#fef2f2;border-radius:8px;padding:16px;text-align:center;margin-bottom:16px;">
+            <div style="font-size:12px;color:#9ca3af;margin-bottom:4px;">累计欠费</div>
+            <div style="font-size:32px;font-weight:700;color:#e02424;">¥8,420</div>
+            <div style="font-size:12px;color:#6b7280;">共 7 个月</div>
+          </div>
+          <table class="debt-table">
+            <thead><tr><th>月份</th><th>物业费</th><th>滞纳金</th><th>合计</th></tr></thead>
+            <tbody>
+              <tr><td>2025-10</td><td>¥1,100</td><td>¥66</td><td>¥1,166</td></tr>
+              <tr><td>2025-11</td><td>¥1,100</td><td>¥55</td><td>¥1,155</td></tr>
+              <tr><td>2025-12</td><td>¥1,100</td><td>¥44</td><td>¥1,144</td></tr>
+              <tr><td>2026-01</td><td>¥1,100</td><td>¥33</td><td>¥1,133</td></tr>
+              <tr><td>2026-02</td><td>¥1,100</td><td>¥22</td><td>¥1,122</td></tr>
+              <tr><td>2026-03</td><td>¥1,100</td><td>¥11</td><td>¥1,111</td></tr>
+              <tr><td>2026-04</td><td>¥1,100</td><td>¥—</td><td>¥1,100</td></tr>
+              <tr style="font-weight:700;background:#fef2f2;"><td>合计</td><td>¥7,700</td><td>¥231</td><td>¥7,931</td></tr>
+            </tbody>
+          </table>
+          <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
+            <span class="badge badge-gray">老业主</span><span class="badge badge-orange">多次承诺未缴</span><span class="badge badge-blue">房屋质量投诉</span>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-direction:column;">
+        <button class="btn btn-primary w-full">发送缴费链接</button>
+        <button class="btn btn-secondary w-full">创建工单</button>
+        <button class="btn btn-secondary w-full" style="color:#7e3af2;border-color:#c4b5fd;">转交法务处理</button>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><span class="card-title">活动时间线</span></div>
+        <div class="card-body">
+          <div class="timeline">
+            <!-- 通话（有效）-->
+            <div class="tl-item">
+              <div class="tl-spine">
+                <div class="tl-node tl-call">
+                  <svg width="11" height="11" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.63A2 2 0 012 .82h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.09 8.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
+                </div>
+                <div class="tl-line"></div>
+              </div>
+              <div class="tl-body">
+                <div class="tl-head">
+                  <span class="tl-title">通话 · 3分42秒</span>
+                  <span class="tl-meta">2026-04-28 14:32 · 李小红</span>
+                </div>
+                <div class="tl-card">
+                  <div class="tl-card-head">
+                    AI 话术摘要
+                    <span class="badge badge-orange" style="font-size:11px;">推托</span>
+                    <span style="font-size:11px;color:#9ca3af;">置信度 0.87</span>
+                  </div>
+                  <div>业主称近期手头紧，老人看病花了不少钱，表示月底前会想办法缴费。</div>
+                  <hr class="tl-card-sep">
+                  <div class="tl-card-meta">
+                    <a href="#">查看录音</a>
+                    <a href="#">完整 AI 分析</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- 无人接听 -->
+            <div class="tl-item">
+              <div class="tl-spine">
+                <div class="tl-node tl-system">
+                  <svg width="11" height="11" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.63A2 2 0 012 .82h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.09 8.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
+                </div>
+                <div class="tl-line"></div>
+              </div>
+              <div class="tl-body">
+                <div class="tl-head">
+                  <span class="tl-title">无人接听</span>
+                  <span class="tl-meta">2026-04-25 10:15 · 1分12秒 · 李小红</span>
+                </div>
+                <div class="tl-text">AI 标注：无效通话</div>
+              </div>
+            </div>
+            <!-- 案件分配 -->
+            <div class="tl-item">
+              <div class="tl-spine">
+                <div class="tl-node tl-system">
+                  <svg width="11" height="11" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+                </div>
+                <div class="tl-line"></div>
+              </div>
+              <div class="tl-body">
+                <div class="tl-head">
+                  <span class="tl-title">案件分配</span>
+                  <span class="tl-meta">2026-04-22 09:30</span>
+                </div>
+                <div class="tl-text">从公海分配给李小红 — 操作人：陈建国（管理员）</div>
+              </div>
+            </div>
+            <!-- 案件导入 -->
+            <div class="tl-item">
+              <div class="tl-spine">
+                <div class="tl-node tl-system">
+                  <svg width="11" height="11" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                </div>
+                <div class="tl-line"></div>
+              </div>
+              <div class="tl-body">
+                <div class="tl-head">
+                  <span class="tl-title">案件导入</span>
+                  <span class="tl-meta">2026-04-18</span>
+                </div>
+                <div class="tl-text">从 Excel 批量导入</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">添加跟进备注</span></div>
+        <div class="card-body">
+          <textarea class="form-control" placeholder="记录本次跟进情况、业主态度、下一步计划..." style="height:80px;"></textarea>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:13px;color:#374151;font-weight:500;">更新阶段：</span>
+              <select class="form-control" style="width:140px;">
+                <option>跟进中</option><option>承诺缴费</option><option>已缴费</option><option>升级中</option><option>已关闭</option>
+              </select>
+            </div>
+            <button class="btn btn-primary">保存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ 公海管理 ═══════════ -->
+<div id="a-pool" class="page-section">
+  <div class="page-header">
+    <div><div class="page-title">公海管理</div><div class="page-subtitle">当前公海：156 个案件</div></div>
+    <button class="btn btn-primary" onclick="openModal('modal-batch-assign')">批量分配</button>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 280px;gap:20px;align-items:start;">
+    <div class="table-wrap">
+      <div class="table-toolbar">
+        <div class="search-box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:10px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" class="form-control" placeholder="搜索业主/房号" style="padding-left:34px;"></div>
+        <select class="form-control" style="width:130px;"><option>全部欠费等级</option><option>>12个月</option><option>6-12个月</option><option>3-6个月</option></select>
+        <select class="form-control" style="width:100px;"><option>优先级排序</option><option>欠费金额↓</option><option>入池时间↑</option></select>
+      </div>
+      <table><thead><tr><th><input type="checkbox"></th><th>业主</th><th>房号</th><th>欠费金额</th><th>欠费月数</th><th>进池原因</th><th>优先级</th><th>入池时间</th><th>操作</th></tr></thead>
+      <tbody>
+        <tr><td><input type="checkbox"></td><td>许志刚</td><td>8-1601</td><td style="color:#e02424;font-weight:600;">¥31,500</td><td>25个月</td><td>超时未跟进</td><td><span class="badge badge-red">95分</span></td><td>7天前</td><td><button class="btn btn-primary btn-sm" onclick="openModal('modal-assign')">分配</button></td></tr>
+        <tr><td><input type="checkbox"></td><td>刘美华</td><td>1-0803</td><td style="color:#e02424;font-weight:600;">¥12,600</td><td>10个月</td><td>超时未跟进</td><td><span class="badge badge-red">87分</span></td><td>3天前</td><td><button class="btn btn-primary btn-sm" onclick="openModal('modal-assign')">分配</button></td></tr>
+        <tr><td><input type="checkbox"></td><td>吴桂芳</td><td>9-0202</td><td style="color:#e02424;font-weight:600;">¥18,900</td><td>15个月</td><td>员工离职回池</td><td><span class="badge badge-red">82分</span></td><td>1天前</td><td><button class="btn btn-primary btn-sm" onclick="openModal('modal-assign')">分配</button></td></tr>
+        <tr><td><input type="checkbox"></td><td>周晓敏</td><td>3-0704</td><td style="color:#e02424;font-weight:600;">¥6,300</td><td>5个月</td><td>员工离职回池</td><td><span class="badge badge-orange">62分</span></td><td>1天前</td><td><button class="btn btn-primary btn-sm" onclick="openModal('modal-assign')">分配</button></td></tr>
+        <tr><td><input type="checkbox"></td><td>高建军</td><td>2-1801</td><td style="color:#e02424;font-weight:600;">¥9,240</td><td>7个月</td><td>超时未跟进</td><td><span class="badge badge-orange">71分</span></td><td>5天前</td><td><button class="btn btn-primary btn-sm" onclick="openModal('modal-assign')">分配</button></td></tr>
+      </tbody></table>
+      <div class="pagination"><span class="pagination-info">共 156 条</span><div class="pagination-pages"><div class="page-btn active">1</div><div class="page-btn">2</div><div class="page-btn">›</div></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">员工私海概览</span></div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:12px;">
+        <div class="agent-load"><div style="width:60px;font-size:13px;font-weight:500;">李小红</div><div class="load-bar-wrap"><div class="load-bar" style="width:90%;"></div></div><span style="font-size:12px;color:#6b7280;width:40px;text-align:right;">18/20</span></div>
+        <div class="agent-load"><div style="width:60px;font-size:13px;font-weight:500;">张建华</div><div class="load-bar-wrap"><div class="load-bar over" style="width:110%;"></div></div><span style="font-size:12px;color:#e02424;width:40px;text-align:right;">22/20⚠</span></div>
+        <div class="agent-load"><div style="width:60px;font-size:13px;font-weight:500;">王芳芳</div><div class="load-bar-wrap"><div class="load-bar" style="width:75%;"></div></div><span style="font-size:12px;color:#6b7280;width:40px;text-align:right;">15/20</span></div>
+        <div class="agent-load"><div style="width:60px;font-size:13px;font-weight:500;">陈明远</div><div class="load-bar-wrap"><div class="load-bar" style="width:60%;"></div></div><span style="font-size:12px;color:#6b7280;width:40px;text-align:right;">12/20</span></div>
+        <div class="agent-load"><div style="width:60px;font-size:13px;font-weight:500;">刘晓娟</div><div class="load-bar-wrap"><div class="load-bar" style="width:45%;"></div></div><span style="font-size:12px;color:#6b7280;width:40px;text-align:right;">9/20</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ 业主名单导入 ═══════════ -->
+<div id="a-import" class="page-section">
+  <div class="page-header"><div class="page-title">业主名单导入</div><button class="btn btn-secondary"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 下载导入模板</button></div>
+  <div class="card section-gap">
+    <div class="card-body">
+      <div class="upload-zone">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.5" style="margin:0 auto 12px;display:block;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <div style="font-size:15px;font-weight:600;color:#374151;margin-bottom:6px;">拖拽 Excel / CSV 文件到此区域</div>
+        <div style="font-size:13px;color:#9ca3af;">或 <span style="color:#1A56DB;cursor:pointer;">点击选择文件</span></div>
+        <div style="font-size:12px;color:#9ca3af;margin-top:8px;">支持 .xlsx / .csv · 最大 100MB · 必须包含：姓名、房号、手机号、欠费金额</div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">上次导入结果</span><span class="badge badge-green">导入成功</span></div>
+    <div class="card-body">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
+        <div style="text-align:center;padding:12px;background:#f0fdf4;border-radius:8px;"><div style="font-size:24px;font-weight:700;color:#057a55;">135</div><div style="font-size:12px;color:#6b7280;">新增</div></div>
+        <div style="text-align:center;padding:12px;background:#eff6ff;border-radius:8px;"><div style="font-size:24px;font-weight:700;color:#1A56DB;">6</div><div style="font-size:12px;color:#6b7280;">更新</div></div>
+        <div style="text-align:center;padding:12px;background:#fffbeb;border-radius:8px;"><div style="font-size:24px;font-weight:700;color:#d97706;">2</div><div style="font-size:12px;color:#6b7280;">跳过重复</div></div>
+        <div style="text-align:center;padding:12px;background:#f3f4f6;border-radius:8px;"><div style="font-size:24px;font-weight:700;color:#374151;">143</div><div style="font-size:12px;color:#6b7280;">总计</div></div>
+      </div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px;">数据预览（前5条）</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#f9fafb;"><th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e5e7eb;">姓名</th><th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e5e7eb;">房号</th><th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e5e7eb;">手机号</th><th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e5e7eb;">欠费金额</th><th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e5e7eb;">状态</th></tr></thead>
+      <tbody>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;">张建国</td><td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;">3-1201</td><td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;">138****6621</td><td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;">¥8,420</td><td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;"><span class="badge badge-green">新增</span></td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;">刘美华</td><td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;">1-0803</td><td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;">139****2208</td><td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;">¥12,600</td><td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;"><span class="badge badge-blue">更新</span></td></tr>
+        <tr><td style="padding:8px 12px;">王建国</td><td style="padding:8px 12px;">5-2201</td><td style="padding:8px 12px;">137****8843</td><td style="padding:8px 12px;">¥5,040</td><td style="padding:8px 12px;"><span class="badge badge-green">新增</span></td></tr>
+      </tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ 录音批量上传 ═══════════ -->
+<div id="a-batch" class="page-section">
+  <div class="page-header"><div class="page-title">录音批量上传</div></div>
+  <div class="card section-gap">
+    <div class="card-body">
+      <div class="upload-zone">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.5" style="margin:0 auto 12px;display:block;"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+        <div style="font-size:15px;font-weight:600;color:#374151;margin-bottom:6px;">拖拽录音文件到此区域</div>
+        <div style="font-size:12px;color:#9ca3af;margin-top:6px;">支持 mp3 / m4a / amr / wav / aac / ogg · 单文件 ≤ 100MB · 单次 ≤ 500 个</div>
+      </div>
+    </div>
+  </div>
+  <div class="card section-gap">
+    <div class="card-header"><span class="card-title">上传进度</span><span class="text-muted text-sm">已完成 47/156</span></div>
+    <div class="card-body">
+      <div style="margin-bottom:12px;"><div class="progress-bar"><div class="progress-fill" style="width:30%;"></div></div><div style="font-size:12px;color:#6b7280;margin-top:4px;">30% · 预计剩余约 8 分钟</div></div>
+      <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+        <div class="file-list-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#057a55" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg><span style="flex:1;font-size:13px;">张大伟_13866216621_20260428.mp3</span><span class="text-muted text-sm">3.2 MB</span><span class="badge badge-green" style="font-size:11px;">分析完成</span><a href="#" style="font-size:12.5px;margin-left:8px;">查看</a></div>
+        <div class="file-list-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#057a55" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg><span style="flex:1;font-size:13px;">刘美华_13922082208_20260427.mp3</span><span class="text-muted text-sm">2.8 MB</span><span class="badge badge-green" style="font-size:11px;">分析完成</span><a href="#" style="font-size:12.5px;margin-left:8px;">查看</a></div>
+        <div class="file-list-item" style="background:#f0f9ff;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1A56DB" stroke-width="2"><polyline points="23 12 17 12"/><path d="M17 12l-5-5m5 5l-5 5"/></svg><span style="flex:1;font-size:13px;">王建国_13788438843_20260425.m4a</span><span class="text-muted text-sm">4.1 MB</span><span class="badge badge-blue" style="font-size:11px;">转写中...</span></div>
+        <div class="file-list-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span style="flex:1;font-size:13px;">陈小燕.amr</span><span class="text-muted text-sm">1.9 MB</span><span class="badge badge-gray" style="font-size:11px;">排队中（第3位）</span></div>
+        <div class="file-list-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e02424" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span style="flex:1;font-size:13px;color:#e02424;">test.exe</span><span class="text-muted text-sm">—</span><span class="badge badge-red" style="font-size:11px;">格式不支持</span><button class="btn btn-ghost btn-sm" style="color:#e02424;">移除</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">分析结果</span></div>
+    <table><thead><tr><th>文件名</th><th>手机号</th><th>日期</th><th>意图/结果</th><th>关键依据</th><th>置信度</th><th>需复核</th><th>操作</th></tr></thead>
+    <tbody>
+      <tr><td style="font-size:12px;">张大伟_20260428.mp3</td><td style="font-family:monospace;font-size:12px;">138****6621</td><td>04-28</td><td><span class="badge badge-orange">推托</span></td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;">家庭困难，下月缴</td><td>0.87</td><td>否</td><td><button class="btn btn-ghost btn-sm">查看转写</button></td></tr>
+      <tr><td style="font-size:12px;">刘美华_20260427.mp3</td><td style="font-family:monospace;font-size:12px;">139****2208</td><td>04-27</td><td><span class="badge badge-gray">无效通话</span></td><td style="font-size:12px;">无人接听</td><td>0.95</td><td>否</td><td><button class="btn btn-ghost btn-sm">查看转写</button></td></tr>
+    </tbody></table>
+  </div>
+</div>
+
+<!-- ═══════════ 项目管理 ═══════════ -->
+<div id="a-projects" class="page-section">
+  <div class="page-header">
+    <div><div class="page-title">项目管理</div><div class="page-subtitle">管理各催收项目及物业侧负责人</div></div>
+    <button class="btn btn-primary" onclick="openModal('modal-new-project')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>新建项目
+    </button>
+  </div>
+
+  <!-- 汇总 -->
+  <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+    <div class="stat-card"><div class="stat-label">进行中项目</div><div class="stat-value">3</div><div class="stat-change neutral">共 5 个项目</div></div>
+    <div class="stat-card"><div class="stat-label">项目案件总数</div><div class="stat-value">1,284</div><div class="stat-change neutral">跨所有项目</div></div>
+    <div class="stat-card"><div class="stat-label">本月总回款</div><div class="stat-value" style="font-size:22px;">¥243,600</div><div class="stat-change up">↑ 11% 较上月</div></div>
+    <div class="stat-card"><div class="stat-label">已指派负责人</div><div class="stat-value">3/5</div><div class="stat-change neutral">2 个项目待指派</div></div>
+  </div>
+
+  <!-- 项目列表 -->
+  <div class="table-wrap">
+    <div class="table-toolbar">
+      <div class="search-box">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:10px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input class="form-control" placeholder="搜索项目名称" style="padding-left:34px;">
+      </div>
+      <select class="form-control" style="width:110px;">
+        <option>全部状态</option><option>进行中</option><option>已完成</option><option>暂停</option>
+      </select>
+    </div>
+    <table>
+      <thead>
+        <tr><th>项目名称</th><th>关联服务商</th><th>案件数</th><th>已回款率</th><th>物业侧负责人</th><th>计划周期</th><th>状态</th><th>操作</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><div style="font-weight:600;font-size:13.5px;">A区2026Q2催收</div><div style="font-size:12px;color:#6b7280;">2026年Q2物业费催收</div></td>
+          <td>聚英催收团队</td>
+          <td>412</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="progress-bar" style="width:80px;height:6px;"><div class="progress-fill" style="width:38%;"></div></div>
+              <span style="font-size:12px;">38%</span>
+            </div>
+          </td>
+          <td><span class="badge badge-blue">刘婷</span></td>
+          <td style="font-size:12px;color:#6b7280;">2026-04-01 ~ 2026-06-30</td>
+          <td><span class="badge badge-green">进行中</span></td>
+          <td>
+            <button class="btn btn-ghost btn-sm" onclick="openModal('modal-project-detail')">详情</button>
+            <button class="btn btn-ghost btn-sm" onclick="openModal('modal-assign-pm')">指派负责人</button>
+          </td>
+        </tr>
+        <tr>
+          <td><div style="font-weight:600;font-size:13.5px;">B区2026Q2催收</div><div style="font-size:12px;color:#6b7280;">2026年Q2物业费催收</div></td>
+          <td>聚英催收团队</td>
+          <td>318</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="progress-bar" style="width:80px;height:6px;"><div class="progress-fill" style="width:29%;"></div></div>
+              <span style="font-size:12px;">29%</span>
+            </div>
+          </td>
+          <td><span class="badge badge-blue">王建明</span></td>
+          <td style="font-size:12px;color:#6b7280;">2026-04-01 ~ 2026-06-30</td>
+          <td><span class="badge badge-green">进行中</span></td>
+          <td>
+            <button class="btn btn-ghost btn-sm" onclick="openModal('modal-project-detail')">详情</button>
+            <button class="btn btn-ghost btn-sm" onclick="openModal('modal-assign-pm')">指派负责人</button>
+          </td>
+        </tr>
+        <tr>
+          <td><div style="font-weight:600;font-size:13.5px;">C区投票邀请</div><div style="font-size:12px;color:#6b7280;">业委会成立投票通知</div></td>
+          <td>无（自营）</td>
+          <td>554</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="progress-bar" style="width:80px;height:6px;"><div class="progress-fill" style="width:61%;background:#059669;"></div></div>
+              <span style="font-size:12px;">61%</span>
+            </div>
+          </td>
+          <td><span class="badge badge-orange">陈晓燕</span></td>
+          <td style="font-size:12px;color:#6b7280;">2026-03-15 ~ 2026-05-15</td>
+          <td><span class="badge badge-green">进行中</span></td>
+          <td>
+            <button class="btn btn-ghost btn-sm" onclick="openModal('modal-project-detail')">详情</button>
+            <button class="btn btn-ghost btn-sm" onclick="openModal('modal-assign-pm')">指派负责人</button>
+          </td>
+        </tr>
+        <tr>
+          <td><div style="font-weight:600;font-size:13.5px;">2025Q4催收</div><div style="font-size:12px;color:#6b7280;">2025年Q4物业费催收</div></td>
+          <td>明德催收服务</td>
+          <td>287</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="progress-bar" style="width:80px;height:6px;"><div class="progress-fill" style="width:84%;background:#059669;"></div></div>
+              <span style="font-size:12px;">84%</span>
+            </div>
+          </td>
+          <td style="color:#9ca3af;font-size:12px;">未指派</td>
+          <td style="font-size:12px;color:#6b7280;">2025-10-01 ~ 2025-12-31</td>
+          <td><span class="badge badge-gray">已完成</span></td>
+          <td>
+            <button class="btn btn-ghost btn-sm" onclick="openModal('modal-project-detail')">详情</button>
+            <button class="btn btn-ghost btn-sm" style="color:#9ca3af;" disabled>指派负责人</button>
+          </td>
+        </tr>
+        <tr>
+          <td><div style="font-weight:600;font-size:13.5px;">D区2026Q1催收</div><div style="font-size:12px;color:#6b7280;">2026年Q1物业费催收</div></td>
+          <td>聚英催收团队</td>
+          <td>198</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="progress-bar" style="width:80px;height:6px;"><div class="progress-fill" style="width:15%;background:#d97706;"></div></div>
+              <span style="font-size:12px;color:#d97706;">15%</span>
+            </div>
+          </td>
+          <td style="color:#9ca3af;font-size:12px;">未指派</td>
+          <td style="font-size:12px;color:#6b7280;">2026-01-01 ~ 2026-03-31</td>
+          <td><span class="badge badge-orange">暂停</span></td>
+          <td>
+            <button class="btn btn-ghost btn-sm" onclick="openModal('modal-project-detail')">详情</button>
+            <button class="btn btn-ghost btn-sm" onclick="openModal('modal-assign-pm')">指派负责人</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal: 新建项目 -->
+<div class="modal-overlay" id="modal-new-project" style="display:none;">
+  <div class="modal" style="width:520px;">
+    <div class="modal-header">
+      <span class="modal-title">新建项目</span>
+      <button class="modal-close" onclick="closeModal('modal-new-project')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">项目名称<span class="req">*</span></label><input class="form-control" placeholder="例：A区2026Q3催收"></div>
+      <div class="form-group"><label class="form-label">项目类型<span class="req">*</span></label>
+        <select class="form-control"><option>物业费催收</option><option>投票邀请</option><option>其他</option></select>
+      </div>
+      <div class="two-col">
+        <div class="form-group"><label class="form-label">计划开始日期<span class="req">*</span></label><input class="form-control" type="date" value="2026-04-29"></div>
+        <div class="form-group"><label class="form-label">计划结束日期<span class="req">*</span></label><input class="form-control" type="date" value="2026-06-30"></div>
+      </div>
+      <div class="form-group"><label class="form-label">关联服务商</label>
+        <select class="form-control"><option value="">无（自营）</option><option>聚英催收团队</option><option>明德催收服务</option></select>
+        <div style="font-size:12px;color:#6b7280;margin-top:4px;">如选择服务商，服务商管理员可在其后台查看本项目数据。</div>
+      </div>
+      <div class="form-group"><label class="form-label">物业侧负责人</label>
+        <select class="form-control"><option value="">暂不指派</option><option>刘婷</option><option>王建明</option><option>陈晓燕</option></select>
+      </div>
+      <div class="form-group"><label class="form-label">项目说明</label><textarea class="form-control" style="height:72px;" placeholder="可选，填写项目背景、目标等"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-project')">取消</button>
+      <button class="btn btn-primary">创建项目</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: 指派负责人 -->
+<div class="modal-overlay" id="modal-assign-pm" style="display:none;">
+  <div class="modal" style="width:440px;">
+    <div class="modal-header">
+      <span class="modal-title">指派物业侧项目负责人</span>
+      <button class="modal-close" onclick="closeModal('modal-assign-pm')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:#0369a1;">
+        <strong>A区2026Q2催收</strong> — 聚英催收团队 · 412 个案件
+      </div>
+      <div class="form-group"><label class="form-label">选择负责人<span class="req">*</span></label>
+        <select class="form-control">
+          <option value="">请选择</option>
+          <option selected>刘婷（当前负责人）</option>
+          <option>王建明</option>
+          <option>陈晓燕</option>
+          <option>赵强</option>
+        </select>
+        <div style="font-size:12px;color:#6b7280;margin-top:4px;">负责人将获得「项目负责人」角色，可查看该项目的回款进度、工单及法务进度，但无法修改用户权限或系统配置。</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-assign-pm')">取消</button>
+      <button class="btn btn-primary">确认指派</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: 项目详情 -->
+<div class="modal-overlay" id="modal-project-detail" style="display:none;">
+  <div class="modal" style="width:600px;">
+    <div class="modal-header">
+      <span class="modal-title">项目详情 — A区2026Q2催收</span>
+      <button class="modal-close" onclick="closeModal('modal-project-detail')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px;">
+        <div class="stat-card"><div class="stat-label">案件总数</div><div class="stat-value" style="font-size:22px;">412</div></div>
+        <div class="stat-card"><div class="stat-label">已回款率</div><div class="stat-value" style="font-size:22px;">38%</div><div class="stat-change neutral">¥156,800</div></div>
+        <div class="stat-card"><div class="stat-label">转工单</div><div class="stat-value" style="font-size:22px;">23</div><div class="stat-change neutral">转法务 8</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px;">
+        <div><span style="color:#6b7280;">关联服务商：</span>聚英催收团队</div>
+        <div><span style="color:#6b7280;">物业侧负责人：</span><span class="badge badge-blue">刘婷</span></div>
+        <div><span style="color:#6b7280;">计划周期：</span>2026-04-01 ~ 2026-06-30</div>
+        <div><span style="color:#6b7280;">状态：</span><span class="badge badge-green">进行中</span></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-project-detail')">关闭</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-project-detail');openModal('modal-assign-pm')">重新指派负责人</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ 用户管理 ═══════════ -->
+<div id="a-users" class="page-section">
+  <div class="page-header"><div class="page-title">用户管理</div><div style="display:flex;gap:8px;"><button class="btn btn-secondary" onclick="openModal('modal-invite')">生成邀请链接</button><button class="btn btn-primary" onclick="openModal('modal-new-user')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>新建员工</button></div></div>
+  <div class="tabs" id="user-tabs">
+    <div class="tab active" data-tab="tab-internal">内部员工 <span class="badge badge-gray" style="font-size:11px;margin-left:4px;">43</span></div>
+    <div class="tab" data-tab="tab-external">外部兼职 <span class="badge badge-gray" style="font-size:11px;margin-left:4px;">8</span></div>
+  </div>
+  <div id="tab-internal" class="tab-content active">
+    <div class="table-wrap">
+      <div class="table-toolbar"><div class="search-box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:10px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input class="form-control" placeholder="搜索姓名/手机" style="padding-left:34px;"></div><select class="form-control" style="width:110px;"><option>全部角色</option><option>督导</option><option>催收员</option></select></div>
+      <table><thead><tr><th>姓名</th><th>手机</th><th>角色</th><th>所属主管</th><th>私海数/上限</th><th>本月通话</th><th>状态</th><th>操作</th></tr></thead>
+      <tbody>
+        <tr><td>李小红</td><td style="font-family:monospace;font-size:12px;">138****1122</td><td><span class="badge badge-blue">催收员</span></td><td>赵强</td><td>18/20</td><td>247次</td><td><span class="badge badge-green">正常</span></td><td><button class="btn btn-ghost btn-sm">编辑</button><button class="btn btn-ghost btn-sm" style="color:#e02424;" onclick="openModal('modal-disable-user')">停用</button></td></tr>
+        <tr><td>张建华</td><td style="font-family:monospace;font-size:12px;">139****3344</td><td><span class="badge badge-blue">催收员</span></td><td>刘敏</td><td><span style="color:#e02424;font-weight:600;">22/20⚠</span></td><td>312次</td><td><span class="badge badge-green">正常</span></td><td><button class="btn btn-ghost btn-sm">编辑</button><button class="btn btn-ghost btn-sm" style="color:#e02424;" onclick="openModal('modal-disable-user')">停用</button></td></tr>
+        <tr><td>王芳芳</td><td style="font-family:monospace;font-size:12px;">137****5566</td><td><span class="badge badge-blue">催收员</span></td><td>赵强</td><td>15/20</td><td>198次</td><td><span class="badge badge-green">正常</span></td><td><button class="btn btn-ghost btn-sm">编辑</button><button class="btn btn-ghost btn-sm" style="color:#e02424;" onclick="openModal('modal-disable-user')">停用</button></td></tr>
+        <tr><td>陈明远</td><td style="font-family:monospace;font-size:12px;">136****7788</td><td><span class="badge badge-blue">催收员</span></td><td>赵强</td><td>12/20</td><td>224次</td><td><span class="badge badge-green">正常</span></td><td><button class="btn btn-ghost btn-sm">编辑</button><button class="btn btn-ghost btn-sm" style="color:#e02424;" onclick="openModal('modal-disable-user')">停用</button></td></tr>
+        <tr><td>刘晓娟</td><td style="font-family:monospace;font-size:12px;">135****9900</td><td><span class="badge badge-blue">催收员</span></td><td>刘敏</td><td>9/20</td><td>187次</td><td><span class="badge badge-green">正常</span></td><td><button class="btn btn-ghost btn-sm">编辑</button><button class="btn btn-ghost btn-sm" style="color:#e02424;" onclick="openModal('modal-disable-user')">停用</button></td></tr>
+        <tr><td>赵强</td><td style="font-family:monospace;font-size:12px;">134****1234</td><td><span class="badge badge-orange">督导</span></td><td>—</td><td>—</td><td>56次</td><td><span class="badge badge-green">正常</span></td><td><button class="btn btn-ghost btn-sm">编辑</button></td></tr>
+        <tr><td>刘敏</td><td style="font-family:monospace;font-size:12px;">133****5678</td><td><span class="badge badge-orange">督导</span></td><td>—</td><td>—</td><td>48次</td><td><span class="badge badge-green">正常</span></td><td><button class="btn btn-ghost btn-sm">编辑</button></td></tr>
+      </tbody></table>
+    </div>
+  </div>
+  <div id="tab-external" class="tab-content">
+    <div class="table-wrap">
+      <table><thead><tr><th>姓名</th><th>手机</th><th>服务商</th><th>配额/上限</th><th>有效期</th><th>可拨打时段</th><th>状态</th><th>操作</th></tr></thead>
+      <tbody>
+        <tr><td>赵伟</td><td style="font-family:monospace;font-size:12px;">138****9901</td><td>聚英催收团队</td><td>10/20</td><td>2026-07-31</td><td>09:00-18:00</td><td><span class="badge badge-green">正常</span></td><td><button class="btn btn-ghost btn-sm">编辑</button><button class="btn btn-ghost btn-sm" style="color:#e02424;">停用</button></td></tr>
+        <tr><td>钱丽</td><td style="font-family:monospace;font-size:12px;">139****1102</td><td>聚英催收团队</td><td>8/20</td><td>2026-06-30</td><td>09:00-18:00</td><td><span class="badge badge-green">正常</span></td><td><button class="btn btn-ghost btn-sm">编辑</button><button class="btn btn-ghost btn-sm" style="color:#e02424;">停用</button></td></tr>
+      </tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ P1 Pages ═══════════ -->
+<div id="a-partners" class="page-section"><div class="page-title" style="margin-bottom:20px;">服务商合作管理</div><div class="p1-banner"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>此功能将在 v1.1 版本上线，包含：服务商签约流程、成员权限配置、跨租户服务管理。</div></div>
+<div id="a-reports" class="page-section"><div class="page-title" style="margin-bottom:20px;">数据报表</div><div class="p1-banner"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>数据报表功能将在 v1.1 版本上线，包含：转化漏斗、员工效率对比、异议类型分布、承诺完成率趋势。</div></div>
+<div id="a-compliance" class="page-section"><div class="page-title" style="margin-bottom:20px;">合规月报</div><div class="p1-banner"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>合规月报将在 v1.1 版本上线，自动生成催收合规行为月报 PDF，可下载留档。</div></div>
+
+<!-- ═══════════ 结算管理 ═══════════ -->
+<div id="a-settlement" class="page-section">
+  <div class="page-header"><div class="page-title">结算管理</div><div style="display:flex;gap:8px;align-items:center;"><span style="font-size:13px;color:#6b7280;">账期：</span><select class="form-control" style="width:130px;"><option>2026年4月</option><option>2026年3月</option></select></div></div>
+  <div class="table-wrap section-gap">
+    <table><thead><tr><th>服务商</th><th>账期</th><th>计费方式</th><th>应付金额</th><th>状态</th><th>操作</th></tr></thead>
+    <tbody>
+      <tr><td><strong>聚英催收团队</strong></td><td>2026年4月</td><td>通话量 × ¥8/次</td><td style="font-weight:700;">¥12,480</td><td><span class="badge badge-green">已确认</span></td><td><button class="btn btn-ghost btn-sm" onclick="openModal('modal-settlement-detail')">查看明细</button><button class="btn btn-secondary btn-sm">上传凭证</button></td></tr>
+      <tr><td><strong>兴华律师事务所</strong></td><td>2026年4月</td><td>回款提成 3%</td><td style="font-weight:700;">¥8,967</td><td><span class="badge badge-orange">待确认</span></td><td><button class="btn btn-ghost btn-sm" onclick="openModal('modal-settlement-detail')">查看明细</button><button class="btn btn-primary btn-sm">确认结算单</button></td></tr>
+    </tbody></table>
+  </div>
+</div>
+
+<!-- ═══════════ 话术库管理 ═══════════ -->
+<div id="a-scripts" class="page-section">
+  <div class="page-header"><div class="page-title">话术库管理</div><div style="display:flex;gap:8px;"><button class="btn btn-secondary">批量导入</button><button class="btn btn-primary" onclick="openModal('modal-new-script')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>新增话术</button></div></div>
+  <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:10px;margin-bottom:16px;font-size:13.5px;color:#854d0e;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    1 条 <strong>D 级话术</strong>（综合评分过低）已被自动禁用，建议修订后重新启用。
+  </div>
+  <div class="table-wrap">
+    <div class="table-toolbar"><div class="search-box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:10px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input class="form-control" placeholder="搜索话术标题或内容" style="padding-left:34px;min-width:200px;"></div><select class="form-control" style="width:130px;"><option>全部异议类型</option><option>房屋质量</option><option>经济困难</option><option>服务不满</option></select><select class="form-control" style="width:100px;"><option>全部状态</option><option>启用</option><option>已禁用</option></select></div>
+    <table><thead><tr><th>话术标题</th><th>异议类型</th><th>级别</th><th>使用次数</th><th>采用率</th><th>转化率</th><th>综合评分</th><th>状态</th><th>操作</th></tr></thead>
+    <tbody>
+      <tr><td style="font-weight:500;">房屋质量问题回应话术</td><td>房屋质量</td><td><span class="badge badge-gray">公司通用</span></td><td>1,247次</td><td>73%</td><td>28%</td><td><span class="score-a">A</span></td><td><span class="badge badge-green">启用</span></td><td><button class="btn btn-ghost btn-sm">编辑</button><button class="btn btn-ghost btn-sm" style="color:#e02424;">禁用</button></td></tr>
+      <tr><td style="font-weight:500;">经济困难分期缴费建议</td><td>经济困难</td><td><span class="badge badge-gray">公司通用</span></td><td>892次</td><td>68%</td><td>22%</td><td><span class="score-b">B</span></td><td><span class="badge badge-green">启用</span></td><td><button class="btn btn-ghost btn-sm">编辑</button><button class="btn btn-ghost btn-sm" style="color:#e02424;">禁用</button></td></tr>
+      <tr><td style="font-weight:500;">服务不满意情绪安抚话术</td><td>服务不满</td><td><span class="badge badge-gray">公司通用</span></td><td>654次</td><td>45%</td><td>14%</td><td><span class="score-c">C</span></td><td><span class="badge badge-green">启用</span></td><td><button class="btn btn-ghost btn-sm">编辑</button><button class="btn btn-ghost btn-sm" style="color:#e02424;">禁用</button></td></tr>
+      <tr style="opacity:.6;"><td style="font-weight:500;">强硬催缴最后通牒话术</td><td>联系困难</td><td><span class="badge badge-gray">公司通用</span></td><td>234次</td><td>28%</td><td>5%</td><td><span class="score-d">D</span></td><td><span class="badge badge-red">已禁用</span></td><td><button class="btn btn-ghost btn-sm">编辑</button><button class="btn btn-ghost btn-sm" style="color:#057a55;">启用</button></td></tr>
+      <tr><td style="font-weight:500;">公共设施问题解释话术</td><td>服务不满</td><td><span class="badge badge-gray">公司通用</span></td><td>489次</td><td>61%</td><td>19%</td><td><span class="score-b">B</span></td><td><span class="badge badge-green">启用</span></td><td><button class="btn btn-ghost btn-sm">编辑</button><button class="btn btn-ghost btn-sm" style="color:#e02424;">禁用</button></td></tr>
+    </tbody></table>
+  </div>
+</div>
+
+<!-- ═══════════ 系统配置 ═══════════ -->
+<div id="a-settings" class="page-section">
+  <div class="page-header"><div class="page-title">系统配置</div></div>
+  <div class="config-section">
+    <div class="config-section-title">🎙️ 录音与 AI 配置</div>
+    <div class="setting-row">
+      <div><div class="setting-label">录音上传模式</div><div class="setting-hint">实时优先：优先使用实时推流，网络差时自动降级为事后上传</div></div>
+      <div class="radio-group">
+        <label class="radio-option"><input type="radio" name="record_mode" checked> 实时优先（自动降级）</label>
+        <label class="radio-option"><input type="radio" name="record_mode"> 仅实时</label>
+        <label class="radio-option"><input type="radio" name="record_mode"> 仅事后</label>
+      </div>
+    </div>
+    <div class="setting-row">
+      <div><div class="setting-label">L3 风险自动挂断</div><div class="setting-hint" style="color:#d97706;">⚠️ 默认关闭。开启后，当检测到 L3 级风险词（如严重威胁）时将自动挂断通话，请谨慎开启。</div></div>
+      <label class="toggle"><input type="checkbox"><div class="toggle-track"><div class="toggle-thumb"></div></div><span style="font-size:13px;color:#374151;">已关闭</span></label>
+    </div>
+    <div class="setting-row">
+      <div><div class="setting-label">AI 话术推送灵敏度</div><div class="setting-hint">灵敏度越高，AI 推送话术越频繁；建议设为"中"以平衡质量与干扰</div></div>
+      <div class="radio-group">
+        <label class="radio-option"><input type="radio" name="sensitivity"> 低</label>
+        <label class="radio-option"><input type="radio" name="sensitivity" checked> 中</label>
+        <label class="radio-option"><input type="radio" name="sensitivity"> 高</label>
+      </div>
+    </div>
+    <div class="setting-row">
+      <div><div class="setting-label">单次最多推送话术数</div><div class="setting-hint">每次异议识别后最多推送的话术卡片数量</div></div>
+      <select class="form-control" style="width:100px;"><option>1条</option><option>2条</option><option selected>3条</option><option>5条</option></select>
+    </div>
+  </div>
+  <div class="config-section">
+    <div class="config-section-title">📞 联系频次控制</div>
+    <div class="setting-row">
+      <div><div class="setting-label">同一业主每月拨打上限</div><div class="setting-hint">超出后系统锁定该业主的拨打按钮，直至下月自动解锁</div></div>
+      <div style="display:flex;align-items:center;gap:6px;"><input type="number" class="form-control" value="6" style="width:70px;"><span style="font-size:13px;color:#374151;">次/月</span></div>
+    </div>
+    <div class="setting-row">
+      <div><div class="setting-label">同一业主每日拨打上限</div></div>
+      <div style="display:flex;align-items:center;gap:6px;"><input type="number" class="form-control" value="2" style="width:70px;"><span style="font-size:13px;color:#374151;">次/天</span></div>
+    </div>
+    <div class="setting-row">
+      <div><div class="setting-label">两次联系最短间隔</div></div>
+      <div style="display:flex;align-items:center;gap:6px;"><input type="number" class="form-control" value="24" style="width:70px;"><span style="font-size:13px;color:#374151;">小时</span></div>
+    </div>
+  </div>
+  <div class="config-section">
+    <div class="config-section-title">🚨 自定义风控关键词（在全局词库基础上叠加）</div>
+    <div class="form-hint" style="margin-bottom:10px;">以下关键词仅对本公司生效，优先级低于平台全局词库</div>
+    <div class="tag-input-wrap">
+      <span class="keyword-tag">催款鬼 <span class="remove">×</span></span>
+      <span class="keyword-tag">吃官司 <span class="remove">×</span></span>
+      <span class="keyword-tag">不管了 <span class="remove">×</span></span>
+      <input type="text" placeholder="输入关键词后按回车添加" style="border:none;outline:none;font-size:13px;min-width:150px;padding:2px 4px;">
+    </div>
+  </div>
+  <div class="config-section">
+    <div class="config-section-title">📁 数据保留策略（只读，v2.0 执行）</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div style="padding:12px;background:#f9fafb;border-radius:6px;font-size:13px;"><span style="color:#6b7280;">录音文件：</span><strong>12 个月</strong></div>
+      <div style="padding:12px;background:#f9fafb;border-radius:6px;font-size:13px;"><span style="color:#6b7280;">转写文本：</span><strong>24 个月</strong></div>
+      <div style="padding:12px;background:#f9fafb;border-radius:6px;font-size:13px;"><span style="color:#6b7280;">案件数据：</span><strong>法定期限</strong></div>
+      <div style="padding:12px;background:#f9fafb;border-radius:6px;font-size:13px;"><span style="color:#6b7280;">审计日志：</span><strong>永久保留</strong></div>
+    </div>
+    <div style="font-size:12px;color:#9ca3af;margin-top:10px;font-style:italic;">具体删除执行由平台运维负责（v2.0 版本实现）</div>
+  </div>
+  <div style="display:flex;justify-content:flex-end;"><button class="btn btn-primary">保存配置</button></div>
+</div>
+
+</div><!-- /main-content -->
+</div><!-- /app-layout -->
+
+<!-- ═══ Modals ═══ -->
+<div id="modal-new-user" class="modal-overlay" style="display:none;">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">新建内部员工</span><button class="modal-close" onclick="closeModal('modal-new-user')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <div class="two-col"><div class="form-group"><label class="form-label">姓名<span class="req">*</span></label><input class="form-control" placeholder="请输入真实姓名"></div><div class="form-group"><label class="form-label">手机号<span class="req">*</span></label><input class="form-control" placeholder="系统将向此号发短信通知"></div></div>
+      <div class="form-group"><label class="form-label">初始密码<span class="req">*</span></label><input type="password" class="form-control" placeholder="8位以上，含大小写字母+数字+特殊字符"><div class="form-hint">员工首次登录后将被强制要求修改密码</div></div>
+      <div class="two-col"><div class="form-group"><label class="form-label">角色<span class="req">*</span></label><select class="form-control"><option>催收员</option><option>督导</option><option>法务专员</option><option>工单处理员</option></select></div><div class="form-group"><label class="form-label">所属主管</label><select class="form-control"><option>— 暂不分配 —</option><option>赵强</option><option>刘敏</option></select></div></div>
+      <div class="form-group"><label class="form-label">备注</label><textarea class="form-control" placeholder="可选"></textarea></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-new-user')">取消</button><button class="btn btn-primary">创建并发送激活短信</button></div>
+  </div>
+</div>
+
+<div id="modal-invite" class="modal-overlay" style="display:none;">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">生成外部兼职邀请链接</span><button class="modal-close" onclick="closeModal('modal-invite')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <div class="two-col"><div class="form-group"><label class="form-label">案件配额上限</label><input type="number" class="form-control" value="20"></div><div class="form-group"><label class="form-label">邀请链接有效期</label><input type="date" class="form-control" value="2026-07-31"></div></div>
+      <div class="form-group"><label class="form-label">可拨打时段</label><div style="display:flex;align-items:center;gap:8px;"><input type="time" class="form-control" value="09:00" style="width:110px;"><span>至</span><input type="time" class="form-control" value="18:00" style="width:110px;"></div></div>
+      <div class="form-group"><label class="form-label">关联服务商（可选）</label><select class="form-control"><option>— 不关联 —</option><option>聚英催收团队</option><option>兴华律师事务所</option></select></div>
+      <div style="background:#f0f9ff;border-radius:8px;padding:14px;margin-top:4px;"><div style="font-size:12px;color:#6b7280;margin-bottom:6px;">生成的邀请链接（有效期 30 天，单次使用）</div><div style="font-family:monospace;font-size:12px;color:#374151;word-break:break-all;margin-bottom:10px;">https://app.youcuihuicui.com/invite/tk_8f2a3b...（点击生成后显示）</div><button class="btn btn-secondary btn-sm">复制链接</button></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-invite')">关闭</button><button class="btn btn-primary">生成链接</button></div>
+  </div>
+</div>
+
+<div id="modal-assign" class="modal-overlay" style="display:none;">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header"><span class="modal-title">分配案件</span><button class="modal-close" onclick="closeModal('modal-assign')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <div style="background:#f3f4f6;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13.5px;"><strong>许志刚</strong> — 8栋1601 — 欠费 ¥31,500（25个月）</div>
+      <div class="form-group"><label class="form-label">分配给<span class="req">*</span></label>
+        <select class="form-control"><option>— 选择员工 —</option><option>李小红（18/20 私海）</option><option>王芳芳（15/20 私海）</option><option>陈明远（12/20 私海）</option><option>刘晓娟（9/20 私海）</option></select>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-assign')">取消</button><button class="btn btn-primary">确认分配</button></div>
+  </div>
+</div>
+
+<div id="modal-batch-assign" class="modal-overlay" style="display:none;">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header"><span class="modal-title">批量分配</span><button class="modal-close" onclick="closeModal('modal-batch-assign')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body"><p style="font-size:13.5px;color:#6b7280;margin-bottom:16px;">已选中 <strong>3</strong> 个公海案件</p><div class="form-group"><label class="form-label">分配给<span class="req">*</span></label><select class="form-control"><option>— 选择员工 —</option><option>李小红</option><option>王芳芳</option><option>陈明远</option></select></div></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-batch-assign')">取消</button><button class="btn btn-primary">批量分配</button></div>
+  </div>
+</div>
+
+<div id="modal-batch" class="modal-overlay" style="display:none;">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header"><span class="modal-title">批量操作</span><button class="modal-close" onclick="closeModal('modal-batch')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body"><p style="font-size:13.5px;color:#6b7280;margin-bottom:16px;">已选中 <strong>0</strong> 个案件</p>
+      <div class="form-group"><label class="form-label">选择操作</label><select class="form-control"><option>批量分配给员工</option><option>批量更新阶段</option><option>批量移入公海</option></select></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-batch')">取消</button><button class="btn btn-primary">执行</button></div>
+  </div>
+</div>
+
+<div id="modal-disable-user" class="modal-overlay alert-dialog" style="display:none;">
+  <div class="modal">
+    <div class="modal-body" style="padding:28px 24px;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;"><div style="width:40px;height:40px;border-radius:50%;background:#fef2f2;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e02424" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><div><div class="alert-title">确认停用账号？</div><div class="alert-desc">停用后李小红将无法登录系统，其私海案件将自动回流公海。</div></div></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-disable-user')">取消</button><button class="btn btn-danger">确认停用</button></div>
+  </div>
+</div>
+
+<div id="modal-settlement-detail" class="modal-overlay" style="display:none;">
+  <div class="modal" style="max-width:580px;">
+    <div class="modal-header"><span class="modal-title">结算明细 — 聚英催收团队 2026年4月</span><button class="modal-close" onclick="closeModal('modal-settlement-detail')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#f9fafb;"><th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e5e7eb;">催收员</th><th style="padding:8px 12px;text-align:right;border-bottom:1px solid #e5e7eb;">有效通话次数</th><th style="padding:8px 12px;text-align:right;border-bottom:1px solid #e5e7eb;">单价</th><th style="padding:8px 12px;text-align:right;border-bottom:1px solid #e5e7eb;">小计</th></tr></thead>
+      <tbody>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;">赵伟</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #f3f4f6;">312</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #f3f4f6;">¥8</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #f3f4f6;font-weight:600;">¥2,496</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;">钱丽</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #f3f4f6;">247</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #f3f4f6;">¥8</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #f3f4f6;font-weight:600;">¥1,976</td></tr>
+        <tr style="background:#f9fafb;font-weight:700;"><td style="padding:8px 12px;">合计</td><td style="padding:8px 12px;text-align:right;">1,560</td><td style="padding:8px 12px;text-align:right;">—</td><td style="padding:8px 12px;text-align:right;color:#1A56DB;">¥12,480</td></tr>
+      </tbody></table>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-settlement-detail')">关闭</button><button class="btn btn-secondary">导出 PDF</button></div>
+  </div>
+</div>
+
+<div id="modal-new-script" class="modal-overlay" style="display:none;">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">新增话术</span><button class="modal-close" onclick="closeModal('modal-new-script')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">话术标题<span class="req">*</span></label><input class="form-control" placeholder="简明描述话术适用场景"></div>
+      <div class="two-col"><div class="form-group"><label class="form-label">异议类型<span class="req">*</span></label><select class="form-control"><option>房屋质量</option><option>经济困难</option><option>服务不满</option><option>联系困难</option><option>其他</option></select></div><div class="form-group"><label class="form-label">级别</label><select class="form-control"><option>公司通用</option></select></div></div>
+      <div class="form-group"><label class="form-label">话术内容<span class="req">*</span></label><textarea class="form-control" style="height:120px;" placeholder="请输入推荐的应对话术，建议包含：情绪安抚→异议回应→引导付款 三个步骤"></textarea></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-new-script')">取消</button><button class="btn btn-primary">保存话术</button></div>
+  </div>
+</div>
+
+<script>
+if (typeof lucide !== 'undefined') lucide.createIcons();
+document.querySelectorAll('.sidebar-item[data-page]').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+    document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
+    item.classList.add('active');
+    document.getElementById(item.dataset.page).classList.add('active');
+  });
+});
+function openModal(id){ document.getElementById(id).style.display='flex'; }
+function closeModal(id){ document.getElementById(id).style.display='none'; }
+document.querySelectorAll('.modal-overlay').forEach(o => o.addEventListener('click', e => { if(e.target===o) o.style.display='none'; }));
+// Tabs
+document.querySelectorAll('.tab[data-tab]').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const p = tab.closest('.tabs').nextElementSibling;
+    tab.closest('.tabs').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.querySelectorAll('#tab-internal, #tab-external').forEach(c => c.classList.remove('active'));
+    document.getElementById(tab.dataset.tab).classList.add('active');
+  });
+});
+// Toggle label update
+document.querySelectorAll('.toggle input').forEach(input => {
+  input.addEventListener('change', () => {
+    const label = input.closest('.toggle').querySelector('span');
+    if(label) label.textContent = input.checked ? '已开启' : '已关闭';
+  });
+});
+</script>
+</body>
+</html>

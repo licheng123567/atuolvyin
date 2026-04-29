@@ -1,0 +1,1618 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>有证慧催 — 催收员 App</title>
+  <link rel="stylesheet" href="assets/design-system.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    body {
+      background: #1a1a2e;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 20px;
+      min-height: 100vh;
+      flex-direction: column;
+      align-items: center;
+    }
+    /* Screen nav pill bar */
+    .screen-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 16px;
+      justify-content: center;
+      max-width: 800px;
+    }
+    .screen-nav-btn {
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: none;
+      background: rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.8);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: var(--font-sans);
+      white-space: nowrap;
+    }
+    .screen-nav-btn:hover { background: rgba(255,255,255,0.25); color: white; }
+    .screen-nav-btn.active { background: #1A56DB; color: white; }
+
+    .phone-frame {
+      width: 390px;
+      background: #f9fafb;
+      border-radius: 40px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      position: relative;
+      border: 8px solid #111;
+    }
+    .phone-screen {
+      min-height: 844px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      background: #f3f4f6;
+    }
+    .status-bar {
+      height: 44px;
+      background: white;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      font-size: 12px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .bottom-tab-bar {
+      background: white;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      flex-shrink: 0;
+      position: sticky;
+      bottom: 0;
+    }
+    .tab-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 8px 4px 10px;
+      gap: 3px;
+      font-size: 10px;
+      color: #6b7280;
+      cursor: pointer;
+    }
+    .tab-item.active { color: #1A56DB; }
+    .tab-item svg { width: 22px; height: 22px; }
+
+    /* Scrollable content area */
+    .screen-content {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    /* page-section in app uses display:block/none but sits inside screen-content */
+    .screen-content .page-section { display: none; }
+    .screen-content .page-section.active { display: block; }
+
+    /* ── App-specific styles ── */
+    .app-header {
+      background: white;
+      padding: 16px 20px 12px;
+    }
+    .greeting { font-size: 20px; font-weight: 700; color: #111827; }
+    .greeting-date { font-size: 13px; color: #6b7280; margin-top: 2px; }
+
+    .summary-card {
+      margin: 12px 16px 0;
+      background: linear-gradient(135deg, #1A56DB 0%, #1E429F 100%);
+      border-radius: 16px;
+      padding: 20px;
+      color: white;
+    }
+    .summary-card-title { font-size: 13px; opacity: 0.85; margin-bottom: 14px; }
+    .summary-stats { display: flex; gap: 0; }
+    .summary-stat { flex: 1; text-align: center; }
+    .summary-stat + .summary-stat { border-left: 1px solid rgba(255,255,255,0.2); }
+    .summary-stat-value { font-size: 28px; font-weight: 700; }
+    .summary-stat-label { font-size: 11px; opacity: 0.8; margin-top: 2px; }
+
+    .app-section { padding: 16px 16px 0; }
+    .app-section-title { font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 10px; }
+
+    .big-btn {
+      display: block;
+      width: calc(100% - 32px);
+      margin: 16px 16px 0;
+      padding: 15px;
+      background: #1A56DB;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      text-align: center;
+      cursor: pointer;
+      font-family: var(--font-sans);
+    }
+    .big-btn:hover { background: #1E429F; }
+
+    .request-card {
+      margin: 12px 16px 0;
+      background: white;
+      border-radius: 12px;
+      border: 1px solid #DBEAFE;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(26,86,219,0.1);
+    }
+    .request-card-top {
+      background: #EBF5FF;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: #1A56DB;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .request-card-body { padding: 12px 14px; }
+    .request-card-name { font-size: 15px; font-weight: 600; }
+    .request-card-amount { font-size: 20px; font-weight: 700; color: #E02424; margin: 4px 0; }
+    .request-card-actions { display: flex; gap: 8px; margin-top: 12px; }
+    .request-card-actions button {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      font-family: var(--font-sans);
+    }
+    .btn-call-now { background: #1A56DB; color: white; }
+    .btn-call-later { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db !important; }
+
+    .case-list-item {
+      background: white;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .case-list-item-left {}
+    .case-list-name { font-size: 14px; font-weight: 600; }
+    .case-list-sub { font-size: 12px; color: #6b7280; margin-top: 2px; }
+    .case-list-amount { font-size: 14px; font-weight: 700; color: #E02424; }
+
+    /* ── DIAL REQUEST full-screen redesign ── */
+    .dial-request-screen {
+      min-height: 756px;
+      background: linear-gradient(180deg, #1e3a5f 0%, #1A56DB 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0 24px 32px;
+      text-align: center;
+      position: relative;
+    }
+    .dial-req-topbar {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 0 0;
+      font-size: 12px;
+      color: rgba(255,255,255,0.75);
+    }
+    .dial-req-topbar-label { font-weight: 600; letter-spacing: 0.3px; }
+    .dial-req-topbar-time { font-variant-numeric: tabular-nums; }
+
+    .dial-req-avatar-wrap {
+      margin-top: 28px;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      border: 3px solid rgba(255,255,255,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      font-weight: 700;
+      color: white;
+      flex-shrink: 0;
+    }
+    .dial-req-name {
+      font-size: 24px;
+      font-weight: 700;
+      color: white;
+      margin-top: 14px;
+    }
+    .dial-req-room {
+      font-size: 13px;
+      color: rgba(255,255,255,0.75);
+      margin-top: 5px;
+      background: rgba(255,255,255,0.15);
+      padding: 3px 12px;
+      border-radius: 12px;
+      display: inline-block;
+      margin-top: 8px;
+    }
+    .dial-req-debt-card {
+      margin-top: 18px;
+      width: 100%;
+      background: rgba(255,255,255,0.15);
+      border-radius: 14px;
+      padding: 14px 18px;
+      backdrop-filter: blur(8px);
+    }
+    .dial-req-debt-amount {
+      font-size: 32px;
+      font-weight: 700;
+      color: #fbbf24;
+    }
+    .dial-req-debt-meta {
+      font-size: 12.5px;
+      color: rgba(255,255,255,0.75);
+      margin-top: 4px;
+    }
+    .dial-req-debt-last {
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+      margin-top: 6px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.15);
+    }
+
+    /* SVG countdown ring */
+    .dial-countdown-wrap {
+      position: relative;
+      width: 110px;
+      height: 110px;
+      margin: 20px auto 6px;
+    }
+    .dial-countdown-wrap svg {
+      transform: rotate(-90deg);
+    }
+    .dial-countdown-num {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 700;
+      color: white;
+    }
+    .dial-countdown-label {
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+      margin-bottom: 20px;
+    }
+
+    .dial-req-btns {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 4px;
+    }
+    .dial-btn-green {
+      padding: 16px;
+      background: #16a34a;
+      color: white;
+      border: none;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: var(--font-sans);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .dial-btn-green:hover { background: #15803d; }
+    .dial-btn-outline-white {
+      padding: 14px;
+      background: transparent;
+      color: rgba(255,255,255,0.85);
+      border: 2px solid rgba(255,255,255,0.4);
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: var(--font-sans);
+    }
+    .dial-btn-outline-white:hover { border-color: rgba(255,255,255,0.7); }
+
+    /* In-call screen */
+    .incall-screen {
+      background: #0f172a;
+      min-height: 756px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .incall-status-bar {
+      height: 44px;
+      background: #0f172a;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding: 12px 20px;
+      font-size: 12px;
+      font-weight:600;
+      color: white;
+      flex-shrink:0;
+    }
+
+    /* Risk L1 warning strip */
+    .risk-strip {
+      background: #d97706;
+      color: white;
+      padding: 6px 16px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .risk-strip-btn {
+      margin-left: auto;
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      font-family: var(--font-sans);
+      white-space: nowrap;
+    }
+
+    .incall-header {
+      padding: 16px 20px 10px;
+      text-align: center;
+      color: white;
+    }
+    .incall-owner { font-size: 24px; font-weight: 700; }
+    .incall-duration { font-size: 20px; font-weight: 600; color: #22c55e; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .incall-network { font-size: 12px; color: #22c55e; margin-top: 4px; }
+
+    /* Realtime transcript preview */
+    .realtime-transcript {
+      background: rgba(0,0,0,0.4);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin: 0 12px 10px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.9);
+      flex-shrink: 0;
+    }
+    .realtime-transcript-label {
+      color: rgba(255,255,255,0.55);
+      font-size: 11px;
+      margin-bottom: 5px;
+      font-weight: 600;
+    }
+    .realtime-line { margin-bottom: 3px; }
+    .realtime-line:last-child { margin-bottom: 0; color: rgba(255,255,255,0.7); }
+
+    /* Waveform CSS animation */
+    .waveform-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 20px;
+    }
+    .waveform {
+      display: flex;
+      gap: 3px;
+      align-items: center;
+      height: 40px;
+    }
+    .waveform-bar {
+      width: 4px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.7);
+      animation: waveAnim 1.2s ease-in-out infinite;
+    }
+    .waveform-bar:nth-child(1){height:12px;animation-delay:0s}
+    .waveform-bar:nth-child(2){height:20px;animation-delay:.1s}
+    .waveform-bar:nth-child(3){height:32px;animation-delay:.2s}
+    .waveform-bar:nth-child(4){height:24px;animation-delay:.3s}
+    .waveform-bar:nth-child(5){height:38px;animation-delay:.1s}
+    .waveform-bar:nth-child(6){height:28px;animation-delay:.25s}
+    .waveform-bar:nth-child(7){height:16px;animation-delay:.15s}
+    @keyframes waveAnim {
+      0%,100%{transform:scaleY(1)}
+      50%{transform:scaleY(1.8)}
+    }
+
+    /* AI popup card (slide-in from bottom) */
+    .ai-card-popup {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 80px;
+      background: white;
+      border-radius: 12px;
+      padding: 14px 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+      border-left: 4px solid #1A56DB;
+      transform: translateY(120%);
+      transition: transform 0.3s ease;
+      z-index: 20;
+    }
+    .ai-card-popup.show { transform: translateY(0); }
+    .ai-card-popup-title { font-size: 12px; font-weight: 700; color: #1A56DB; margin-bottom: 6px; }
+    .ai-card-popup-text { font-size: 12.5px; color: #374151; line-height: 1.5; }
+    .ai-card-popup-actions { display: flex; gap: 8px; margin-top: 10px; }
+    .ai-card-popup-actions button {
+      padding: 5px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: var(--font-sans);
+    }
+    .ai-card-adopt { background: #1A56DB; color: white; border: none; }
+    .ai-card-dismiss { background: white; color: #6b7280; border: 1px solid #d1d5db; }
+
+    .incall-controls {
+      padding: 16px;
+      display: flex;
+      justify-content: space-around;
+      background: #1e293b;
+      border-top: 1px solid #334155;
+      flex-shrink: 0;
+      position: relative;
+      z-index: 10;
+    }
+    .ctrl-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: #94a3b8;
+      cursor: pointer;
+    }
+    .ctrl-btn-circle {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+    }
+    .ctrl-btn-circle.hangup { background: #ef4444; }
+
+    /* After call */
+    .after-call-screen {
+      background: #f9fafb;
+      padding: 16px;
+      min-height: 756px;
+    }
+    .after-call-header {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .after-call-title { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
+    .after-call-meta { display: flex; gap: 16px; margin-bottom: 12px; }
+    .after-call-meta-item { font-size: 13px; color: #6b7280; }
+    .after-call-meta-item span { font-weight: 600; color: #111827; }
+
+    /* AI analysis result box */
+    .ai-analysis-box {
+      background: #f0f9ff;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .ai-analysis-label { font-size: 12px; color: #0369a1; font-weight: 600; margin-bottom: 4px; }
+    .ai-analysis-intent { font-size: 13.5px; color: #1e40af; }
+    .ai-analysis-desc { font-size: 12.5px; color: #6b7280; margin-top: 4px; }
+
+    .ai-summary-box {
+      background: #EBF5FF;
+      border-radius: 8px;
+      padding: 10px 12px;
+      border-left: 3px solid #1A56DB;
+    }
+    .ai-summary-label { font-size: 11px; font-weight: 700; color: #1A56DB; margin-bottom: 4px; }
+    .ai-summary-text { font-size: 12.5px; color: #374151; line-height: 1.5; }
+
+    .tag-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+    .tag-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 14px;
+      border-radius: 20px;
+      border: 2px solid #e5e7eb;
+      background: white;
+      font-size: 13px;
+      color: #374151;
+      cursor: pointer;
+      font-family: var(--font-sans);
+      transition: all 0.15s;
+    }
+    .tag-btn.selected { border-color: #1A56DB; background: #eff6ff; color: #1A56DB; font-weight: 600; }
+    .tag-btn.danger-tag.selected { background: #FDF2F2; border-color: #E02424; color: #E02424; }
+
+    .promise-date-box {
+      background: white;
+      border-radius: 12px;
+      padding: 14px;
+      margin-top: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+
+    /* After-call bottom actions */
+    .after-call-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+      padding-bottom: 16px;
+    }
+    .btn-skip {
+      flex: 0 0 80px;
+      padding: 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      background: white;
+      font-size: 14px;
+      color: #6b7280;
+      cursor: pointer;
+      font-family: var(--font-sans);
+    }
+    .btn-save-next {
+      flex: 1;
+      padding: 14px;
+      background: #1A56DB;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: var(--font-sans);
+    }
+    .btn-save-next:hover { background: #1E429F; }
+
+    /* Cases list screen */
+    .search-bar-mobile {
+      position: relative;
+      margin: 12px 16px 0;
+    }
+    .search-bar-mobile input {
+      width: 100%;
+      padding: 10px 12px 10px 36px;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      font-size: 14px;
+      background: white;
+      font-family: var(--font-sans);
+      outline: none;
+    }
+    .search-bar-mobile svg {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #9ca3af;
+    }
+    .filter-tabs-mobile {
+      display: flex;
+      padding: 12px 16px 0;
+      gap: 8px;
+    }
+    .filter-tab-m {
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      background: white;
+      border: 1px solid #d1d5db;
+      color: #6b7280;
+      cursor: pointer;
+    }
+    .filter-tab-m.active { background: #EBF5FF; border-color: #1A56DB; color: #1A56DB; font-weight: 600; }
+
+    .case-card-full {
+      background: white;
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    .case-card-row1 { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .case-card-name { font-size: 15px; font-weight: 700; }
+    .case-card-amount { font-size: 16px; font-weight: 700; color: #E02424; }
+    .case-card-row2 { display: flex; justify-content: space-between; align-items: center; }
+    .case-card-sub { font-size: 12px; color: #6b7280; }
+
+    .fab-btn {
+      position: fixed;
+      bottom: 80px;
+      right: 20px;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: #1A56DB;
+      color: white;
+      border: none;
+      font-size: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(26,86,219,0.4);
+      cursor: pointer;
+    }
+
+    /* Case detail */
+    .detail-screen {
+      background: #f3f4f6;
+      min-height: 756px;
+    }
+    .detail-top-bar {
+      background: white;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .back-btn { font-size: 20px; cursor: pointer; color: #1A56DB; }
+    .detail-owner-name { font-size: 16px; font-weight: 700; }
+
+    .detail-info-cards {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px 0;
+    }
+    .detail-info-card {
+      flex: 1;
+      background: white;
+      border-radius: 10px;
+      padding: 12px 10px;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .detail-info-card-value { font-size: 18px; font-weight: 700; color: #E02424; }
+    .detail-info-card-label { font-size: 11px; color: #6b7280; margin-top: 2px; }
+
+    .timeline-wrap { padding: 12px 16px 0; }
+    .timeline-card {
+      background: white;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .timeline-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .timeline-card-date { font-size: 12px; color: #6b7280; }
+    .timeline-card-duration { font-size: 12px; color: #374151; font-weight: 600; }
+    .timeline-card-ai { font-size: 12px; color: #374151; line-height: 1.5; }
+    .timeline-card-ai::before { content: "AI: "; font-weight: 600; color: #1A56DB; }
+
+    /* Call history */
+    .call-history-item {
+      background: white;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .call-history-row1 { display: flex; justify-content: space-between; align-items: center; }
+    .call-history-name { font-size: 14px; font-weight: 600; }
+    .call-history-date { font-size: 12px; color: #6b7280; }
+    .call-history-row2 { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+    .call-history-duration { font-size: 12px; color: #374151; }
+    .call-history-expand {
+      background: #f3f4f6;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin-top: 8px;
+      font-size: 12px;
+      color: #374151;
+      line-height: 1.5;
+      display: none;
+    }
+    .call-history-item.expanded .call-history-expand { display: block; }
+
+    /* Profile screen */
+    .profile-header {
+      background: linear-gradient(135deg, #1A56DB, #1E429F);
+      padding: 32px 20px 24px;
+      text-align: center;
+      color: white;
+    }
+    .profile-avatar {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      margin: 0 auto 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 700;
+      border: 3px solid rgba(255,255,255,0.4);
+    }
+    .profile-name { font-size: 20px; font-weight: 700; }
+    .profile-role {
+      display: inline-block;
+      background: rgba(255,255,255,0.2);
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      margin-top: 6px;
+    }
+
+    .profile-stats {
+      display: flex;
+      background: white;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .profile-stat { flex: 1; padding: 16px 8px; text-align: center; }
+    .profile-stat + .profile-stat { border-left: 1px solid #e5e7eb; }
+    .profile-stat-value { font-size: 22px; font-weight: 700; color: #111827; }
+    .profile-stat-label { font-size: 11px; color: #6b7280; margin-top: 2px; }
+
+    .settings-list { background: white; }
+    .settings-item {
+      display: flex;
+      align-items: center;
+      padding: 14px 16px;
+      border-bottom: 1px solid #f3f4f6;
+      cursor: pointer;
+    }
+    .settings-item-icon { font-size: 18px; width: 28px; display: flex; align-items: center; }
+    .settings-item-icon svg { width: 16px; height: 16px; stroke-width: 1.5; color: #9CA3AF; }
+    .settings-item-label { flex: 1; font-size: 14px; color: #111827; }
+    .settings-item-arrow { color: #9ca3af; font-size: 16px; }
+
+    .logout-btn-wrap { padding: 16px; }
+    .logout-btn {
+      width: 100%;
+      padding: 14px;
+      background: #FDF2F2;
+      border: 1px solid #fca5a5;
+      color: #E02424;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: var(--font-sans);
+    }
+
+    /* ── FORCE LOGOUT screen ── */
+    .force-logout-screen {
+      background: white;
+      min-height: 756px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 60px 32px 40px;
+      text-align: center;
+    }
+    .force-logout-icon-wrap {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: #FEF2F2;
+      border: 2px solid #fca5a5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      margin-bottom: 24px;
+    }
+    .force-logout-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 14px;
+    }
+    .force-logout-desc {
+      font-size: 13.5px;
+      color: #4b5563;
+      line-height: 1.7;
+      margin-bottom: 10px;
+    }
+    .force-logout-time {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-bottom: 36px;
+    }
+    .force-logout-relogin {
+      width: 100%;
+      padding: 15px;
+      background: #1A56DB;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: var(--font-sans);
+      margin-bottom: 16px;
+    }
+    .force-logout-relogin:hover { background: #1E429F; }
+    .force-logout-contact {
+      font-size: 13px;
+      color: #1A56DB;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    /* Recording downgrade banner */
+    .recording-downgrade-banner {
+      background: #fffbeb;
+      border-bottom: 1px solid #fde68a;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12.5px;
+      color: #92400e;
+      flex-shrink: 0;
+    }
+    .recording-downgrade-banner button {
+      margin-left: auto;
+      border: none;
+      background: none;
+      color: #92400e;
+      font-size: 18px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0 2px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Screen Navigator -->
+<div class="screen-nav">
+  <button class="screen-nav-btn active" data-page="app-home">工作台首页</button>
+  <button class="screen-nav-btn" data-page="app-dial-request">拨打请求</button>
+  <button class="screen-nav-btn" data-page="app-in-call">通话中</button>
+  <button class="screen-nav-btn" data-page="app-after-call">通话结束</button>
+  <button class="screen-nav-btn" data-page="app-cases">案件列表</button>
+  <button class="screen-nav-btn" data-page="app-case-detail">案件详情</button>
+  <button class="screen-nav-btn" data-page="app-call-history">通话记录</button>
+  <button class="screen-nav-btn" data-page="app-profile">个人信息</button>
+  <button class="screen-nav-btn" data-page="app-force-logout">强制退出</button>
+</div>
+
+<div class="phone-frame">
+  <div class="phone-screen">
+
+    <!-- Status Bar (shared) -->
+    <div class="status-bar" id="global-status-bar">
+      <span>9:41</span>
+      <span>
+        <svg width="16" height="11" viewBox="0 0 16 11" fill="none" style="vertical-align:middle;margin-right:4px">
+          <rect x="0" y="4" width="3" height="7" rx="1" fill="#111"/>
+          <rect x="4" y="2.5" width="3" height="8.5" rx="1" fill="#111"/>
+          <rect x="8" y="1" width="3" height="10" rx="1" fill="#111"/>
+          <rect x="12" y="0" width="3" height="11" rx="1" fill="#111"/>
+        </svg>
+        <svg width="15" height="11" viewBox="0 0 15 11" fill="none" style="vertical-align:middle;margin-right:4px">
+          <path d="M7.5 2.5C9.2 2.5 10.7 3.2 11.8 4.3L13 3.1C11.6 1.7 9.7 0.8 7.5 0.8C5.3 0.8 3.4 1.7 2 3.1L3.2 4.3C4.3 3.2 5.8 2.5 7.5 2.5Z" fill="#111"/>
+          <path d="M7.5 5C8.6 5 9.6 5.4 10.3 6.1L11.5 4.9C10.5 3.9 9.1 3.3 7.5 3.3C5.9 3.3 4.5 3.9 3.5 4.9L4.7 6.1C5.4 5.4 6.4 5 7.5 5Z" fill="#111"/>
+          <circle cx="7.5" cy="9" r="1.5" fill="#111"/>
+        </svg>
+        🔋
+      </span>
+    </div>
+
+    <!-- Scrollable Content -->
+    <div class="screen-content">
+
+      <!-- ── SCREEN 1: 工作台首页 ── -->
+      <div class="page-section active" id="app-home">
+
+        <!-- 录音模式降级 Banner（可关闭） -->
+        <div id="recording-downgrade-banner" class="recording-downgrade-banner">
+          ⬇️ 网络信号较弱，已自动切换为<strong style="margin:0 2px;">事后上传模式</strong>，录音将在通话结束后上传
+          <button onclick="this.parentElement.style.display='none'" title="关闭">×</button>
+        </div>
+
+        <div class="app-header">
+          <div class="greeting">早上好，刘威 👋</div>
+          <div class="greeting-date">2026年4月28日 星期二</div>
+        </div>
+
+        <div class="summary-card">
+          <div class="summary-card-title">今日外呼任务</div>
+          <div class="summary-stats">
+            <div class="summary-stat">
+              <div class="summary-stat-value">12</div>
+              <div class="summary-stat-label">今日待拨</div>
+            </div>
+            <div class="summary-stat">
+              <div class="summary-stat-value">5</div>
+              <div class="summary-stat-label">已拨</div>
+            </div>
+            <div class="summary-stat">
+              <div class="summary-stat-value">2</div>
+              <div class="summary-stat-label">承诺缴费</div>
+            </div>
+          </div>
+        </div>
+
+        <button class="big-btn">📞 立即开始外呼</button>
+
+        <div class="request-card">
+          <div class="request-card-top">
+            <span><i data-lucide="bell" style="width:16px;height:16px;stroke-width:1.75;vertical-align:middle;color:#D97706;"></i></span>
+            <span>主管发来拨打请求</span>
+          </div>
+          <div class="request-card-body">
+            <div class="request-card-name">张建国 · 3栋2单元1201</div>
+            <div class="request-card-amount">¥3,200</div>
+            <div style="font-size:12px;color:#6b7280;">欠缴8个月 · 王主管指派</div>
+            <div class="request-card-actions">
+              <button class="btn-call-now">立即拨打</button>
+              <button class="btn-call-later">稍后处理</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="app-section">
+          <div class="app-section-title">最近跟进案件</div>
+          <div class="case-list-item">
+            <div class="case-list-item-left">
+              <div class="case-list-name">李梅芳</div>
+              <div class="case-list-sub">2栋1单元305 · 欠缴5个月</div>
+            </div>
+            <div style="text-align:right;">
+              <div class="case-list-amount">¥2,000</div>
+              <span class="badge badge-orange" style="font-size:11px;margin-top:3px;">跟进中</span>
+            </div>
+          </div>
+          <div class="case-list-item">
+            <div class="case-list-item-left">
+              <div class="case-list-name">陈志远</div>
+              <div class="case-list-sub">1栋3单元801 · 欠缴3个月</div>
+            </div>
+            <div style="text-align:right;">
+              <div class="case-list-amount">¥1,200</div>
+              <span class="badge badge-green" style="font-size:11px;margin-top:3px;">承诺缴费</span>
+            </div>
+          </div>
+          <div class="case-list-item">
+            <div class="case-list-item-left">
+              <div class="case-list-name">王秀英</div>
+              <div class="case-list-sub">4栋1单元1102 · 欠缴6个月</div>
+            </div>
+            <div style="text-align:right;">
+              <div class="case-list-amount">¥2,400</div>
+              <span class="badge badge-gray" style="font-size:11px;margin-top:3px;">未接通</span>
+            </div>
+          </div>
+        </div>
+        <div style="height:16px;"></div>
+      </div>
+
+      <!-- ── SCREEN 2: 拨打请求（全屏来电界面） ── -->
+      <div class="page-section" id="app-dial-request">
+        <div class="dial-request-screen">
+
+          <!-- 顶部标签行 -->
+          <div class="dial-req-topbar">
+            <span class="dial-req-topbar-label">📲 主管发来外呼请求</span>
+            <span class="dial-req-topbar-time" id="dial-req-time">14:32:05</span>
+          </div>
+
+          <!-- 头像 -->
+          <div class="dial-req-avatar-wrap">张</div>
+
+          <!-- 姓名 & 房号 -->
+          <div class="dial-req-name">张大伟</div>
+          <div class="dial-req-room">3栋1单元1201室</div>
+
+          <!-- 欠费信息卡 -->
+          <div class="dial-req-debt-card">
+            <div class="dial-req-debt-amount">¥8,420</div>
+            <div class="dial-req-debt-meta">7个月欠费</div>
+            <div class="dial-req-debt-last">上次联系：3天前 &nbsp;·&nbsp; 推托</div>
+          </div>
+
+          <!-- SVG 倒计时环 -->
+          <div class="dial-countdown-wrap">
+            <svg width="110" height="110">
+              <circle cx="55" cy="55" r="45" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="4"/>
+              <circle id="countdown-circle" cx="55" cy="55" r="45" fill="none" stroke="white" stroke-width="4"
+                stroke-linecap="round" style="transition:stroke-dashoffset 1s linear;"/>
+            </svg>
+            <div class="dial-countdown-num" id="dial-countdown">15</div>
+          </div>
+          <div class="dial-countdown-label">15秒后自动取消</div>
+
+          <!-- 底部按钮 -->
+          <div class="dial-req-btns">
+            <button class="dial-btn-green">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+                <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+              </svg>
+              立即拨打
+            </button>
+            <button class="dial-btn-outline-white">稍后处理</button>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ── SCREEN 3: 通话中 ── -->
+      <div class="page-section" id="app-in-call">
+        <div class="incall-screen">
+          <div class="incall-status-bar">
+            <span style="color:white;">9:41</span>
+            <span style="background:#22c55e;color:white;padding:2px 8px;border-radius:10px;font-size:11px;">通话中 <span id="incall-timer">03:42</span></span>
+            <span style="color:white;">🔋</span>
+          </div>
+
+          <!-- 风控 L1 橙色提示条 -->
+          <div class="risk-strip">
+            ⚠️ AI 检测到异议：房屋质量问题
+            <button class="risk-strip-btn">查看建议</button>
+          </div>
+
+          <div class="incall-header">
+            <div class="incall-owner">张建国</div>
+            <div class="incall-duration" id="incall-duration-display">03:42</div>
+            <div class="incall-network">● 网络良好 · 4G</div>
+          </div>
+
+          <!-- 实时转写预览 -->
+          <div class="realtime-transcript">
+            <div class="realtime-transcript-label">实时转写</div>
+            <div class="realtime-line">[催收员] 张先生，我们完全理解您的...</div>
+            <div class="realtime-line">[业主] 房子质量有问题，不想交</div>
+          </div>
+
+          <!-- 音量波形动画 -->
+          <div class="waveform-wrap">
+            <div class="waveform">
+              <div class="waveform-bar"></div>
+              <div class="waveform-bar"></div>
+              <div class="waveform-bar"></div>
+              <div class="waveform-bar"></div>
+              <div class="waveform-bar"></div>
+              <div class="waveform-bar"></div>
+              <div class="waveform-bar"></div>
+            </div>
+          </div>
+
+          <!-- AI 建议弹出卡（滑入式，z-index 高于控制栏） -->
+          <div class="ai-card-popup show" id="ai-card-popup">
+            <div class="ai-card-popup-title">💡 AI 建议</div>
+            <div class="ai-card-popup-text">检测到房屋质量异议（渗水问题），建议先安抚业主情绪，承诺提交工单并跟进处理，再引导缴费...</div>
+            <div class="ai-card-popup-actions">
+              <button class="ai-card-adopt" onclick="document.getElementById('ai-card-popup').classList.remove('show')">采纳</button>
+              <button class="ai-card-dismiss" onclick="document.getElementById('ai-card-popup').classList.remove('show')">忽略</button>
+            </div>
+          </div>
+
+          <div class="incall-controls">
+            <div class="ctrl-btn">
+              <div class="ctrl-btn-circle">🔇</div>
+              <span style="color:#94a3b8;">静音</span>
+            </div>
+            <div class="ctrl-btn">
+              <div class="ctrl-btn-circle hangup">📵</div>
+              <span style="color:#f87171;">挂断</span>
+            </div>
+            <div class="ctrl-btn">
+              <div class="ctrl-btn-circle">📝</div>
+              <span style="color:#94a3b8;">备注</span>
+            </div>
+            <div class="ctrl-btn">
+              <div class="ctrl-btn-circle">🔗</div>
+              <span style="color:#94a3b8;">发码</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SCREEN 4: 通话结束标记 ── -->
+      <div class="page-section" id="app-after-call">
+        <div class="after-call-screen">
+          <div class="after-call-header">
+            <div class="after-call-title">通话结束 — 张建国</div>
+            <div class="after-call-meta">
+              <div class="after-call-meta-item">时长: <span>3分42秒</span></div>
+              <div class="after-call-meta-item">时间: <span>09:41</span></div>
+            </div>
+            <!-- AI 分析结果 -->
+            <div class="ai-analysis-box">
+              <div class="ai-analysis-label">🤖 AI 分析结果</div>
+              <div class="ai-analysis-intent">意图：<strong>推托</strong> · 置信度 87%</div>
+              <div class="ai-analysis-desc">业主提到经济困难和房屋质量问题，情绪较平静</div>
+            </div>
+            <div style="height:10px;"></div>
+            <div class="ai-summary-box">
+              <div class="ai-summary-label">🤖 AI 通话摘要</div>
+              <div class="ai-summary-text">业主提出墙面渗水质量异议，情绪较激动。表示愿意在工单处理后缴纳费用，建议提交工单后72小时内跟进，可促成缴费。</div>
+            </div>
+          </div>
+
+          <div class="app-section">
+            <div class="app-section-title">通话结果标记</div>
+            <div class="tag-grid" id="tag-grid">
+              <button class="tag-btn selected" data-tag="promise">✅ 承诺缴费</button>
+              <button class="tag-btn danger-tag" data-tag="refuse">❌ 拒绝缴费</button>
+              <button class="tag-btn" data-tag="workorder">🔧 需要工单</button>
+              <button class="tag-btn" data-tag="followup">🔄 再次跟进</button>
+              <button class="tag-btn" data-tag="noanswer">📵 无人接听</button>
+            </div>
+          </div>
+
+          <!-- 承诺缴费日期（默认显示，仅选"承诺缴费"时展示） -->
+          <div class="promise-date-box" id="promise-date-section">
+            <div class="app-section-title" style="margin-bottom:10px;">承诺缴费日期</div>
+            <div class="form-group" style="margin-bottom:0;">
+              <input type="date" class="form-control" value="2026-05-05">
+            </div>
+            <div style="font-size:12px;color:#6b7280;margin-top:6px;">承诺金额: ¥3,200（全款）</div>
+          </div>
+
+          <div class="promise-date-box">
+            <div class="app-section-title" style="margin-bottom:10px;">跟进备注</div>
+            <textarea class="form-control" rows="3" placeholder="可选：记录额外信息...">业主反映3栋2单元1201墙面长期渗水，已承诺提交工单，工单处理后会配合缴费。</textarea>
+          </div>
+
+          <div class="after-call-actions">
+            <button class="btn-skip">跳过</button>
+            <button class="btn-save-next">保存并进入下一通 →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SCREEN 5: 案件列表 ── -->
+      <div class="page-section" id="app-cases">
+        <div style="background:white;padding:12px 16px 0;">
+          <div style="font-size:16px;font-weight:700;margin-bottom:10px;">我的案件</div>
+        </div>
+        <div class="search-bar-mobile">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input type="text" placeholder="搜索业主姓名或房号...">
+        </div>
+        <div class="filter-tabs-mobile">
+          <div class="filter-tab-m active">全部 (18)</div>
+          <div class="filter-tab-m">跟进中 (8)</div>
+          <div class="filter-tab-m">承诺缴费 (4)</div>
+        </div>
+        <div style="padding:12px 16px 0;">
+          <div class="case-card-full">
+            <div class="case-card-row1">
+              <div class="case-card-name">张建国</div>
+              <div class="case-card-amount">¥3,200</div>
+            </div>
+            <div class="case-card-row2">
+              <div class="case-card-sub">3栋2单元1201 · 欠8个月 · 联系于昨天</div>
+              <span class="badge badge-orange" style="font-size:11px;">跟进中</span>
+            </div>
+          </div>
+          <div class="case-card-full">
+            <div class="case-card-row1">
+              <div class="case-card-name">李梅芳</div>
+              <div class="case-card-amount">¥2,000</div>
+            </div>
+            <div class="case-card-row2">
+              <div class="case-card-sub">2栋1单元305 · 欠5个月 · 联系于3天前</div>
+              <span class="badge badge-green" style="font-size:11px;">承诺缴费</span>
+            </div>
+          </div>
+          <div class="case-card-full">
+            <div class="case-card-row1">
+              <div class="case-card-name">陈志远</div>
+              <div class="case-card-amount">¥1,200</div>
+            </div>
+            <div class="case-card-row2">
+              <div class="case-card-sub">1栋3单元801 · 欠3个月 · 联系于今天</div>
+              <span class="badge badge-blue" style="font-size:11px;">已回款</span>
+            </div>
+          </div>
+          <div class="case-card-full">
+            <div class="case-card-row1">
+              <div class="case-card-name">王秀英</div>
+              <div class="case-card-amount">¥2,400</div>
+            </div>
+            <div class="case-card-row2">
+              <div class="case-card-sub">4栋1单元1102 · 欠6个月 · 联系于2天前</div>
+              <span class="badge badge-gray" style="font-size:11px;">未接通</span>
+            </div>
+          </div>
+          <div class="case-card-full">
+            <div class="case-card-row1">
+              <div class="case-card-name">刘建华</div>
+              <div class="case-card-amount">¥4,800</div>
+            </div>
+            <div class="case-card-row2">
+              <div class="case-card-sub">5栋2单元601 · 欠12个月 · 联系于5天前</div>
+              <span class="badge badge-red" style="font-size:11px;">拒绝缴费</span>
+            </div>
+          </div>
+        </div>
+        <div style="height:70px;"></div>
+      </div>
+
+      <!-- ── SCREEN 6: 案件详情 ── -->
+      <div class="page-section" id="app-case-detail">
+        <div class="detail-screen">
+          <div class="detail-top-bar">
+            <span class="back-btn">←</span>
+            <div class="detail-owner-name">张建国</div>
+            <span class="badge badge-orange" style="margin-left:auto;">跟进中</span>
+          </div>
+          <div class="detail-info-cards">
+            <div class="detail-info-card">
+              <div class="detail-info-card-value">¥3,200</div>
+              <div class="detail-info-card-label">欠费金额</div>
+            </div>
+            <div class="detail-info-card">
+              <div class="detail-info-card-value" style="color:#D97706;">8个月</div>
+              <div class="detail-info-card-label">欠费月数</div>
+            </div>
+            <div class="detail-info-card">
+              <div class="detail-info-card-value" style="font-size:13px;color:#374151;">昨天</div>
+              <div class="detail-info-card-label">最近联系</div>
+            </div>
+          </div>
+          <div class="timeline-wrap">
+            <div class="app-section-title" style="margin-bottom:10px;">通话记录</div>
+            <div class="timeline-card">
+              <div class="timeline-card-header">
+                <span class="timeline-card-date">04-27 09:41</span>
+                <span class="timeline-card-duration">3分42秒</span>
+                <span class="badge badge-orange" style="font-size:11px;">跟进中</span>
+              </div>
+              <div class="timeline-card-ai">检测到渗水质量异议，情绪较激动，已承诺提交工单后缴费。建议72小时内跟进。</div>
+            </div>
+            <div class="timeline-card">
+              <div class="timeline-card-header">
+                <span class="timeline-card-date">04-20 14:22</span>
+                <span class="timeline-card-duration">1分18秒</span>
+                <span class="badge badge-gray" style="font-size:11px;">未接通</span>
+              </div>
+              <div class="timeline-card-ai">业主未接听，建议更换拨打时间段。</div>
+            </div>
+            <div class="timeline-card">
+              <div class="timeline-card-header">
+                <span class="timeline-card-date">04-15 10:05</span>
+                <span class="timeline-card-duration">2分09秒</span>
+                <span class="badge badge-gray" style="font-size:11px;">需跟进</span>
+              </div>
+              <div class="timeline-card-ai">业主表示最近资金紧张，承诺月底前缴清，但未兑现承诺。建议升级催收策略。</div>
+            </div>
+          </div>
+          <div style="padding:16px;">
+            <button class="big-btn" style="margin:0 0 8px;width:100%;border-radius:10px;">📞 发起外呼</button>
+            <button style="width:100%;padding:12px;border:1px solid #d1d5db;border-radius:10px;background:white;font-size:14px;color:#374151;cursor:pointer;font-family:var(--font-sans);">📝 添加备注</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SCREEN 7: 通话记录 ── -->
+      <div class="page-section" id="app-call-history">
+        <div style="background:white;padding:12px 16px;border-bottom:1px solid #e5e7eb;">
+          <div style="font-size:16px;font-weight:700;">通话记录</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:2px;">本月共 47 通，累计 3小时28分</div>
+        </div>
+        <div style="padding:12px 16px 0;">
+          <div class="call-history-item" onclick="this.classList.toggle('expanded')">
+            <div class="call-history-row1">
+              <div class="call-history-name">张建国</div>
+              <div class="call-history-date">04-27 09:41</div>
+            </div>
+            <div class="call-history-row2">
+              <div class="call-history-duration">时长 3分42秒</div>
+              <span class="badge badge-orange" style="font-size:11px;">跟进中</span>
+            </div>
+            <div class="call-history-expand">
+              <strong>AI分析:</strong> 业主提出渗水质量异议，情绪较激动。承诺提交工单后缴费，建议72小时内跟进。
+            </div>
+          </div>
+          <div class="call-history-item" onclick="this.classList.toggle('expanded')">
+            <div class="call-history-row1">
+              <div class="call-history-name">李梅芳</div>
+              <div class="call-history-date">04-26 14:30</div>
+            </div>
+            <div class="call-history-row2">
+              <div class="call-history-duration">时长 2分15秒</div>
+              <span class="badge badge-green" style="font-size:11px;">承诺缴费</span>
+            </div>
+            <div class="call-history-expand">
+              <strong>AI分析:</strong> 业主态度配合，表示5月5日前转账缴清全款2,000元，承诺可信度较高。
+            </div>
+          </div>
+          <div class="call-history-item" onclick="this.classList.toggle('expanded')">
+            <div class="call-history-row1">
+              <div class="call-history-name">陈志远</div>
+              <div class="call-history-date">04-26 10:15</div>
+            </div>
+            <div class="call-history-row2">
+              <div class="call-history-duration">时长 4分52秒</div>
+              <span class="badge badge-blue" style="font-size:11px;">已回款</span>
+            </div>
+            <div class="call-history-expand">
+              <strong>AI分析:</strong> 业主主动询问缴费方式，沟通顺畅，已于通话后2小时内完成付款。
+            </div>
+          </div>
+          <div class="call-history-item" onclick="this.classList.toggle('expanded')">
+            <div class="call-history-row1">
+              <div class="call-history-name">王秀英</div>
+              <div class="call-history-date">04-25 16:08</div>
+            </div>
+            <div class="call-history-row2">
+              <div class="call-history-duration">时长 0分18秒</div>
+              <span class="badge badge-gray" style="font-size:11px;">未接通</span>
+            </div>
+            <div class="call-history-expand">
+              <strong>AI分析:</strong> 业主未接听，已自动发送短信提醒。建议换时间段再次尝试。
+            </div>
+          </div>
+          <div class="call-history-item" onclick="this.classList.toggle('expanded')">
+            <div class="call-history-row1">
+              <div class="call-history-name">刘建华</div>
+              <div class="call-history-date">04-24 09:05</div>
+            </div>
+            <div class="call-history-row2">
+              <div class="call-history-duration">时长 5分31秒</div>
+              <span class="badge badge-red" style="font-size:11px;">拒绝缴费</span>
+            </div>
+            <div class="call-history-expand">
+              <strong>AI分析:</strong> 业主明确拒绝缴费，情绪激动，表示已委托律师。建议转入法务流程。
+            </div>
+          </div>
+        </div>
+        <div style="height:16px;"></div>
+      </div>
+
+      <!-- ── SCREEN 8: 个人信息 ── -->
+      <div class="page-section" id="app-profile">
+        <div class="profile-header">
+          <div class="profile-avatar">刘</div>
+          <div class="profile-name">刘威</div>
+          <div class="profile-role">内部催收员</div>
+        </div>
+        <div class="profile-stats">
+          <div class="profile-stat">
+            <div class="profile-stat-value">47</div>
+            <div class="profile-stat-label">本月通话量</div>
+          </div>
+          <div class="profile-stat">
+            <div class="profile-stat-value">18</div>
+            <div class="profile-stat-label">本月承诺数</div>
+          </div>
+          <div class="profile-stat">
+            <div class="profile-stat-value">92</div>
+            <div class="profile-stat-label">综合评分</div>
+          </div>
+        </div>
+        <div style="height:8px;background:#f3f4f6;"></div>
+        <div class="settings-list">
+          <div class="settings-item">
+            <span class="settings-item-icon"><i data-lucide="bell"></i></span>
+            <span class="settings-item-label">通知设置</span>
+            <span class="settings-item-arrow">›</span>
+          </div>
+          <div class="settings-item">
+            <span class="settings-item-icon"><i data-lucide="mic"></i></span>
+            <span class="settings-item-label">录音模式</span>
+            <span class="settings-item-arrow">›</span>
+          </div>
+          <div class="settings-item">
+            <span class="settings-item-icon"><i data-lucide="lock"></i></span>
+            <span class="settings-item-label">修改密码</span>
+            <span class="settings-item-arrow">›</span>
+          </div>
+          <div class="settings-item">
+            <span class="settings-item-icon"><i data-lucide="info"></i></span>
+            <span class="settings-item-label">关于应用</span>
+            <span class="settings-item-arrow">›</span>
+          </div>
+        </div>
+        <div style="height:8px;background:#f3f4f6;"></div>
+        <div class="logout-btn-wrap">
+          <button class="logout-btn">退出登录</button>
+        </div>
+      </div>
+
+      <!-- ── SCREEN 9: 强制退出（账号异地登录） ── -->
+      <div class="page-section" id="app-force-logout">
+        <div class="force-logout-screen">
+          <div class="force-logout-icon-wrap"><i data-lucide="lock-keyhole" style="width:40px;height:40px;stroke-width:1.5;"></i></div>
+          <div class="force-logout-title">账号已在其他设备登录</div>
+          <div class="force-logout-desc">
+            您的账号于 14:35 在 Android 设备（小米12）上登录，<br>
+            本设备已自动退出。
+          </div>
+          <div class="force-logout-time">如非您本人操作，请立即修改密码以保护账号安全。</div>
+          <button class="force-logout-relogin">重新登录</button>
+          <span class="force-logout-contact">联系管理员</span>
+        </div>
+      </div>
+
+    </div><!-- end .screen-content -->
+
+    <!-- Bottom Tab Bar -->
+    <div class="bottom-tab-bar">
+      <div class="tab-item active" data-tab="app-home">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+        工作台
+      </div>
+      <div class="tab-item" data-tab="app-cases">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+        </svg>
+        案件
+      </div>
+      <div class="tab-item" data-tab="app-call-history">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.67 3.4 2 2 0 0 1 3.64 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.85a16 16 0 0 0 6 6l.95-1.01a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.5 16.92z"/>
+        </svg>
+        通话记录
+      </div>
+      <div class="tab-item" data-tab="app-profile">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+        </svg>
+        我的
+      </div>
+    </div>
+
+  </div><!-- end .phone-screen -->
+</div><!-- end .phone-frame -->
+
+<script>
+  // ── Screen nav pill buttons ──
+  document.querySelectorAll('.screen-nav-btn[data-page]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.screen-nav-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.screen-content .page-section').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      const targetPage = btn.dataset.page;
+      document.getElementById(targetPage).classList.add('active');
+
+      // Sync tab bar
+      const tabMap = { 'app-home': 'app-home', 'app-cases': 'app-cases', 'app-call-history': 'app-call-history', 'app-profile': 'app-profile' };
+      document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+      if (tabMap[targetPage]) {
+        const matchingTab = document.querySelector(`.tab-item[data-tab="${tabMap[targetPage]}"]`);
+        if (matchingTab) matchingTab.classList.add('active');
+      }
+
+      // Trigger page-specific init
+      if (targetPage === 'app-dial-request') initDialCountdown();
+      if (targetPage === 'app-in-call') initInCallTimer();
+    });
+  });
+
+  // ── Bottom tab bar navigation ──
+  document.querySelectorAll('.tab-item[data-tab]').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const targetPage = tab.dataset.tab;
+      document.querySelectorAll('.screen-nav-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.screen-content .page-section').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+      const targetSection = document.getElementById(targetPage);
+      if (targetSection) targetSection.classList.add('active');
+      tab.classList.add('active');
+      const matchBtn = document.querySelector(`.screen-nav-btn[data-page="${targetPage}"]`);
+      if (matchBtn) matchBtn.classList.add('active');
+    });
+  });
+
+  // ── Tag buttons: radio-style selection + promise date toggle ──
+  const tagGrid = document.getElementById('tag-grid');
+  const promiseDateSection = document.getElementById('promise-date-section');
+  if (tagGrid) {
+    tagGrid.querySelectorAll('.tag-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        tagGrid.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        // Show promise date picker only when "承诺缴费" is selected
+        if (promiseDateSection) {
+          promiseDateSection.style.display = (btn.dataset.tag === 'promise') ? 'block' : 'none';
+        }
+      });
+    });
+  }
+
+  // ── DIAL_REQUEST: SVG countdown ring ──
+  let dialCountdownTimer = null;
+  function initDialCountdown() {
+    if (dialCountdownTimer) clearInterval(dialCountdownTimer);
+    let countdown = 15;
+    const countdownEl = document.getElementById('dial-countdown');
+    const circleEl = document.getElementById('countdown-circle');
+    const labelEl = document.querySelector('.dial-countdown-label');
+    if (!countdownEl || !circleEl) return;
+    const circumference = 2 * Math.PI * 45; // r=45
+    circleEl.style.strokeDasharray = circumference;
+    circleEl.style.strokeDashoffset = '0';
+    countdownEl.textContent = countdown;
+    if (labelEl) labelEl.textContent = '15秒后自动取消';
+
+    dialCountdownTimer = setInterval(() => {
+      countdown--;
+      if (countdownEl) countdownEl.textContent = countdown < 0 ? 0 : countdown;
+      if (labelEl) labelEl.textContent = (countdown > 0 ? countdown : 0) + '秒后自动取消';
+      const progress = Math.max(countdown, 0) / 15;
+      circleEl.style.strokeDashoffset = circumference * (1 - progress);
+      if (countdown <= 0) {
+        clearInterval(dialCountdownTimer);
+        dialCountdownTimer = null;
+        // auto dismiss — visual feedback
+        if (countdownEl) countdownEl.textContent = '✕';
+        if (labelEl) labelEl.textContent = '已自动取消';
+      }
+    }, 1000);
+  }
+
+  // ── IN-CALL: duration timer ──
+  let inCallTimerInterval = null;
+  let inCallSeconds = 222; // start at 03:42 = 222s
+  function formatTime(s) {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+  }
+  function initInCallTimer() {
+    if (inCallTimerInterval) clearInterval(inCallTimerInterval);
+    inCallSeconds = 222;
+    const timerEl = document.getElementById('incall-timer');
+    const durationEl = document.getElementById('incall-duration-display');
+    function update() {
+      const t = formatTime(inCallSeconds);
+      if (timerEl) timerEl.textContent = t;
+      if (durationEl) durationEl.textContent = t;
+      inCallSeconds++;
+    }
+    update();
+    inCallTimerInterval = setInterval(update, 1000);
+  }
+
+  // Auto-init AI card popup with a slight delay when in-call screen becomes visible
+  // (it starts with .show class; can be dismissed with the action buttons)
+
+  // Update dial-request time display
+  function updateDialReqTime() {
+    const el = document.getElementById('dial-req-time');
+    if (el) {
+      const now = new Date();
+      el.textContent = now.toTimeString().slice(0, 8);
+    }
+  }
+  setInterval(updateDialReqTime, 1000);
+  updateDialReqTime();
+  lucide.createIcons();
+</script>
+</body>
+</html>

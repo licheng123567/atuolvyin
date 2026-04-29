@@ -1,0 +1,1269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>有证慧催 — 服务商管理后台</title>
+  <link rel="stylesheet" href="assets/design-system.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    /* ── Provider Admin specific styles ── */
+    .modal-overlay { display: none; }
+
+    /* P1 Banner */
+    .p1-banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--color-neutral-100);
+      border: 1px dashed var(--color-neutral-300);
+      border-radius: var(--radius-lg);
+      padding: 40px 24px;
+      color: var(--color-neutral-500);
+      font-size: 14px;
+      flex-direction: column;
+    }
+    .p1-banner-label { font-size: 18px; font-weight: 700; color: var(--color-neutral-400); }
+    .p1-banner-desc { font-size: 13px; color: var(--color-neutral-400); }
+
+    /* Overview client cards */
+    .client-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+    .client-card {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      box-shadow: var(--shadow-sm);
+    }
+    .client-card-name { font-size: 14.5px; font-weight: 700; color: var(--color-neutral-900); margin-bottom: 12px; }
+    .client-card-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 7px; color: var(--color-neutral-700); }
+    .client-card-val { font-weight: 600; color: var(--color-neutral-900); }
+    .client-card-alert { color: var(--color-warning); font-weight: 600; }
+
+    /* Comparison table */
+    .compare-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; background: white; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-sm); margin-bottom: 24px; }
+    .compare-cell { padding: 14px 16px; font-size: 13px; border-right: 1px solid var(--color-neutral-100); border-bottom: 1px solid var(--color-neutral-100); }
+    .compare-cell:last-child { border-right: none; }
+    .compare-header { background: var(--color-neutral-50); font-weight: 600; font-size: 12px; color: var(--color-neutral-600); }
+
+    /* Receivables total row */
+    .total-row td { background: var(--color-neutral-50); font-weight: 600; }
+
+    /* Member role colors */
+    .role-admin { background: var(--color-purple-light); color: var(--color-purple); }
+
+    /* Dispute form */
+    .dispute-form-card {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: 22px 24px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* Perf table sub-rows */
+    .perf-sub-row td { color: var(--color-neutral-600); font-size: 13px; }
+    .perf-member-cell { font-weight: 600; color: var(--color-neutral-900) !important; vertical-align: top; }
+    .perf-first { border-top: 2px solid var(--color-neutral-200); }
+
+    /* Status dot */
+    .status-dot-ok { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); margin-right: 5px; }
+    .status-dot-off { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--color-danger); margin-right: 5px; }
+
+    /* Month bar chart placeholder */
+    .chart-bars { display: flex; align-items: flex-end; gap: 8px; height: 80px; padding: 0 4px; }
+    .chart-bar-group { display: flex; align-items: flex-end; gap: 3px; flex: 1; }
+    .bar { border-radius: 3px 3px 0 0; min-width: 14px; }
+    .bar-current { background: var(--color-primary); }
+    .bar-last { background: var(--color-neutral-200); }
+
+    /* Notification bell count */
+    .bell-count {
+      position: absolute;
+      top: 2px; right: 2px;
+      background: var(--color-danger);
+      color: white;
+      font-size: 10px;
+      font-weight: 700;
+      min-width: 16px;
+      height: 16px;
+      border-radius: 8px;
+      padding: 0 3px;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid white;
+    }
+
+    .page-section { display: none; }
+    .page-section.active { display: block; }
+
+    /* sidebar p1 badge */
+    .sidebar-badge-p1 { margin-left: auto; background: var(--color-neutral-200); color: var(--color-neutral-600); font-size: 10px; font-weight: 600; padding: 2px 5px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+
+  <!-- ── TopBar ── -->
+  <header class="topbar">
+    <span class="topbar-logo">有证慧催</span>
+    <span class="topbar-sep"></span>
+    <span class="topbar-tenant">聚英催收服务团队</span>
+    <span class="badge badge-purple" style="font-size:12px;">服务商管理员</span>
+    <div class="topbar-right">
+      <div class="topbar-icon-btn" title="通知">
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="bell-count">1</span>
+      </div>
+      <div class="topbar-avatar" style="background:var(--color-purple-light);color:var(--color-purple);">赵</div>
+    </div>
+  </header>
+
+  <!-- ── Sidebar ── -->
+  <nav class="sidebar">
+    <div class="sidebar-item active" data-page="pa-overview">
+      <i data-lucide="layout-dashboard"></i>
+      服务商概览
+    </div>
+    <div class="sidebar-item" data-page="pa-projects">
+      <i data-lucide="folder-open"></i>
+      项目列表
+    </div>
+    <div class="sidebar-item" data-page="pa-members">
+      <i data-lucide="users"></i>
+      团队成员
+    </div>
+    <div class="sidebar-item" data-page="pa-contracts">
+      <i data-lucide="file-check"></i>
+      合约管理
+    </div>
+    <div class="sidebar-item" data-page="pa-receivables">
+      <i data-lucide="receipt"></i>
+      应收账款
+    </div>
+    <div class="sidebar-item" data-page="pa-performance">
+      <i data-lucide="trending-up"></i>
+      成员绩效
+    </div>
+    <div class="sidebar-item" data-page="pa-commission">
+      <i data-lucide="percent"></i>
+      个人佣金
+      <span class="sidebar-badge-p1">P1</span>
+    </div>
+    <div class="sidebar-item" data-page="pa-dispute">
+      <i data-lucide="alert-circle"></i>
+      结算异议
+    </div>
+  </nav>
+
+  <!-- ── Main Content ── -->
+  <main class="main-content">
+
+    <!-- ══════════════ pa-overview ══════════════ -->
+    <section id="pa-overview" class="page-section active">
+      <div class="page-header">
+        <div>
+          <div class="page-title">服务商概览</div>
+          <div class="page-subtitle">聚英催收服务团队 — 2026年4月运营概况</div>
+        </div>
+        <div style="font-size:12.5px;color:var(--color-neutral-500);">截至 2026-04-28</div>
+      </div>
+
+      <!-- KPI -->
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label">签约物业公司</div>
+          <div class="stat-value">3</div>
+          <div class="stat-change neutral">家合约有效期内</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">本月通话量</div>
+          <div class="stat-value">1,842</div>
+          <div class="stat-change up">↑ 8.4% 较上月</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">本月应收金额</div>
+          <div class="stat-value" style="font-size:24px;">¥24,847</div>
+          <div class="stat-change up">↑ ¥2,400 较上月</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">团队成员</div>
+          <div class="stat-value">12</div>
+          <div class="stat-change neutral">1人离职中</div>
+        </div>
+      </div>
+
+      <!-- Per-client pending tasks -->
+      <div style="font-size:15px;font-weight:600;color:var(--color-neutral-800);margin-bottom:14px;">各客户待处理事项</div>
+      <div class="client-cards">
+        <div class="client-card">
+          <div class="client-card-name">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2" style="margin-right:5px;vertical-align:-2px;"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+            绿城锦绣物业
+          </div>
+          <div class="client-card-row">
+            <span>今日待拨案件</span>
+            <span class="client-card-val">45个</span>
+          </div>
+          <div class="client-card-row">
+            <span>待处理工单</span>
+            <span class="client-card-alert">2个 ⚠</span>
+          </div>
+          <div class="client-card-row">
+            <span>本月接通率</span>
+            <span class="client-card-val">68.3%</span>
+          </div>
+          <div style="margin-top:14px;">
+            <button class="btn btn-sm btn-primary" style="width:100%;" onclick="alert('跳转至绿城锦绣物业工作台')">进入工作台</button>
+          </div>
+        </div>
+        <div class="client-card">
+          <div class="client-card-name">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2" style="margin-right:5px;vertical-align:-2px;"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+            万科翡翠园
+          </div>
+          <div class="client-card-row">
+            <span>今日待拨案件</span>
+            <span class="client-card-val">32个</span>
+          </div>
+          <div class="client-card-row">
+            <span>结算待确认</span>
+            <span class="client-card-alert">1单 ⚠</span>
+          </div>
+          <div class="client-card-row">
+            <span>本月接通率</span>
+            <span class="client-card-val">71.5%</span>
+          </div>
+          <div style="margin-top:14px;">
+            <button class="btn btn-sm btn-primary" style="width:100%;" onclick="alert('跳转至万科翡翠园工作台')">进入工作台</button>
+          </div>
+        </div>
+        <div class="client-card">
+          <div class="client-card-name">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2" style="margin-right:5px;vertical-align:-2px;"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+            保利云上
+          </div>
+          <div class="client-card-row">
+            <span>今日待拨案件</span>
+            <span class="client-card-val">28个</span>
+          </div>
+          <div class="client-card-row">
+            <span>待处理工单</span>
+            <span style="color:var(--color-neutral-500);">无</span>
+          </div>
+          <div class="client-card-row">
+            <span>本月接通率</span>
+            <span class="client-card-val">65.8%</span>
+          </div>
+          <div style="margin-top:14px;">
+            <button class="btn btn-sm btn-primary" style="width:100%;" onclick="alert('跳转至保利云上工作台')">进入工作台</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Monthly comparison -->
+      <div style="font-size:15px;font-weight:600;color:var(--color-neutral-800);margin-bottom:14px;">本月 vs 上月对比</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>指标</th>
+              <th>本月（4月）</th>
+              <th>上月（3月）</th>
+              <th>变化</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>总通话量</td>
+              <td><strong>1,842次</strong></td>
+              <td>1,700次</td>
+              <td><span style="color:var(--color-success);font-weight:600;">↑ 8.4%</span></td>
+            </tr>
+            <tr>
+              <td>平均接通率</td>
+              <td><strong>68.5%</strong></td>
+              <td>65.2%</td>
+              <td><span style="color:var(--color-success);font-weight:600;">↑ 3.3%</span></td>
+            </tr>
+            <tr>
+              <td>承诺缴费量</td>
+              <td><strong>312次</strong></td>
+              <td>278次</td>
+              <td><span style="color:var(--color-success);font-weight:600;">↑ 12.2%</span></td>
+            </tr>
+            <tr>
+              <td>应收金额</td>
+              <td><strong>¥24,847</strong></td>
+              <td>¥22,447</td>
+              <td><span style="color:var(--color-success);font-weight:600;">↑ ¥2,400</span></td>
+            </tr>
+            <tr>
+              <td>平均AI话术采用率</td>
+              <td><strong>79.3%</strong></td>
+              <td>75.1%</td>
+              <td><span style="color:var(--color-success);font-weight:600;">↑ 4.2%</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══════════════ pa-projects ══════════════ -->
+    <section id="pa-projects" class="page-section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">项目列表</div>
+          <div class="page-subtitle">我方承接的催收项目及服务商侧负责人</div>
+        </div>
+      </div>
+
+      <!-- 汇总KPI -->
+      <div class="stat-grid" style="margin-bottom:20px;">
+        <div class="stat-card">
+          <div class="stat-label">承接中项目</div>
+          <div class="stat-value">2</div>
+          <div class="stat-change neutral">共 3 个项目</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">项目案件总数</div>
+          <div class="stat-value">730</div>
+          <div class="stat-change neutral">跨所有项目</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">本月总回款</div>
+          <div class="stat-value" style="font-size:22px;">¥187,400</div>
+          <div class="stat-change up">↑ 9% 较上月</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">已指派负责人</div>
+          <div class="stat-value">2/3</div>
+          <div class="stat-change neutral">1 个项目待指派</div>
+        </div>
+      </div>
+
+      <!-- 项目列表 -->
+      <div class="table-wrap">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:10px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input class="form-control" placeholder="搜索项目名称 / 物业公司" style="padding-left:34px;">
+          </div>
+          <select class="form-control" style="width:110px;">
+            <option>全部状态</option><option>进行中</option><option>已完成</option><option>暂停</option>
+          </select>
+        </div>
+        <table>
+          <thead>
+            <tr><th>项目名称</th><th>委托物业公司</th><th>案件数</th><th>已回款率</th><th>服务商侧负责人</th><th>计划周期</th><th>状态</th><th>操作</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><div style="font-weight:600;font-size:13.5px;">A区2026Q2催收</div><div style="font-size:12px;color:#6b7280;">物业费催收项目</div></td>
+              <td>绿城锦绣物业</td>
+              <td>412</td>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div class="progress-bar" style="width:80px;height:6px;"><div class="progress-fill" style="width:38%;"></div></div>
+                  <span style="font-size:12px;">38%</span>
+                </div>
+              </td>
+              <td><span class="badge badge-blue">张磊</span></td>
+              <td style="font-size:12px;color:#6b7280;">2026-04-01 ~ 2026-06-30</td>
+              <td><span class="badge badge-green">进行中</span></td>
+              <td>
+                <button class="btn btn-ghost btn-sm" onclick="openModal('modal-pa-project-detail')">详情</button>
+                <button class="btn btn-ghost btn-sm" onclick="openModal('modal-pa-assign-pm')">指派负责人</button>
+              </td>
+            </tr>
+            <tr>
+              <td><div style="font-weight:600;font-size:13.5px;">B区2026Q2催收</div><div style="font-size:12px;color:#6b7280;">物业费催收项目</div></td>
+              <td>绿城锦绣物业</td>
+              <td>318</td>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div class="progress-bar" style="width:80px;height:6px;"><div class="progress-fill" style="width:29%;"></div></div>
+                  <span style="font-size:12px;">29%</span>
+                </div>
+              </td>
+              <td><span class="badge badge-blue">陈欣</span></td>
+              <td style="font-size:12px;color:#6b7280;">2026-04-01 ~ 2026-06-30</td>
+              <td><span class="badge badge-green">进行中</span></td>
+              <td>
+                <button class="btn btn-ghost btn-sm" onclick="openModal('modal-pa-project-detail')">详情</button>
+                <button class="btn btn-ghost btn-sm" onclick="openModal('modal-pa-assign-pm')">指派负责人</button>
+              </td>
+            </tr>
+            <tr>
+              <td><div style="font-weight:600;font-size:13.5px;">2025Q4催收</div><div style="font-size:12px;color:#6b7280;">物业费催收项目</div></td>
+              <td>恒大万悦物业</td>
+              <td>287</td>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div class="progress-bar" style="width:80px;height:6px;"><div class="progress-fill" style="width:84%;background:#059669;"></div></div>
+                  <span style="font-size:12px;">84%</span>
+                </div>
+              </td>
+              <td style="color:#9ca3af;font-size:12px;">未指派</td>
+              <td style="font-size:12px;color:#6b7280;">2025-10-01 ~ 2025-12-31</td>
+              <td><span class="badge badge-gray">已完成</span></td>
+              <td>
+                <button class="btn btn-ghost btn-sm" onclick="openModal('modal-pa-project-detail')">详情</button>
+                <button class="btn btn-ghost btn-sm" style="color:#9ca3af;" disabled>指派负责人</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Modal: 服务商项目详情 -->
+    <div class="modal-overlay" id="modal-pa-project-detail" style="display:none;">
+      <div class="modal" style="width:580px;">
+        <div class="modal-header">
+          <span class="modal-title">项目详情 — A区2026Q2催收</span>
+          <button class="modal-close" onclick="closeModal('modal-pa-project-detail')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12" stroke-linecap="round"/></svg></button>
+        </div>
+        <div class="modal-body">
+          <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px;">
+            <div class="stat-card"><div class="stat-label">案件总数</div><div class="stat-value" style="font-size:22px;">412</div></div>
+            <div class="stat-card"><div class="stat-label">已回款率</div><div class="stat-value" style="font-size:22px;">38%</div><div class="stat-change neutral">¥156,800</div></div>
+            <div class="stat-card"><div class="stat-label">转工单</div><div class="stat-value" style="font-size:22px;">23</div><div class="stat-change neutral">转法务 8</div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px;">
+            <div><span style="color:#6b7280;">委托物业公司：</span>绿城锦绣物业</div>
+            <div><span style="color:#6b7280;">服务商侧负责人：</span><span class="badge badge-blue">张磊</span></div>
+            <div><span style="color:#6b7280;">计划周期：</span>2026-04-01 ~ 2026-06-30</div>
+            <div><span style="color:#6b7280;">状态：</span><span class="badge badge-green">进行中</span></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('modal-pa-project-detail')">关闭</button>
+          <button class="btn btn-primary" onclick="closeModal('modal-pa-project-detail');openModal('modal-pa-assign-pm')">重新指派负责人</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: 指派服务商侧负责人 -->
+    <div class="modal-overlay" id="modal-pa-assign-pm" style="display:none;">
+      <div class="modal" style="width:440px;">
+        <div class="modal-header">
+          <span class="modal-title">指派服务商侧项目负责人</span>
+          <button class="modal-close" onclick="closeModal('modal-pa-assign-pm')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12" stroke-linecap="round"/></svg></button>
+        </div>
+        <div class="modal-body">
+          <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:#0369a1;">
+            <strong>A区2026Q2催收</strong> — 绿城锦绣物业 · 412 个案件
+          </div>
+          <div class="form-group">
+            <label class="form-label">选择我方负责人<span class="req">*</span></label>
+            <select class="form-control">
+              <option value="">请选择</option>
+              <option selected>张磊（当前负责人）</option>
+              <option>陈欣</option>
+              <option>王华</option>
+              <option>刘洋</option>
+            </select>
+            <div style="font-size:12px;color:#6b7280;margin-top:4px;">被指派人将获得该项目的「项目负责人」角色，可查看回款进度、工单及法务进度。</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('modal-pa-assign-pm')">取消</button>
+          <button class="btn btn-primary">确认指派</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ pa-members ══════════════ -->
+    <section id="pa-members" class="page-section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">团队成员</div>
+          <div class="page-subtitle">管理聚英催收服务团队的账号与权限</div>
+        </div>
+        <button class="btn btn-primary" onclick="openModal('modal-add-member')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 4v16m8-8H4" stroke-linecap="round"/></svg>
+          新增成员
+        </button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>姓名</th>
+              <th>角色</th>
+              <th>手机号</th>
+              <th>分配客户</th>
+              <th>本月通话</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div style="width:30px;height:30px;border-radius:50%;background:var(--color-purple-light);color:var(--color-purple);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;">赵</div>
+                  <strong>赵伟明</strong>
+                </div>
+              </td>
+              <td><span class="badge badge-purple">管理员</span></td>
+              <td style="font-family:monospace;color:var(--color-neutral-600);">138****3301</td>
+              <td>全部3家</td>
+              <td style="color:var(--color-neutral-500);">—</td>
+              <td><span class="status-dot-ok"></span>正常</td>
+              <td>
+                <button class="btn btn-sm btn-secondary" onclick="openModal('modal-edit-member')">编辑</button>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div style="width:30px;height:30px;border-radius:50%;background:var(--color-primary-light);color:var(--color-primary);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;">张</div>
+                  <strong>张力</strong>
+                </div>
+              </td>
+              <td><span class="badge badge-blue">催收员</span></td>
+              <td style="font-family:monospace;color:var(--color-neutral-600);">139****4412</td>
+              <td>绿城 + 万科</td>
+              <td>247次</td>
+              <td><span class="status-dot-ok"></span>正常</td>
+              <td>
+                <div style="display:flex;gap:4px;">
+                  <button class="btn btn-sm btn-secondary" onclick="openModal('modal-edit-member')">编辑</button>
+                  <button class="btn btn-sm btn-secondary" onclick="openModal('modal-confirm-disable')">停用</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div style="width:30px;height:30px;border-radius:50%;background:var(--color-primary-light);color:var(--color-primary);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;">周</div>
+                  <strong>周海燕</strong>
+                </div>
+              </td>
+              <td><span class="badge badge-blue">催收员</span></td>
+              <td style="font-family:monospace;color:var(--color-neutral-600);">137****5523</td>
+              <td>绿城 + 保利</td>
+              <td>198次</td>
+              <td><span class="status-dot-ok"></span>正常</td>
+              <td>
+                <div style="display:flex;gap:4px;">
+                  <button class="btn btn-sm btn-secondary" onclick="openModal('modal-edit-member')">编辑</button>
+                  <button class="btn btn-sm btn-secondary" onclick="openModal('modal-confirm-disable')">停用</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div style="width:30px;height:30px;border-radius:50%;background:var(--color-primary-light);color:var(--color-primary);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;">刘</div>
+                  <strong>刘强</strong>
+                </div>
+              </td>
+              <td><span class="badge badge-blue">催收员</span></td>
+              <td style="font-family:monospace;color:var(--color-neutral-600);">136****6634</td>
+              <td>万科 + 保利</td>
+              <td>312次</td>
+              <td><span class="status-dot-ok"></span>正常</td>
+              <td>
+                <div style="display:flex;gap:4px;">
+                  <button class="btn btn-sm btn-secondary" onclick="openModal('modal-edit-member')">编辑</button>
+                  <button class="btn btn-sm btn-secondary" onclick="openModal('modal-confirm-disable')">停用</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div style="width:30px;height:30px;border-radius:50%;background:var(--color-primary-light);color:var(--color-primary);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;">陈</div>
+                  <strong>陈萍</strong>
+                </div>
+              </td>
+              <td><span class="badge badge-blue">催收员</span></td>
+              <td style="font-family:monospace;color:var(--color-neutral-600);">135****7745</td>
+              <td>绿城</td>
+              <td>156次</td>
+              <td><span class="status-dot-ok"></span>正常</td>
+              <td>
+                <div style="display:flex;gap:4px;">
+                  <button class="btn btn-sm btn-secondary" onclick="openModal('modal-edit-member')">编辑</button>
+                  <button class="btn btn-sm btn-secondary" onclick="openModal('modal-confirm-disable')">停用</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div style="width:30px;height:30px;border-radius:50%;background:#FEE2E2;color:var(--color-danger);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;">李</div>
+                  <strong>李明</strong>
+                </div>
+              </td>
+              <td><span class="badge badge-blue">催收员</span></td>
+              <td style="font-family:monospace;color:var(--color-neutral-600);">134****8856</td>
+              <td>全部3家</td>
+              <td>89次</td>
+              <td><span class="status-dot-off"></span><span style="color:var(--color-danger);">离职中</span></td>
+              <td>
+                <div style="display:flex;gap:4px;">
+                  <button class="btn btn-sm btn-secondary" onclick="openModal('modal-edit-member')">编辑</button>
+                  <button class="btn btn-sm btn-secondary" onclick="openModal('modal-confirm-disable')">停用</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="pagination">
+          <span class="pagination-info">共 12 名成员，显示 6 条</span>
+          <div class="pagination-pages">
+            <span class="page-btn active">1</span>
+            <span class="page-btn">2</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ pa-contracts ══════════════ -->
+    <section id="pa-contracts" class="page-section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">合约管理</div>
+          <div class="page-subtitle">查看与物业公司签订的服务合约</div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>签约物业公司</th>
+              <th>合约类型</th>
+              <th>生效日期</th>
+              <th>到期日期</th>
+              <th>计费方式</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>绿城锦绣物业</strong></td>
+              <td>催收服务</td>
+              <td>2025-10-01</td>
+              <td>2026-09-30</td>
+              <td>通话量计费 <strong>¥8/次</strong></td>
+              <td><span class="badge badge-green">生效中</span></td>
+              <td><button class="btn btn-sm btn-secondary" onclick="openModal('modal-contract-detail')">查看详情</button></td>
+            </tr>
+            <tr>
+              <td><strong>万科翡翠园</strong></td>
+              <td>催收服务</td>
+              <td>2025-11-15</td>
+              <td>2026-11-14</td>
+              <td>回款提成 <strong>2%</strong></td>
+              <td><span class="badge badge-green">生效中</span></td>
+              <td><button class="btn btn-sm btn-secondary" onclick="openModal('modal-contract-detail')">查看详情</button></td>
+            </tr>
+            <tr>
+              <td><strong>保利云上</strong></td>
+              <td>催收服务</td>
+              <td>2026-02-01</td>
+              <td>2027-01-31</td>
+              <td>通话量 <strong>¥6/次</strong> + 回款奖励</td>
+              <td><span class="badge badge-green">生效中</span></td>
+              <td><button class="btn btn-sm btn-secondary" onclick="openModal('modal-contract-detail')">查看详情</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="margin-top:16px;padding:14px 16px;background:var(--color-primary-light);border:1px solid #BFDBFE;border-radius:var(--radius-md);font-size:13px;color:var(--color-primary);">
+        <strong>提示：</strong>如需新增合约或修改计费条款，请联系有证慧催平台运营团队，合约变更需由双方管理员在平台上完成电子签章。
+      </div>
+    </section>
+
+    <!-- ══════════════ pa-receivables ══════════════ -->
+    <section id="pa-receivables" class="page-section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">应收账款</div>
+          <div class="page-subtitle">查看各物业公司结算明细与付款状态</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <input type="month" class="form-control" style="width:auto;" value="2026-04">
+          <button class="btn btn-secondary" onclick="alert('导出Excel')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            导出 Excel
+          </button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>客户</th>
+              <th>月份</th>
+              <th>结算方式</th>
+              <th>应收金额</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>绿城锦绣物业</strong></td>
+              <td>2026-04</td>
+              <td>通话量计费</td>
+              <td><strong>¥12,480</strong></td>
+              <td><span class="badge badge-orange">待付款</span></td>
+              <td>
+                <div style="display:flex;gap:4px;">
+                  <button class="btn btn-sm btn-secondary" onclick="openModal('modal-receivable-detail')">查看明细</button>
+                  <button class="btn btn-sm btn-secondary" onclick="alert('正在导出PDF...')">导出PDF</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td><strong>绿城锦绣物业</strong></td>
+              <td>2026-03</td>
+              <td>通话量计费</td>
+              <td>¥11,200</td>
+              <td><span class="badge badge-green">已付款</span></td>
+              <td>
+                <button class="btn btn-sm btn-secondary" onclick="openModal('modal-receivable-detail')">查看明细</button>
+              </td>
+            </tr>
+            <tr>
+              <td><strong>万科翡翠园</strong></td>
+              <td>2026-04</td>
+              <td>回款提成2%</td>
+              <td><strong>¥8,967</strong></td>
+              <td><span class="badge badge-blue">已确认</span></td>
+              <td>
+                <div style="display:flex;gap:4px;">
+                  <button class="btn btn-sm btn-secondary" onclick="openModal('modal-receivable-detail')">查看明细</button>
+                  <button class="btn btn-sm btn-secondary" onclick="alert('正在导出PDF...')">导出PDF</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td><strong>万科翡翠园</strong></td>
+              <td>2026-03</td>
+              <td>回款提成2%</td>
+              <td>¥7,840</td>
+              <td><span class="badge badge-green">已付款</span></td>
+              <td>
+                <button class="btn btn-sm btn-secondary" onclick="openModal('modal-receivable-detail')">查看明细</button>
+              </td>
+            </tr>
+            <tr>
+              <td><strong>保利云上</strong></td>
+              <td>2026-04</td>
+              <td>通话量计费+回款奖励</td>
+              <td><strong>¥3,400</strong></td>
+              <td><span class="badge badge-orange">待付款</span></td>
+              <td>
+                <div style="display:flex;gap:4px;">
+                  <button class="btn btn-sm btn-secondary" onclick="openModal('modal-receivable-detail')">查看明细</button>
+                  <button class="btn btn-sm btn-secondary" onclick="alert('正在导出PDF...')">导出PDF</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td><strong>保利云上</strong></td>
+              <td>2026-03</td>
+              <td>通话量计费+回款奖励</td>
+              <td>¥3,407</td>
+              <td><span class="badge badge-green">已付款</span></td>
+              <td>
+                <button class="btn btn-sm btn-secondary" onclick="openModal('modal-receivable-detail')">查看明细</button>
+              </td>
+            </tr>
+            <tr class="total-row">
+              <td colspan="3">本月合计（2026-04）</td>
+              <td><strong style="font-size:15px;color:var(--color-primary);">¥24,847</strong></td>
+              <td colspan="2" style="color:var(--color-neutral-600);font-size:13px;">其中待付款 ¥15,880 / 已确认 ¥8,967</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══════════════ pa-performance ══════════════ -->
+    <section id="pa-performance" class="page-section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">成员绩效</div>
+          <div class="page-subtitle">2026年4月 — 各成员在客户侧的通话与转化数据</div>
+        </div>
+        <select class="form-control" style="width:auto;">
+          <option>2026-04</option>
+          <option>2026-03</option>
+          <option>2026-02</option>
+        </select>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>成员</th>
+              <th>所在客户</th>
+              <th>通话量</th>
+              <th>承诺量</th>
+              <th>转化量</th>
+              <th>转化率</th>
+              <th>绩效积分</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="perf-first">
+              <td class="perf-member-cell" rowspan="2">张力</td>
+              <td>绿城锦绣物业</td>
+              <td>134次</td>
+              <td>32</td>
+              <td>18</td>
+              <td><span style="color:var(--color-success);font-weight:600;">13.4%</span></td>
+              <td><strong>2,840</strong></td>
+            </tr>
+            <tr class="perf-sub-row">
+              <td>万科翡翠园</td>
+              <td>113次</td>
+              <td>28</td>
+              <td>15</td>
+              <td>13.3%</td>
+              <td><strong>2,340</strong></td>
+            </tr>
+            <tr class="perf-first">
+              <td class="perf-member-cell" rowspan="2">周海燕</td>
+              <td>绿城锦绣物业</td>
+              <td>98次</td>
+              <td>24</td>
+              <td>13</td>
+              <td>13.3%</td>
+              <td><strong>2,120</strong></td>
+            </tr>
+            <tr class="perf-sub-row">
+              <td>保利云上</td>
+              <td>100次</td>
+              <td>22</td>
+              <td>12</td>
+              <td>12.0%</td>
+              <td><strong>1,980</strong></td>
+            </tr>
+            <tr class="perf-first">
+              <td class="perf-member-cell" rowspan="3">刘强</td>
+              <td>万科翡翠园</td>
+              <td>112次</td>
+              <td>30</td>
+              <td>18</td>
+              <td><span style="color:var(--color-success);font-weight:600;">16.1%</span></td>
+              <td><strong>3,240</strong></td>
+            </tr>
+            <tr class="perf-sub-row">
+              <td>保利云上</td>
+              <td>100次</td>
+              <td>24</td>
+              <td>14</td>
+              <td>14.0%</td>
+              <td><strong>2,540</strong></td>
+            </tr>
+            <tr class="perf-sub-row">
+              <td>绿城锦绣物业</td>
+              <td>100次</td>
+              <td>20</td>
+              <td>11</td>
+              <td>11.0%</td>
+              <td><strong>1,840</strong></td>
+            </tr>
+            <tr class="perf-first">
+              <td class="perf-member-cell">陈萍</td>
+              <td>绿城锦绣物业</td>
+              <td>156次</td>
+              <td>38</td>
+              <td>21</td>
+              <td>13.5%</td>
+              <td><strong>3,480</strong></td>
+            </tr>
+            <tr class="perf-first">
+              <td class="perf-member-cell" style="color:var(--color-danger);">李明 <span class="badge badge-red" style="font-size:10px;">离职中</span></td>
+              <td style="color:var(--color-neutral-500);">全部3家</td>
+              <td style="color:var(--color-neutral-500);">89次</td>
+              <td style="color:var(--color-neutral-500);">18</td>
+              <td style="color:var(--color-neutral-500);">9</td>
+              <td style="color:var(--color-neutral-500);">10.1%</td>
+              <td style="color:var(--color-neutral-500);">1,240</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══════════════ pa-commission (P1) ══════════════ -->
+    <section id="pa-commission" class="page-section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">个人佣金</div>
+          <div class="page-subtitle">成员个人佣金核算与发放记录</div>
+        </div>
+      </div>
+      <div class="p1-banner">
+        <div class="p1-banner-label">P1 — 功能建设中</div>
+        <div class="p1-banner-desc">个人佣金模块正在开发中，预计 v1.1 上线。包含：佣金规则配置、个人佣金明细、发放记录、银行卡绑定等功能。</div>
+        <div style="font-size:13px;color:var(--color-neutral-400);">当前可在"成员绩效"页查看各成员绩效积分，作为临时参考依据。</div>
+      </div>
+    </section>
+
+    <!-- ══════════════ pa-dispute ══════════════ -->
+    <section id="pa-dispute" class="page-section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">结算异议</div>
+          <div class="page-subtitle">对结算单发起异议并跟踪处理进度</div>
+        </div>
+      </div>
+
+      <!-- Dispute submission form -->
+      <div class="dispute-form-card">
+        <div style="font-size:15px;font-weight:600;color:var(--color-neutral-800);margin-bottom:18px;">提交新异议</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div class="form-group">
+            <label class="form-label">选择争议结算单<span class="req">*</span></label>
+            <select class="form-control">
+              <option value="">请选择结算单</option>
+              <option>绿城锦绣物业 2026-04 ¥12,480（待付款）</option>
+              <option>保利云上 2026-04 ¥3,400（待付款）</option>
+              <option>万科翡翠园 2026-04 ¥8,967（已确认）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">异议类型<span class="req">*</span></label>
+            <select class="form-control">
+              <option value="">请选择异议类型</option>
+              <option>通话量计算有误</option>
+              <option>回款金额统计有误</option>
+              <option>计费单价与合约不符</option>
+              <option>重复计费</option>
+              <option>其他</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">异议说明<span class="req">*</span></label>
+          <textarea class="form-control" rows="4" placeholder="请详细说明您的异议内容，如涉及具体通话或业主记录，请注明相关信息..."></textarea>
+        </div>
+        <div style="display:flex;justify-content:flex-end;">
+          <button class="btn btn-primary" onclick="alert('异议已提交，预计1-3个工作日内处理')">提交异议</button>
+        </div>
+      </div>
+
+      <!-- Status tracking -->
+      <div style="font-size:15px;font-weight:600;color:var(--color-neutral-800);margin-bottom:14px;">异议跟踪记录</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>提交时间</th>
+              <th>关联结算单</th>
+              <th>异议原因摘要</th>
+              <th>状态</th>
+              <th>最后更新</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>2026-04-25 14:32</td>
+              <td>绿城锦绣物业 2026-03</td>
+              <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">通话量统计有误：3月28日-31日记录缺少约42通</td>
+              <td><span class="badge badge-orange">平台审核中</span></td>
+              <td>2026-04-26 09:11</td>
+              <td>
+                <button class="btn btn-sm btn-secondary" onclick="openModal('modal-dispute-detail')">查看详情</button>
+              </td>
+            </tr>
+            <tr>
+              <td>2026-03-18 10:15</td>
+              <td>万科翡翠园 2026-02</td>
+              <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">计费单价与合约不符：合约约定¥8/次，实际结算为¥7.5</td>
+              <td><span class="badge badge-green">已解决</span></td>
+              <td>2026-03-22 16:48</td>
+              <td>
+                <button class="btn btn-sm btn-secondary" onclick="openModal('modal-dispute-detail')">查看报告</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ══════════════ MODALS ══════════════ -->
+
+<!-- Add Member Modal -->
+<div class="modal-overlay" id="modal-add-member">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">新增团队成员</span>
+      <button class="modal-close" onclick="closeModal('modal-add-member')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">姓名<span class="req">*</span></label>
+        <input type="text" class="form-control" placeholder="请输入真实姓名">
+      </div>
+      <div class="form-group">
+        <label class="form-label">手机号<span class="req">*</span></label>
+        <input type="tel" class="form-control" placeholder="用于登录与接收验证码">
+      </div>
+      <div class="form-group">
+        <label class="form-label">角色<span class="req">*</span></label>
+        <select class="form-control">
+          <option value="">请选择角色</option>
+          <option>催收员</option>
+          <option>督导</option>
+          <option>管理员</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">分配客户<span class="req">*</span></label>
+        <div style="display:flex;flex-direction:column;gap:8px;padding:10px 12px;border:1px solid var(--color-neutral-300);border-radius:var(--radius-md);background:var(--color-neutral-50);">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox"> 绿城锦绣物业</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox"> 万科翡翠园</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox"> 保利云上</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">初始密码<span class="req">*</span></label>
+        <input type="password" class="form-control" placeholder="至少8位，包含字母和数字">
+        <div class="form-hint">首次登录后系统将强制要求修改密码</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-member')">取消</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-add-member');alert('成员账号已创建，验证码短信已发送')">创建</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Member Modal -->
+<div class="modal-overlay" id="modal-edit-member">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">编辑成员信息 — 张力</span>
+      <button class="modal-close" onclick="closeModal('modal-edit-member')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">姓名</label>
+        <input type="text" class="form-control" value="张力">
+      </div>
+      <div class="form-group">
+        <label class="form-label">手机号</label>
+        <input type="tel" class="form-control" value="139****4412" readonly style="background:var(--color-neutral-100);">
+        <div class="form-hint">手机号不可直接修改，如需变更请联系平台管理员</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">角色</label>
+        <select class="form-control">
+          <option selected>催收员</option>
+          <option>督导</option>
+          <option>管理员</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">分配客户</label>
+        <div style="display:flex;flex-direction:column;gap:8px;padding:10px 12px;border:1px solid var(--color-neutral-300);border-radius:var(--radius-md);background:var(--color-neutral-50);">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox" checked> 绿城锦绣物业</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox" checked> 万科翡翠园</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox"> 保利云上</label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-edit-member')">取消</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-edit-member');alert('成员信息已更新')">保存修改</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Disable Modal -->
+<div class="modal-overlay alert-dialog" id="modal-confirm-disable">
+  <div class="modal">
+    <div class="modal-body">
+      <div class="alert-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" stroke-width="2" style="display:inline;margin-right:6px;vertical-align:-3px;"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        确认停用此账号？
+      </div>
+      <div class="alert-desc">停用后该成员将无法登录系统，其名下私海案件将回归公海。此操作可撤销，如需重新启用请在成员管理中操作。</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-confirm-disable')">取消</button>
+      <button class="btn btn-danger" onclick="closeModal('modal-confirm-disable');alert('账号已停用')">确认停用</button>
+    </div>
+  </div>
+</div>
+
+<!-- Contract Detail Modal -->
+<div class="modal-overlay" id="modal-contract-detail">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">合约详情 — 绿城锦绣物业</span>
+      <button class="modal-close" onclick="closeModal('modal-contract-detail')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;">
+        <div style="background:var(--color-neutral-50);border-radius:var(--radius-md);padding:12px;">
+          <div style="font-size:12px;color:var(--color-neutral-500);margin-bottom:4px;">合约类型</div>
+          <div style="font-weight:600;">物业费催收服务</div>
+        </div>
+        <div style="background:var(--color-neutral-50);border-radius:var(--radius-md);padding:12px;">
+          <div style="font-size:12px;color:var(--color-neutral-500);margin-bottom:4px;">合约状态</div>
+          <div><span class="badge badge-green">生效中</span></div>
+        </div>
+        <div style="background:var(--color-neutral-50);border-radius:var(--radius-md);padding:12px;">
+          <div style="font-size:12px;color:var(--color-neutral-500);margin-bottom:4px;">生效日期</div>
+          <div style="font-weight:600;">2025-10-01</div>
+        </div>
+        <div style="background:var(--color-neutral-50);border-radius:var(--radius-md);padding:12px;">
+          <div style="font-size:12px;color:var(--color-neutral-500);margin-bottom:4px;">到期日期</div>
+          <div style="font-weight:600;">2026-09-30 <span style="color:var(--color-success);font-size:12px;">（剩余155天）</span></div>
+        </div>
+      </div>
+      <div style="background:var(--color-neutral-50);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px;">计费规则</div>
+        <div style="font-size:13px;color:var(--color-neutral-700);line-height:1.8;">
+          • 计费单价：每次有效通话 <strong>¥8.00</strong><br>
+          • 有效通话定义：通话时长≥30秒且AI识别为有效对话<br>
+          • 结算周期：自然月，次月10日前完成结算<br>
+          • 付款方式：银行转账，账期30日
+        </div>
+      </div>
+      <div style="background:var(--color-neutral-50);border-radius:var(--radius-md);padding:14px 16px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px;">签约方信息</div>
+        <div style="font-size:13px;color:var(--color-neutral-700);line-height:1.8;">
+          • 甲方（物业方）：绿城锦绣物业管理有限公司<br>
+          • 乙方（服务方）：聚英催收服务团队<br>
+          • 合约编号：JY-2025-GC-001
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-contract-detail')">关闭</button>
+      <button class="btn btn-secondary" onclick="alert('合约PDF下载中...')">下载PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- Receivable Detail Modal -->
+<div class="modal-overlay" id="modal-receivable-detail">
+  <div class="modal" style="max-width:580px;">
+    <div class="modal-header">
+      <span class="modal-title">结算明细 — 绿城锦绣物业 2026-04</span>
+      <button class="modal-close" onclick="closeModal('modal-receivable-detail')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px;">
+        <div style="text-align:center;background:var(--color-neutral-50);border-radius:var(--radius-md);padding:14px;">
+          <div style="font-size:12px;color:var(--color-neutral-500);">本月通话量</div>
+          <div style="font-size:22px;font-weight:700;color:var(--color-neutral-900);margin-top:4px;">1,560次</div>
+        </div>
+        <div style="text-align:center;background:var(--color-neutral-50);border-radius:var(--radius-md);padding:14px;">
+          <div style="font-size:12px;color:var(--color-neutral-500);">有效通话量</div>
+          <div style="font-size:22px;font-weight:700;color:var(--color-primary);margin-top:4px;">1,560次</div>
+        </div>
+        <div style="text-align:center;background:var(--color-primary-light);border-radius:var(--radius-md);padding:14px;border:1px solid #BFDBFE;">
+          <div style="font-size:12px;color:var(--color-primary);">应收金额</div>
+          <div style="font-size:22px;font-weight:700;color:var(--color-primary);margin-top:4px;">¥12,480</div>
+        </div>
+      </div>
+      <div style="background:var(--color-neutral-50);border-radius:var(--radius-md);border:1px solid var(--color-neutral-200);overflow:hidden;">
+        <table style="font-size:13px;">
+          <thead>
+            <tr>
+              <th>成员</th>
+              <th>通话量</th>
+              <th>有效通话</th>
+              <th>单价</th>
+              <th>小计</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>张力</td><td>134次</td><td>134次</td><td>¥8</td><td>¥1,072</td></tr>
+            <tr><td>周海燕</td><td>98次</td><td>98次</td><td>¥8</td><td>¥784</td></tr>
+            <tr><td>陈萍</td><td>156次</td><td>156次</td><td>¥8</td><td>¥1,248</td></tr>
+            <tr><td>其余9人</td><td>1,172次</td><td>1,172次</td><td>¥8</td><td>¥9,376</td></tr>
+            <tr style="background:var(--color-neutral-100);font-weight:600;">
+              <td>合计</td><td>1,560次</td><td>1,560次</td><td>—</td><td style="color:var(--color-primary);">¥12,480</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top:12px;font-size:12.5px;color:var(--color-neutral-500);">计费规则：通话时长≥30秒且AI识别有效对话方计费，单价¥8/次，本期无效通话已扣除。</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-receivable-detail')">关闭</button>
+      <button class="btn btn-secondary" onclick="alert('导出PDF...')">导出PDF</button>
+      <button class="btn btn-primary" onclick="document.querySelector('[data-page=pa-dispute]').click();closeModal('modal-receivable-detail')">对此单发起异议</button>
+    </div>
+  </div>
+</div>
+
+<!-- Dispute Detail Modal -->
+<div class="modal-overlay" id="modal-dispute-detail">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">异议详情</span>
+      <button class="modal-close" onclick="closeModal('modal-dispute-detail')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div><strong>绿城锦绣物业 2026-03 结算单</strong></div>
+        <span class="badge badge-orange">平台审核中</span>
+      </div>
+      <div style="background:var(--color-neutral-50);border-radius:var(--radius-md);padding:14px;margin-bottom:16px;">
+        <div style="font-size:12px;color:var(--color-neutral-500);margin-bottom:6px;">异议说明</div>
+        <div style="font-size:13.5px;line-height:1.7;">通话量统计有误：3月28日至3月31日期间，我方系统记录有效通话约420通，但结算单中仅显示378通，缺少约42通，涉及金额约¥336，请平台复核对账。</div>
+      </div>
+      <div style="font-size:13px;color:var(--color-neutral-700);">
+        <div style="margin-bottom:8px;display:flex;gap:8px;"><span style="color:var(--color-neutral-500);min-width:80px;">提交时间：</span>2026-04-25 14:32</div>
+        <div style="margin-bottom:8px;display:flex;gap:8px;"><span style="color:var(--color-neutral-500);min-width:80px;">最后更新：</span>2026-04-26 09:11</div>
+        <div style="margin-bottom:8px;display:flex;gap:8px;"><span style="color:var(--color-neutral-500);min-width:80px;">平台回复：</span>已收到您的异议，正在比对双方日志，预计1-2个工作日完成核实。</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-dispute-detail')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<script>
+lucide.createIcons();
+document.querySelectorAll('.sidebar-item[data-page]').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+    document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
+    item.classList.add('active');
+    document.getElementById(item.dataset.page).classList.add('active');
+  });
+});
+function openModal(id){ document.getElementById(id).style.display='flex'; }
+function closeModal(id){ document.getElementById(id).style.display='none'; }
+document.querySelectorAll('.modal-overlay').forEach(o => o.addEventListener('click', e => { if(e.target===o) o.style.display='none'; }));
+</script>
+</body>
+</html>

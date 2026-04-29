@@ -1,0 +1,40 @@
+# Caddy v2 配置：自动 HTTPS（Let's Encrypt）+ 反代后端
+# 使用前请把下面所有 your-domain.com 替换成你的备案域名，并把 admin@... 改成有效邮箱
+# DNS 必须先指向本服务器公网 IP，且 80/443 端口已放行
+
+{
+    email admin@your-domain.com
+}
+
+# ===== 后端 API =====
+# 服务于 App、Web 后台、ASR 回拉录音（local 存储模式下）
+api.your-domain.com {
+    encode zstd gzip
+
+    # 录音上传可能较大，放宽超时与请求体上限
+    request_body {
+        max_size 200MB
+    }
+
+    reverse_proxy backend:8000 {
+        transport http {
+            read_timeout 5m
+            write_timeout 5m
+        }
+    }
+
+    log {
+        output file /var/log/caddy/api.log
+        format json
+    }
+}
+
+# ===== MinIO 数据口（仅当 STORAGE_BACKEND=minio 时启用，其他模式删除本块）=====
+# 注意：永远不要把 MinIO 控制台 :9001 暴露到公网，console 仅经 SSH tunnel 本地访问
+# recording.your-domain.com {
+#     encode zstd gzip
+#     request_body {
+#         max_size 200MB
+#     }
+#     reverse_proxy minio:9000
+# }

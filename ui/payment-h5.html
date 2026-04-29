@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>物业费缴纳通知 — 有证慧催</title>
+  <style>
+    :root {
+      --color-primary: #1A56DB;
+      --color-primary-light: #EBF5FF;
+      --color-success: #057a55;
+      --color-success-bg: #f0fdf4;
+      --color-warning: #D97706;
+      --color-warning-bg: #fffbeb;
+      --color-danger: #dc2626;
+      --color-danger-bg: #fef2f2;
+      --color-neutral-50: #f9fafb;
+      --color-neutral-100: #f3f4f6;
+      --color-neutral-200: #e5e7eb;
+      --color-neutral-300: #d1d5db;
+      --color-neutral-400: #9ca3af;
+      --color-neutral-500: #6b7280;
+      --color-neutral-600: #4b5563;
+      --color-neutral-700: #374151;
+      --color-neutral-800: #1f2937;
+      --color-neutral-900: #111827;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+      --font-mono: 'SF Mono', 'Courier New', monospace;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,.08);
+      --shadow-md: 0 4px 12px rgba(0,0,0,.10);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,.12);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-neutral-100);
+      color: var(--color-neutral-900);
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .page-wrapper {
+      max-width: 430px;
+      margin: 0 auto;
+      background: white;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ───────────────────────────────────── */
+    .page-header {
+      background: linear-gradient(135deg, #1A56DB 0%, #1e40af 100%);
+      color: white;
+      padding: 20px 20px 28px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .page-header::before {
+      content: '';
+      position: absolute;
+      top: -30px; right: -30px;
+      width: 120px; height: 120px;
+      background: rgba(255,255,255,.08);
+      border-radius: 50%;
+    }
+
+    .page-header::after {
+      content: '';
+      position: absolute;
+      bottom: -20px; left: 60px;
+      width: 80px; height: 80px;
+      background: rgba(255,255,255,.06);
+      border-radius: 50%;
+    }
+
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .header-logo-icon {
+      width: 28px; height: 28px;
+      background: rgba(255,255,255,.2);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+    }
+
+    .header-logo-text {
+      font-size: 13px;
+      opacity: .85;
+      font-weight: 500;
+    }
+
+    .company-name {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .header-subtitle {
+      font-size: 13px;
+      opacity: .8;
+    }
+
+    /* ── Owner Info Card ──────────────────────────── */
+    .owner-card {
+      background: white;
+      border-radius: var(--radius-lg);
+      margin: -16px 16px 16px;
+      padding: 18px;
+      box-shadow: var(--shadow-md);
+      position: relative;
+      z-index: 1;
+    }
+
+    .owner-card-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .owner-card-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .owner-label {
+      font-size: 12px;
+      color: var(--color-neutral-500);
+    }
+
+    .owner-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--color-neutral-800);
+    }
+
+    .owner-divider {
+      height: 1px;
+      background: var(--color-neutral-100);
+      margin: 12px 0;
+    }
+
+    /* ── Debt Summary Card ────────────────────────── */
+    .debt-card {
+      background: var(--color-danger-bg);
+      border: 1px solid #fecaca;
+      border-radius: var(--radius-lg);
+      margin: 0 16px 16px;
+      padding: 18px;
+    }
+
+    .debt-card-title {
+      font-size: 12px;
+      color: var(--color-danger);
+      font-weight: 600;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .debt-amount-row {
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      margin-bottom: 12px;
+    }
+
+    .debt-currency {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--color-danger);
+    }
+
+    .debt-amount {
+      font-size: 36px;
+      font-weight: 800;
+      color: var(--color-danger);
+      line-height: 1;
+    }
+
+    .debt-unit {
+      font-size: 14px;
+      color: var(--color-danger);
+      font-weight: 500;
+      align-self: flex-end;
+      padding-bottom: 4px;
+    }
+
+    .debt-breakdown {
+      background: white;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+
+    .debt-breakdown-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--color-neutral-100);
+      font-size: 13px;
+    }
+
+    .debt-breakdown-row:last-child {
+      border-bottom: none;
+    }
+
+    .debt-breakdown-label {
+      color: var(--color-neutral-600);
+    }
+
+    .debt-breakdown-value {
+      font-weight: 600;
+      color: var(--color-neutral-800);
+    }
+
+    .debt-breakdown-value.total {
+      color: var(--color-danger);
+      font-size: 14px;
+    }
+
+    /* ── Section ──────────────────────────────────── */
+    .section {
+      margin: 0 16px 16px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--color-neutral-700);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .section-title::before {
+      content: '';
+      display: inline-block;
+      width: 3px; height: 14px;
+      background: var(--color-primary);
+      border-radius: 2px;
+    }
+
+    /* ── Transfer Info Card ───────────────────────── */
+    .transfer-card {
+      background: var(--color-neutral-50);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+    }
+
+    .transfer-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--color-neutral-100);
+    }
+
+    .transfer-row:last-child {
+      border-bottom: none;
+    }
+
+    .transfer-label {
+      font-size: 12px;
+      color: var(--color-neutral-500);
+      flex-shrink: 0;
+      width: 64px;
+    }
+
+    .transfer-value {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-neutral-800);
+      text-align: right;
+      word-break: break-all;
+    }
+
+    .copy-btn {
+      background: var(--color-primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 4px 10px;
+      font-size: 11px;
+      font-family: var(--font-sans);
+      cursor: pointer;
+      flex-shrink: 0;
+      margin-left: 8px;
+      transition: background .15s;
+    }
+
+    .copy-btn:active { background: #1e40af; }
+
+    .copy-btn.copied {
+      background: var(--color-success);
+    }
+
+    /* ── QR Code Box ──────────────────────────────── */
+    .qr-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      margin-top: 12px;
+    }
+
+    .qr-placeholder {
+      width: 140px; height: 140px;
+      background: var(--color-neutral-50);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+
+    /* SVG QR mock */
+    .qr-svg { width: 130px; height: 130px; }
+
+    .qr-label {
+      font-size: 12px;
+      color: var(--color-neutral-500);
+      text-align: center;
+    }
+
+    .qr-amount-hint {
+      font-size: 11px;
+      color: var(--color-warning);
+      text-align: center;
+      margin-top: 4px;
+    }
+
+    /* ── Escrow Accordion ─────────────────────────── */
+    .accordion {
+      background: var(--color-primary-light);
+      border: 1px solid #bfdbfe;
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    .accordion-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 16px;
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .accordion-header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .accordion-icon {
+      font-size: 16px;
+    }
+
+    .accordion-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-primary);
+    }
+
+    .accordion-subtitle {
+      font-size: 11px;
+      color: #3b82f6;
+      margin-top: 1px;
+    }
+
+    .accordion-chevron {
+      font-size: 18px;
+      color: var(--color-primary);
+      transition: transform .25s;
+      line-height: 1;
+    }
+
+    .accordion.open .accordion-chevron {
+      transform: rotate(180deg);
+    }
+
+    .accordion-body {
+      display: none;
+      padding: 0 16px 16px;
+    }
+
+    .accordion.open .accordion-body {
+      display: block;
+    }
+
+    .accordion-body p {
+      font-size: 12.5px;
+      color: var(--color-neutral-700);
+      line-height: 1.7;
+      margin-bottom: 10px;
+    }
+
+    .accordion-body p:last-child {
+      margin-bottom: 0;
+    }
+
+    .escrow-steps {
+      background: white;
+      border-radius: var(--radius-md);
+      padding: 12px;
+      margin-top: 10px;
+    }
+
+    .escrow-step {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .escrow-step:last-child { margin-bottom: 0; }
+
+    .escrow-step-num {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: var(--color-primary);
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .escrow-step-text {
+      font-size: 12px;
+      color: var(--color-neutral-700);
+      line-height: 1.6;
+    }
+
+    /* ── Notice Box ───────────────────────────────── */
+    .notice-box {
+      background: var(--color-warning-bg);
+      border: 1px solid #fde68a;
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      font-size: 12px;
+      color: var(--color-neutral-700);
+      line-height: 1.7;
+    }
+
+    .notice-box-title {
+      font-weight: 700;
+      color: var(--color-warning);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .notice-box ul {
+      padding-left: 14px;
+    }
+
+    .notice-box li {
+      margin-bottom: 4px;
+    }
+
+    .notice-box li:last-child {
+      margin-bottom: 0;
+    }
+
+    /* ── Status Section (Paid state) ──────────────── */
+    .paid-banner {
+      background: var(--color-success-bg);
+      border: 1px solid #a7f3d0;
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      text-align: center;
+      margin: 0 16px 16px;
+    }
+
+    .paid-check {
+      font-size: 40px;
+      margin-bottom: 8px;
+    }
+
+    .paid-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--color-success);
+      margin-bottom: 4px;
+    }
+
+    .paid-meta {
+      font-size: 12.5px;
+      color: var(--color-neutral-500);
+    }
+
+    /* ── Expired Banner ───────────────────────────── */
+    .expired-banner {
+      background: var(--color-neutral-100);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      text-align: center;
+      margin: 0 16px 16px;
+    }
+
+    .expired-icon {
+      font-size: 36px;
+      margin-bottom: 8px;
+    }
+
+    .expired-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--color-neutral-600);
+      margin-bottom: 4px;
+    }
+
+    .expired-meta {
+      font-size: 12.5px;
+      color: var(--color-neutral-400);
+    }
+
+    /* ── Help Link ────────────────────────────────── */
+    .help-section {
+      margin: 0 16px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .help-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px;
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--color-neutral-700);
+      transition: background .15s;
+    }
+
+    .help-item:active { background: var(--color-neutral-50); }
+
+    .help-item-icon {
+      font-size: 18px;
+      width: 24px;
+      text-align: center;
+    }
+
+    .help-item-text {
+      flex: 1;
+    }
+
+    .help-item-title {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .help-item-sub {
+      font-size: 11.5px;
+      color: var(--color-neutral-400);
+    }
+
+    .help-item-arrow {
+      color: var(--color-neutral-400);
+      font-size: 16px;
+    }
+
+    /* ── Footer ───────────────────────────────────── */
+    .page-footer {
+      background: var(--color-neutral-50);
+      border-top: 1px solid var(--color-neutral-200);
+      padding: 16px 20px;
+      margin-top: auto;
+    }
+
+    .footer-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .footer-logo-icon {
+      width: 22px; height: 22px;
+      background: var(--color-primary);
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      color: white;
+    }
+
+    .footer-logo-text {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--color-neutral-600);
+    }
+
+    .footer-desc {
+      font-size: 11px;
+      color: var(--color-neutral-400);
+      line-height: 1.6;
+      margin-bottom: 8px;
+    }
+
+    .footer-expiry {
+      font-size: 11px;
+      color: var(--color-neutral-400);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .footer-expiry.warning {
+      color: var(--color-warning);
+    }
+
+    /* ── Demo State Switcher ──────────────────────── */
+    .demo-switcher {
+      position: fixed;
+      bottom: 20px;
+      right: 16px;
+      z-index: 100;
+    }
+
+    .demo-switcher-btn {
+      background: var(--color-neutral-800);
+      color: white;
+      border: none;
+      border-radius: 20px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-family: var(--font-sans);
+      cursor: pointer;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .demo-menu {
+      position: absolute;
+      bottom: 44px;
+      right: 0;
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+      display: none;
+      min-width: 160px;
+    }
+
+    .demo-menu.show { display: block; }
+
+    .demo-menu-item {
+      padding: 10px 14px;
+      font-size: 12.5px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--color-neutral-100);
+      color: var(--color-neutral-700);
+      white-space: nowrap;
+    }
+
+    .demo-menu-item:last-child { border-bottom: none; }
+    .demo-menu-item:hover { background: var(--color-neutral-50); }
+    .demo-menu-item.active { font-weight: 600; color: var(--color-primary); }
+
+    /* ── States (show/hide via JS) ────────────────── */
+    .state-unpaid { display: block; }
+    .state-paid { display: none; }
+    .state-expired { display: none; }
+    body.paid .state-unpaid { display: none; }
+    body.paid .state-paid { display: block; }
+    body.expired .state-unpaid { display: none; }
+    body.expired .state-expired { display: block; }
+
+    /* ── Toast ────────────────────────────────────── */
+    .toast {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(.9);
+      background: rgba(0,0,0,.75);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-size: 13px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s, transform .2s;
+      white-space: nowrap;
+      z-index: 200;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  </style>
+</head>
+<body>
+
+<div class="page-wrapper">
+
+  <!-- ── Header ──────────────────────────────────── -->
+  <div class="page-header">
+    <div class="header-logo">
+      <div class="header-logo-icon">⚖️</div>
+      <span class="header-logo-text">有证慧催 · 物业费缴纳通知</span>
+    </div>
+    <div class="company-name">绿城锦绣花园物业服务有限公司</div>
+    <div class="header-subtitle">您好，以下是您的物业费缴纳详情</div>
+  </div>
+
+  <!-- ── Owner Info ───────────────────────────────── -->
+  <div class="owner-card">
+    <div class="owner-card-row">
+      <span class="owner-label">业主姓名</span>
+      <span class="owner-value">张建国</span>
+    </div>
+    <div class="owner-divider"></div>
+    <div class="owner-card-row">
+      <span class="owner-label">房屋地址</span>
+      <span class="owner-value">3栋2单元1201室</span>
+    </div>
+    <div class="owner-card-row">
+      <span class="owner-label">所属小区</span>
+      <span class="owner-value">锦绣花园（北区）</span>
+    </div>
+    <div class="owner-card-row">
+      <span class="owner-label">月物业费</span>
+      <span class="owner-value">¥400 / 月</span>
+    </div>
+  </div>
+
+  <!-- ── Unpaid State ─────────────────────────────── -->
+  <div class="state-unpaid">
+
+    <!-- Debt Summary -->
+    <div class="debt-card">
+      <div class="debt-card-title">
+        ⚠️ 当前欠费情况
+      </div>
+      <div class="debt-amount-row">
+        <span class="debt-currency">¥</span>
+        <span class="debt-amount">3,200</span>
+        <span class="debt-unit">元</span>
+      </div>
+      <div class="debt-breakdown">
+        <div class="debt-breakdown-row">
+          <span class="debt-breakdown-label">欠缴月份</span>
+          <span class="debt-breakdown-value">2025年9月 — 2026年4月（8个月）</span>
+        </div>
+        <div class="debt-breakdown-row">
+          <span class="debt-breakdown-label">基础物业费</span>
+          <span class="debt-breakdown-value">¥400 × 8 = ¥3,200</span>
+        </div>
+        <div class="debt-breakdown-row">
+          <span class="debt-breakdown-label">滞纳金</span>
+          <span class="debt-breakdown-value" style="color:var(--color-warning);">¥0（暂免）</span>
+        </div>
+        <div class="debt-breakdown-row" style="background:var(--color-danger-bg);">
+          <span class="debt-breakdown-label" style="font-weight:700;color:var(--color-neutral-800);">应缴合计</span>
+          <span class="debt-breakdown-value total">¥3,200</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transfer Info -->
+    <div class="section">
+      <div class="section-title">银行转账方式</div>
+      <div class="transfer-card">
+        <div class="transfer-row">
+          <span class="transfer-label">收款户名</span>
+          <div style="display:flex;align-items:center;flex:1;justify-content:flex-end;">
+            <span class="transfer-value">绿城锦绣花园物业</span>
+            <button class="copy-btn" onclick="copyText(this,'绿城锦绣花园物业服务有限公司')">复制</button>
+          </div>
+        </div>
+        <div class="transfer-row">
+          <span class="transfer-label">收款账号</span>
+          <div style="display:flex;align-items:center;flex:1;justify-content:flex-end;">
+            <span class="transfer-value" style="font-family:var(--font-mono);font-size:12px;">6228 4800 1234 5678 9</span>
+            <button class="copy-btn" onclick="copyText(this,'622848001234567890')">复制</button>
+          </div>
+        </div>
+        <div class="transfer-row">
+          <span class="transfer-label">开户行</span>
+          <span class="transfer-value">中国工商银行杭州西湖支行</span>
+        </div>
+        <div class="transfer-row">
+          <span class="transfer-label">转账金额</span>
+          <div style="display:flex;align-items:center;flex:1;justify-content:flex-end;">
+            <span class="transfer-value" style="color:var(--color-danger);">¥3,200.00</span>
+            <button class="copy-btn" onclick="copyText(this,'3200')">复制</button>
+          </div>
+        </div>
+        <div class="transfer-row">
+          <span class="transfer-label">转账备注</span>
+          <div style="display:flex;align-items:center;flex:1;justify-content:flex-end;">
+            <span class="transfer-value" style="font-family:var(--font-mono);font-size:12px;">WYFZ-20260428-9021</span>
+            <button class="copy-btn" onclick="copyText(this,'WYFZ-20260428-9021')">复制</button>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--color-neutral-400);margin-top:6px;padding:0 2px;">
+        ⚠️ 转账备注请务必填写，用于系统自动核销匹配
+      </div>
+    </div>
+
+    <!-- QR Code -->
+    <div class="section" style="margin-top:-4px;">
+      <div class="section-title">扫码转账（推荐）</div>
+      <div class="qr-box">
+        <!-- Mock QR SVG -->
+        <div class="qr-placeholder">
+          <svg class="qr-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <!-- Finder patterns -->
+            <rect x="5" y="5" width="30" height="30" fill="none" stroke="#111" stroke-width="3"/>
+            <rect x="10" y="10" width="20" height="20" fill="#111"/>
+            <rect x="65" y="5" width="30" height="30" fill="none" stroke="#111" stroke-width="3"/>
+            <rect x="70" y="10" width="20" height="20" fill="#111"/>
+            <rect x="5" y="65" width="30" height="30" fill="none" stroke="#111" stroke-width="3"/>
+            <rect x="10" y="70" width="20" height="20" fill="#111"/>
+            <!-- Mock data modules -->
+            <rect x="42" y="5" width="5" height="5" fill="#111"/>
+            <rect x="50" y="5" width="5" height="5" fill="#111"/>
+            <rect x="58" y="5" width="5" height="5" fill="#111"/>
+            <rect x="42" y="13" width="5" height="5" fill="#111"/>
+            <rect x="54" y="13" width="5" height="5" fill="#111"/>
+            <rect x="42" y="21" width="5" height="5" fill="#111"/>
+            <rect x="50" y="21" width="5" height="5" fill="#111"/>
+            <rect x="5" y="42" width="5" height="5" fill="#111"/>
+            <rect x="13" y="42" width="5" height="5" fill="#111"/>
+            <rect x="21" y="42" width="5" height="5" fill="#111"/>
+            <rect x="29" y="42" width="5" height="5" fill="#111"/>
+            <rect x="42" y="42" width="5" height="5" fill="#111"/>
+            <rect x="50" y="42" width="5" height="5" fill="#111"/>
+            <rect x="58" y="42" width="5" height="5" fill="#111"/>
+            <rect x="66" y="42" width="5" height="5" fill="#111"/>
+            <rect x="74" y="42" width="5" height="5" fill="#111"/>
+            <rect x="82" y="42" width="5" height="5" fill="#111"/>
+            <rect x="90" y="42" width="5" height="5" fill="#111"/>
+            <rect x="5" y="50" width="5" height="5" fill="#111"/>
+            <rect x="21" y="50" width="5" height="5" fill="#111"/>
+            <rect x="42" y="50" width="5" height="5" fill="#111"/>
+            <rect x="58" y="50" width="5" height="5" fill="#111"/>
+            <rect x="74" y="50" width="5" height="5" fill="#111"/>
+            <rect x="90" y="50" width="5" height="5" fill="#111"/>
+            <rect x="5" y="58" width="5" height="5" fill="#111"/>
+            <rect x="13" y="58" width="5" height="5" fill="#111"/>
+            <rect x="29" y="58" width="5" height="5" fill="#111"/>
+            <rect x="42" y="58" width="5" height="5" fill="#111"/>
+            <rect x="50" y="58" width="5" height="5" fill="#111"/>
+            <rect x="66" y="58" width="5" height="5" fill="#111"/>
+            <rect x="82" y="58" width="5" height="5" fill="#111"/>
+            <rect x="42" y="66" width="5" height="5" fill="#111"/>
+            <rect x="50" y="66" width="5" height="5" fill="#111"/>
+            <rect x="58" y="66" width="5" height="5" fill="#111"/>
+            <rect x="66" y="66" width="5" height="5" fill="#111"/>
+            <rect x="82" y="66" width="5" height="5" fill="#111"/>
+            <rect x="90" y="66" width="5" height="5" fill="#111"/>
+            <rect x="42" y="74" width="5" height="5" fill="#111"/>
+            <rect x="58" y="74" width="5" height="5" fill="#111"/>
+            <rect x="74" y="74" width="5" height="5" fill="#111"/>
+            <rect x="42" y="82" width="5" height="5" fill="#111"/>
+            <rect x="50" y="82" width="5" height="5" fill="#111"/>
+            <rect x="66" y="82" width="5" height="5" fill="#111"/>
+            <rect x="82" y="82" width="5" height="5" fill="#111"/>
+            <rect x="90" y="82" width="5" height="5" fill="#111"/>
+            <rect x="42" y="90" width="5" height="5" fill="#111"/>
+            <rect x="58" y="90" width="5" height="5" fill="#111"/>
+            <rect x="74" y="90" width="5" height="5" fill="#111"/>
+            <rect x="90" y="90" width="5" height="5" fill="#111"/>
+          </svg>
+        </div>
+        <div class="qr-label">微信/支付宝 扫码转账</div>
+        <div class="qr-amount-hint">金额 ¥3,200 · 备注 WYFZ-20260428-9021</div>
+      </div>
+    </div>
+
+    <!-- Escrow Explanation -->
+    <div class="section">
+      <div class="accordion" id="escrow-accordion">
+        <div class="accordion-header" onclick="toggleAccordion()">
+          <div class="accordion-header-left">
+            <span class="accordion-icon">🏛️</span>
+            <div>
+              <div class="accordion-title">公证提存说明</div>
+              <div class="accordion-subtitle">资金受司法保护，安全透明</div>
+            </div>
+          </div>
+          <span class="accordion-chevron">∨</span>
+        </div>
+        <div class="accordion-body">
+          <p>本次催收款项将通过<strong>浙江省公证处提存账户</strong>进行管理，受公证处全程监管，确保您的资金安全，专款专用于物业服务费用。</p>
+          <p>您缴纳的物业费将由具备法律效力的公证处托管，在双方无异议的情况下，由公证处按月向物业公司拨付。</p>
+          <div class="escrow-steps">
+            <div class="escrow-step">
+              <div class="escrow-step-num">1</div>
+              <div class="escrow-step-text"><strong>您转账</strong> → 资金进入公证处提存专用账户，您获得电子凭证</div>
+            </div>
+            <div class="escrow-step">
+              <div class="escrow-step-num">2</div>
+              <div class="escrow-step-text"><strong>公证核验</strong> → 公证处核验款项归属，生成区块链存证记录</div>
+            </div>
+            <div class="escrow-step">
+              <div class="escrow-step-num">3</div>
+              <div class="escrow-step-text"><strong>拨付放款</strong> → 核验通过后，资金拨付物业公司，费用自动核销</div>
+            </div>
+            <div class="escrow-step">
+              <div class="escrow-step-num">4</div>
+              <div class="escrow-step-text"><strong>完成归档</strong> → 区块链永久存证，您可随时查询缴费历史</div>
+            </div>
+          </div>
+          <p style="margin-top:10px;font-size:11.5px;color:var(--color-neutral-400);">如您对公证提存有疑问，可拨打 <strong style="color:var(--color-primary);">0571-87654321</strong> 联系公证处核实。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notice -->
+    <div class="section">
+      <div class="notice-box">
+        <div class="notice-box-title">⚠️ 缴费注意事项</div>
+        <ul>
+          <li>转账<strong>备注编号</strong>为必填项，用于系统自动核销</li>
+          <li>缴费后系统将在 <strong>1-3 个工作日</strong>内确认到账</li>
+          <li>如有房屋质量投诉，请先缴费再通过正式渠道提交工单</li>
+          <li>本页面链接有效期 <strong>30 天</strong>，请尽快缴纳</li>
+          <li>如有异议请拨打客服 <strong>0571-88888888</strong></li>
+        </ul>
+      </div>
+    </div>
+
+  </div><!-- end .state-unpaid -->
+
+  <!-- ── Paid State ────────────────────────────────── -->
+  <div class="state-paid">
+    <div class="paid-banner">
+      <div class="paid-check">✅</div>
+      <div class="paid-title">已缴费，感谢配合</div>
+      <div class="paid-meta">缴费金额：¥3,200 · 缴费时间：2026-04-28 14:32</div>
+      <div class="paid-meta" style="margin-top:4px;">流水号：WYFZ-20260428-9021</div>
+    </div>
+    <div class="section" style="margin-top:0;">
+      <div class="notice-box" style="background:var(--color-success-bg);border-color:#a7f3d0;">
+        <div class="notice-box-title" style="color:var(--color-success);">✅ 缴费记录已存证</div>
+        <ul>
+          <li>本次缴费已生成区块链存证，凭证编号：<strong style="font-family:var(--font-mono);">BC-2026-042891023</strong></li>
+          <li>物业公司将在 1-3 个工作日内更新您的缴费状态</li>
+          <li>如需开具发票，请联系物业前台</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Expired State ─────────────────────────────── -->
+  <div class="state-expired">
+    <div class="expired-banner">
+      <div class="expired-icon">🔒</div>
+      <div class="expired-title">链接已过期</div>
+      <div class="expired-meta">本缴费链接有效期为 30 天，已于 2026-02-15 失效</div>
+    </div>
+    <div class="section" style="margin-top:0;">
+      <div class="notice-box">
+        <div class="notice-box-title">如需继续缴费</div>
+        <ul>
+          <li>请拨打客服电话 <strong>0571-88888888</strong> 重新获取缴费链接</li>
+          <li>或直接前往物业服务中心（周一至周日 8:00-20:00）</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Help ─────────────────────────────────────── -->
+  <div class="help-section">
+    <a href="tel:057188888888" class="help-item">
+      <span class="help-item-icon">📞</span>
+      <div class="help-item-text">
+        <div class="help-item-title">联系物业客服</div>
+        <div class="help-item-sub">0571-88888888 · 工作日 8:00-20:00</div>
+      </div>
+      <span class="help-item-arrow">›</span>
+    </a>
+    <div class="help-item" onclick="alert('工单提交功能：请联系物业前台或拨打客服电话')">
+      <span class="help-item-icon">🔧</span>
+      <div class="help-item-text">
+        <div class="help-item-title">提交房屋质量问题工单</div>
+        <div class="help-item-sub">渗水、设施损坏等问题</div>
+      </div>
+      <span class="help-item-arrow">›</span>
+    </div>
+    <div class="help-item" onclick="alert('缴费记录查询：请登录小区业主App查询')">
+      <span class="help-item-icon">📋</span>
+      <div class="help-item-text">
+        <div class="help-item-title">查询历史缴费记录</div>
+        <div class="help-item-sub">区块链存证，永久可查</div>
+      </div>
+      <span class="help-item-arrow">›</span>
+    </div>
+  </div>
+
+  <!-- ── Footer ───────────────────────────────────── -->
+  <div class="page-footer">
+    <div class="footer-logo">
+      <div class="footer-logo-icon">⚖️</div>
+      <span class="footer-logo-text">有证慧催 · 物业费催收服务平台</span>
+    </div>
+    <div class="footer-desc">
+      本页面由有证慧催平台根据物业公司授权自动生成。所有催收行为均符合《物业管理条例》及相关法律法规。缴费资金受公证处监管，安全可靠。
+    </div>
+    <div class="footer-expiry" id="footer-expiry">
+      🕐 链接有效期至：2026-05-28（剩余 30 天）
+    </div>
+    <div style="margin-top:8px;font-size:10px;color:var(--color-neutral-300);">
+      如对本通知有异议，可拨打 0571-88888888 或发送邮件至 contact@youzheng.ai
+    </div>
+  </div>
+
+</div><!-- end .page-wrapper -->
+
+<!-- ── Toast ──────────────────────────────────────── -->
+<div class="toast" id="toast"></div>
+
+<!-- ── Demo Switcher ──────────────────────────────── -->
+<div class="demo-switcher">
+  <div class="demo-menu" id="demo-menu">
+    <div class="demo-menu-item active" onclick="switchState('unpaid')">待缴费状态</div>
+    <div class="demo-menu-item" onclick="switchState('paid')">已缴费状态</div>
+    <div class="demo-menu-item" onclick="switchState('expired')">链接过期状态</div>
+  </div>
+  <button class="demo-switcher-btn" onclick="toggleDemoMenu()">演示切换 ▲</button>
+</div>
+
+<script>
+  /* ── Accordion ──────────────────────────────────── */
+  function toggleAccordion() {
+    document.getElementById('escrow-accordion').classList.toggle('open');
+  }
+
+  /* ── Copy to clipboard ──────────────────────────── */
+  function copyText(btn, text) {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = '✓';
+        btn.classList.add('copied');
+        showToast('已复制');
+        setTimeout(() => {
+          btn.textContent = '复制';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      btn.textContent = '✓';
+      btn.classList.add('copied');
+      showToast('已复制');
+      setTimeout(() => {
+        btn.textContent = '复制';
+        btn.classList.remove('copied');
+      }, 2000);
+    }
+  }
+
+  /* ── Toast ──────────────────────────────────────── */
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 1500);
+  }
+
+  /* ── Demo state switcher ────────────────────────── */
+  function switchState(state) {
+    document.body.classList.remove('paid', 'expired');
+    if (state === 'paid') document.body.classList.add('paid');
+    if (state === 'expired') document.body.classList.add('expired');
+
+    document.querySelectorAll('.demo-menu-item').forEach((item, i) => {
+      item.classList.toggle('active',
+        (state === 'unpaid' && i === 0) ||
+        (state === 'paid' && i === 1) ||
+        (state === 'expired' && i === 2)
+      );
+    });
+
+    // Update footer expiry text
+    const expiryEl = document.getElementById('footer-expiry');
+    if (state === 'expired') {
+      expiryEl.className = 'footer-expiry';
+      expiryEl.textContent = '🔒 链接已过期（有效期：2026-01-16 至 2026-02-15）';
+    } else if (state === 'paid') {
+      expiryEl.className = 'footer-expiry';
+      expiryEl.textContent = '✅ 已缴费 · 2026-04-28';
+    } else {
+      expiryEl.className = 'footer-expiry warning';
+      expiryEl.textContent = '🕐 链接有效期至：2026-05-28（剩余 30 天）';
+    }
+
+    document.getElementById('demo-menu').classList.remove('show');
+  }
+
+  function toggleDemoMenu() {
+    document.getElementById('demo-menu').classList.toggle('show');
+  }
+
+  // Close demo menu on outside click
+  document.addEventListener('click', e => {
+    const switcher = document.querySelector('.demo-switcher');
+    if (!switcher.contains(e.target)) {
+      document.getElementById('demo-menu').classList.remove('show');
+    }
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,14 @@
+R_DEF: Internal format may change without notice
+local
+id btnCall
+id btnGrantStorage
+id btnRefresh
+id btnSelfCheck
+id btnServerUrl
+id statusText
+id sub
+id tasks
+id title
+layout activity_main
+layout item_task
+string app_name
