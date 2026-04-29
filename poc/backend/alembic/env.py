@@ -19,6 +19,13 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+# Only consider tables defined in ORM metadata.
+# Legacy PoC tables (from init.sql) are not in metadata → never dropped.
+def include_object(object, name, type_, reflected, compare_to):  # noqa: A002
+    if type_ == "table":
+        return name in target_metadata.tables
+    return True
+
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
@@ -27,6 +34,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -39,7 +47,11 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            include_object=include_object,
+        )
         with context.begin_transaction():
             context.run_migrations()
 
