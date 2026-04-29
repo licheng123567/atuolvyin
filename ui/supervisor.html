@@ -219,6 +219,10 @@
       <i data-lucide="clipboard-list"></i>
       案件分配
     </div>
+    <div class="sidebar-item" data-page="sv-escalated">
+      <i data-lucide="alert-circle"></i>
+      升级案件处理
+    </div>
     <div class="sidebar-item" data-page="sv-scripts">
       <i data-lucide="message-circle"></i>
       话术反馈
@@ -403,6 +407,32 @@
               <div style="background:var(--color-success);height:100%;width:82%;border-radius:6px;"></div>
             </div>
             <div style="font-size:12px;color:var(--color-neutral-600);margin-top:8px;">今日推送话术 34条，催收员采用 28条</div>
+          </div>
+
+          <!-- Minute Usage Trend -->
+          <div class="panel-stat" style="border-color:#fed7aa;background:#fff7ed;">
+            <div class="panel-stat-title" style="color:#92400e;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              本组本月通话分钟
+            </div>
+            <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;">
+              <span style="font-size:26px;font-weight:700;color:#ea580c;">1,284</span>
+              <span style="font-size:13px;color:#92400e;">分钟</span>
+              <span style="font-size:12px;font-weight:600;color:var(--color-success);">↑8.2%</span>
+            </div>
+            <div style="background:#fde68a;border-radius:4px;height:6px;overflow:hidden;margin-bottom:6px;">
+              <div style="background:#d97706;height:100%;width:72%;border-radius:4px;"></div>
+            </div>
+            <div style="display:flex;gap:2px;align-items:flex-end;height:36px;margin-bottom:4px;">
+              <div style="flex:1;background:#fed7aa;border-radius:2px 2px 0 0;height:55%;"></div>
+              <div style="flex:1;background:#fed7aa;border-radius:2px 2px 0 0;height:62%;"></div>
+              <div style="flex:1;background:#fed7aa;border-radius:2px 2px 0 0;height:48%;"></div>
+              <div style="flex:1;background:#fed7aa;border-radius:2px 2px 0 0;height:70%;"></div>
+              <div style="flex:1;background:#fed7aa;border-radius:2px 2px 0 0;height:58%;"></div>
+              <div style="flex:1;background:#fed7aa;border-radius:2px 2px 0 0;height:80%;"></div>
+              <div style="flex:1;background:#ea580c;border-radius:2px 2px 0 0;height:72%;"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:#92400e;"><span>周一</span><span>今天</span></div>
           </div>
         </div>
       </div>
@@ -761,6 +791,166 @@
               </div>
               <div style="text-align:right;font-size:12.5px;color:var(--color-neutral-600);">39/60<br><span style="color:var(--color-success);font-size:12px;">可接21</span></div>
             </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ sv-escalated ══════════════ -->
+    <section id="sv-escalated" class="page-section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">升级案件处理</div>
+          <div class="page-subtitle">大额/疑难案件督导处置 — 由催收员标记升级，需督导介入</div>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-secondary btn-sm">导出列表</button>
+        </div>
+      </div>
+
+      <!-- Summary Bar -->
+      <div class="status-bar" style="margin-bottom:16px;">
+        <div class="status-bar-item"><span class="dot-red"></span> 待处理 <strong>6件</strong></div>
+        <div class="status-bar-item"><span class="dot-green"></span> 协商中 <strong>4件</strong></div>
+        <div class="status-bar-item"><span class="dot-gray"></span> 已转法务 <strong>3件</strong></div>
+        <div class="status-bar-item"><span class="dot-gray"></span> 本月关闭 <strong>8件</strong></div>
+      </div>
+
+      <!-- Escalated Case List -->
+      <div class="table-wrap">
+        <div class="table-toolbar">
+          <div style="display:flex;gap:8px;">
+            <select class="input" style="width:120px;height:34px;font-size:13px;">
+              <option>全部状态</option>
+              <option>待处理</option>
+              <option>协商中</option>
+              <option>已转法务</option>
+            </select>
+            <input type="text" class="input" placeholder="搜索业主 / 案件号" style="width:180px;height:34px;font-size:13px;">
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>案件号</th>
+              <th>业主</th>
+              <th>欠费金额</th>
+              <th>升级原因</th>
+              <th>升级催收员</th>
+              <th>升级时间</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="font-family:monospace;font-size:12px;">CC-0410</td>
+              <td>陈小燕 / 2栋0601</td>
+              <td style="color:var(--color-danger);font-weight:600;">¥21,000</td>
+              <td><span class="badge badge-red" style="font-size:11px;">17个月未缴</span></td>
+              <td>李小红</td>
+              <td style="font-size:12px;color:var(--color-neutral-500);">2026-04-26</td>
+              <td><span class="badge badge-orange">待处理</span></td>
+              <td>
+                <button class="btn btn-sm btn-primary" onclick="openModal('modal-escalated-handle')">处理</button>
+              </td>
+            </tr>
+            <tr>
+              <td style="font-family:monospace;font-size:12px;">CC-0388</td>
+              <td>何敏华 / 4栋2002</td>
+              <td style="color:var(--color-danger);font-weight:600;">¥18,480</td>
+              <td><span class="badge badge-purple" style="font-size:11px;">情绪激动</span></td>
+              <td>陈明远</td>
+              <td style="font-size:12px;color:var(--color-neutral-500);">2026-04-25</td>
+              <td><span class="badge badge-blue">协商中</span></td>
+              <td>
+                <button class="btn btn-sm btn-secondary" onclick="openModal('modal-escalated-handle')">查看进展</button>
+              </td>
+            </tr>
+            <tr>
+              <td style="font-family:monospace;font-size:12px;">CC-0397</td>
+              <td>吴大强 / 7栋1801</td>
+              <td style="color:var(--color-danger);font-weight:600;">¥25,200</td>
+              <td><span class="badge badge-red" style="font-size:11px;">21个月未缴</span></td>
+              <td>张建华</td>
+              <td style="font-size:12px;color:var(--color-neutral-500);">2026-04-24</td>
+              <td><span class="badge badge-orange">待处理</span></td>
+              <td>
+                <button class="btn btn-sm btn-primary" onclick="openModal('modal-escalated-handle')">处理</button>
+              </td>
+            </tr>
+            <tr>
+              <td style="font-family:monospace;font-size:12px;">CC-0395</td>
+              <td>马晓芳 / 2栋1103</td>
+              <td style="color:var(--color-danger);font-weight:600;">¥16,800</td>
+              <td><span class="badge badge-orange" style="font-size:11px;">拒绝接听</span></td>
+              <td>王芳芳</td>
+              <td style="font-size:12px;color:var(--color-neutral-500);">2026-04-23</td>
+              <td><span class="badge badge-purple">已转法务</span></td>
+              <td>
+                <button class="btn btn-sm btn-secondary" onclick="openModal('modal-escalated-handle')">法务详情</button>
+              </td>
+            </tr>
+            <tr>
+              <td style="font-family:monospace;font-size:12px;">CC-0350</td>
+              <td>钱建国 / 6栋1202</td>
+              <td style="color:var(--color-danger);font-weight:600;">¥9,660</td>
+              <td><span class="badge badge-red" style="font-size:11px;">威胁投诉</span></td>
+              <td>刘晓娟</td>
+              <td style="font-size:12px;color:var(--color-neutral-500);">2026-04-22</td>
+              <td><span class="badge badge-blue">协商中</span></td>
+              <td>
+                <button class="btn btn-sm btn-secondary" onclick="openModal('modal-escalated-handle')">查看进展</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Handle Modal -->
+      <div id="modal-escalated-handle" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-escalated-handle')">
+        <div class="modal" style="max-width:560px;">
+          <div class="modal-header">
+            <span class="modal-title">升级案件处理 — CC-0410 陈小燕</span>
+            <button class="modal-close" onclick="closeModal('modal-escalated-handle')">✕</button>
+          </div>
+          <div class="modal-body">
+            <!-- Case summary -->
+            <div style="background:var(--color-neutral-50);border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px;">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <div><span style="color:var(--color-neutral-500);">业主：</span><strong>陈小燕 / 2栋0601</strong></div>
+                <div><span style="color:var(--color-neutral-500);">欠费：</span><strong style="color:var(--color-danger);">¥21,000（17个月）</strong></div>
+                <div><span style="color:var(--color-neutral-500);">最后通话：</span>2026-04-26 李小红</div>
+                <div><span style="color:var(--color-neutral-500);">升级原因：</span>持续拒绝沟通</div>
+              </div>
+            </div>
+            <!-- Progress notes -->
+            <div style="margin-bottom:16px;">
+              <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">协商进展记录</label>
+              <textarea class="input" style="width:100%;height:90px;resize:vertical;font-size:13px;" placeholder="记录与业主的协商细节，如：分期方案、回款时间承诺…"></textarea>
+            </div>
+            <!-- Action -->
+            <div style="margin-bottom:16px;">
+              <label style="font-size:13px;font-weight:600;margin-bottom:8px;display:block;">处理动作</label>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                  <input type="radio" name="escalate-action" value="continue"> 继续跟进（督导直接处理）
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                  <input type="radio" name="escalate-action" value="workorder"> 建立工单（提请物业方介入）
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                  <input type="radio" name="escalate-action" value="legal" checked> 转法务（提起诉讼流程）
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                  <input type="radio" name="escalate-action" value="close"> 关闭案件（对方已处理或撤销）
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('modal-escalated-handle')">取消</button>
+            <button class="btn btn-primary" onclick="alert('处理动作已提交');closeModal('modal-escalated-handle')">确认提交</button>
           </div>
         </div>
       </div>

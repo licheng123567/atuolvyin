@@ -19,7 +19,35 @@
 
 ---
 
-## 2. P0 页面验收一览
+## 2. Sprint 0：认证 & Layout Shell 验收
+
+### 登录 / 会话管理（auth）
+
+| 验收项 | 条件 |
+|--------|------|
+| 登录成功 | 正确手机号+密码 → 返回 `access_token`；前端存 localStorage；跳转首页 |
+| 登录失败 | 错误密码 → 401 `ERR_INVALID_CREDENTIALS`；前端显示错误提示 |
+| 未激活账户 | `is_active=false` → 401 `ERR_USER_INACTIVE` |
+| 受保护路由 | 未携带 token 访问任意受保护页面 → 重定向 `/login` |
+| 登出 | 调用 `authProvider.logout()` → 清除 localStorage → 重定向 `/login` |
+| token 写入 | JWT payload 含 `user_id / tenant_id / role / scope / exp`（HS256, 24h）|
+| CORS | `localhost:5173` 可发跨域请求；生产域名在 `ALLOWED_ORIGINS` 环境变量配置 |
+
+"Auth 完成"定义：上述 7 项全部通过；`tests/api/test_auth.py` 5 个集成测试绿色。
+
+### Layout Shell（sidebar / topbar / AppLayout）
+
+| 验收项 | 条件 |
+|--------|------|
+| Sidebar 宽度 | 240px（`var(--sidebar-width)`），含 Logo 区 + 导航区 + 用户信息区 |
+| Topbar 高度 | 56px（`var(--topbar-height)`），含页面标题插槽 |
+| 布局结构 | `AppLayout` 渲染 sidebar（左） + 主内容区（右），主内容区可独立滚动 |
+| 路由保护 | 所有 `<AppLayout>` 内路由被 `<Authenticated>` 包裹；无 token 时跳转登录 |
+| 视觉一致 | 颜色使用 CSS 变量（`var(--color-primary)`），无硬编码 HEX |
+
+---
+
+## 3. P0 页面验收一览
 
 > 状态来自 `docs/UI_GAPS.md`（✅ UI 已完成 / ⚠️ 部分缺失 / ❌ 未实现）
 > 每个页面的"完成条件"对应后端接口 + 前端页面双双落地。

@@ -44,12 +44,26 @@ autoluyin/
 ```
 ✅ A  PRD-UI 缺口排查（UI_GAPS.md 已生成）
 ✅ B  关键 P0 缺口补 UI（池化配额视图、项目负责人角色等）
-⬜ C  三份标准文档（CODING_STANDARDS / TESTING_STANDARDS / ACCEPTANCE）
-⬜ D  工程脚手架（eslint/ruff/CI/Alembic/Refine.dev 项目初始化）
+✅ C  三份标准文档（CODING_STANDARDS / TESTING_STANDARDS / ACCEPTANCE）
+✅ D  工程脚手架（eslint/ruff/CI/Alembic/Refine.dev 项目初始化）
 ⬜ E  MVP 全栈编码
 ```
 
-**当前处于 B→C 过渡期。** 写任何生产代码前必须先完成 C 和 D。
+**当前处于 D→E 过渡期，可以开始 MVP 编码。**
+
+### Stage D 交付物清单
+- `docs/CODING_STANDARDS.md` — 三端语言规范（Python/TS/Kotlin）
+- `docs/TESTING_STANDARDS.md` — 测试框架、覆盖率目标、CI 配置
+- `docs/ACCEPTANCE.md` — P0 页面 DoD 与端到端流程验收标准
+- `poc/backend/pyproject.toml` — ruff + mypy + pytest 配置
+- `poc/backend/app/models/` — SQLAlchemy 2.0 ORM 模型（18 个实体）
+- `poc/backend/app/schemas/` — Pydantic v2 schema（含 PaginatedResponse 泛型）
+- `poc/backend/tests/conftest.py` — testcontainers-postgres session fixture
+- `poc/backend/alembic/` — 迁移脚本骨架（env.py 已接 Base.metadata）
+- `frontend/` — Refine.dev v5 + Tailwind + shadcn/ui 初始化（tailwind.config.ts / components.json / postcss.config.js）
+- `frontend/src/lib/utils.ts` — cn() 工具函数
+- `frontend/src/types/index.ts` — 共享类型定义（UserRole / ApiError / PaginatedResponse）
+- `.github/workflows/ci.yml` — 4 个 job（backend-lint / backend-test / frontend-lint / frontend-build）
 
 ## Skill 使用规则
 

@@ -590,6 +590,50 @@
         <div class="usage-value">2.3 <span style="font-size:14px;font-weight:400;color:var(--color-neutral-600);">GB</span></div>
         <div class="usage-sub">录音文件</div>
       </div>
+      <div class="usage-card" style="border-color:#fed7aa;background:#fff7ed;">
+        <div class="usage-label" style="color:#92400e;">本月通话分钟</div>
+        <div class="usage-value" style="color:#d97706;">3,240 <span style="font-size:14px;font-weight:400;color:#92400e;">分钟</span></div>
+        <div style="background:#fde68a;border-radius:4px;height:5px;margin:6px 0;overflow:hidden;">
+          <div style="background:#d97706;height:100%;width:64.8%;border-radius:4px;"></div>
+        </div>
+        <div style="font-size:12px;color:#92400e;display:flex;justify-content:space-between;">
+          <span>配额 5,000 分</span>
+          <button class="btn btn-sm" style="height:22px;padding:0 8px;font-size:11px;background:#ea580c;color:white;border:none;cursor:pointer;" onclick="openModal('modal-quota-config')">调整配额</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quota Config Modal -->
+    <div id="modal-quota-config" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-quota-config')">
+      <div class="modal" style="max-width:440px;">
+        <div class="modal-header">
+          <span class="modal-title">调整通话分钟配额 — XX物业管理有限公司</span>
+          <button class="modal-close" onclick="closeModal('modal-quota-config')">✕</button>
+        </div>
+        <div class="modal-body">
+          <div style="font-size:13px;color:var(--color-neutral-600);margin-bottom:16px;">
+            当前配额：<strong>5,000 分钟/月</strong> · 本月已用：<strong>3,240 分钟（64.8%）</strong>
+          </div>
+          <div style="margin-bottom:16px;">
+            <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">新配额（分钟/月）</label>
+            <input type="number" class="input" value="5000" min="100" step="500" style="width:100%;font-size:15px;">
+          </div>
+          <div style="margin-bottom:16px;">
+            <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">生效时间</label>
+            <select class="input" style="width:100%;">
+              <option>立即生效</option>
+              <option>下月1日起生效</option>
+            </select>
+          </div>
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:10px;font-size:12.5px;color:#92400e;">
+            配额用尽后，该租户的所有拨打请求将返回 403 Quota Exceeded，直至配额刷新或人工调整。
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('modal-quota-config')">取消</button>
+          <button class="btn btn-primary" onclick="alert('配额已更新为 5000 分钟/月');closeModal('modal-quota-config')">保存配额</button>
+        </div>
+      </div>
     </div>
 
     <!-- Signed providers -->
