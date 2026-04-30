@@ -35,3 +35,13 @@ class InviteLinkResponse(BaseModel):
     token: str
     url: str
     expires_at: datetime
+
+
+class UserMeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    role: str
+    tenant_id: Optional[int]
+    scope: str

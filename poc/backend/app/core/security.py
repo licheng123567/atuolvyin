@@ -98,3 +98,10 @@ def require_roles(*roles: str):
         return user
 
     return _check
+
+
+def mask_phone(phone: str) -> str:
+    """Return 138****1234 format. Input is plaintext 11-digit phone."""
+    if len(phone) == 11:
+        return phone[:3] + "****" + phone[7:]
+    return phone[:3] + "****" + phone[-4:] if len(phone) >= 7 else "***"

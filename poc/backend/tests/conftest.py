@@ -56,3 +56,20 @@ async def client(db_session):
     ) as c:
         yield c
     app.dependency_overrides.clear()
+
+
+from app.core.security import get_password_hash  # noqa: E402
+from app.models.user import UserAccount  # noqa: E402
+
+
+@pytest.fixture
+def seeded_user(db_session):
+    user = UserAccount(
+        phone_enc="13800138001",
+        name="测试用户",
+        password_hash=get_password_hash("Test@1234"),
+        is_active=True,
+    )
+    db_session.add(user)
+    db_session.flush()
+    return user
