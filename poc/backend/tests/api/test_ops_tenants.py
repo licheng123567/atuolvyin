@@ -97,3 +97,41 @@ async def test_create_tenant_duplicate_credit_code(
     resp = await client.post("/api/v1/ops/tenants", json=payload, headers=ops_auth_headers)
     assert resp.status_code == 409
     assert resp.json()["code"] == "ERR_DUPLICATE_CREDIT_CODE"
+
+
+@pytest.mark.asyncio
+async def test_get_tenant_by_id(client: AsyncClient, seeded_tenant, ops_auth_headers):
+    resp = await client.get(
+        f"/api/v1/ops/tenants/{seeded_tenant.id}", headers=ops_auth_headers
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["id"] == seeded_tenant.id
+    assert data["name"] == seeded_tenant.name
+
+
+@pytest.mark.asyncio
+async def test_get_tenant_not_found(client: AsyncClient, ops_auth_headers):
+    resp = await client.get("/api/v1/ops/tenants/99999999", headers=ops_auth_headers)
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_update_quota(client: AsyncClient, seeded_tenant, ops_auth_headers):
+    resp = await client.patch(
+        f"/api/v1/ops/tenants/{seeded_tenant.id}/quota",
+        json={"monthly_minute_quota": 1000},
+        headers=ops_auth_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["monthly_minute_quota"] == 1000
+
+
+@pytest.mark.asyncio
+async def test_update_quota_negative(client: AsyncClient, seeded_tenant, ops_auth_headers):
+    resp = await client.patch(
+        f"/api/v1/ops/tenants/{seeded_tenant.id}/quota",
+        json={"monthly_minute_quota": -1},
+        headers=ops_auth_headers,
+    )
+    assert resp.status_code == 422

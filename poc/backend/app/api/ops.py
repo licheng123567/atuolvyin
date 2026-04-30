@@ -13,7 +13,7 @@ from app.core.security import mask_phone, require_roles
 from app.models.tenant import Tenant
 from app.models.user import UserAccount
 from app.schemas.common import PaginatedResponse
-from app.schemas.tenant import TenantCreate, TenantResponse
+from app.schemas.tenant import TenantCreate, TenantQuotaUpdate, TenantResponse
 
 router = APIRouter()
 
@@ -90,6 +90,43 @@ async def create_tenant(
                 "message": "统一社会信用代码已存在",
             },
         )
+    db.commit()
+    db.refresh(tenant)
+    return _tenant_to_response(tenant)
+
+
+@router.get("/tenants/{tenant_id}", response_model=TenantResponse)
+async def get_tenant(
+    tenant_id: int,
+    _user: Annotated[UserAccount, Depends(require_roles(*OPS_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> TenantResponse:
+    tenant = db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "租户不存在"},
+        )
+    return _tenant_to_response(tenant)
+
+
+@router.patch("/tenants/{tenant_id}/quota", response_model=TenantResponse)
+async def update_tenant_quota(
+    tenant_id: int,
+    body: TenantQuotaUpdate,
+    _user: Annotated[UserAccount, Depends(require_roles(*OPS_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> TenantResponse:
+    from datetime import datetime, timezone
+
+    tenant = db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "租户不存在"},
+        )
+    tenant.monthly_minute_quota = body.monthly_minute_quota
+    tenant.minute_quota_updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(tenant)
     return _tenant_to_response(tenant)
