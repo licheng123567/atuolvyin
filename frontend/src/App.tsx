@@ -10,6 +10,9 @@ import {
 
 import { AppLayout } from "./components/layout/AppLayout";
 import { LoginPage } from "./pages/login";
+import { TenantListPage } from "./pages/ops/tenants/index";
+import { TenantNewPage } from "./pages/ops/tenants/new";
+import { TenantDetailPage } from "./pages/ops/tenants/[id]";
 import { authProvider } from "./providers/auth-provider";
 import { dataProvider } from "./providers";
 
@@ -20,6 +23,14 @@ function App() {
         dataProvider={dataProvider}
         authProvider={authProvider}
         routerProvider={routerBindings}
+        resources={[
+          {
+            name: "ops/tenants",
+            list: "/ops/tenants",
+            create: "/ops/tenants/new",
+            show: "/ops/tenants/:id",
+          },
+        ]}
         options={{ syncWithLocation: true, warnWhenUnsavedChanges: false }}
       >
         <Routes>
@@ -52,6 +63,10 @@ function App() {
                 </div>
               }
             />
+            {/* Ops - Tenant Management */}
+            <Route path="/ops/tenants" element={<TenantListPage />} />
+            <Route path="/ops/tenants/new" element={<TenantNewPage />} />
+            <Route path="/ops/tenants/:id" element={<TenantDetailPage />} />
           </Route>
 
           {/* Catch-all */}
