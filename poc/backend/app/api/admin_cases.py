@@ -15,18 +15,22 @@ from app.core.security import (
     mask_phone,
     require_roles,
 )
+from app.models.call import AnalysisResult, CallRecord, Transcript
 from app.models.case import CollectionCase, OwnerProfile
 from app.models.tenant import UserTenantMembership
 from app.models.user import UserAccount
 from app.schemas.case import (
     CaseAssignRequest,
     CaseAssignResponse,
+    CaseCallItem,
+    CaseDetailResponse,
     CaseImportRequest,
     CaseImportResponse,
     CaseResponse,
     CaseStageUpdate,
     CaseWithOwnerResponse,
     OwnerInfo,
+    TimelineEvent,
 )
 from app.schemas.common import PaginatedResponse
 
@@ -208,13 +212,13 @@ async def assign_cases(
     return CaseAssignResponse(updated_count=result.rowcount)
 
 
-@router.get("/cases/{case_id}", response_model=CaseWithOwnerResponse)
+@router.get("/cases/{case_id}", response_model=CaseDetailResponse)
 async def get_case(
     case_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
-) -> CaseWithOwnerResponse:
+) -> CaseDetailResponse:
     tenant_id = _require_tenant(payload)
     row = db.execute(
         select(CollectionCase, OwnerProfile)
@@ -229,7 +233,76 @@ async def get_case(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
         )
-    return _case_row_to_response(row[0], row[1])
+    case, owner = row[0], row[1]
+
+    # Build call timeline
+    call_rows = db.execute(
+        select(CallRecord, UserAccount.name.label("agent_name"))
+        .join(UserAccount, UserAccount.id == CallRecord.caller_user_id)
+        .where(
+            CallRecord.case_id == case_id,
+            CallRecord.tenant_id == tenant_id,
+        )
+        .order_by(CallRecord.started_at.desc().nulls_last())
+    ).all()
+
+    call_items: list[CaseCallItem] = []
+    for call_row in call_rows:
+        call = call_row[0]
+        agent_name = call_row[1]
+
+        analysis = db.execute(
+            select(AnalysisResult).where(AnalysisResult.call_id == call.id)
+        ).scalar_one_or_none()
+        transcript = db.execute(
+            select(Transcript).where(Transcript.call_id == call.id)
+        ).scalar_one_or_none()
+
+        confidence = None
+        if analysis and analysis.key_segments:
+            confidence = analysis.key_segments.get("confidence")
+
+        preview = None
+        if transcript and transcript.full_text:
+            preview = transcript.full_text[:100]
+
+        call_items.append(CaseCallItem(
+            id=call.id,
+            started_at=call.started_at,
+            duration_sec=call.duration_sec,
+            status=call.status,
+            transcript_preview=preview,
+            result_tag=call.result_tag,
+            confidence=confidence,
+            agent_name=agent_name,
+        ))
+
+    return CaseDetailResponse(
+        id=case.id,
+        tenant_id=case.tenant_id,
+        project_id=case.project_id,
+        owner=OwnerInfo(
+            id=owner.id,
+            name=owner.name,
+            phone_masked=mask_phone(owner.phone_enc),
+            building=owner.building,
+            room=owner.room,
+            do_not_call=owner.do_not_call,
+        ),
+        assigned_to=case.assigned_to,
+        pool_type=case.pool_type,
+        stage=case.stage,
+        amount_owed=case.amount_owed,
+        months_overdue=case.months_overdue,
+        priority_score=case.priority_score,
+        last_contact_at=case.last_contact_at,
+        monthly_contact_count=case.monthly_contact_count,
+        status=case.status,
+        created_at=case.created_at,
+        updated_at=case.updated_at,
+        calls=call_items,
+        timeline_events=[],  # Sprint 4: add workorder/assignment events
+    )
 
 
 @router.patch("/cases/{case_id}/stage", response_model=CaseResponse)

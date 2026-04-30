@@ -53,6 +53,7 @@ class OwnerInfo(BaseModel):
 
     id: int
     name: str
+    phone: Optional[str] = None        # decrypted, only for agent_internal
     phone_masked: str
     building: Optional[str]
     room: Optional[str]
@@ -93,3 +94,44 @@ class CaseStageUpdate(BaseModel):
 
 class CaseAssignResponse(BaseModel):
     updated_count: int
+
+
+# ── Sprint 3b: case detail with call timeline ──────────────────
+
+
+class CaseCallItem(BaseModel):
+    id: int
+    started_at: Optional[datetime]
+    duration_sec: Optional[int]
+    status: str
+    transcript_preview: Optional[str]
+    result_tag: Optional[str]
+    confidence: Optional[float]
+    agent_name: Optional[str]
+
+
+class TimelineEvent(BaseModel):
+    type: str
+    ts: datetime
+    actor: Optional[str]
+    note: Optional[str]
+
+
+class CaseDetailResponse(BaseModel):
+    id: int
+    tenant_id: int
+    project_id: Optional[int]
+    owner: OwnerInfo
+    assigned_to: Optional[int]
+    pool_type: str
+    stage: str
+    amount_owed: Optional[Decimal]
+    months_overdue: Optional[int]
+    priority_score: int
+    last_contact_at: Optional[datetime]
+    monthly_contact_count: int
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    calls: list[CaseCallItem]
+    timeline_events: list[TimelineEvent]
