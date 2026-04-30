@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expires_minutes: int = 1440  # 24 hours
 
+    # AES-256-GCM key for phone number encryption (64 hex chars = 32 bytes)
+    autoluyin_aes_key: str = ""
+
     # ==== 录音存储后端：local / minio / oss ====
     storage_backend: str = "local"   # "local" | "minio" | "oss"
 

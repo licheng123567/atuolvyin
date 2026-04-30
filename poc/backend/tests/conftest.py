@@ -8,6 +8,8 @@ from testcontainers.postgres import PostgresContainer
 os.environ["ASR_BACKEND"] = "mock"
 os.environ["LLM_BACKEND"] = "mock"
 os.environ["LOCAL_STORAGE_ROOT"] = "/tmp/autoluyin_test_recordings"
+os.environ["AUTOLUYIN_AES_KEY"] = "deadbeef" * 8  # 64 hex chars — test key only
+os.environ["CELERY_TASK_ALWAYS_EAGER"] = "True"
 
 from app.main import app  # noqa: E402
 from app.core.db import get_db  # noqa: E402
