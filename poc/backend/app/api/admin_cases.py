@@ -3,9 +3,9 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -22,6 +22,7 @@ from app.schemas.case import (
     CaseWithOwnerResponse,
     OwnerInfo,
 )
+from app.schemas.common import PaginatedResponse
 
 router = APIRouter()
 
@@ -119,3 +120,72 @@ async def import_cases(
     db.flush()
     db.commit()
     return CaseImportResponse(imported=imported, skipped=0, errors=[])
+
+
+@router.get("/cases", response_model=PaginatedResponse[CaseWithOwnerResponse])
+async def list_cases(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+    stage: Optional[str] = Query(None),
+    pool_type: Optional[str] = Query(None),
+    assigned_to: Optional[int] = Query(None),
+    keyword: Optional[str] = Query(None, max_length=100),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+) -> PaginatedResponse[CaseWithOwnerResponse]:
+    tenant_id = _require_tenant(payload)
+
+    stmt = (
+        select(CollectionCase, OwnerProfile)
+        .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
+        .where(CollectionCase.tenant_id == tenant_id)
+    )
+    if stage:
+        stmt = stmt.where(CollectionCase.stage == stage)
+    if pool_type:
+        stmt = stmt.where(CollectionCase.pool_type == pool_type)
+    if assigned_to:
+        stmt = stmt.where(CollectionCase.assigned_to == assigned_to)
+    if keyword:
+        stmt = stmt.where(OwnerProfile.name.ilike(f"%{keyword}%"))
+
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total: int = db.execute(count_stmt).scalar_one()
+
+    rows = db.execute(
+        stmt.order_by(CollectionCase.priority_score.desc(), CollectionCase.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+
+    return PaginatedResponse(
+        items=[_case_row_to_response(case, owner) for case, owner in rows],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/cases/{case_id}", response_model=CaseWithOwnerResponse)
+async def get_case(
+    case_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> CaseWithOwnerResponse:
+    tenant_id = _require_tenant(payload)
+    row = db.execute(
+        select(CollectionCase, OwnerProfile)
+        .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
+        .where(
+            CollectionCase.id == case_id,
+            CollectionCase.tenant_id == tenant_id,
+        )
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
+        )
+    return _case_row_to_response(row[0], row[1])
