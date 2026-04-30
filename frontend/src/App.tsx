@@ -15,6 +15,9 @@ import { TenantNewPage } from "./pages/ops/tenants/new";
 import { TenantDetailPage } from "./pages/ops/tenants/[id]";
 import { UserListPage } from "./pages/admin/users/index";
 import { UserNewPage } from "./pages/admin/users/new";
+import { CaseListPage } from "./pages/admin/cases/index";
+import { CaseImportPage } from "./pages/admin/cases/import";
+import { AgentCaseListPage } from "./pages/agent/cases/index";
 import { authProvider } from "./providers/auth-provider";
 import { dataProvider } from "./providers";
 
@@ -36,6 +39,15 @@ function App() {
             name: "admin/users",
             list: "/admin/users",
             create: "/admin/users/new",
+          },
+          {
+            name: "admin/cases",
+            list: "/admin/cases",
+            create: "/admin/cases/import",
+          },
+          {
+            name: "agent/cases",
+            list: "/agent/cases",
           },
         ]}
         options={{ syncWithLocation: true, warnWhenUnsavedChanges: false }}
@@ -77,6 +89,11 @@ function App() {
             {/* Admin - User Management */}
             <Route path="/admin/users" element={<UserListPage />} />
             <Route path="/admin/users/new" element={<UserNewPage />} />
+            {/* Admin - Case Management */}
+            <Route path="/admin/cases" element={<CaseListPage />} />
+            <Route path="/admin/cases/import" element={<CaseImportPage />} />
+            {/* Agent - Case List */}
+            <Route path="/agent/cases" element={<AgentCaseListPage />} />
           </Route>
 
           {/* Catch-all */}
