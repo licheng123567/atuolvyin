@@ -45,3 +45,26 @@ class UserMeResponse(BaseModel):
     role: str
     tenant_id: Optional[int]
     scope: str
+
+
+class UserCreateByAdminRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=50)
+    phone: str = Field(..., pattern=r"^1[3-9]\d{9}$")
+    password: str = Field(..., min_length=8, max_length=72)
+    role: str = Field(
+        ...,
+        pattern=r"^(supervisor|agent_internal|legal|workorder|project_manager_property)$",
+    )
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+
+class UserListResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    phone_masked: str
+    role: str
+    is_active: bool
+    created_at: datetime
