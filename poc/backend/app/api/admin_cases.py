@@ -19,6 +19,8 @@ from app.models.user import UserAccount
 from app.schemas.case import (
     CaseImportRequest,
     CaseImportResponse,
+    CaseWithOwnerResponse,
+    OwnerInfo,
 )
 
 router = APIRouter()
@@ -40,6 +42,35 @@ def _calc_priority(
     amount_owed: Optional[Decimal], months_overdue: Optional[int]
 ) -> int:
     return int(float(amount_owed or 0) * 0.4 + float(months_overdue or 0) * 0.3)
+
+
+def _case_row_to_response(
+    case: CollectionCase, owner: OwnerProfile
+) -> CaseWithOwnerResponse:
+    return CaseWithOwnerResponse(
+        id=case.id,
+        tenant_id=case.tenant_id,
+        project_id=case.project_id,
+        owner=OwnerInfo(
+            id=owner.id,
+            name=owner.name,
+            phone_masked=mask_phone(owner.phone_enc),
+            building=owner.building,
+            room=owner.room,
+            do_not_call=owner.do_not_call,
+        ),
+        assigned_to=case.assigned_to,
+        pool_type=case.pool_type,
+        stage=case.stage,
+        amount_owed=case.amount_owed,
+        months_overdue=case.months_overdue,
+        priority_score=case.priority_score,
+        last_contact_at=case.last_contact_at,
+        monthly_contact_count=case.monthly_contact_count,
+        status=case.status,
+        created_at=case.created_at,
+        updated_at=case.updated_at,
+    )
 
 
 @router.post("/cases/import", response_model=CaseImportResponse, status_code=201)
