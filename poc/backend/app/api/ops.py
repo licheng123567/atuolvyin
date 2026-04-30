@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -117,8 +118,6 @@ async def update_tenant_quota(
     _user: Annotated[UserAccount, Depends(require_roles(*OPS_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> TenantResponse:
-    from datetime import datetime, timezone
-
     tenant = db.get(Tenant, tenant_id)
     if not tenant:
         raise HTTPException(
