@@ -10,7 +10,7 @@ _pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 @pytest.fixture
-def seeded_user(db_session: Session):
+def seeded_auth_user(db_session: Session):
     tenant = Tenant(name="测试物业公司", admin_phone_enc="13900139000", plan="trial")
     db_session.add(tenant)
     db_session.flush()
@@ -34,8 +34,8 @@ def seeded_user(db_session: Session):
 
 
 @pytest.mark.asyncio
-async def test_login_success(client: AsyncClient, seeded_user):
-    user, tenant = seeded_user
+async def test_login_success(client: AsyncClient, seeded_auth_user):
+    user, tenant = seeded_auth_user
     r = await client.post(
         "/api/v1/auth/login",
         json={"phone": "13800138000", "password": "Password123"},
@@ -50,7 +50,7 @@ async def test_login_success(client: AsyncClient, seeded_user):
 
 
 @pytest.mark.asyncio
-async def test_login_wrong_password(client: AsyncClient, seeded_user):
+async def test_login_wrong_password(client: AsyncClient, seeded_auth_user):
     r = await client.post(
         "/api/v1/auth/login",
         json={"phone": "13800138000", "password": "wrongpassword"},
