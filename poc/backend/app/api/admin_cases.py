@@ -54,7 +54,7 @@ def _case_row_to_response(
         owner=OwnerInfo(
             id=owner.id,
             name=owner.name,
-            phone_masked=mask_phone(owner.phone_enc),
+            phone_masked=mask_phone(owner.phone_enc),  # phone_enc is plaintext until AES sprint
             building=owner.building,
             room=owner.room,
             do_not_call=owner.do_not_call,
