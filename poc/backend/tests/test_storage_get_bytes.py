@@ -9,10 +9,13 @@ def test_local_file_storage_get_bytes():
     expected = b"sprint3b test audio bytes"
     key = "test_get_bytes/unique_sample.mp3"
     ls.put_object(key, expected, "audio/mpeg")
-    result = ls.get_bytes(key)
-    assert result == expected
-    # cleanup
-    os.unlink(ls.local_path(key))
+    try:
+        result = ls.get_bytes(key)
+        assert result == expected
+    finally:
+        path = ls.local_path(key)
+        if os.path.exists(path):
+            os.unlink(path)
 
 
 def test_local_file_storage_get_bytes_missing_key_raises():

@@ -17,15 +17,15 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.add_column('call_record', sa.Column('object_key', sa.Text(), nullable=True))
-    # Fix transcript FK in case deployed DB has wrong target
-    with op.batch_alter_table('transcript') as batch_op:
-        try:
-            batch_op.drop_constraint('transcript_call_id_fkey', type_='foreignkey')
-        except Exception:
-            pass
-        batch_op.create_foreign_key(
-            'fk_transcript_call_record', 'call_record', ['call_id'], ['id']
-        )
+    # Drop old FK if it exists (IF EXISTS is atomic on PostgreSQL)
+    op.execute(
+        "ALTER TABLE transcript DROP CONSTRAINT IF EXISTS transcript_call_id_fkey"
+    )
+    # Re-create FK pointing to correct table
+    op.execute(
+        "ALTER TABLE transcript ADD CONSTRAINT fk_transcript_call_record "
+        "FOREIGN KEY (call_id) REFERENCES call_record(id)"
+    )
 
 
 def downgrade() -> None:
