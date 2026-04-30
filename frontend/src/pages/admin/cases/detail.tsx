@@ -2,7 +2,7 @@
 import { useGo, useOne } from "@refinedev/core";
 import { ArrowLeft, Phone, PhoneOff } from "lucide-react";
 import { useParams } from "react-router-dom";
-import type { CaseDetailResponse } from "../../../types/case";
+import type { CaseCallItem, CaseDetailResponse } from "../../../types/case";
 
 const STAGE_LABELS: Record<string, string> = {
   new: "待处理", in_progress: "处理中", promised: "已承诺",
@@ -20,12 +20,13 @@ export function AdminCaseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const go = useGo();
 
-  const { data, isLoading } = useOne<CaseDetailResponse>({
+  const { query } = useOne<CaseDetailResponse>({
     resource: "admin/cases",
     id: id!,
   });
 
-  const detail = data?.data;
+  const detail = query.data?.data;
+  const isLoading = query.isLoading;
 
   if (isLoading) {
     return <div className="text-sm text-[var(--color-neutral-400)] p-8">加载中…</div>;
@@ -102,7 +103,7 @@ export function AdminCaseDetailPage() {
             <div className="text-sm text-[var(--color-neutral-400)]">暂无通话记录</div>
           ) : (
             <div className="space-y-4">
-              {detail.calls.map((call) => (
+              {detail.calls.map((call: CaseCallItem) => (
                 <div
                   key={call.id}
                   className="border border-[var(--color-neutral-100)] rounded-lg p-4"

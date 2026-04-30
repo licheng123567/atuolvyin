@@ -2,7 +2,7 @@
 import { useGo, useList, useOne } from "@refinedev/core";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import type { CaseDetailResponse } from "../../../types/case";
+import type { CaseCallItem, CaseDetailResponse } from "../../../types/case";
 import type { PaginatedResponse } from "../../../types";
 
 export function AgentWorkstationPage() {
@@ -21,12 +21,13 @@ export function AgentWorkstationPage() {
     (rawListData as CaseDetailResponse[] | undefined) ??
     [];
 
-  const { data: detailData, isLoading } = useOne<CaseDetailResponse>({
+  const { query: detailQuery } = useOne<CaseDetailResponse>({
     resource: "agent/cases",
     id: id!,
   });
 
-  const detail = detailData?.data;
+  const detail = detailQuery.data?.data;
+  const isLoading = detailQuery.isLoading;
   const selectedCall = detail?.calls[selectedCallIdx] ?? null;
 
   return (
@@ -109,7 +110,7 @@ export function AgentWorkstationPage() {
       {/* col-transcript */}
       <div className="border-r border-[var(--color-neutral-200)] flex flex-col overflow-hidden">
         <div className="p-3 border-b border-[var(--color-neutral-200)] flex gap-2 overflow-x-auto">
-          {detail?.calls.map((call, idx) => (
+          {detail?.calls.map((call: CaseCallItem, idx: number) => (
             <button
               key={call.id}
               type="button"

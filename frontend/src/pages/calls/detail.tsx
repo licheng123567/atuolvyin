@@ -45,12 +45,13 @@ export function CallDetailPage() {
   const { id } = useParams<{ id: string }>();
   const go = useGo();
 
-  const { data, isLoading } = useOne<CallDetailData>({
+  const { query } = useOne<CallDetailData>({
     resource: "calls",
     id: id!,
   });
 
-  const detail = data?.data;
+  const detail = query.data?.data;
+  const isLoading = query.isLoading;
 
   if (isLoading) {
     return <div className="text-sm text-[var(--color-neutral-400)] p-8">加载中…</div>;
@@ -109,7 +110,7 @@ export function CallDetailPage() {
             {detail.transcript ? (
               <div className="space-y-2">
                 {detail.transcript.segments ? (
-                  detail.transcript.segments.map((seg, i) => (
+                  detail.transcript.segments.map((seg: TranscriptSegment, i: number) => (
                     <div key={i} className="flex gap-3 text-sm">
                       <span
                         className="shrink-0 font-medium w-12"
@@ -176,7 +177,7 @@ export function CallDetailPage() {
                   <div>
                     <div className="text-xs text-[var(--color-neutral-500)] mb-1">风险词</div>
                     <div className="flex flex-wrap gap-1">
-                      {detail.analysis.risk_keywords.map((kw) => (
+                      {detail.analysis.risk_keywords.map((kw: string) => (
                         <span
                           key={kw}
                           className="inline-flex px-2 py-0.5 text-xs rounded"

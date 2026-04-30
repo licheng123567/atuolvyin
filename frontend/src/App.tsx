@@ -18,6 +18,9 @@ import { UserNewPage } from "./pages/admin/users/new";
 import { CaseListPage } from "./pages/admin/cases/index";
 import { CaseImportPage } from "./pages/admin/cases/import";
 import { AgentCaseListPage } from "./pages/agent/cases/index";
+import { AdminCaseDetailPage } from "./pages/admin/cases/detail";
+import { AgentWorkstationPage } from "./pages/agent/cases/detail";
+import { CallDetailPage } from "./pages/calls/detail";
 import { authProvider } from "./providers/auth-provider";
 import { dataProvider } from "./providers";
 
@@ -44,10 +47,16 @@ function App() {
             name: "admin/cases",
             list: "/admin/cases",
             create: "/admin/cases/import",
+            show: "/admin/cases/:id",
           },
           {
             name: "agent/cases",
             list: "/agent/cases",
+            show: "/agent/cases/:id",
+          },
+          {
+            name: "calls",
+            show: "/calls/:id",
           },
         ]}
         options={{ syncWithLocation: true, warnWhenUnsavedChanges: false }}
@@ -94,6 +103,12 @@ function App() {
             <Route path="/admin/cases/import" element={<CaseImportPage />} />
             {/* Agent - Case List */}
             <Route path="/agent/cases" element={<AgentCaseListPage />} />
+            {/* Admin - Case Detail */}
+            <Route path="/admin/cases/:id" element={<AdminCaseDetailPage />} />
+            {/* Agent - Case Detail / Workstation */}
+            <Route path="/agent/cases/:id" element={<AgentWorkstationPage />} />
+            {/* Call Detail */}
+            <Route path="/calls/:id" element={<CallDetailPage />} />
           </Route>
 
           {/* Catch-all */}
