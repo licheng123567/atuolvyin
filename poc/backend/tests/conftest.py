@@ -73,3 +73,77 @@ def seeded_user(db_session):
     db_session.add(user)
     db_session.flush()
     return user
+
+
+from app.models.tenant import Tenant, UserTenantMembership  # noqa: E402
+
+
+@pytest.fixture
+def seeded_tenant(db_session):
+    tenant = Tenant(
+        name="测试物业公司",
+        admin_phone_enc="13900139001",
+        plan="trial",
+        is_active=True,
+    )
+    db_session.add(tenant)
+    db_session.flush()
+    return tenant
+
+
+@pytest.fixture
+def ops_auth_headers(seeded_user):
+    from app.core.security import create_access_token
+    token = create_access_token({
+        "sub": str(seeded_user.id),
+        "user_id": seeded_user.id,
+        "tenant_id": None,
+        "role": "platform_ops",
+        "scope": "platform",
+    })
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def seeded_member_user(db_session, seeded_tenant):
+    from app.core.security import get_password_hash
+    user = UserAccount(
+        phone_enc="13811138111",
+        name="催收员小王",
+        password_hash=get_password_hash("Agent@1234"),
+        is_active=True,
+    )
+    db_session.add(user)
+    db_session.flush()
+    membership = UserTenantMembership(
+        user_id=user.id,
+        tenant_id=seeded_tenant.id,
+        role="agent_internal",
+        source_type="INTERNAL",
+        is_active=True,
+    )
+    db_session.add(membership)
+    db_session.flush()
+    return user
+
+
+@pytest.fixture
+def admin_auth_headers(seeded_user, seeded_tenant, db_session):
+    from app.core.security import create_access_token
+    membership = UserTenantMembership(
+        user_id=seeded_user.id,
+        tenant_id=seeded_tenant.id,
+        role="admin",
+        source_type="INTERNAL",
+        is_active=True,
+    )
+    db_session.add(membership)
+    db_session.flush()
+    token = create_access_token({
+        "sub": str(seeded_user.id),
+        "user_id": seeded_user.id,
+        "tenant_id": seeded_tenant.id,
+        "role": "admin",
+        "scope": f"tenant:{seeded_tenant.id}",
+    })
+    return {"Authorization": f"Bearer {token}"}
