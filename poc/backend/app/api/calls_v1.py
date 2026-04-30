@@ -9,6 +9,7 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi import status as http_status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.crypto import encrypt_phone, mask_phone
@@ -38,13 +39,22 @@ def _get_or_create_usage(db: Session, tenant_id: int, year_month: str) -> Tenant
         )
     ).scalar_one_or_none()
     if not usage:
-        usage = TenantMinuteUsage(
-            tenant_id=tenant_id,
-            year_month=year_month,
-            used_minutes=0,
-        )
-        db.add(usage)
-        db.flush()
+        try:
+            usage = TenantMinuteUsage(
+                tenant_id=tenant_id,
+                year_month=year_month,
+                used_minutes=0,
+            )
+            db.add(usage)
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            usage = db.execute(
+                select(TenantMinuteUsage).where(
+                    TenantMinuteUsage.tenant_id == tenant_id,
+                    TenantMinuteUsage.year_month == year_month,
+                )
+            ).scalar_one()
     return usage
 
 
@@ -61,8 +71,13 @@ async def upload_call(
     duration_sec: Annotated[int, Form()],
     file: Annotated[UploadFile, File()],
 ) -> CallUploadResponse:
-    user_id: int = payload["user_id"]
-    tenant_id: int = payload["tenant_id"]
+    user_id = int(payload.get("user_id") or 0)
+    tenant_id = int(payload.get("tenant_id") or 0)
+    if not user_id or not tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "ERR_INVALID_TOKEN", "message": "Token 缺少必要字段"},
+        )
 
     # 1. Verify device belongs to current user and tenant
     device = db.execute(
@@ -113,10 +128,16 @@ async def upload_call(
             )
 
     # 5. Upload file to storage
-    raw = await file.read()
-    object_key = f"calls/{tenant_id}/{uuid.uuid4().hex}.{fmt}"
-    storage.put_object(object_key, raw, file.content_type or f"audio/{fmt}")
-    recording_url = storage.get_url(object_key)
+    try:
+        raw = await file.read()
+        object_key = f"calls/{tenant_id}/{uuid.uuid4().hex}.{fmt}"
+        storage.put_object(object_key, raw, file.content_type or f"audio/{fmt}")
+        recording_url = storage.get_url(object_key)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_502_BAD_GATEWAY,
+            detail={"code": "ERR_STORAGE_FAILURE", "message": "录音上传失败，请重试"},
+        ) from exc
 
     # 6. Encrypt callee phone and parse datetimes
     callee_phone_enc = encrypt_phone(callee_phone)
@@ -169,8 +190,13 @@ def list_calls(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[CallListItem]:
-    user_id: int = payload["user_id"]
-    tenant_id: int = payload["tenant_id"]
+    user_id = int(payload.get("user_id") or 0)
+    tenant_id = int(payload.get("tenant_id") or 0)
+    if not user_id or not tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "ERR_INVALID_TOKEN", "message": "Token 缺少必要字段"},
+        )
     role: str = payload.get("role", "")
 
     stmt = select(CallRecord).where(CallRecord.tenant_id == tenant_id)
@@ -213,8 +239,13 @@ def get_call_detail(
     _user: Annotated[object, Depends(require_roles(*AGENT_ROLES, *SUPERVISOR_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> CallDetailResponse:
-    user_id: int = payload["user_id"]
-    tenant_id: int = payload["tenant_id"]
+    user_id = int(payload.get("user_id") or 0)
+    tenant_id = int(payload.get("tenant_id") or 0)
+    if not user_id or not tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "ERR_INVALID_TOKEN", "message": "Token 缺少必要字段"},
+        )
     role: str = payload.get("role", "")
 
     call = db.execute(
