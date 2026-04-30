@@ -13,6 +13,8 @@ import { LoginPage } from "./pages/login";
 import { TenantListPage } from "./pages/ops/tenants/index";
 import { TenantNewPage } from "./pages/ops/tenants/new";
 import { TenantDetailPage } from "./pages/ops/tenants/[id]";
+import { UserListPage } from "./pages/admin/users/index";
+import { UserNewPage } from "./pages/admin/users/new";
 import { authProvider } from "./providers/auth-provider";
 import { dataProvider } from "./providers";
 
@@ -29,6 +31,11 @@ function App() {
             list: "/ops/tenants",
             create: "/ops/tenants/new",
             show: "/ops/tenants/:id",
+          },
+          {
+            name: "admin/users",
+            list: "/admin/users",
+            create: "/admin/users/new",
           },
         ]}
         options={{ syncWithLocation: true, warnWhenUnsavedChanges: false }}
@@ -67,6 +74,9 @@ function App() {
             <Route path="/ops/tenants" element={<TenantListPage />} />
             <Route path="/ops/tenants/new" element={<TenantNewPage />} />
             <Route path="/ops/tenants/:id" element={<TenantDetailPage />} />
+            {/* Admin - User Management */}
+            <Route path="/admin/users" element={<UserListPage />} />
+            <Route path="/admin/users/new" element={<UserNewPage />} />
           </Route>
 
           {/* Catch-all */}
