@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.crypto import encrypt_phone
 from app.core.db import get_db
 from app.core.security import (
     get_current_user,
@@ -98,7 +99,7 @@ async def create_user(
         )
 
     new_user = UserAccount(
-        phone_enc=body.phone,  # plaintext until AES sprint
+        phone_enc=encrypt_phone(body.phone),
         name=body.name,
         password_hash=get_password_hash(body.password),
         is_active=True,

@@ -8,6 +8,7 @@ from fastapi import status as http_status
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
+from app.core.crypto import encrypt_phone
 from app.core.db import get_db
 from app.core.security import (
     get_token_payload,
@@ -60,7 +61,7 @@ def _case_row_to_response(
         owner=OwnerInfo(
             id=owner.id,
             name=owner.name,
-            phone_masked=mask_phone(owner.phone_enc),  # phone_enc is plaintext until AES sprint
+            phone_masked=mask_phone(owner.phone_enc),
             building=owner.building,
             room=owner.room,
             do_not_call=owner.do_not_call,
@@ -93,7 +94,7 @@ async def import_cases(
         existing_owner = db.execute(
             select(OwnerProfile).where(
                 OwnerProfile.tenant_id == tenant_id,
-                OwnerProfile.phone_enc == row.phone,
+                OwnerProfile.phone_enc == encrypt_phone(row.phone),
             )
         ).scalar_one_or_none()
 
@@ -101,7 +102,7 @@ async def import_cases(
             owner = OwnerProfile(
                 tenant_id=tenant_id,
                 name=row.name,
-                phone_enc=row.phone,  # plaintext until AES sprint
+                phone_enc=encrypt_phone(row.phone),
                 building=row.building,
                 room=row.room,
             )

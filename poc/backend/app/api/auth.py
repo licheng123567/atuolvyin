@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.crypto import encrypt_phone
 from app.core.db import get_db
 from app.core.security import create_access_token, verify_password
 from app.models.tenant import UserTenantMembership
@@ -18,10 +19,9 @@ router = APIRouter()
 
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
-    # phone_enc stores plaintext until Sprint 1 adds AES-256 encryption
     user = db.execute(
         select(UserAccount).where(
-            UserAccount.phone_enc == body.phone,
+            UserAccount.phone_enc == encrypt_phone(body.phone),
             UserAccount.is_active.is_(True),
         )
     ).scalar_one_or_none()

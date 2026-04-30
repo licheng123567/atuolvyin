@@ -3,6 +3,7 @@ from httpx import AsyncClient
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
+from app.core.crypto import encrypt_phone
 from app.models.user import UserAccount
 from app.models.tenant import Tenant, UserTenantMembership
 
@@ -11,12 +12,12 @@ _pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 @pytest.fixture
 def seeded_auth_user(db_session: Session):
-    tenant = Tenant(name="测试物业公司", admin_phone_enc="13900139000", plan="trial")
+    tenant = Tenant(name="测试物业公司", admin_phone_enc=encrypt_phone("13900139000"), plan="trial")
     db_session.add(tenant)
     db_session.flush()
 
     user = UserAccount(
-        phone_enc="13800138000",
+        phone_enc=encrypt_phone("13800138000"),
         name="测试管理员",
         password_hash=_pwd.hash("Password123"),
     )
@@ -80,12 +81,12 @@ async def test_login_invalid_phone_format(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_login_inactive_user(client: AsyncClient, db_session: Session):
-    tenant = Tenant(name="另一物业", admin_phone_enc="13600136000", plan="trial")
+    tenant = Tenant(name="另一物业", admin_phone_enc=encrypt_phone("13600136000"), plan="trial")
     db_session.add(tenant)
     db_session.flush()
 
     user = UserAccount(
-        phone_enc="13500135000",
+        phone_enc=encrypt_phone("13500135000"),
         name="已停用账号",
         password_hash=_pwd.hash("Password123"),
         is_active=False,

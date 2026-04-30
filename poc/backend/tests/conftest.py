@@ -13,6 +13,7 @@ os.environ["CELERY_TASK_ALWAYS_EAGER"] = "True"
 
 from app.main import app  # noqa: E402
 from app.core.db import get_db  # noqa: E402
+from app.core.crypto import encrypt_phone  # noqa: E402
 from app.models.base import Base  # noqa: E402
 
 
@@ -67,7 +68,7 @@ from app.models.user import UserAccount  # noqa: E402
 @pytest.fixture
 def seeded_user(db_session):
     user = UserAccount(
-        phone_enc="13800138001",
+        phone_enc=encrypt_phone("13800138001"),
         name="测试用户",
         password_hash=get_password_hash("Test@1234"),
         is_active=True,
@@ -84,7 +85,7 @@ from app.models.tenant import Tenant, UserTenantMembership  # noqa: E402
 def seeded_tenant(db_session):
     tenant = Tenant(
         name="测试物业公司",
-        admin_phone_enc="13900139001",
+        admin_phone_enc=encrypt_phone("13900139001"),
         plan="trial",
         is_active=True,
     )
@@ -110,7 +111,7 @@ def ops_auth_headers(seeded_user):
 def seeded_member_user(db_session, seeded_tenant):
     from app.core.security import get_password_hash
     user = UserAccount(
-        phone_enc="13811138111",
+        phone_enc=encrypt_phone("13811138111"),
         name="催收员小王",
         password_hash=get_password_hash("Agent@1234"),
         is_active=True,
@@ -160,7 +161,7 @@ def seeded_owner(db_session, seeded_tenant):
     owner = OwnerProfile(
         tenant_id=seeded_tenant.id,
         name="张三",
-        phone_enc="13712345678",  # plaintext until AES sprint
+        phone_enc=encrypt_phone("13712345678"),
         building="1栋",
         room="101",
     )
@@ -191,7 +192,7 @@ def seeded_supervisor_user(db_session, seeded_tenant):
     from app.core.security import get_password_hash
     from app.models.tenant import UserTenantMembership
     user = UserAccount(
-        phone_enc="13922239222",
+        phone_enc=encrypt_phone("13922239222"),
         name="督导李四",
         password_hash=get_password_hash("Supervisor@1234"),
         is_active=True,

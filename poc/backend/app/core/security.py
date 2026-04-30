@@ -100,8 +100,7 @@ def require_roles(*roles: str):
     return _check
 
 
-def mask_phone(phone: str) -> str:
-    """Return 138****1234 format. Input is plaintext 11-digit phone."""
-    if len(phone) == 11:
-        return phone[:3] + "****" + phone[7:]
-    return phone[:3] + "****" + phone[-4:] if len(phone) >= 7 else "***"
+def mask_phone(phone_enc: str) -> str:
+    """Decrypt AES-256 ciphertext and return masked form like 138****1234."""
+    from app.core.crypto import mask_phone as _mask  # avoid circular at module level
+    return _mask(phone_enc)

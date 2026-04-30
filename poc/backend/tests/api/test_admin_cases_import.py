@@ -36,7 +36,7 @@ async def test_import_duplicate_phone_reuses_owner(
         "rows": [
             {
                 "name": seeded_owner.name,
-                "phone": seeded_owner.phone_enc,
+                "phone": "13712345678",  # plaintext phone matching seeded_owner
                 "amount_owed": "2000.00",
                 "months_overdue": 1,
             }

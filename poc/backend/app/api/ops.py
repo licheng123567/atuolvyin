@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.crypto import encrypt_phone
 from app.core.db import get_db
 from app.core.security import mask_phone, require_roles
 from app.models.tenant import Tenant
@@ -74,7 +75,7 @@ async def create_tenant(
     tenant = Tenant(
         name=body.name,
         credit_code=body.credit_code,
-        admin_phone_enc=body.admin_phone,  # plaintext until AES sprint
+        admin_phone_enc=encrypt_phone(body.admin_phone),
         plan=body.plan,
         monthly_minute_quota=body.monthly_minute_quota,
         is_active=True,
