@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -46,3 +46,50 @@ class CaseImportRow(BaseModel):
     room: Optional[str] = None
     amount_owed: Optional[Decimal] = None
     months_overdue: Optional[int] = None
+
+
+class OwnerInfo(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    phone_masked: str
+    building: Optional[str]
+    room: Optional[str]
+    do_not_call: bool
+
+
+class CaseWithOwnerResponse(BaseModel):
+    id: int
+    tenant_id: int
+    project_id: Optional[int]
+    owner: OwnerInfo
+    assigned_to: Optional[int]
+    pool_type: str
+    stage: str
+    amount_owed: Optional[Decimal]
+    months_overdue: Optional[int]
+    priority_score: int
+    last_contact_at: Optional[datetime]
+    monthly_contact_count: int
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class CaseImportRequest(BaseModel):
+    rows: list[CaseImportRow] = Field(..., min_length=1, max_length=500)
+
+
+class CaseImportResponse(BaseModel):
+    imported: int
+    skipped: int
+    errors: list[str]
+
+
+class CaseStageUpdate(BaseModel):
+    stage: Literal["new", "in_progress", "promised", "paid", "escalated", "closed"]
+
+
+class CaseAssignResponse(BaseModel):
+    updated_count: int
