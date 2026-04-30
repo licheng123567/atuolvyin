@@ -23,6 +23,7 @@ async def test_register_device_upserts_on_conflict(client, agent_auth_headers):
     resp = await client.post("/api/v1/devices/register", json=payload2, headers=agent_auth_headers)
     assert resp.status_code == 201
     assert resp.json()["device_id"] == "dev-uuid-upsert"
+    assert resp.json()["brand"] == "Huawei"
 
 
 @pytest.mark.asyncio

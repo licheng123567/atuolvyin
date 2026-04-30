@@ -30,6 +30,7 @@ class DeviceRegisterResponse(BaseModel):
     device_id: str
     user_id: int
     tenant_id: int
+    brand: Optional[str] = None
     created_at: datetime
 
 
@@ -79,6 +80,7 @@ def register_device(
             DeviceProfile.device_id,
             DeviceProfile.user_id,
             DeviceProfile.tenant_id,
+            DeviceProfile.brand,
             DeviceProfile.created_at,
         )
     )
@@ -89,6 +91,7 @@ def register_device(
         device_id=row.device_id,
         user_id=row.user_id,
         tenant_id=row.tenant_id,
+        brand=row.brand,
         created_at=row.created_at,
     )
 
@@ -101,11 +104,13 @@ def self_check(
     db: Annotated[Session, Depends(get_db)],
 ) -> SelfCheckResponse:
     user_id: int = payload["user_id"]
+    tenant_id: int = payload["tenant_id"]
 
     device = db.execute(
         select(DeviceProfile).where(
             DeviceProfile.device_id == body.device_id,
             DeviceProfile.user_id == user_id,
+            DeviceProfile.tenant_id == tenant_id,
         )
     ).scalar_one_or_none()
 
