@@ -32,6 +32,9 @@ async def test_agent_sees_own_private_cases(
     assert resp.status_code == 200
     ids = [item["id"] for item in resp.json()["items"]]
     assert seeded_case.id in ids
+    matching = next(i for i in resp.json()["items"] if i["id"] == seeded_case.id)
+    assert matching["pool_type"] == "private"
+    assert matching["assigned_to"] == seeded_member_user.id
 
 
 @pytest.mark.asyncio
@@ -77,9 +80,16 @@ async def test_claim_nonexistent_case(client: AsyncClient, agent_auth_headers):
         "/api/v1/agent/cases/999999/claim", headers=agent_auth_headers
     )
     assert resp.status_code == 404
+    assert resp.json()["code"] == "ERR_NOT_FOUND"
 
 
 @pytest.mark.asyncio
 async def test_agent_cases_requires_auth(client: AsyncClient):
     resp = await client.get("/api/v1/agent/cases")
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_claim_requires_auth(client: AsyncClient, seeded_case):
+    resp = await client.post(f"/api/v1/agent/cases/{seeded_case.id}/claim")
     assert resp.status_code == 401

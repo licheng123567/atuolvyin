@@ -82,7 +82,11 @@ async def claim_case(
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseResponse:
     tenant_id = _require_tenant(payload)
-    case = db.get(CollectionCase, case_id)
+    case = db.execute(
+        select(CollectionCase)
+        .where(CollectionCase.id == case_id)
+        .with_for_update()
+    ).scalar_one_or_none()
     if not case or case.tenant_id != tenant_id:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
