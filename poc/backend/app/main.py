@@ -5,7 +5,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import admin, admin_cases, agent_cases, auth, calls, devices, devices_v1, ops, recordings, supervisor, tasks, users
+from app.api import admin, admin_cases, agent_cases, auth, calls, calls_v1, devices, devices_v1, ops, recordings, supervisor, tasks, users
 
 
 @asynccontextmanager
@@ -70,6 +70,7 @@ app.include_router(admin_cases.router, prefix="/api/v1/admin", tags=["admin-case
 app.include_router(supervisor.router, prefix="/api/v1/supervisor", tags=["supervisor"])
 app.include_router(agent_cases.router, prefix="/api/v1/agent", tags=["agent"])
 app.include_router(devices_v1.router, prefix="/api/v1/devices", tags=["devices-v1"])
+app.include_router(calls_v1.router, prefix="/api/v1/calls", tags=["calls-v1"])
 # Legacy PoC routers (Sprint 1 migrates these to ORM + /api/v1/ prefix)
 app.include_router(devices.router, prefix="/api/devices", tags=["devices"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])

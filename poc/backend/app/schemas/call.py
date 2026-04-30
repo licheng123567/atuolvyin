@@ -36,3 +36,40 @@ class CallMinuteQuotaStatus(BaseModel):
     remaining: Optional[int]
     pct_used: Optional[float]
     is_exhausted: bool
+
+
+# ── Sprint 3a: calls_v1 schemas ───────────────────────────────
+
+
+class CallUploadResponse(BaseModel):
+    call_id: int
+    status: str
+
+
+class CallListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    case_id: Optional[int]
+    callee_phone_masked: str
+    started_at: Optional[datetime]
+    ended_at: Optional[datetime]
+    duration_sec: Optional[int]
+    status: str
+    created_at: datetime
+
+
+class CallDetailResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    case_id: Optional[int]
+    callee_phone_masked: str
+    started_at: Optional[datetime]
+    ended_at: Optional[datetime]
+    duration_sec: Optional[int]
+    recording_url: Optional[str]
+    status: str
+    transcript: None  # Sprint 3b
+    analysis: None  # Sprint 3b
+    created_at: datetime
