@@ -27,13 +27,12 @@ import kotlinx.coroutines.launch
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private val adapter = TaskAdapter(::onCallClick)
+    private val adapter = CaseAdapter(::onCallClick)
 
     private val uploadDoneReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context?, i: Intent?) {
-            val callId = i?.getLongExtra("call_log_id", -1) ?: -1
-            val taskId = i?.getLongExtra("task_id", -1) ?: -1
-            if (callId > 0) showBusinessDialog(callId, taskId)
+            val callId = i?.getLongExtra("call_id", -1) ?: -1
+            if (callId > 0) toast("通话已上传 #$callId")
         }
     }
 
@@ -77,6 +76,8 @@ class MainActivity : AppCompatActivity() {
         val url = AppConfig.backendUrl(this)
         if (url.isNullOrBlank()) {
             showBackendUrlDialog(onSaved = next)
+        } else if (AppConfig.jwtToken(this) == null) {
+            showLoginDialog()
         } else {
             renderHeader()
             next()
@@ -101,6 +102,42 @@ class MainActivity : AppCompatActivity() {
                 AppConfig.saveBackendUrl(this, v)
                 renderHeader()
                 onSaved?.invoke() ?: doSelfCheck()
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    // ---------- 登录 ----------
+    private fun showLoginDialog() {
+        val phoneInput = android.widget.EditText(this).apply { hint = "手机号" }
+        val pwdInput = android.widget.EditText(this).apply {
+            hint = "密码"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                    android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        val layout = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(48, 16, 48, 0)
+            addView(phoneInput)
+            addView(pwdInput)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("登录")
+            .setView(layout)
+            .setPositiveButton("登录") { _, _ ->
+                val phone = phoneInput.text.toString().trim()
+                val pwd = pwdInput.text.toString()
+                lifecycleScope.launch {
+                    try {
+                        val resp = ApiClient.get(this@MainActivity)
+                            .login(LoginReq(phone = phone, password = pwd))
+                        AppConfig.saveJwtToken(this@MainActivity, resp.access_token)
+                        ApiClient.invalidate()
+                        doSelfCheck()
+                    } catch (t: Throwable) {
+                        toast("登录失败: ${t.message}")
+                    }
+                }
             }
             .setNegativeButton("取消", null)
             .show()
@@ -145,9 +182,6 @@ class MainActivity : AppCompatActivity() {
                 val api = ApiClient.get(this@MainActivity)
                 val resp = api.selfCheck(SelfCheckReq(
                     device_id = DeviceId.get(this@MainActivity),
-                    brand = RecordingScanner.deviceBrand(),
-                    model = RecordingScanner.deviceModel(),
-                    os_version = RecordingScanner.osVersion(),
                     recording_dir_ok = dirOk,
                     recording_toggle_on = recDirs.isNotEmpty(),
                     permissions_ok = true,
@@ -163,7 +197,13 @@ class MainActivity : AppCompatActivity() {
                 if (resp.can_call) loadTasks()
                 else toast("自检未通过，呼叫禁用")
             } catch (t: Throwable) {
-                toast("自检失败: ${t.message}")
+                if (t.message?.contains("401") == true || t.message?.contains("403") == true) {
+                    AppConfig.clearJwtToken(this@MainActivity)
+                    ApiClient.invalidate()
+                    showLoginDialog()
+                } else {
+                    toast("自检失败: ${t.message}")
+                }
             }
         }
     }
@@ -185,17 +225,22 @@ class MainActivity : AppCompatActivity() {
     private fun loadTasks() {
         lifecycleScope.launch {
             try {
-                val list = ApiClient.get(this@MainActivity)
-                    .todayTasks(DeviceId.get(this@MainActivity))
-                adapter.submit(list)
+                val resp = ApiClient.get(this@MainActivity).myCases()
+                adapter.submitCases(resp.items)
             } catch (t: Throwable) {
-                toast("加载任务失败: ${t.message}")
+                if (t.message?.contains("401") == true || t.message?.contains("403") == true) {
+                    AppConfig.clearJwtToken(this@MainActivity)
+                    ApiClient.invalidate()
+                    showLoginDialog()
+                } else {
+                    toast("加载案件失败: ${t.message}")
+                }
             }
         }
     }
 
     // ---------- 一键拨号 ----------
-    private fun onCallClick(t: TaskItem) {
+    private fun onCallClick(c: CaseItem) {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
             != PackageManager.PERMISSION_GRANTED) {
             toast("请先授予拨打电话权限"); return
@@ -203,62 +248,21 @@ class MainActivity : AppCompatActivity() {
         if (AppConfig.backendUrl(this) == null) {
             toast("请先配置后端地址"); showBackendUrlDialog(); return
         }
-        CallWatcherService.start(this, t.id, t.phone)
-        startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:${t.phone}")))
-    }
-
-    // ---------- 业务表单 ----------
-    private fun showBusinessDialog(callId: Long, taskId: Long) {
-        val task = adapter.findById(taskId) ?: return
-        when (task.type) {
-            "vote" -> showVoteDialog(callId, task)
-            "collection" -> showCollectionDialog(callId, task)
-        }
-    }
-
-    private fun showVoteDialog(callId: Long, t: TaskItem) {
-        @Suppress("UNCHECKED_CAST")
-        val opts = (t.payload["options"] as? List<Map<String, Any?>>) ?: emptyList()
-        val labels = opts.map { it["label"]?.toString() ?: "?" }.toTypedArray()
-        var picked = 0
-        AlertDialog.Builder(this)
-            .setTitle("登记投票表态：${t.payload["motion_title"]}")
-            .setSingleChoiceItems(labels, 0) { _, w -> picked = w }
-            .setPositiveButton("提交") { _, _ ->
-                submitBiz(callId, mapOf("choice" to labels[picked]))
-            }.show()
-    }
-
-    private fun showCollectionDialog(callId: Long, t: TaskItem) {
-        val items = arrayOf("立即缴", "承诺缴", "推托", "拒缴", "失联")
-        var picked = 0
-        AlertDialog.Builder(this)
-            .setTitle("催收结果（业主：${t.name}）")
-            .setSingleChoiceItems(items, 0) { _, w -> picked = w }
-            .setPositiveButton("提交") { _, _ ->
-                submitBiz(callId, mapOf("intent" to items[picked]))
-            }.show()
-    }
-
-    private fun submitBiz(callId: Long, payload: Map<String, Any?>) {
-        lifecycleScope.launch {
-            try {
-                ApiClient.get(this@MainActivity).submitBusiness(callId, payload)
-                toast("已提交"); loadTasks()
-            } catch (t: Throwable) { toast("提交失败: ${t.message}") }
-        }
+        val phone = c.owner.phone ?: c.owner.phone_masked
+        CallWatcherService.start(this, c.id, phone)
+        startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:$phone")))
     }
 
     private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
 }
 
-class TaskAdapter(
-    private val onCall: (TaskItem) -> Unit,
-) : RecyclerView.Adapter<TaskAdapter.VH>() {
+class CaseAdapter(
+    private val onCall: (CaseItem) -> Unit,
+) : RecyclerView.Adapter<CaseAdapter.VH>() {
 
-    private val items = mutableListOf<TaskItem>()
+    private val items = mutableListOf<CaseItem>()
 
-    fun submit(list: List<TaskItem>) {
+    fun submitCases(list: List<CaseItem>) {
         items.clear(); items.addAll(list); notifyDataSetChanged()
     }
     fun findById(id: Long) = items.firstOrNull { it.id == id }
@@ -275,14 +279,17 @@ class TaskAdapter(
         private val title: TextView = v.findViewById(R.id.title)
         private val sub: TextView = v.findViewById(R.id.sub)
         private val btn: android.widget.Button = v.findViewById(R.id.btnCall)
-        fun bind(t: TaskItem) {
-            val tag = if (t.type == "vote") "[投票]" else "[催收]"
-            title.text = "$tag ${t.name}（${t.building ?: ""}${t.room ?: ""}）"
-            sub.text = if (t.type == "collection")
-                "欠 ${t.payload["amount"]} / ${t.payload["months"]}"
-            else "议题：${t.payload["motion_title"]}"
-            btn.text = "呼叫 ${t.phone}"
-            btn.setOnClickListener { onCall(t) }
+        fun bind(c: CaseItem) {
+            val tag = if (c.stage == "vote") "[投票]" else "[催收]"
+            val location = listOfNotNull(c.owner.building, c.owner.room).joinToString("")
+            title.text = "$tag ${c.owner.name}（$location）"
+            sub.text = if (c.stage != "vote")
+                "欠 ${c.amount_owed ?: "-"} / ${c.months_overdue ?: 0} 月"
+            else
+                "阶段：${c.stage}"
+            val displayPhone = c.owner.phone ?: c.owner.phone_masked
+            btn.text = "呼叫 $displayPhone"
+            btn.setOnClickListener { onCall(c) }
         }
     }
 }

@@ -38,6 +38,20 @@ object AppConfig {
         ApiClient.invalidate()
     }
 
+    // -------- JWT Token --------
+    fun jwtToken(ctx: Context): String? =
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("jwt_token", null)
+
+    fun saveJwtToken(ctx: Context, token: String) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString("jwt_token", token).apply()
+    }
+
+    fun clearJwtToken(ctx: Context) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .remove("jwt_token").apply()
+    }
+
     // -------- L2：运行时业务配置 --------
     @Volatile var runtime: Runtime = Runtime()
 

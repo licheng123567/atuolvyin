@@ -14,16 +14,16 @@ import java.util.Locale
 class CallWatcherService : Service() {
 
     companion object {
-        const val EXTRA_TASK_ID = "task_id"
+        const val EXTRA_CASE_ID = "case_id"
         const val EXTRA_CALLEE  = "callee_phone"
         const val EXTRA_RESUME  = "resume_scan"
         private const val NOTIF_ID = 1001
         private const val CHANNEL  = "autoluyin_call_watch"
         private const val TAG      = "CallWatcher"
 
-        fun start(ctx: Context, taskId: Long, callee: String) {
+        fun start(ctx: Context, caseId: Long, callee: String) {
             val i = Intent(ctx, CallWatcherService::class.java).apply {
-                putExtra(EXTRA_TASK_ID, taskId)
+                putExtra(EXTRA_CASE_ID, caseId)
                 putExtra(EXTRA_CALLEE, callee)
             }
             ctx.startForegroundService(i)
@@ -46,9 +46,9 @@ class CallWatcherService : Service() {
             updateNotif("挂机，匹配录音…")
             scope.launch { matchAndUpload() }
         } else {
-            val taskId = intent?.getLongExtra(EXTRA_TASK_ID, 0) ?: 0
+            val caseId = intent?.getLongExtra(EXTRA_CASE_ID, 0) ?: 0
             val callee = intent?.getStringExtra(EXTRA_CALLEE).orEmpty()
-            saveState(taskId = taskId, callee = callee, startedAt = 0, endedAt = 0, observed = false)
+            saveState(caseId = caseId, callee = callee, startedAt = 0, endedAt = 0, observed = false)
             updateNotif("等待呼叫 ${maskPhone(callee)}…")
         }
         return START_NOT_STICKY
@@ -56,7 +56,7 @@ class CallWatcherService : Service() {
 
     private suspend fun matchAndUpload() {
         val prefs     = getSharedPreferences(PhoneStateReceiver.PREFS, Context.MODE_PRIVATE)
-        val taskId    = prefs.getLong(PhoneStateReceiver.KEY_TASK_ID, 0)
+        val caseId    = prefs.getLong(PhoneStateReceiver.KEY_TASK_ID, 0)
         val callee    = prefs.getString(PhoneStateReceiver.KEY_CALLEE, "").orEmpty()
         val startedAt = prefs.getLong(PhoneStateReceiver.KEY_STARTED, 0)
         val endedAt   = prefs.getLong(PhoneStateReceiver.KEY_ENDED, System.currentTimeMillis())
@@ -87,22 +87,20 @@ class CallWatcherService : Service() {
 
         try {
             val resp = ApiClient.get(this@CallWatcherService).uploadRecording(
-                taskId      = ApiClient.textPart(taskId.toString()),
+                caseId      = ApiClient.textPart(caseId.toString()),
                 deviceId    = ApiClient.textPart(DeviceId.get(this@CallWatcherService)),
                 calleePhone = ApiClient.textPart(callee),
                 startedAt   = ApiClient.textPart(iso(startedAt)),
                 endedAt     = ApiClient.textPart(iso(endedAt)),
                 durationSec = ApiClient.textPart(durSec.toString()),
-                srcPath     = ApiClient.textPart(hit.file.absolutePath),
-                matchMethod = ApiClient.textPart(hit.method),
                 file        = ApiClient.filePart("file", hit.file, mimeOf(hit.file)),
             )
-            Log.i(TAG, "uploaded call=${resp.call_log_id}")
-            updateNotif("上传完成 #${resp.call_log_id}")
+            Log.i(TAG, "uploaded call=${resp.call_id}")
+            updateNotif("上传完成 #${resp.call_id}")
             sendBroadcast(Intent("com.autoluyin.demo.UPLOAD_DONE")
                 .setPackage(packageName)
-                .putExtra("call_log_id", resp.call_log_id)
-                .putExtra("task_id", taskId))
+                .putExtra("call_id", resp.call_id)
+                .putExtra("case_id", caseId))
         } catch (t: Throwable) {
             Log.e(TAG, "upload failed", t)
             updateNotif("上传失败：${t.message}")
@@ -111,9 +109,9 @@ class CallWatcherService : Service() {
         stopSelfDelayed()
     }
 
-    private fun saveState(taskId: Long, callee: String, startedAt: Long, endedAt: Long, observed: Boolean) {
+    private fun saveState(caseId: Long, callee: String, startedAt: Long, endedAt: Long, observed: Boolean) {
         getSharedPreferences(PhoneStateReceiver.PREFS, Context.MODE_PRIVATE).edit()
-            .putLong(PhoneStateReceiver.KEY_TASK_ID, taskId)
+            .putLong(PhoneStateReceiver.KEY_TASK_ID, caseId)
             .putString(PhoneStateReceiver.KEY_CALLEE, callee)
             .putLong(PhoneStateReceiver.KEY_STARTED, startedAt)
             .putLong(PhoneStateReceiver.KEY_ENDED, endedAt)
