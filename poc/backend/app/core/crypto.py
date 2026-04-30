@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac as _hmac
-import os
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.backends import default_backend
@@ -15,7 +14,8 @@ _KEY: bytes | None = None
 def _get_key() -> bytes:
     global _KEY
     if _KEY is None:
-        hex_key = os.environ.get("AUTOLUYIN_AES_KEY", "")
+        from app.core.config import settings  # 延迟导入避免循环依赖
+        hex_key = settings.autoluyin_aes_key
         if len(hex_key) != 64:
             raise RuntimeError(
                 "AUTOLUYIN_AES_KEY must be set to 64 hex characters (32 bytes); "
