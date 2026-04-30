@@ -21,7 +21,12 @@ def _get_key() -> bytes:
                 "AUTOLUYIN_AES_KEY must be set to 64 hex characters (32 bytes); "
                 f"got length {len(hex_key)}"
             )
-        _KEY = bytes.fromhex(hex_key)
+        try:
+            _KEY = bytes.fromhex(hex_key)
+        except ValueError as exc:
+            raise RuntimeError(
+                "AUTOLUYIN_AES_KEY contains invalid characters; must be 64 hex digits (0-9, a-f)"
+            ) from exc
     return _KEY
 
 
