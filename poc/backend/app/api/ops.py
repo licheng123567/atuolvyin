@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import status as http_status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -11,7 +13,7 @@ from app.core.security import mask_phone, require_roles
 from app.models.tenant import Tenant
 from app.models.user import UserAccount
 from app.schemas.common import PaginatedResponse
-from app.schemas.tenant import TenantResponse
+from app.schemas.tenant import TenantCreate, TenantResponse
 
 router = APIRouter()
 
@@ -60,3 +62,34 @@ async def list_tenants(
         page=page,
         page_size=page_size,
     )
+
+
+@router.post("/tenants", response_model=TenantResponse, status_code=201)
+async def create_tenant(
+    body: TenantCreate,
+    _user: Annotated[UserAccount, Depends(require_roles(*OPS_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> TenantResponse:
+    tenant = Tenant(
+        name=body.name,
+        credit_code=body.credit_code,
+        admin_phone_enc=body.admin_phone,  # plaintext until AES sprint
+        plan=body.plan,
+        monthly_minute_quota=body.monthly_minute_quota,
+        is_active=True,
+    )
+    db.add(tenant)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail={
+                "code": "ERR_DUPLICATE_CREDIT_CODE",
+                "message": "统一社会信用代码已存在",
+            },
+        )
+    db.commit()
+    db.refresh(tenant)
+    return _tenant_to_response(tenant)
