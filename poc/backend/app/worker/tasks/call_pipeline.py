@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import tempfile
 from contextlib import contextmanager, suppress
@@ -11,6 +12,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.core.storage import storage
 from app.services import asr, llm
 from app.worker.celery_app import celery_app
+
+logger = logging.getLogger(__name__)
 
 _engine = None
 _SessionLocal = None
@@ -129,11 +132,13 @@ def process_call(self, call_id: int) -> None:
             db.flush()
 
     except Exception as exc:
-        with suppress(Exception):
+        try:
             with _get_db() as err_db:
                 err_call = err_db.get(CallRecord, call_id)
                 if err_call:
                     err_call.status = "failed"
+        except Exception as db_exc:
+            logger.error("Failed to mark call %s as failed: %s", call_id, db_exc)
         raise self.retry(exc=exc)
 
     finally:
