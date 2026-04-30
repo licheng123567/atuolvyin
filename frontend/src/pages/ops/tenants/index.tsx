@@ -144,11 +144,18 @@ export function TenantListPage() {
                 </td>
                 <td className="px-4 py-3">
                   <span
-                    className={`inline-flex px-2 py-0.5 text-xs rounded-full font-medium ${
+                    className="inline-flex px-2 py-0.5 text-xs rounded-full font-medium"
+                    style={
                       t.is_active
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-600"
-                    }`}
+                        ? {
+                            background: "var(--color-success-light)",
+                            color: "var(--color-success)",
+                          }
+                        : {
+                            background: "var(--color-danger-light)",
+                            color: "var(--color-danger)",
+                          }
+                    }
                   >
                     {t.is_active ? "正常" : "停用"}
                   </span>
