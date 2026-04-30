@@ -147,3 +147,88 @@ def admin_auth_headers(seeded_user, seeded_tenant, db_session):
         "scope": f"tenant:{seeded_tenant.id}",
     })
     return {"Authorization": f"Bearer {token}"}
+
+
+from decimal import Decimal  # noqa: E402
+
+
+@pytest.fixture
+def seeded_owner(db_session, seeded_tenant):
+    from app.models.case import OwnerProfile
+    owner = OwnerProfile(
+        tenant_id=seeded_tenant.id,
+        name="张三",
+        phone_enc="13712345678",  # plaintext until AES sprint
+        building="1栋",
+        room="101",
+    )
+    db_session.add(owner)
+    db_session.flush()
+    return owner
+
+
+@pytest.fixture
+def seeded_case(db_session, seeded_tenant, seeded_owner):
+    from app.models.case import CollectionCase
+    case = CollectionCase(
+        tenant_id=seeded_tenant.id,
+        owner_id=seeded_owner.id,
+        pool_type="public",
+        stage="new",
+        amount_owed=Decimal("3000.00"),
+        months_overdue=3,
+        priority_score=1200,
+    )
+    db_session.add(case)
+    db_session.flush()
+    return case
+
+
+@pytest.fixture
+def seeded_supervisor_user(db_session, seeded_tenant):
+    from app.core.security import get_password_hash
+    from app.models.tenant import UserTenantMembership
+    user = UserAccount(
+        phone_enc="13922239222",
+        name="督导李四",
+        password_hash=get_password_hash("Supervisor@1234"),
+        is_active=True,
+    )
+    db_session.add(user)
+    db_session.flush()
+    membership = UserTenantMembership(
+        user_id=user.id,
+        tenant_id=seeded_tenant.id,
+        role="supervisor",
+        source_type="INTERNAL",
+        is_active=True,
+    )
+    db_session.add(membership)
+    db_session.flush()
+    return user
+
+
+@pytest.fixture
+def agent_auth_headers(seeded_member_user, seeded_tenant):
+    from app.core.security import create_access_token
+    token = create_access_token({
+        "sub": str(seeded_member_user.id),
+        "user_id": seeded_member_user.id,
+        "tenant_id": seeded_tenant.id,
+        "role": "agent_internal",
+        "scope": f"tenant:{seeded_tenant.id}",
+    })
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def supervisor_auth_headers(seeded_supervisor_user, seeded_tenant):
+    from app.core.security import create_access_token
+    token = create_access_token({
+        "sub": str(seeded_supervisor_user.id),
+        "user_id": seeded_supervisor_user.id,
+        "tenant_id": seeded_tenant.id,
+        "role": "supervisor",
+        "scope": f"tenant:{seeded_tenant.id}",
+    })
+    return {"Authorization": f"Bearer {token}"}
