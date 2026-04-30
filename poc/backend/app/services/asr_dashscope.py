@@ -6,6 +6,8 @@
 import subprocess
 import time
 import logging
+from typing import Optional
+
 import dashscope
 from dashscope.audio.asr import Recognition, RecognitionCallback, RecognitionResult
 
@@ -15,7 +17,7 @@ logger = logging.getLogger(__name__)
 dashscope.api_key = settings.dashscope_api_key
 
 
-def transcribe(audio_url: str, local_file_path: str | None = None) -> dict:
+def transcribe(audio_url: str, local_file_path: Optional[str] = None) -> dict:
     if not local_file_path:
         raise RuntimeError("DashScope ASR 需要 local_file_path（无公网 URL 支持）")
     return _stream_transcribe(local_file_path)
