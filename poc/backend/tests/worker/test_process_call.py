@@ -27,6 +27,7 @@ def test_process_call_sets_status_queued(seeded_call, db_session):
     @contextmanager
     def _mock_db():
         yield db_session
+        db_session.flush()  # make changes visible without a real COMMIT
 
     with patch.object(pipeline_module, "_get_db", _mock_db):
         pipeline_module.process_call.run(seeded_call.id)
@@ -41,6 +42,7 @@ def test_process_call_nonexistent_id_is_noop(db_session):
     @contextmanager
     def _mock_db():
         yield db_session
+        db_session.flush()
 
     with patch.object(pipeline_module, "_get_db", _mock_db):
         pipeline_module.process_call.run(999999999)  # should not raise
