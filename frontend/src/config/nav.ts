@@ -33,17 +33,34 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
       items: [
         { label: "控制台", path: "/" },
         { label: "用户管理", path: "/admin/users" },
+        { label: "案件管理", path: "/admin/cases" },
+        { label: "导入案件", path: "/admin/cases/import" },
       ],
     },
   ],
   supervisor: [
-    { items: [{ label: "控制台", path: "/" }] },
+    {
+      items: [
+        { label: "控制台", path: "/" },
+        { label: "案件总览", path: "/supervisor/cases" },
+      ],
+    },
   ],
   agent_internal: [
-    { items: [{ label: "控制台", path: "/" }] },
+    {
+      items: [
+        { label: "控制台", path: "/" },
+        { label: "我的案件", path: "/agent/cases" },
+      ],
+    },
   ],
   agent_external: [
-    { items: [{ label: "控制台", path: "/" }] },
+    {
+      items: [
+        { label: "控制台", path: "/" },
+        { label: "我的案件", path: "/agent/cases" },
+      ],
+    },
   ],
   legal: [
     { items: [{ label: "控制台", path: "/" }] },
