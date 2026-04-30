@@ -54,6 +54,17 @@ services:
       echo 'MinIO bucket ready';
       "
 
+  redis:
+    image: redis:7-alpine
+    container_name: autoluyin-redis
+    ports:
+      - "${REDIS_HOST_PORT:-16379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   backend:
     build:
       context: ./backend
@@ -63,16 +74,39 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql+psycopg://autoluyin:autoluyin_dev@postgres:5432/autoluyin
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "${BACKEND_HOST_PORT:-18000}:8000"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     volumes:
       - ./backend:/app
       - recordings_data:/data/recordings   # local 模式下录音落在这里
     command: >
       sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: autoluyin-celery
+    command: celery -A app.worker.celery_app worker --loglevel=info -Q default
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://autoluyin:autoluyin_dev@postgres:5432/autoluyin
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - recordings_data:/data/recordings
 
 volumes:
   pg_data:

@@ -10,6 +10,13 @@ from app.api import admin, admin_cases, agent_cases, auth, calls, calls_v1, devi
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from app.core.crypto import _get_key
+    try:
+        _get_key()
+    except RuntimeError as exc:
+        import sys
+        print(f"FATAL: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
     yield
 
 
