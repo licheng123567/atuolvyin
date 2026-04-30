@@ -1,6 +1,9 @@
 import { useGetIdentity, useLogout } from "@refinedev/core";
-import { LogOut } from "lucide-react";
+import { Home, Building2, Users, LogOut } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
 import type { AuthUser } from "../../providers/auth-provider";
+import { getNavSections } from "../../config/nav";
+import { cn } from "../../lib/utils";
 
 const ROLE_LABELS: Record<string, string> = {
   platform_superadmin: "平台超管",
@@ -16,18 +19,26 @@ const ROLE_LABELS: Record<string, string> = {
   project_manager_provider: "项目负责人（服务商）",
 };
 
+const ICON_MAP: Record<string, React.ElementType> = {
+  "/": Home,
+  "/ops/tenants": Building2,
+  "/admin/users": Users,
+};
+
 export function Sidebar() {
   const { data: user } = useGetIdentity<AuthUser>();
   const { mutate: logout } = useLogout();
+  const location = useLocation();
 
   const initials = user?.name?.slice(0, 1) ?? "?";
+  const sections = user ? getNavSections(user.role) : [];
 
   return (
     <aside
       className="flex flex-col bg-white border-r border-[var(--color-neutral-200)] flex-shrink-0"
       style={{ width: "var(--sidebar-width)" }}
     >
-      {/* Logo row — same height as topbar */}
+      {/* Logo row */}
       <div
         className="flex items-center px-5 border-b border-[var(--color-neutral-200)] flex-shrink-0"
         style={{ height: "var(--topbar-height)" }}
@@ -37,11 +48,37 @@ export function Sidebar() {
         </span>
       </div>
 
-      {/* Navigation — populated per-role in Sprint 1+ */}
-      <nav className="flex-1 overflow-y-auto px-2 py-3">
-        <p className="px-3 text-xs text-[var(--color-neutral-400)]">
-          功能菜单将在各模块开发后补充
-        </p>
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
+        {sections.map((section, si) => (
+          <div key={si}>
+            {section.title && (
+              <p className="px-3 mb-1 text-xs font-medium text-[var(--color-neutral-400)] uppercase tracking-wider">
+                {section.title}
+              </p>
+            )}
+            {section.items.map((item) => {
+              const Icon = ICON_MAP[item.path] ?? Home;
+              const isActive = location.pathname === item.path;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-2 text-sm rounded transition-colors",
+                    isActive
+                      ? "bg-[var(--color-primary)] text-white font-medium"
+                      : "text-[var(--color-neutral-700)] hover:bg-[var(--color-neutral-100)]",
+                  )}
+                  style={{ borderRadius: "var(--radius-md)" }}
+                >
+                  <Icon className="w-4 h-4 flex-shrink-0" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
       {/* User block + logout */}
@@ -50,11 +87,7 @@ export function Sidebar() {
           <div className="flex items-center gap-2 px-2 py-1 mb-1">
             <div
               className="flex-shrink-0 flex items-center justify-center rounded-full text-white text-xs font-semibold"
-              style={{
-                width: 28,
-                height: 28,
-                background: "var(--color-primary)",
-              }}
+              style={{ width: 28, height: 28, background: "var(--color-primary)" }}
             >
               {initials}
             </div>
