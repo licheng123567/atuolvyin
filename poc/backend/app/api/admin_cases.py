@@ -5,7 +5,7 @@ from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -15,10 +15,15 @@ from app.core.security import (
     require_roles,
 )
 from app.models.case import CollectionCase, OwnerProfile
+from app.models.tenant import UserTenantMembership
 from app.models.user import UserAccount
 from app.schemas.case import (
+    CaseAssignRequest,
+    CaseAssignResponse,
     CaseImportRequest,
     CaseImportResponse,
+    CaseResponse,
+    CaseStageUpdate,
     CaseWithOwnerResponse,
     OwnerInfo,
 )
@@ -167,6 +172,41 @@ async def list_cases(
     )
 
 
+@router.post("/cases/assign", response_model=CaseAssignResponse)
+async def assign_cases(
+    body: CaseAssignRequest,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> CaseAssignResponse:
+    tenant_id = _require_tenant(payload)
+
+    member = db.execute(
+        select(UserTenantMembership).where(
+            UserTenantMembership.user_id == body.assign_to,
+            UserTenantMembership.tenant_id == tenant_id,
+            UserTenantMembership.is_active.is_(True),
+        )
+    ).scalar_one_or_none()
+    if member is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_USER_NOT_IN_TENANT", "message": "指定用户不在本租户"},
+        )
+
+    stmt = (
+        update(CollectionCase)
+        .where(
+            CollectionCase.id.in_(body.case_ids),
+            CollectionCase.tenant_id == tenant_id,
+        )
+        .values(assigned_to=body.assign_to, pool_type="private")
+    )
+    result = db.execute(stmt)
+    db.commit()
+    return CaseAssignResponse(updated_count=result.rowcount)
+
+
 @router.get("/cases/{case_id}", response_model=CaseWithOwnerResponse)
 async def get_case(
     case_id: int,
@@ -189,3 +229,24 @@ async def get_case(
             detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
         )
     return _case_row_to_response(row[0], row[1])
+
+
+@router.patch("/cases/{case_id}/stage", response_model=CaseResponse)
+async def update_case_stage(
+    case_id: int,
+    body: CaseStageUpdate,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> CaseResponse:
+    tenant_id = _require_tenant(payload)
+    case = db.get(CollectionCase, case_id)
+    if not case or case.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
+        )
+    case.stage = body.stage
+    db.commit()
+    db.refresh(case)
+    return case
