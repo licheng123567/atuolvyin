@@ -57,7 +57,7 @@ export function CaseImportPage() {
         room: r.room.trim() || null,
         amount_owed: r.amount_owed ? r.amount_owed.trim() : null,
         months_overdue: r.months_overdue
-          ? parseInt(r.months_overdue, 10)
+          ? (parseInt(r.months_overdue, 10) || null)
           : null,
       }));
 
