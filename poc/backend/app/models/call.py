@@ -32,6 +32,7 @@ class CallRecord(Base, TimestampMixin):
     emotion_tag: Mapped[Optional[str]] = mapped_column(sa.Text)
     risk_flagged: Mapped[bool] = mapped_column(sa.Boolean, default=False)
     recording_url: Mapped[Optional[str]] = mapped_column(sa.Text)
+    object_key: Mapped[Optional[str]] = mapped_column(sa.Text)
     data_hash: Mapped[Optional[str]] = mapped_column(sa.Text)
     status: Mapped[str] = mapped_column(sa.Text, nullable=False, default="pending")
 

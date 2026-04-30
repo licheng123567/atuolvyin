@@ -24,6 +24,10 @@ class StorageBackend(ABC):
         """返回 ASR 可访问的 URL；私有桶返回带签名的临时 URL。"""
 
     @abstractmethod
+    def get_bytes(self, object_key: str) -> bytes:
+        """Return raw bytes of stored object. Raises on failure."""
+
+    @abstractmethod
     def name(self) -> str: ...
 
 
@@ -48,6 +52,14 @@ class MinIOStorage(StorageBackend):
     def get_url(self, object_key: str) -> str:
         scheme = "https" if settings.minio_secure else "http"
         return f"{scheme}://{settings.minio_public_host}/{self._bucket}/{object_key}"
+
+    def get_bytes(self, object_key: str) -> bytes:
+        response = self._client.get_object(self._bucket, object_key)
+        try:
+            return response.read()
+        finally:
+            response.close()
+            response.release_conn()
 
     def name(self) -> str:
         return "minio"
@@ -77,6 +89,10 @@ class OSSStorage(StorageBackend):
             )
         return f"https://{settings.oss_bucket}.{settings.oss_endpoint}/{object_key}"
 
+    def get_bytes(self, object_key: str) -> bytes:
+        result = self._bucket.get_object(object_key)
+        return result.read()
+
     def name(self) -> str:
         return "oss"
 
@@ -103,6 +119,11 @@ class LocalFileStorage(StorageBackend):
             f"{self._public_base}/api/recordings/raw"
             f"?key={quote(object_key, safe='')}&exp={exp}&token={token}"
         )
+
+    def get_bytes(self, object_key: str) -> bytes:
+        path = self.local_path(object_key)
+        with open(path, "rb") as f:
+            return f.read()
 
     def local_path(self, object_key: str) -> str:
         return os.path.join(self._root, object_key)

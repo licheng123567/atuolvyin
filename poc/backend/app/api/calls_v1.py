@@ -161,6 +161,7 @@ async def upload_call(
         ended_at=ended_dt,
         duration_sec=duration_sec,
         recording_url=recording_url,
+        object_key=object_key,
         status="uploaded",
     )
     db.add(call)
