@@ -16,11 +16,18 @@ from app.core.crypto import encrypt_phone, mask_phone
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
 from app.core.storage import storage
-from app.models.call import CallRecord
+from app.models.call import AnalysisResult, CallRecord, Transcript
 from app.models.case import CollectionCase
 from app.models.device import DeviceProfile
 from app.models.tenant import Tenant, TenantMinuteUsage
-from app.schemas.call import CallDetailResponse, CallListItem, CallUploadResponse
+from app.schemas.call import (
+    AnalysisResultOut,
+    CallDetailResponse,
+    CallListItem,
+    CallUploadResponse,
+    TranscriptOut,
+    TranscriptSegment,
+)
 from app.schemas.common import PaginatedResponse
 
 router = APIRouter()
@@ -268,6 +275,39 @@ def get_call_detail(
             detail={"code": "ERR_FORBIDDEN", "message": "无权访问此通话记录"},
         )
 
+    transcript_out: Optional[TranscriptOut] = None
+    analysis_out: Optional[AnalysisResultOut] = None
+
+    if call.status == "processed":
+        t = db.execute(
+            select(Transcript).where(Transcript.call_id == call_id)
+        ).scalar_one_or_none()
+        if t:
+            segs = None
+            if t.segments:
+                segs = [TranscriptSegment(**s) for s in t.segments]
+            transcript_out = TranscriptOut(
+                full_text=t.full_text or "",
+                segments=segs,
+                asr_model=t.asr_model,
+            )
+
+        a = db.execute(
+            select(AnalysisResult).where(AnalysisResult.call_id == call_id)
+        ).scalar_one_or_none()
+        if a:
+            kv = a.key_segments or {}
+            analysis_out = AnalysisResultOut(
+                summary=a.summary,
+                intent=kv.get("intent"),
+                promise_date=kv.get("promise_date"),
+                excuse_category=kv.get("excuse_category"),
+                compliance_disclosed=kv.get("compliance_disclosed"),
+                risk_keywords=kv.get("risk_keywords"),
+                confidence=kv.get("confidence"),
+                needs_review=a.needs_review,
+            )
+
     return CallDetailResponse(
         id=call.id,
         case_id=call.case_id,
@@ -277,7 +317,7 @@ def get_call_detail(
         duration_sec=call.duration_sec,
         recording_url=call.recording_url,
         status=call.status,
-        transcript=None,
-        analysis=None,
+        transcript=transcript_out,
+        analysis=analysis_out,
         created_at=call.created_at,
     )

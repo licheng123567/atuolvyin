@@ -59,6 +59,33 @@ class CallListItem(BaseModel):
     created_at: datetime
 
 
+# ── Sprint 3b: transcript + analysis schemas ──────────────────
+
+
+class TranscriptSegment(BaseModel):
+    speaker: int
+    start_ms: int
+    end_ms: int
+    text: str
+
+
+class TranscriptOut(BaseModel):
+    full_text: str
+    segments: Optional[list[TranscriptSegment]]
+    asr_model: Optional[str]
+
+
+class AnalysisResultOut(BaseModel):
+    summary: Optional[str]
+    intent: Optional[str]
+    promise_date: Optional[str]
+    excuse_category: Optional[str]
+    compliance_disclosed: Optional[bool]
+    risk_keywords: Optional[list[str]]
+    confidence: Optional[float]
+    needs_review: bool
+
+
 class CallDetailResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -70,6 +97,6 @@ class CallDetailResponse(BaseModel):
     duration_sec: Optional[int]
     recording_url: Optional[str]
     status: str
-    transcript: None  # Sprint 3b
-    analysis: None  # Sprint 3b
+    transcript: Optional[TranscriptOut]
+    analysis: Optional[AnalysisResultOut]
     created_at: datetime
