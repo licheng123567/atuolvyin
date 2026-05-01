@@ -25,9 +25,12 @@ from app.schemas.call import (
     CallDetailResponse,
     CallListItem,
     CallUploadResponse,
+    DialRequestIn,
+    DialRequestOut,
     TranscriptOut,
     TranscriptSegment,
 )
+from app.services import mipush
 from app.schemas.common import PaginatedResponse
 
 router = APIRouter()
@@ -63,6 +66,99 @@ def _get_or_create_usage(db: Session, tenant_id: int, year_month: str) -> Tenant
                 )
             ).scalar_one()
     return usage
+
+
+@router.post("/dial-request", response_model=DialRequestOut, status_code=201)
+async def dial_request(
+    body: DialRequestIn,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> DialRequestOut:
+    user_id = int(payload.get("user_id") or 0)
+    tenant_id = int(payload.get("tenant_id") or 0)
+    if not user_id or not tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "ERR_INVALID_TOKEN", "message": "Token 缺少必要字段"},
+        )
+
+    case = db.execute(
+        select(CollectionCase).where(
+            CollectionCase.id == body.case_id,
+            CollectionCase.tenant_id == tenant_id,
+        )
+    ).scalar_one_or_none()
+    if not case:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在或不属于当前租户"},
+        )
+    if case.assigned_to != user_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_FORBIDDEN", "message": "案件未分配给当前催收员"},
+        )
+
+    # Look up most-recent device with a push_reg_id
+    device = db.execute(
+        select(DeviceProfile)
+        .where(
+            DeviceProfile.user_id == user_id,
+            DeviceProfile.tenant_id == tenant_id,
+            DeviceProfile.push_reg_id.isnot(None),
+        )
+        .order_by(DeviceProfile.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if not device:
+        raise HTTPException(
+            status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "ERR_PUSH_NOT_REGISTERED", "message": "设备未注册推送，请重新登录催收 App"},
+        )
+
+    # Resolve owner info for the DIAL_REQUEST payload
+    from app.models.case import OwnerProfile  # local import to avoid potential cycles
+    owner = db.get(OwnerProfile, case.owner_id) if case.owner_id else None
+    owner_name = owner.name if owner else "未知业主"
+    owner_phone_masked = mask_phone(owner.phone_enc) if owner and owner.phone_enc else ""
+
+    # Insert pending_dial CallRecord
+    call = CallRecord(
+        tenant_id=tenant_id,
+        case_id=case.id,
+        caller_user_id=user_id,
+        callee_phone_enc=owner.phone_enc if owner and owner.phone_enc else "",
+        initiated_by="pc",
+        status="pending_dial",
+    )
+    db.add(call)
+    db.flush()
+
+    # Send MiPush
+    push_client = mipush.get_mipush_client()
+    payload_dict = {
+        "type": "DIAL_REQUEST",
+        "call_id": call.id,
+        "case_id": case.id,
+        "owner_name": owner_name,
+        "owner_phone_masked": owner_phone_masked,
+    }
+    try:
+        await push_client.send_to_user(
+            reg_id=device.push_reg_id,
+            payload=payload_dict,
+            title="新外呼任务",
+            description=f"{owner_name} · {owner_phone_masked}",
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_502_BAD_GATEWAY,
+            detail={"code": "ERR_PUSH_FAILED", "message": "推送失败，请稍后重试"},
+        ) from exc
+
+    db.commit()
+    return DialRequestOut(call_id=call.id, status="dispatched")
 
 
 @router.post("/upload", response_model=CallUploadResponse, status_code=201)
