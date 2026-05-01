@@ -1,4 +1,5 @@
 import io
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -83,9 +84,10 @@ async def test_upload_quota_exceeded_returns_403(
     from app.models.tenant import TenantMinuteUsage
 
     seeded_tenant.monthly_minute_quota = 10  # 10 minutes
+    current_ym = datetime.now(timezone.utc).strftime("%Y-%m")
     usage = TenantMinuteUsage(
         tenant_id=seeded_tenant.id,
-        year_month="2026-04",
+        year_month=current_ym,
         used_minutes=10,  # already at quota
     )
     db_session.add(usage)
