@@ -119,3 +119,53 @@ def test_ws_observer_supervisor_accepted(
                 assert msg["type"] == "pong"
     finally:
         app.dependency_overrides.clear()
+
+
+def test_ws_rejects_cross_tenant_token(db_session, call_for_member, seeded_supervisor_user):
+    """A valid JWT for a DIFFERENT tenant must be rejected."""
+    from app.main import app
+    from app.core.db import get_db
+    from app.core.crypto import encrypt_phone
+    from app.core.security import create_access_token
+    from app.models.tenant import Tenant
+    from app.models.user import UserAccount
+
+    # Create a separate tenant and a user in it
+    other_tenant = Tenant(
+        name="别家公司", admin_phone_enc=encrypt_phone("13800000000"),
+        plan="trial", is_active=True,
+    )
+    db_session.add(other_tenant)
+    db_session.flush()
+
+    other_user = UserAccount(
+        phone_enc=encrypt_phone("13700000000"),
+        name="他家催收员",
+        password_hash="x",
+        is_active=True,
+    )
+    db_session.add(other_user)
+    db_session.flush()
+
+    # Token claims membership in OTHER tenant; supervisor role
+    token = create_access_token({
+        "sub": str(other_user.id),
+        "user_id": other_user.id,
+        "tenant_id": other_tenant.id,  # ← different tenant from call_for_member.tenant_id
+        "role": "supervisor",
+        "scope": f"tenant:{other_tenant.id}",
+    })
+
+    def override_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        with TestClient(app) as cli:
+            with pytest.raises(Exception):
+                with cli.websocket_connect(
+                    f"/ws/calls/{call_for_member.id}?token={token}&role=observer"
+                ):
+                    pass
+    finally:
+        app.dependency_overrides.clear()

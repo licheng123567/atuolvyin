@@ -84,8 +84,8 @@ async def ws_calls(
             on_suggestion_broadcast=broadcast_suggestion,
             on_tag_ready=broadcast_tag,
         )
+        _sessions[call_id] = session  # claim slot BEFORE awaiting
         await session.start(db)
-        _sessions[call_id] = session
 
     try:
         while True:
@@ -119,8 +119,10 @@ async def ws_calls(
         pass
     finally:
         await manager.disconnect(call_id, websocket)
-        # Tear down session if room empty
-        if manager.room_size(call_id) == 0:
+        # Tear down session if room is empty, OR if the agent (session owner) disconnected.
+        # An observer staying connected after agent disconnect doesn't keep the session alive —
+        # there's no audio source anymore.
+        if manager.room_size(call_id) == 0 or role == "agent":
             sess = _sessions.pop(call_id, None)
             if sess:
                 await sess.stop()
