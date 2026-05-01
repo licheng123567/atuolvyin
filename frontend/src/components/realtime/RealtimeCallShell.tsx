@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCallSocket } from "../../hooks/useCallSocket";
+import { postSuggestionFeedback } from "../../lib/realtime/feedback-api";
 import { ConnectionBadge } from "./ConnectionBadge";
 import { TranscriptStream } from "./TranscriptStream";
 import { SuggestionCardStack } from "./SuggestionCardStack";
@@ -37,6 +38,11 @@ export function RealtimeCallShell({ callId, role, token, owner }: Props) {
       return () => clearTimeout(timeout);
     }
   }, [tag, callId, navigate]);
+
+  const handleFeedback = (id: string, action: "adopt" | "ignore") => {
+    sendFeedback(id, action);  // WS ack for instant UX
+    void postSuggestionFeedback(callId, id, action, token);  // durable
+  };
 
   const mm = String(Math.floor(elapsed / 60)).padStart(2, "0");
   const ss = String(elapsed % 60).padStart(2, "0");
@@ -75,7 +81,7 @@ export function RealtimeCallShell({ callId, role, token, owner }: Props) {
         <aside>
           <SuggestionCardStack
             suggestions={suggestions}
-            onFeedback={(id, action) => sendFeedback(id, action)}
+            onFeedback={handleFeedback}
             readOnly={role === "observer"}
           />
         </aside>

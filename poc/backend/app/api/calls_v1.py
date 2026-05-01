@@ -29,6 +29,7 @@ from app.schemas.call import (
     CallUploadResponse,
     DialRequestIn,
     DialRequestOut,
+    SuggestionFeedbackIn,
     TranscriptOut,
     TranscriptSegment,
 )
@@ -482,3 +483,62 @@ def patch_call_tag(
         summary=analysis.summary,
         user_confirmed_at=call.user_confirmed_at,
     )
+
+
+@router.post("/{call_id}/suggestions/{suggestion_id}/feedback", status_code=201)
+def post_suggestion_feedback(
+    call_id: int,
+    suggestion_id: str,
+    body: SuggestionFeedbackIn,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    from fastapi.responses import JSONResponse
+    from app.models.call import SuggestionFeedback
+
+    user_id = int(payload.get("user_id") or 0)
+    tenant_id = int(payload.get("tenant_id") or 0)
+
+    call = db.execute(
+        select(CallRecord).where(
+            CallRecord.id == call_id, CallRecord.tenant_id == tenant_id
+        )
+    ).scalar_one_or_none()
+    if not call:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "通话记录不存在"},
+        )
+    if call.caller_user_id != user_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_FORBIDDEN", "message": "无权对此通话提交反馈"},
+        )
+
+    if body.action not in ("adopt", "ignore"):
+        raise HTTPException(
+            status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "ERR_VALIDATION", "message": "action 必须是 adopt 或 ignore"},
+        )
+
+    existing = db.execute(
+        select(SuggestionFeedback).where(
+            SuggestionFeedback.call_id == call_id,
+            SuggestionFeedback.suggestion_id == suggestion_id,
+        )
+    ).scalar_one_or_none()
+    if existing:
+        # idempotent — return 200 without re-inserting
+        return JSONResponse(status_code=200, content={})
+
+    fb = SuggestionFeedback(
+        call_id=call_id,
+        suggestion_id=suggestion_id,
+        user_id=user_id,
+        action=body.action,
+        suggestion_text=body.suggestion_text or "",
+    )
+    db.add(fb)
+    db.commit()
+    return {"id": fb.id}

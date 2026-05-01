@@ -128,3 +128,8 @@ class CallTagOut(BaseModel):
     promise_amount: Optional[float]
     summary: Optional[str]
     user_confirmed_at: Optional[datetime]
+
+
+class SuggestionFeedbackIn(BaseModel):
+    action: str  # "adopt" | "ignore"
+    suggestion_text: Optional[str] = None
