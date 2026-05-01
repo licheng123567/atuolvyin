@@ -10,7 +10,7 @@ async def test_mock_streaming_asr_emits_chunks_every_1s():
     received: list[dict] = []
 
     async def on_transcript(chunk):
-        received.append(chunk.model_dump() if hasattr(chunk, "model_dump") else dict(chunk))
+        received.append(chunk.model_dump())
 
     async def on_error(exc):
         pytest.fail(f"mock should not error: {exc}")

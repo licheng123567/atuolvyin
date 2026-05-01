@@ -8,12 +8,12 @@ from datetime import datetime, timezone
 
 from app.core.config import settings
 
-from .streaming_asr import OnError, OnTranscript, StreamingASRSession, TranscriptChunk
+from .streaming_asr import OnError, OnTranscript, TranscriptChunk
 
 logger = logging.getLogger(__name__)
 
 
-class DashScopeStreamingASRSession(StreamingASRSession):
+class DashScopeStreamingASRSession:
     def __init__(self, on_transcript: OnTranscript, on_error: OnError):
         self._on_transcript = on_transcript
         self._on_error = on_error
