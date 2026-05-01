@@ -235,3 +235,11 @@ def supervisor_auth_headers(seeded_supervisor_user, seeded_tenant):
         "scope": f"tenant:{seeded_tenant.id}",
     })
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(autouse=True)
+def reset_mipush_mock():
+    from app.services import mipush
+    mipush._reset_for_tests()
+    yield
+    mipush._reset_for_tests()
