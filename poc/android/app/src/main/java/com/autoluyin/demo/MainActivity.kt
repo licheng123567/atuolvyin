@@ -46,6 +46,9 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Provide application context to ApiClient for service accessor
+        ApiClient.appContext = applicationContext
+
         binding.tasks.layoutManager = LinearLayoutManager(this)
         binding.tasks.adapter = adapter
 
@@ -55,6 +58,14 @@ class MainActivity : AppCompatActivity() {
         binding.btnServerUrl.setOnClickListener { showBackendUrlDialog() }
 
         ensurePermsThenCheck()
+
+        // MiPush registration — only when real App ID/Key are provisioned
+        // TODO: Sprint 4 MiPush — enable when AAR provisioned
+        val miPushAppId = BuildConfig.MIPUSH_APP_ID
+        val miPushAppKey = BuildConfig.MIPUSH_APP_KEY
+        if (miPushAppId.isNotBlank() && miPushAppKey.isNotBlank()) {
+            // com.xiaomi.mipush.sdk.MiPushClient.registerPush(applicationContext, miPushAppId, miPushAppKey)
+        }
     }
 
     override fun onResume() {

@@ -63,6 +63,19 @@ data class LoginReq(val phone: String, val password: String)
 @JsonClass(generateAdapter = true)
 data class LoginResp(val access_token: String, val token_type: String)
 
+@JsonClass(generateAdapter = true)
+data class RegisterDeviceRequest(
+    val device_id: String,
+    val brand: String?,
+    val model: String?,
+    val os_version: String?,
+    val push_reg_id: String? = null,
+    val push_provider: String? = "xiaomi",
+)
+
+@JsonClass(generateAdapter = true)
+data class RegisterDeviceResponse(val status: String)
+
 // ── API interface ─────────────────────────────────────────────
 
 interface BackendApi {
@@ -80,6 +93,27 @@ interface BackendApi {
         @Query("page") page: Int = 1,
         @Query("page_size") pageSize: Int = 50,
     ): CasesResponse
+
+    @POST("/api/v1/devices/register")
+    suspend fun registerDevice(
+        @Header("Authorization") authHeader: String,
+        @Body body: RegisterDeviceRequest,
+    ): RegisterDeviceResponse
+
+    @POST("api/v1/calls/{call_id}/suggestions/{suggestion_id}/feedback")
+    suspend fun postSuggestionFeedback(
+        @Header("Authorization") authHeader: String,
+        @Path("call_id") callId: Long,
+        @Path("suggestion_id") suggestionId: String,
+        @Body body: Map<String, String>,
+    ): retrofit2.Response<Unit>
+
+    @PATCH("api/v1/calls/{call_id}/tag")
+    suspend fun patchCallTag(
+        @Header("Authorization") authHeader: String,
+        @Path("call_id") callId: Long,
+        @Body body: Map<String, @JvmSuppressWildcards Any>,
+    ): retrofit2.Response<Unit>
 
     @Multipart
     @POST("/api/v1/calls/upload")
@@ -149,6 +183,16 @@ object ApiClient {
     fun invalidate() {
         synchronized(this) { current = null; currentBaseUrl = null }
     }
+
+    /**
+     * Convenience accessor used by code that doesn't have a Context handy
+     * (e.g. coroutines in RealtimeCallActivity). Throws if backend URL not configured.
+     */
+    lateinit var appContext: android.content.Context
+
+    val service: BackendApi get() = get(appContext)
+
+    val BASE_URL: String get() = currentBaseUrl ?: ""
 
     fun textPart(s: String) = s.toRequestBody("text/plain".toMediaType())
 
