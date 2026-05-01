@@ -52,6 +52,26 @@ object AppConfig {
             .remove("jwt_token").apply()
     }
 
+    /** Alias for jwtToken — used by realtime call stack. */
+    fun token(ctx: Context): String? = jwtToken(ctx)
+
+    // -------- 设备 ID --------
+    /** Returns the stable device ID (ANDROID_ID). Convenience alias for DeviceId.get(). */
+    fun deviceId(ctx: Context): String? =
+        android.provider.Settings.Secure.getString(
+            ctx.contentResolver, android.provider.Settings.Secure.ANDROID_ID
+        )?.takeIf { it.isNotBlank() }
+
+    // -------- MiPush 注册 ID --------
+    private const val KEY_PUSH_REG_ID = "push_reg_id"
+
+    fun pushRegId(ctx: Context): String? =
+        prefs(ctx).getString(KEY_PUSH_REG_ID, null)
+
+    fun savePushRegId(ctx: Context, regId: String) {
+        prefs(ctx).edit().putString(KEY_PUSH_REG_ID, regId).apply()
+    }
+
     // -------- L2：运行时业务配置 --------
     @Volatile var runtime: Runtime = Runtime()
 

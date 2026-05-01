@@ -235,3 +235,37 @@ def supervisor_auth_headers(seeded_supervisor_user, seeded_tenant):
         "scope": f"tenant:{seeded_tenant.id}",
     })
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(autouse=True)
+def reset_mipush_mock():
+    from app.services import mipush
+    mipush._reset_for_tests()
+    yield
+    mipush._reset_for_tests()
+
+
+@pytest.fixture
+def seeded_device_with_push_reg(db_session, seeded_member_user, seeded_tenant):
+    from app.models.device import DeviceProfile
+    device = DeviceProfile(
+        device_id="test-device-001",
+        user_id=seeded_member_user.id,
+        tenant_id=seeded_tenant.id,
+        brand="Xiaomi",
+        model="Redmi K70",
+        os_version="MIUI 14",
+        push_reg_id="reg-id-xiaomi-abc123",
+        push_provider="xiaomi",
+        is_healthy=True,
+    )
+    db_session.add(device)
+    db_session.flush()
+    return device
+
+
+@pytest.fixture
+def seeded_assigned_case(db_session, seeded_case, seeded_member_user):
+    seeded_case.assigned_to = seeded_member_user.id
+    db_session.flush()
+    return seeded_case

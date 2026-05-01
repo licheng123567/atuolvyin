@@ -25,6 +25,8 @@ class DeviceProfile(Base):
     os_version: Mapped[Optional[str]] = mapped_column(sa.Text)
     last_check_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True))
     is_healthy: Mapped[bool] = mapped_column(sa.Boolean, default=False)
+    push_reg_id: Mapped[Optional[str]] = mapped_column(sa.Text)
+    push_provider: Mapped[Optional[str]] = mapped_column(sa.String(20))
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True),
         server_default=sa.func.now(),

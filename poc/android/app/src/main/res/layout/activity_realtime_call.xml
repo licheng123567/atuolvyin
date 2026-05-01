@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0F172A"
+    android:padding="16dp">
+
+    <!-- Top bar: timer + connection status + hangup -->
+    <LinearLayout
+        android:id="@+id/topBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+        <TextView android:id="@+id/timer"
+            android:layout_width="0dp" android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="00:00" android:textColor="#FFFFFF" android:textSize="22sp"/>
+        <TextView android:id="@+id/connectionBadge"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="🟢 实时" android:textColor="#22C55E" android:layout_marginEnd="12dp"/>
+        <Button android:id="@+id/btnMute"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="静音" android:layout_marginEnd="8dp"/>
+        <Button android:id="@+id/btnHangup"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="挂断" android:backgroundTint="#EF4444"/>
+    </LinearLayout>
+
+    <!-- Owner info card -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/ownerCard"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="2dp"
+        app:layout_constraintTop_toBottomOf="@id/topBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="12dp">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="12dp">
+            <TextView android:id="@+id/ownerName"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textSize="18sp" android:textStyle="bold"/>
+            <TextView android:id="@+id/ownerRoom"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textSize="14sp" android:textColor="#64748B"/>
+            <TextView android:id="@+id/amountOwed"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textSize="14sp" android:textColor="#DC2626"/>
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- Transcript stream -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/transcriptList"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="#1E293B"
+        android:padding="8dp"
+        app:layout_constraintTop_toBottomOf="@id/ownerCard"
+        app:layout_constraintBottom_toTopOf="@id/suggestionCard"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="12dp"/>
+
+    <!-- AI suggestion card -->
+    <com.autoluyin.demo.realtime.SuggestionCardView
+        android:id="@+id/suggestionCard"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="12dp"/>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -100,3 +100,36 @@ class CallDetailResponse(BaseModel):
     transcript: Optional[TranscriptOut]
     analysis: Optional[AnalysisResultOut]
     created_at: datetime
+
+
+# ── Sprint 4: realtime call schemas ───────────────────────────
+
+
+class DialRequestIn(BaseModel):
+    case_id: int
+
+
+class DialRequestOut(BaseModel):
+    call_id: int
+    status: str  # "dispatched"
+
+
+class CallTagPatch(BaseModel):
+    intent: Optional[str] = None
+    promise_date: Optional[str] = None
+    promise_amount: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class CallTagOut(BaseModel):
+    call_id: int
+    intent: Optional[str]
+    promise_date: Optional[str]
+    promise_amount: Optional[float]
+    summary: Optional[str]
+    user_confirmed_at: Optional[datetime]
+
+
+class SuggestionFeedbackIn(BaseModel):
+    action: str  # "adopt" | "ignore"
+    suggestion_text: Optional[str] = None

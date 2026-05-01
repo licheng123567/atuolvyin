@@ -15,6 +15,8 @@ android {
         versionName = "0.1.0"
         // 后端地址不再硬编码，APK 首次启动由用户输入或扫激活码注入；
         // 见 AppConfig.kt / MainActivity.showBackendUrlDialog。
+        buildConfigField("String", "MIPUSH_APP_ID", "\"\"")
+        buildConfigField("String", "MIPUSH_APP_KEY", "\"\"")
     }
     buildTypes {
         release {
@@ -23,12 +25,18 @@ android {
     }
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+    testOptions {
+        unitTests.all {
+            it.useJUnitPlatform()
+        }
+    }
 }
 
 dependencies {
@@ -46,4 +54,11 @@ dependencies {
     implementation("com.squareup.moshi:moshi-kotlin:1.15.1")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
+    // CardView for SuggestionCardView
+    implementation("androidx.cardview:cardview:1.0.0")
+
+    // JUnit 5 for unit tests
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.3")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

@@ -2,6 +2,7 @@ import { useCreate, useList } from "@refinedev/core";
 import type { CrudFilter } from "@refinedev/core";
 import { Phone } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { PaginatedResponse } from "../../../types";
 
 interface OwnerInfo {
@@ -43,10 +44,12 @@ const STAGE_COLORS: Record<string, React.CSSProperties> = {
 };
 
 export function AgentCaseListPage() {
+  const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [stage, setStage] = useState("");
   const [poolType, setPoolType] = useState("");
   const [claimingId, setClaimingId] = useState<number | null>(null);
+  const [dialingId, setDialingId] = useState<number | null>(null);
   const PAGE_SIZE = 20;
 
   const filters: CrudFilter[] = [];
@@ -69,6 +72,29 @@ export function AgentCaseListPage() {
   const isLoading = query.isLoading;
 
   const { mutate: claimCase } = useCreate();
+
+  async function handleDial(caseId: number) {
+    setDialingId(caseId);
+    try {
+      const token = localStorage.getItem("access_token") ?? "";
+      const resp = await fetch("/api/v1/calls/dial-request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ case_id: caseId }),
+      });
+      if (!resp.ok) {
+        alert("拨打失败：" + resp.status);
+        return;
+      }
+      const body = await resp.json() as { call_id: number };
+      navigate(`/agent/workstation/${body.call_id}`);
+    } finally {
+      setDialingId(null);
+    }
+  }
 
   function handleClaim(caseId: number) {
     setClaimingId(caseId);
@@ -221,24 +247,40 @@ export function AgentCaseListPage() {
                   {c.pool_type === "public" ? "公池" : "专属"}
                 </td>
                 <td className="px-4 py-3">
-                  {c.pool_type === "public" && c.assigned_to === null ? (
-                    <button
-                      type="button"
-                      disabled={claimingId === c.id}
-                      onClick={() => handleClaim(c.id)}
-                      className="text-xs font-medium text-white px-2 py-1 disabled:opacity-40"
-                      style={{
-                        background: "var(--color-primary)",
-                        borderRadius: "var(--radius-sm)",
-                      }}
-                    >
-                      {claimingId === c.id ? "认领中…" : "认领"}
-                    </button>
-                  ) : (
-                    <span className="text-xs text-[var(--color-neutral-400)]">
-                      {c.assigned_to !== null ? "已认领" : "—"}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {c.pool_type === "public" && c.assigned_to === null ? (
+                      <button
+                        type="button"
+                        disabled={claimingId === c.id}
+                        onClick={() => handleClaim(c.id)}
+                        className="text-xs font-medium text-white px-2 py-1 disabled:opacity-40"
+                        style={{
+                          background: "var(--color-primary)",
+                          borderRadius: "var(--radius-sm)",
+                        }}
+                      >
+                        {claimingId === c.id ? "认领中…" : "认领"}
+                      </button>
+                    ) : null}
+                    {c.assigned_to !== null && (
+                      <button
+                        type="button"
+                        disabled={dialingId === c.id}
+                        onClick={() => handleDial(c.id)}
+                        className="text-xs font-medium text-white px-2 py-1 disabled:opacity-40 flex items-center gap-1"
+                        style={{
+                          background: "var(--color-success, #16a34a)",
+                          borderRadius: "var(--radius-sm)",
+                        }}
+                      >
+                        <Phone className="w-3 h-3" />
+                        {dialingId === c.id ? "拨打中…" : "拨打"}
+                      </button>
+                    )}
+                    {c.pool_type !== "public" && c.assigned_to === null && (
+                      <span className="text-xs text-[var(--color-neutral-400)]">—</span>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

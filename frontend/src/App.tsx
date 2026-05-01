@@ -21,6 +21,8 @@ import { AgentCaseListPage } from "./pages/agent/cases/index";
 import { AdminCaseDetailPage } from "./pages/admin/cases/detail";
 import { AgentWorkstationPage } from "./pages/agent/cases/detail";
 import { CallDetailPage } from "./pages/calls/detail";
+import { AgentLiveWorkstationPage } from "./pages/agent/workstation/live";
+import { AdminLiveWorkstationPage } from "./pages/admin/workstation/live";
 import { authProvider } from "./providers/auth-provider";
 import { dataProvider } from "./providers";
 
@@ -109,6 +111,10 @@ function App() {
             <Route path="/agent/cases/:id" element={<AgentWorkstationPage />} />
             {/* Call Detail */}
             <Route path="/calls/:id" element={<CallDetailPage />} />
+            {/* Agent Live Workstation */}
+            <Route path="/agent/workstation/:call_id" element={<AgentLiveWorkstationPage />} />
+            {/* Admin Observer Workstation */}
+            <Route path="/admin/workstation/:call_id" element={<AdminLiveWorkstationPage />} />
           </Route>
 
           {/* Catch-all */}
