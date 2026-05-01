@@ -112,3 +112,19 @@ class DialRequestIn(BaseModel):
 class DialRequestOut(BaseModel):
     call_id: int
     status: str  # "dispatched"
+
+
+class CallTagPatch(BaseModel):
+    intent: Optional[str] = None
+    promise_date: Optional[str] = None
+    promise_amount: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class CallTagOut(BaseModel):
+    call_id: int
+    intent: Optional[str]
+    promise_date: Optional[str]
+    promise_amount: Optional[float]
+    summary: Optional[str]
+    user_confirmed_at: Optional[datetime]

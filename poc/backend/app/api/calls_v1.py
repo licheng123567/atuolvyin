@@ -24,6 +24,8 @@ from app.schemas.call import (
     AnalysisResultOut,
     CallDetailResponse,
     CallListItem,
+    CallTagOut,
+    CallTagPatch,
     CallUploadResponse,
     DialRequestIn,
     DialRequestOut,
@@ -416,4 +418,67 @@ def get_call_detail(
         transcript=transcript_out,
         analysis=analysis_out,
         created_at=call.created_at,
+    )
+
+
+@router.patch("/{call_id}/tag", response_model=CallTagOut)
+def patch_call_tag(
+    call_id: int,
+    body: CallTagPatch,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> CallTagOut:
+    user_id = int(payload.get("user_id") or 0)
+    tenant_id = int(payload.get("tenant_id") or 0)
+
+    call = db.execute(
+        select(CallRecord).where(
+            CallRecord.id == call_id,
+            CallRecord.tenant_id == tenant_id,
+        )
+    ).scalar_one_or_none()
+    if not call:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "通话记录不存在"},
+        )
+    if call.caller_user_id != user_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_FORBIDDEN", "message": "无权修改此通话"},
+        )
+
+    analysis = db.execute(
+        select(AnalysisResult).where(AnalysisResult.call_id == call_id)
+    ).scalar_one_or_none()
+    if not analysis:
+        analysis = AnalysisResult(call_id=call_id, key_segments={})
+        db.add(analysis)
+        db.flush()
+
+    # Merge into key_segments (don't overwrite existing fields with None)
+    seg = dict(analysis.key_segments or {})
+    if body.intent is not None:
+        seg["intent"] = body.intent
+    if body.promise_date is not None:
+        seg["promise_date"] = body.promise_date
+    if body.promise_amount is not None:
+        seg["promise_amount"] = body.promise_amount
+    analysis.key_segments = seg
+    if body.notes is not None:
+        analysis.summary = body.notes
+
+    call.user_confirmed_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(analysis)
+    db.refresh(call)
+
+    return CallTagOut(
+        call_id=call.id,
+        intent=seg.get("intent"),
+        promise_date=seg.get("promise_date"),
+        promise_amount=seg.get("promise_amount"),
+        summary=analysis.summary,
+        user_confirmed_at=call.user_confirmed_at,
     )
