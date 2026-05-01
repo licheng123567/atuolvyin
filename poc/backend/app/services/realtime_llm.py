@@ -23,6 +23,8 @@ from app.core.config import settings
 
 from .streaming_asr import TranscriptChunk
 
+TRANSCRIPT_CONTEXT_WINDOW = 10  # number of most-recent transcript chunks fed to the LLM
+
 
 @dataclass
 class Suggestion:
@@ -103,7 +105,7 @@ class RealtimeSuggestionEngine:
         amount = getattr(self._ctx.case, "amount_owed", 0)
         months = getattr(self._ctx.case, "months_overdue", 0)
         history = "\n".join(
-            f"[{c.speaker}] {c.text}" for c in self._ctx.transcript[-10:]
+            f"[{c.speaker}] {c.text}" for c in self._ctx.transcript[-TRANSCRIPT_CONTEXT_WINDOW:]
         )
         if final:
             prompt = (
@@ -140,8 +142,10 @@ async def _call_llm(messages: list[dict]) -> dict:
         import json
         from openai import AsyncOpenAI
 
+        if not settings.llm_api_key:
+            raise RuntimeError("llm_api_key is required when llm_backend='api'")
         _BASE = settings.llm_base_url or "https://api.deepseek.com"
-        _KEY = settings.llm_api_key or "sk-placeholder"
+        _KEY = settings.llm_api_key
         _MODEL = settings.llm_model or "deepseek-chat"
 
         system = (
@@ -159,7 +163,10 @@ async def _call_llm(messages: list[dict]) -> dict:
             temperature=0.3,
         )
         content = resp.choices[0].message.content or "{}"
-        return json.loads(content)
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            return {"text": "", "intent": "error", "confidence": 0.0}
 
     raise RuntimeError(f"unknown LLM_BACKEND: {settings.llm_backend}")
 
@@ -183,8 +190,10 @@ async def _call_final_analysis(messages: list[dict]) -> dict:
         import json
         from openai import AsyncOpenAI
 
+        if not settings.llm_api_key:
+            raise RuntimeError("llm_api_key is required when llm_backend='api'")
         _BASE = settings.llm_base_url or "https://api.deepseek.com"
-        _KEY = settings.llm_api_key or "sk-placeholder"
+        _KEY = settings.llm_api_key
         _MODEL = settings.llm_model or "deepseek-chat"
 
         system = (
@@ -201,7 +210,16 @@ async def _call_final_analysis(messages: list[dict]) -> dict:
             temperature=0.1,
         )
         content = resp.choices[0].message.content or "{}"
-        result = json.loads(content)
+        try:
+            result = json.loads(content)
+        except json.JSONDecodeError:
+            result = {
+                "intent": "unknown",
+                "promise_date": None,
+                "promise_amount": None,
+                "summary": "",
+                "needs_review": True,
+            }
         return {
             "intent": result.get("intent", "unknown"),
             "promise_date": result.get("promise_date"),
