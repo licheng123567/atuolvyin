@@ -23,6 +23,9 @@ import { AgentWorkstationPage } from "./pages/agent/cases/detail";
 import { CallDetailPage } from "./pages/calls/detail";
 import { AgentLiveWorkstationPage } from "./pages/agent/workstation/live";
 import { AdminLiveWorkstationPage } from "./pages/admin/workstation/live";
+import { ScriptListPage } from "./pages/admin/scripts/list";
+import { ScriptVersionsPage } from "./pages/admin/scripts/versions";
+import { SupervisorScriptLabelsPage } from "./pages/supervisor/script-labels";
 import { authProvider } from "./providers/auth-provider";
 import { dataProvider } from "./providers";
 
@@ -59,6 +62,17 @@ function App() {
           {
             name: "calls",
             show: "/calls/:id",
+          },
+          {
+            name: "admin/scripts",
+            list: "/admin/scripts",
+            show: "/admin/scripts/:id/versions",
+            meta: { label: "话术库" },
+          },
+          {
+            name: "supervisor/script-labels",
+            list: "/supervisor/script-labels",
+            meta: { label: "话术标注" },
           },
         ]}
         options={{ syncWithLocation: true, warnWhenUnsavedChanges: false }}
@@ -115,6 +129,11 @@ function App() {
             <Route path="/agent/workstation/:call_id" element={<AgentLiveWorkstationPage />} />
             {/* Admin Observer Workstation */}
             <Route path="/admin/workstation/:call_id" element={<AdminLiveWorkstationPage />} />
+            {/* Admin - Script Library */}
+            <Route path="/admin/scripts" element={<ScriptListPage />} />
+            <Route path="/admin/scripts/:id/versions" element={<ScriptVersionsPage />} />
+            {/* Supervisor - Script Labels */}
+            <Route path="/supervisor/script-labels" element={<SupervisorScriptLabelsPage />} />
           </Route>
 
           {/* Catch-all */}

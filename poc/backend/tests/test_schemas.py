@@ -39,3 +39,29 @@ def test_quota_no_limit():
     )
     assert status.quota is None
     assert not status.is_exhausted
+
+
+def test_script_schemas_import_and_validate():
+    from app.schemas.script import (
+        ScriptTemplateCreate, ScriptTemplateUpdate, ScriptTemplateOut,
+        ScriptVersionOut, ImportResultOut,
+        SupervisorLabelCreate, SuggestionConfigOut, SuggestionConfigUpdate,
+    )
+    obj = ScriptTemplateCreate(title="T", trigger_intent="其他", content="内容")
+    assert obj.title == "T"
+
+    label = SupervisorLabelCreate(label="bad", note="有问题")
+    assert label.label == "bad"
+
+    # bad 话术必须有 note
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        SupervisorLabelCreate(label="bad")
+
+
+def test_suggestion_feedbackin_accepts_script_template_id():
+    from app.schemas.call import SuggestionFeedbackIn
+    fb = SuggestionFeedbackIn(action="adopt", script_template_id=5)
+    assert fb.script_template_id == 5
+    fb2 = SuggestionFeedbackIn(action="ignore")
+    assert fb2.script_template_id is None

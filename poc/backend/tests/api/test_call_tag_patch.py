@@ -87,3 +87,42 @@ async def test_patch_tag_call_not_found(client, agent_auth_headers):
         headers=agent_auth_headers,
     )
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_patch_tag_intent_infers_signal(
+    client, agent_auth_headers, seeded_call_with_analysis, db_session, seeded_tenant
+):
+    """Patching tag with intent=payment_confirmed should infer signal=1 on linked feedbacks."""
+    from app.models.call import SuggestionFeedback
+    from app.models.script import ScriptTemplate
+
+    # Seed a script template and a feedback row linked to it (pending signal)
+    script = ScriptTemplate(
+        tenant_id=seeded_tenant.id, title="payment script", trigger_intent="payment_confirmed",
+        content="c", version=1
+    )
+    db_session.add(script)
+    db_session.flush()
+
+    fb = SuggestionFeedback(
+        call_id=seeded_call_with_analysis.id,
+        suggestion_id="sug-infer-01",
+        user_id=seeded_call_with_analysis.caller_user_id,
+        action="adopt",
+        suggestion_text="话术内容",
+        script_template_id=script.id,
+        inferred_signal=None,
+    )
+    db_session.add(fb)
+    db_session.flush()
+
+    resp = await client.patch(
+        f"/api/v1/calls/{seeded_call_with_analysis.id}/tag",
+        json={"intent": "payment_confirmed"},
+        headers=agent_auth_headers,
+    )
+    assert resp.status_code == 200
+
+    db_session.expire(fb)
+    assert fb.inferred_signal == 1

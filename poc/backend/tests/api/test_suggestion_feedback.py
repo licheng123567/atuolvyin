@@ -67,3 +67,25 @@ async def test_suggestion_feedback_other_user_forbidden(
         headers=supervisor_auth_headers,
     )
     assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_feedback_with_script_template_id_increments_usage(
+    client, agent_auth_headers, seeded_call_processed, db_session, seeded_tenant
+):
+    from app.models.script import ScriptTemplate
+    script = ScriptTemplate(
+        tenant_id=seeded_tenant.id, title="t", trigger_intent="其他", content="c", version=1
+    )
+    db_session.add(script)
+    db_session.flush()
+
+    resp = await client.post(
+        f"/api/v1/calls/{seeded_call_processed.id}/suggestions/sug-st-01/feedback",
+        json={"action": "adopt", "script_template_id": script.id},
+        headers=agent_auth_headers,
+    )
+    assert resp.status_code == 201
+
+    db_session.expire(script)
+    assert script.usage_count == 1

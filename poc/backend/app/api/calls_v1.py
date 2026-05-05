@@ -472,6 +472,13 @@ def patch_call_tag(
 
     call.user_confirmed_at = datetime.now(timezone.utc)
     db.commit()
+
+    # 推断业务信号
+    if body.intent:
+        from app.services.signal_inference import infer_signals_for_call
+        infer_signals_for_call(call.id, body.intent, db)
+        db.commit()
+
     db.refresh(analysis)
     db.refresh(call)
 
@@ -538,7 +545,20 @@ def post_suggestion_feedback(
         user_id=user_id,
         action=body.action,
         suggestion_text=body.suggestion_text or "",
+        script_template_id=body.script_template_id,
     )
     db.add(fb)
+    db.flush()
+
+    # 采用时累计 usage_count
+    if body.action == "adopt" and body.script_template_id is not None:
+        from app.models.script import ScriptTemplate
+        from sqlalchemy import update as sa_update
+        db.execute(
+            sa_update(ScriptTemplate)
+            .where(ScriptTemplate.id == body.script_template_id)
+            .values(usage_count=ScriptTemplate.usage_count + 1)
+        )
+
     db.commit()
     return {"id": fb.id}

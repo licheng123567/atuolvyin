@@ -37,7 +37,7 @@ async def test_suggestion_triggered_on_utterance_end_after_debounce(fake_case, f
 
     calls = []
 
-    async def fake_llm(messages):
+    async def fake_llm(messages, system_prompt):
         calls.append(messages)
         return {"text": "建议询问分期", "intent": "ask_installment", "confidence": 0.8}
 
@@ -54,7 +54,7 @@ async def test_suggestion_triggered_on_utterance_end_after_debounce(fake_case, f
 async def test_suggestion_debounce_skips_within_window(fake_case, fake_owner, monkeypatch):
     from app.services import realtime_llm
 
-    async def fake_llm(messages):
+    async def fake_llm(messages, system_prompt):
         return {"text": "建议X", "intent": "x", "confidence": 0.9}
 
     monkeypatch.setattr(realtime_llm, "_call_llm", fake_llm)
@@ -70,7 +70,7 @@ async def test_suggestion_debounce_skips_within_window(fake_case, fake_owner, mo
 async def test_suggestion_timeout_fallback_triggers_when_no_utterance_end(fake_case, fake_owner, monkeypatch):
     from app.services import realtime_llm
 
-    async def fake_llm(messages):
+    async def fake_llm(messages, system_prompt):
         return {"text": "建议Y", "intent": "y", "confidence": 0.7}
 
     monkeypatch.setattr(realtime_llm, "_call_llm", fake_llm)
@@ -87,7 +87,7 @@ async def test_suggestion_timeout_fallback_triggers_when_no_utterance_end(fake_c
 async def test_no_suggestion_when_chunk_not_utterance_end_within_timeout(fake_case, fake_owner, monkeypatch):
     from app.services import realtime_llm
 
-    async def fake_llm(messages):
+    async def fake_llm(messages, system_prompt):
         pytest.fail("should not call LLM")
 
     monkeypatch.setattr(realtime_llm, "_call_llm", fake_llm)

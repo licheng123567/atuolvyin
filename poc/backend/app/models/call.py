@@ -104,6 +104,16 @@ class SuggestionFeedback(Base):
         server_default=sa.func.now(),
         nullable=False,
     )
+    supervisor_label: Mapped[Optional[str]] = mapped_column(sa.String(16))  # good | bad
+    supervisor_note: Mapped[Optional[str]] = mapped_column(sa.Text)
+    supervisor_id: Mapped[Optional[int]] = mapped_column(
+        sa.BigInteger, sa.ForeignKey("user_account.id"), nullable=True
+    )
+    supervisor_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True))
+    inferred_signal: Mapped[Optional[int]] = mapped_column(sa.SmallInteger)
+    script_template_id: Mapped[Optional[int]] = mapped_column(
+        sa.BigInteger, sa.ForeignKey("script_template.id"), nullable=True
+    )
 
     __table_args__ = (
         sa.UniqueConstraint("call_id", "suggestion_id", name="uq_suggestion_feedback_call_sid"),

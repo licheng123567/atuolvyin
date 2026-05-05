@@ -5,7 +5,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import admin, admin_cases, agent_cases, auth, calls, calls_v1, devices, devices_v1, ops, recordings, supervisor, tasks, users, ws_calls
+from app.api import admin, admin_cases, admin_scripts, agent_cases, auth, calls, calls_v1, devices, devices_v1, ops, recordings, supervisor, supervisor_labels, tasks, users, ws_calls, admin_suggestion_config
 
 
 @asynccontextmanager
@@ -84,6 +84,9 @@ app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(calls.router, prefix="/api/calls", tags=["calls"])
 app.include_router(recordings.router, prefix="/api/recordings", tags=["recordings"])
 app.include_router(ws_calls.router)  # no prefix — /ws/calls/{id} stays as-is
+app.include_router(admin_scripts.router, prefix="/api/v1/admin", tags=["admin-scripts"])
+app.include_router(supervisor_labels.router, prefix="/api/v1/supervisor", tags=["supervisor-labels"])
+app.include_router(admin_suggestion_config.router, prefix="/api/v1/admin", tags=["suggestion-config"])
 
 
 @app.get("/health")
