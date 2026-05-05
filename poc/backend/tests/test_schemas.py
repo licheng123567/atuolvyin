@@ -55,7 +55,6 @@ def test_script_schemas_import_and_validate():
 
     # bad 话术必须有 note
     from pydantic import ValidationError
-    import pytest
     with pytest.raises(ValidationError):
         SupervisorLabelCreate(label="bad")
 

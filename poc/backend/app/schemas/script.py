@@ -22,17 +22,17 @@ class ScriptTemplateUpdate(BaseModel):
 
 class ScriptTemplateOut(BaseModel):
     id: int
-    tenant_id: Optional[int]
+    tenant_id: Optional[int] = None
     title: str
     trigger_intent: str
     content: str
-    notes: Optional[str]
+    notes: Optional[str] = None
     version: int
     is_active: bool
     usage_count: int
-    adoption_rate: Optional[float]
-    conversion_rate: Optional[float]
-    score_grade: Optional[str]
+    adoption_rate: Optional[float] = None
+    conversion_rate: Optional[float] = None
+    score_grade: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)
@@ -43,8 +43,8 @@ class ScriptVersionOut(BaseModel):
     title: str
     trigger_intent: str
     content: str
-    notes: Optional[str]
-    edited_by: Optional[int]
+    notes: Optional[str] = None
+    edited_by: Optional[int] = None
     edited_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
@@ -75,9 +75,9 @@ class SupervisorLabelOut(BaseModel):
     feedback_id: int
     call_id: int
     suggestion_text: str
-    supervisor_label: Optional[str]
-    supervisor_note: Optional[str]
-    script_template_id: Optional[int]
+    supervisor_label: Optional[str] = None
+    supervisor_note: Optional[str] = None
+    script_template_id: Optional[int] = None
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
