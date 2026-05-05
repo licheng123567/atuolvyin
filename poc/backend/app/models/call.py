@@ -107,12 +107,12 @@ class SuggestionFeedback(Base):
     supervisor_label: Mapped[Optional[str]] = mapped_column(sa.String(16))  # good | bad
     supervisor_note: Mapped[Optional[str]] = mapped_column(sa.Text)
     supervisor_id: Mapped[Optional[int]] = mapped_column(
-        sa.Integer, sa.ForeignKey("user_account.id"), nullable=True
+        sa.BigInteger, sa.ForeignKey("user_account.id"), nullable=True
     )
     supervisor_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True))
     inferred_signal: Mapped[Optional[int]] = mapped_column(sa.SmallInteger)
     script_template_id: Mapped[Optional[int]] = mapped_column(
-        sa.Integer, sa.ForeignKey("script_template.id"), nullable=True
+        sa.BigInteger, sa.ForeignKey("script_template.id"), nullable=True
     )
 
     __table_args__ = (

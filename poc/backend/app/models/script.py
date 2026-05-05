@@ -12,10 +12,10 @@ from .base import Base
 class ScriptTemplate(Base):
     __tablename__ = "script_template"
 
-    id: Mapped[int] = mapped_column(sa.Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
     tenant_id: Mapped[Optional[int]] = mapped_column(
-        sa.Integer, sa.ForeignKey("tenant.id", ondelete="CASCADE"), nullable=True
-    )
+        sa.BigInteger, sa.ForeignKey("tenant.id", ondelete="CASCADE"), nullable=True
+    )  # None = platform-level shared template
     title: Mapped[str] = mapped_column(sa.String(128), nullable=False)
     trigger_intent: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     content: Mapped[str] = mapped_column(sa.Text, nullable=False)
@@ -27,7 +27,7 @@ class ScriptTemplate(Base):
     conversion_rate: Mapped[Optional[float]] = mapped_column(sa.Float)
     score_grade: Mapped[Optional[str]] = mapped_column(sa.String(1))
     created_by: Mapped[Optional[int]] = mapped_column(
-        sa.Integer, sa.ForeignKey("user_account.id"), nullable=True
+        sa.BigInteger, sa.ForeignKey("user_account.id"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
@@ -40,15 +40,16 @@ class ScriptTemplate(Base):
     __table_args__ = (
         sa.Index("idx_script_template_tenant", "tenant_id"),
         sa.Index("idx_script_template_active", "tenant_id", "is_active"),
+        sa.CheckConstraint("score_grade IN ('A','B','C','D')", name="ck_st_score_grade"),
     )
 
 
 class ScriptTemplateVersion(Base):
     __tablename__ = "script_template_version"
 
-    id: Mapped[int] = mapped_column(sa.Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
     script_template_id: Mapped[int] = mapped_column(
-        sa.Integer, sa.ForeignKey("script_template.id", ondelete="CASCADE"), nullable=False
+        sa.BigInteger, sa.ForeignKey("script_template.id", ondelete="CASCADE"), nullable=False
     )
     version: Mapped[int] = mapped_column(sa.Integer, nullable=False)
     title: Mapped[str] = mapped_column(sa.String(128), nullable=False)
@@ -56,7 +57,7 @@ class ScriptTemplateVersion(Base):
     content: Mapped[str] = mapped_column(sa.Text, nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(sa.Text)
     edited_by: Mapped[Optional[int]] = mapped_column(
-        sa.Integer, sa.ForeignKey("user_account.id"), nullable=True
+        sa.BigInteger, sa.ForeignKey("user_account.id"), nullable=True
     )
     edited_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
@@ -70,9 +71,9 @@ class ScriptTemplateVersion(Base):
 class TenantSuggestionConfig(Base):
     __tablename__ = "tenant_suggestion_config"
 
-    id: Mapped[int] = mapped_column(sa.Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
-        sa.Integer, sa.ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False, unique=True
+        sa.BigInteger, sa.ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False, unique=True
     )
     sensitivity: Mapped[int] = mapped_column(sa.SmallInteger, nullable=False, default=3)
     max_per_push: Mapped[int] = mapped_column(sa.SmallInteger, nullable=False, default=3)
