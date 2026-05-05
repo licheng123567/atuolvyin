@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column
@@ -41,7 +40,7 @@ class DisputeRecord(Base, TimestampMixin):
     )
     reason: Mapped[str] = mapped_column(sa.Text, nullable=False)
     status: Mapped[str] = mapped_column(sa.Text, nullable=False, default="open")
-    resolution: Mapped[Optional[str]] = mapped_column(sa.Text)
+    resolution: Mapped[str | None] = mapped_column(sa.Text)
     submitted_by: Mapped[int] = mapped_column(
         sa.BigInteger, sa.ForeignKey("user_account.id"), nullable=False
     )

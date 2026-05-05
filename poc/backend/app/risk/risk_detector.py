@@ -4,8 +4,8 @@ import asyncio
 import logging
 import time
 import uuid
-from datetime import datetime, timezone
-from typing import Awaitable, Callable, Optional, Set
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
@@ -41,7 +41,7 @@ class RiskDetector:
         # Per-speaker free LLM throttle timestamp
         self._last_free_llm: dict[str, float] = {}
         # Track live background tasks so we can cancel them on stop()
-        self._tasks: Set[asyncio.Task] = set()
+        self._tasks: set[asyncio.Task] = set()
 
     def cancel(self) -> None:
         for task in self._tasks:
@@ -174,11 +174,11 @@ class RiskDetector:
         speaker: str,
         level: str,
         trigger: str,
-        keyword: Optional[str],
-        llm_confidence: Optional[float],
+        keyword: str | None,
+        llm_confidence: float | None,
         text: str,
     ) -> dict:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return {
             "type": "risk.event",
             "id": risk_id,

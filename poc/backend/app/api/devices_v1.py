@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Annotated, Optional
+from datetime import UTC, datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
@@ -21,16 +21,16 @@ AGENT_ROLES = ("agent_internal", "agent_external")
 
 class DeviceRegisterRequest(BaseModel):
     device_id: str
-    brand: Optional[str] = None
-    model: Optional[str] = None
-    os_version: Optional[str] = None
+    brand: str | None = None
+    model: str | None = None
+    os_version: str | None = None
 
 
 class DeviceRegisterResponse(BaseModel):
     device_id: str
     user_id: int
     tenant_id: int
-    brand: Optional[str] = None
+    brand: str | None = None
     created_at: datetime
 
 
@@ -122,7 +122,7 @@ def self_check(
 
     is_healthy = body.recording_dir_ok and body.recording_toggle_on and body.permissions_ok
     device.is_healthy = is_healthy
-    device.last_check_at = datetime.now(timezone.utc)
+    device.last_check_at = datetime.now(UTC)
     db.commit()
 
     return SelfCheckResponse(can_call=is_healthy)
@@ -132,7 +132,7 @@ def self_check(
 def get_config(
     _payload: Annotated[dict, Depends(get_token_payload)],
     db: Annotated[Session, Depends(get_db)],
-    device_id: Optional[str] = Query(None),
+    device_id: str | None = Query(None),
 ) -> dict:
     try:
         rows = db.execute(text("SELECT key, value FROM app_config")).fetchall()

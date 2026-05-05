@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.core.config import settings
 
@@ -37,7 +37,7 @@ class DashScopeStreamingASRSession:
                         seq=manager._seq,
                         speaker="unknown",
                         text=sentence["text"],
-                        ts=datetime.now(timezone.utc),
+                        ts=datetime.now(UTC),
                         utterance_end=bool(sentence.get("end_time")),
                     )
                     manager._seq += 1

@@ -4,6 +4,7 @@
 """
 import json
 import logging
+
 from sqlalchemy import text
 
 from app.core.config import settings
@@ -38,7 +39,7 @@ def process_call(call_log_id: int):
                 hint_task_type=ctx["task_type"],
                 local_file_path=local_path,
             )
-        except Exception as e:
+        except Exception:
             logger.exception("ASR failed for call %s", call_log_id)
             db.execute(text("UPDATE call_log SET status='failed' WHERE id=:c"),
                        {"c": call_log_id})

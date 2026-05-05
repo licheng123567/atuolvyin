@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -12,7 +10,7 @@ class RiskKeyword(Base, TimestampMixin):
     __tablename__ = "risk_keyword"
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[int]] = mapped_column(sa.BigInteger)
+    tenant_id: Mapped[int | None] = mapped_column(sa.BigInteger)
     category: Mapped[str] = mapped_column(sa.String(32), nullable=False)
     speaker: Mapped[str] = mapped_column(sa.String(16), nullable=False)
     level: Mapped[str] = mapped_column(sa.String(8), nullable=False)

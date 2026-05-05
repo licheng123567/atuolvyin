@@ -2,15 +2,15 @@
 from __future__ import annotations
 
 import logging
-from typing import Callable, Awaitable, Optional
+from collections.abc import Awaitable, Callable
 
 from sqlalchemy.orm import Session
 
 from app.models.call import CallRecord
 from app.models.case import CollectionCase, OwnerProfile
 from app.risk.risk_detector import RiskDetector
+from app.services.realtime_llm import RealtimeSuggestionEngine
 from app.services.streaming_asr import TranscriptChunk, get_streaming_asr_backend
-from app.services.realtime_llm import RealtimeSuggestionEngine, Suggestion
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +37,10 @@ class CallSession:
         self._on_tag = on_tag_ready
         self._on_risk = on_risk_broadcast
         self._asr_session = None
-        self._llm_engine: Optional[RealtimeSuggestionEngine] = None
-        self._risk_detector: Optional[RiskDetector] = None
-        self._tenant_id: Optional[int] = None
-        self._db: Optional[Session] = None
+        self._llm_engine: RealtimeSuggestionEngine | None = None
+        self._risk_detector: RiskDetector | None = None
+        self._tenant_id: int | None = None
+        self._db: Session | None = None
         self._stopped: bool = False
 
     async def start(self, db: Session) -> None:

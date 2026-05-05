@@ -3,9 +3,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 
-from app.core.db import get_db
 from app.core.security import get_current_user, get_token_payload
 from app.models.user import UserAccount
 from app.schemas.user import UserMeResponse

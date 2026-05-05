@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Annotated, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
@@ -13,7 +13,6 @@ from sqlalchemy.orm import Session
 from app.core.crypto import encrypt_phone
 from app.core.db import get_db
 from app.core.security import (
-    get_current_user,
     get_password_hash,
     get_token_payload,
     mask_phone,
@@ -22,7 +21,12 @@ from app.core.security import (
 from app.models.tenant import UserTenantMembership
 from app.models.user import UserAccount
 from app.schemas.common import PaginatedResponse
-from app.schemas.user import InviteLinkRequest, InviteLinkResponse, UserCreateByAdminRequest, UserListResponse
+from app.schemas.user import (
+    InviteLinkRequest,
+    InviteLinkResponse,
+    UserCreateByAdminRequest,
+    UserListResponse,
+)
 
 router = APIRouter()
 
@@ -45,11 +49,11 @@ async def list_users(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
-    q: Optional[str] = Query(None, max_length=100),
+    q: str | None = Query(None, max_length=100),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[UserListResponse]:
-    tenant_id: Optional[int] = payload.get("tenant_id")
+    tenant_id: int | None = payload.get("tenant_id")
     if not tenant_id:
         raise HTTPException(
             status_code=http_status.HTTP_403_FORBIDDEN,
@@ -91,7 +95,7 @@ async def create_user(
     _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> UserListResponse:
-    tenant_id: Optional[int] = payload.get("tenant_id")
+    tenant_id: int | None = payload.get("tenant_id")
     if not tenant_id:
         raise HTTPException(
             status_code=http_status.HTTP_403_FORBIDDEN,
@@ -112,7 +116,7 @@ async def create_user(
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,
             detail={"code": "ERR_DUPLICATE_PHONE", "message": "手机号已被注册"},
-        )
+        ) from None
 
     membership = UserTenantMembership(
         user_id=new_user.id,
@@ -133,7 +137,7 @@ async def generate_invite_link(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
 ) -> InviteLinkResponse:
-    tenant_id: Optional[int] = payload.get("tenant_id")
+    tenant_id: int | None = payload.get("tenant_id")
     if not tenant_id:
         raise HTTPException(
             status_code=http_status.HTTP_403_FORBIDDEN,
@@ -141,7 +145,7 @@ async def generate_invite_link(
         )
 
     token = secrets.token_urlsafe(32)
-    expires_at = datetime.now(timezone.utc) + timedelta(days=body.expire_days)
+    expires_at = datetime.now(UTC) + timedelta(days=body.expire_days)
     # Invite token storage deferred to Sprint 2 (need invite_token table)
     return InviteLinkResponse(
         token=token,

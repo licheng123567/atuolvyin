@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
-
 
 # ── WebSocket event shapes ────────────────────────────────────
 
@@ -16,8 +14,8 @@ class RiskEventOut(BaseModel):
     speaker: str
     level: str
     trigger: str        # "keyword" | "llm" | "keyword+llm"
-    matched_keyword: Optional[str] = None
-    llm_confidence: Optional[float] = None
+    matched_keyword: str | None = None
+    llm_confidence: float | None = None
     transcript_text: str
     ts_ms: int
     raised_at: datetime
@@ -26,7 +24,7 @@ class RiskEventOut(BaseModel):
 class SupervisorAlertOut(BaseModel):
     type: str = "supervisor.alert"
     call_id: int
-    case_id: Optional[int] = None
+    case_id: int | None = None
     agent_user_id: int
     agent_name: str
     callee_phone_masked: str
@@ -41,19 +39,19 @@ class RiskKeywordCreate(BaseModel):
     speaker: str
     level: str
     keyword: str
-    tenant_id: Optional[int] = None     # None = platform preset; only platform_super may set
+    tenant_id: int | None = None     # None = platform preset; only platform_super may set
 
 
 class RiskKeywordUpdate(BaseModel):
-    is_active: Optional[bool] = None
-    level: Optional[str] = None
+    is_active: bool | None = None
+    level: str | None = None
 
 
 class RiskKeywordOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    tenant_id: Optional[int] = None
+    tenant_id: int | None = None
     category: str
     speaker: str
     level: str

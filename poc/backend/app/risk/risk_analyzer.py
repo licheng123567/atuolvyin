@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 from app.core.config import settings
 from app.risk.keyword_matcher import KeywordHit
@@ -19,7 +18,7 @@ class LLMRiskVerdict:
 async def analyze_risk_with_llm(
     transcript_text: str,
     speaker: str,
-    keyword_hint: Optional[KeywordHit],
+    keyword_hint: KeywordHit | None,
 ) -> LLMRiskVerdict:
     backend = settings.risk_analyzer_backend.lower()
     if backend == "mock":
@@ -33,7 +32,7 @@ async def analyze_risk_with_llm(
 def _mock_analyze(
     text: str,
     speaker: str,
-    hint: Optional[KeywordHit],
+    hint: KeywordHit | None,
 ) -> LLMRiskVerdict:
     """Keyword-only mock: returns verdict based on hint or simple text heuristics."""
     if hint is not None:
@@ -82,10 +81,12 @@ speaker 字段是输入，不需 LLM 推断。confidence < 0.7 时输出 is_risk
 async def _api_analyze(
     text: str,
     speaker: str,
-    hint: Optional[KeywordHit],
+    hint: KeywordHit | None,
 ) -> LLMRiskVerdict:
     import json
+
     from openai import AsyncOpenAI
+
     from app.services.llm_openai_compatible import _BASE, _KEY, _MODEL
 
     client = AsyncOpenAI(api_key=_KEY, base_url=_BASE)

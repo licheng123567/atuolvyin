@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -45,7 +44,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
         .limit(1)
     ).scalar_one_or_none()
 
-    tenant_id: Optional[int] = None
+    tenant_id: int | None = None
     role = "platform_superadmin"
     scope = "platform"
 
@@ -54,7 +53,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
         role = membership.role
         scope = f"tenant:{membership.tenant_id}"
 
-    user.last_login_at = datetime.now(timezone.utc)
+    user.last_login_at = datetime.now(UTC)
     db.commit()
 
     token = create_access_token(

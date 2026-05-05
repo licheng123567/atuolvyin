@@ -2,14 +2,12 @@
 """JWT validation for WebSocket query-string token."""
 from __future__ import annotations
 
-from typing import Optional
-
 from jose import JWTError, jwt
 
 from app.core.config import settings
 
 
-def decode_ws_token(token: str) -> Optional[dict]:
+def decode_ws_token(token: str) -> dict | None:
     """Return JWT payload dict or None if invalid."""
     if not token:
         return None

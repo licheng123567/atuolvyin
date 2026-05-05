@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
@@ -43,7 +43,7 @@ def _authorize(payload: dict, role: str, call: CallRecord) -> bool:
 async def ws_calls(
     websocket: WebSocket,
     call_id: int,
-    token: Annotated[Optional[str], Query()] = None,
+    token: Annotated[str | None, Query()] = None,
     role: Annotated[str, Query()] = "agent",
     db: Annotated[Session, Depends(get_db)] = None,
 ):

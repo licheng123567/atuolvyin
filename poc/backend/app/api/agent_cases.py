@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -20,7 +20,6 @@ from app.schemas.case import (
     CaseResponse,
     CaseWithOwnerResponse,
     OwnerInfo,
-    TimelineEvent,
 )
 from app.schemas.common import PaginatedResponse
 
@@ -36,8 +35,8 @@ async def list_my_cases(
     payload: Annotated[dict, Depends(get_token_payload)],
     user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
-    pool_type: Optional[str] = Query(None),
-    stage: Optional[str] = Query(None),
+    pool_type: str | None = Query(None),
+    stage: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[CaseWithOwnerResponse]:

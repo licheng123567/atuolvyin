@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import defaultdict
-from typing import Optional
 
 from fastapi import WebSocket
 
@@ -38,7 +37,7 @@ class SupervisorManager:
                 await self.disconnect(tenant_id, ws)
 
 
-_supervisor_manager: Optional[SupervisorManager] = None
+_supervisor_manager: SupervisorManager | None = None
 
 
 def get_supervisor_manager() -> SupervisorManager:

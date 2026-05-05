@@ -17,7 +17,6 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Optional
 
 from app.core.config import settings
 
@@ -55,8 +54,8 @@ class RealtimeSuggestionEngine:
         self,
         case: object,
         owner: object,
-        debounce_sec: Optional[int] = None,
-        timeout_sec: Optional[int] = None,
+        debounce_sec: int | None = None,
+        timeout_sec: int | None = None,
     ):
         self._ctx = _CaseCtx(case=case, owner=owner)
         self._debounce_sec = (
@@ -71,7 +70,7 @@ class RealtimeSuggestionEngine:
         # very first chunk.
         self._last_llm_at: float = time.monotonic() - self._debounce_sec
 
-    async def on_transcript(self, chunk: TranscriptChunk) -> Optional[Suggestion]:
+    async def on_transcript(self, chunk: TranscriptChunk) -> Suggestion | None:
         self._ctx.transcript.append(chunk)
         now = time.monotonic()
 
@@ -140,6 +139,7 @@ async def _call_llm(messages: list[dict]) -> dict:
         }
     if backend == "api":
         import json
+
         from openai import AsyncOpenAI
 
         if not settings.llm_api_key:
@@ -188,6 +188,7 @@ async def _call_final_analysis(messages: list[dict]) -> dict:
         }
     if backend == "api":
         import json
+
         from openai import AsyncOpenAI
 
         if not settings.llm_api_key:

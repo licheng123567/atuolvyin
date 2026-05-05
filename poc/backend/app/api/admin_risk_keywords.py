@@ -1,4 +1,4 @@
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
@@ -18,7 +18,7 @@ _ALLOWED_ROLES = {"admin", "platform_super"}
 _MAX_PAGE_SIZE = 100  # cap per-page rows to limit memory usage
 
 
-def _check_auth(payload: dict) -> tuple[str, Optional[int]]:
+def _check_auth(payload: dict) -> tuple[str, int | None]:
     role = payload.get("role", "")
     if role not in _ALLOWED_ROLES:
         raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN,
@@ -27,21 +27,20 @@ def _check_auth(payload: dict) -> tuple[str, Optional[int]]:
     return role, int(tenant_id) if tenant_id else None
 
 
-def _assert_can_modify(role: str, tenant_id: Optional[int], kw: RiskKeyword) -> None:
+def _assert_can_modify(role: str, tenant_id: int | None, kw: RiskKeyword) -> None:
     """Raise 403 if admin tries to modify a keyword they don't own."""
-    if role == "admin":
-        if kw.tenant_id is None or kw.tenant_id != tenant_id:
-            raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN,
-                                detail={"code": "ERR_403", "message": "cannot modify platform preset"})
+    if role == "admin" and (kw.tenant_id is None or kw.tenant_id != tenant_id):
+        raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN,
+                            detail={"code": "ERR_403", "message": "cannot modify platform preset"})
 
 
 @router.get("/risk-keywords", response_model=PaginatedResponse[RiskKeywordOut])
 async def list_risk_keywords(
     payload: Annotated[dict, Depends(get_token_payload)],
     db: Annotated[Session, Depends(get_db)],
-    category: Optional[str] = Query(None),
-    speaker: Optional[str] = Query(None),
-    is_active: Optional[bool] = Query(None),
+    category: str | None = Query(None),
+    speaker: str | None = Query(None),
+    is_active: bool | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=_MAX_PAGE_SIZE),
 ):
@@ -94,7 +93,7 @@ async def create_risk_keyword(
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=http_status.HTTP_409_CONFLICT,
-                            detail={"code": "ERR_409", "message": "keyword already exists"})
+                            detail={"code": "ERR_409", "message": "keyword already exists"}) from None
     db.refresh(kw)
     return RiskKeywordOut.model_validate(kw)
 

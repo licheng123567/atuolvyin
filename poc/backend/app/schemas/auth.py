@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 from pydantic import BaseModel, field_validator
 
@@ -24,5 +23,5 @@ class TokenResponse(BaseModel):
     user_id: int
     name: str
     role: str
-    tenant_id: Optional[int]
+    tenant_id: int | None
     scope: str  # "platform" | "tenant:{id}" | "provider:{id}"

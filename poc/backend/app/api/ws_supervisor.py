@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
@@ -17,7 +17,7 @@ _SUPERVISOR_ROLES = {"supervisor", "admin"}
 @router.websocket("/ws/supervisor")
 async def ws_supervisor(
     websocket: WebSocket,
-    token: Annotated[Optional[str], Query()] = None,
+    token: Annotated[str | None, Query()] = None,
 ):
     payload = decode_ws_token(token or "")
     if payload is None:

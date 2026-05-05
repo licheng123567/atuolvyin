@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import defaultdict
-from typing import Optional
 
 from fastapi import WebSocket
 
@@ -28,7 +27,7 @@ class ConnectionManager:
                 self._rooms.pop(call_id, None)
 
     async def broadcast(
-        self, call_id: int, message: dict, exclude: Optional[WebSocket] = None
+        self, call_id: int, message: dict, exclude: WebSocket | None = None
     ) -> None:
         async with self._lock:
             members = list(self._rooms.get(call_id, {}).items())

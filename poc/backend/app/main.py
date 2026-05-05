@@ -5,7 +5,24 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import admin, admin_cases, admin_risk_keywords, agent_cases, auth, calls, calls_v1, devices, devices_v1, ops, recordings, supervisor, tasks, users, ws_calls, ws_supervisor
+from app.api import (
+    admin,
+    admin_cases,
+    admin_risk_keywords,
+    agent_cases,
+    auth,
+    calls,
+    calls_v1,
+    devices,
+    devices_v1,
+    ops,
+    recordings,
+    supervisor,
+    tasks,
+    users,
+    ws_calls,
+    ws_supervisor,
+)
 
 
 @asynccontextmanager

@@ -2,7 +2,6 @@
 
 不需要任何 API key、不需要公网 URL、不需要 GPU。
 """
-from typing import Optional
 
 _TRANSCRIPT_COLLECTION = (
     "[坐席] 喂您好，请问是张先生吗？我是阳光花园物业的小赵，本次通话将被录音用于服务质量。\n"
@@ -22,7 +21,7 @@ _TRANSCRIPT_VOTE = (
 )
 
 
-def transcribe(audio_url: str, hint_task_type: Optional[str] = None) -> dict:
+def transcribe(audio_url: str, hint_task_type: str | None = None) -> dict:
     is_vote = hint_task_type == "vote"
     text = _TRANSCRIPT_VOTE if is_vote else _TRANSCRIPT_COLLECTION
     segments = []

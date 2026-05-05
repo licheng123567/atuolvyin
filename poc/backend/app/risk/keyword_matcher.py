@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Optional
 
 import ahocorasick
 from sqlalchemy import or_, select
@@ -33,7 +32,7 @@ class RiskKeywordMatcher:
     def __init__(self, tenant_id: int, speaker: str) -> None:
         self.tenant_id = tenant_id
         self.speaker = speaker
-        self._automaton: Optional[ahocorasick.Automaton] = None
+        self._automaton: ahocorasick.Automaton | None = None
         self._loaded_at: float = 0.0
 
     async def ensure_loaded(self, db: Session) -> None:

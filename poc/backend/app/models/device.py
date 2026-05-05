@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column
@@ -20,13 +19,13 @@ class DeviceProfile(Base):
     tenant_id: Mapped[int] = mapped_column(
         sa.BigInteger, sa.ForeignKey("tenant.id"), nullable=False
     )
-    brand: Mapped[Optional[str]] = mapped_column(sa.Text)
-    model: Mapped[Optional[str]] = mapped_column(sa.Text)
-    os_version: Mapped[Optional[str]] = mapped_column(sa.Text)
-    last_check_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True))
+    brand: Mapped[str | None] = mapped_column(sa.Text)
+    model: Mapped[str | None] = mapped_column(sa.Text)
+    os_version: Mapped[str | None] = mapped_column(sa.Text)
+    last_check_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     is_healthy: Mapped[bool] = mapped_column(sa.Boolean, default=False)
-    push_reg_id: Mapped[Optional[str]] = mapped_column(sa.Text)
-    push_provider: Mapped[Optional[str]] = mapped_column(sa.String(20))
+    push_reg_id: Mapped[str | None] = mapped_column(sa.Text)
+    push_provider: Mapped[str | None] = mapped_column(sa.String(20))
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True),
         server_default=sa.func.now(),
