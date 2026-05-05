@@ -41,11 +41,13 @@ class CallSession:
         self._risk_detector: Optional[RiskDetector] = None
         self._tenant_id: Optional[int] = None
         self._db: Optional[Session] = None
+        self._stopped: bool = False
 
     async def start(self, db: Session) -> None:
         self._db = db
         call = db.get(CallRecord, self.call_id)
         if not call or not call.case_id:
+            logger.warning("CallSession.start: call=%s not found or missing case_id", self.call_id)
             return
 
         self._tenant_id = call.tenant_id
@@ -69,6 +71,9 @@ class CallSession:
             await self._asr_session.feed_audio(pcm_bytes)
 
     async def stop(self) -> None:
+        if self._stopped:
+            return
+        self._stopped = True
         if self._asr_session:
             await self._asr_session.close()
             self._asr_session = None
@@ -77,7 +82,9 @@ class CallSession:
             if tag:
                 await self._on_tag(tag)
             self._llm_engine = None
-        self._risk_detector = None
+        if self._risk_detector:
+            self._risk_detector.cancel()
+            self._risk_detector = None
 
     async def _handle_transcript(self, chunk: TranscriptChunk) -> None:
         await self._on_transcript({

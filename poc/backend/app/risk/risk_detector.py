@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Awaitable, Callable, Optional
+from typing import Awaitable, Callable, Optional, Set
 
 from sqlalchemy.orm import Session
 
@@ -12,6 +13,8 @@ from app.core.config import settings
 from app.risk.keyword_matcher import KeywordHit, get_matcher
 from app.risk.risk_analyzer import analyze_risk_with_llm
 from app.services.streaming_asr import TranscriptChunk
+
+logger = logging.getLogger(__name__)
 
 
 class RiskDetector:
@@ -37,6 +40,13 @@ class RiskDetector:
         self._last_emit: dict[str, float] = {}
         # Per-speaker free LLM throttle timestamp
         self._last_free_llm: dict[str, float] = {}
+        # Track live background tasks so we can cancel them on stop()
+        self._tasks: Set[asyncio.Task] = set()
+
+    def cancel(self) -> None:
+        for task in self._tasks:
+            task.cancel()
+        self._tasks.clear()
 
     async def on_utterance(self, chunk: TranscriptChunk, db: Session) -> None:
         if not chunk.utterance_end:
@@ -65,29 +75,34 @@ class RiskDetector:
                 )
                 await self._on_event(event)
                 self._mark_emit(primary.category)
-                        # Schedule LLM confirmation — emits upgraded keyword+llm event if confirmed
-                asyncio.create_task(
-                    self._llm_confirm(risk_id=risk_id, chunk=chunk, hint=primary)
-                )
+                # Schedule LLM confirmation — emits upgraded keyword+llm event if confirmed
+                self._schedule(self._llm_confirm(risk_id=risk_id, chunk=chunk, hint=primary))
 
         else:
             # Free-form LLM scan (throttled)
             now = time.monotonic()
-            last = self._last_free_llm.get(chunk.speaker, 0.0)
+            last = self._last_free_llm.get(chunk.speaker, float("-inf"))
             if now - last >= settings.risk_llm_free_throttle_sec:
                 self._last_free_llm[chunk.speaker] = now
-                asyncio.create_task(
-                    self._llm_free_scan(chunk=chunk)
-                )
+                self._schedule(self._llm_free_scan(chunk=chunk))
+
+    def _schedule(self, coro) -> None:
+        task = asyncio.create_task(coro)
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
 
     async def _llm_confirm(
         self, risk_id: str, chunk: TranscriptChunk, hint: KeywordHit
     ) -> None:
-        verdict = await analyze_risk_with_llm(
-            transcript_text=chunk.text,
-            speaker=chunk.speaker,
-            keyword_hint=hint,
-        )
+        try:
+            verdict = await analyze_risk_with_llm(
+                transcript_text=chunk.text,
+                speaker=chunk.speaker,
+                keyword_hint=hint,
+            )
+        except Exception as exc:
+            logger.error("LLM confirm failed call=%s: %s", self.call_id, exc)
+            return
         if not verdict.is_risk:
             # LLM says false positive — keep keyword-only event as-is, no upgrade
             return
@@ -106,15 +121,22 @@ class RiskDetector:
             llm_confidence=verdict.confidence,
             text=chunk.text,
         )
-        await self._on_event(event)
+        try:
+            await self._on_event(event)
+        except Exception as exc:
+            logger.error("risk broadcast failed call=%s: %s", self.call_id, exc)
         self._mark_emit(verdict.category)
 
     async def _llm_free_scan(self, chunk: TranscriptChunk) -> None:
-        verdict = await analyze_risk_with_llm(
-            transcript_text=chunk.text,
-            speaker=chunk.speaker,
-            keyword_hint=None,
-        )
+        try:
+            verdict = await analyze_risk_with_llm(
+                transcript_text=chunk.text,
+                speaker=chunk.speaker,
+                keyword_hint=None,
+            )
+        except Exception as exc:
+            logger.error("LLM free scan failed call=%s: %s", self.call_id, exc)
+            return
         if not verdict.is_risk:
             return
         if not self._should_emit(verdict.category):
@@ -130,7 +152,11 @@ class RiskDetector:
             llm_confidence=verdict.confidence,
             text=chunk.text,
         )
-        await self._on_event(event)
+        try:
+            await self._on_event(event)
+        except Exception as exc:
+            logger.error("risk broadcast failed call=%s: %s", self.call_id, exc)
+            return
         self._mark_emit(verdict.category)
 
     def _should_emit(self, category: str) -> bool:
@@ -152,6 +178,7 @@ class RiskDetector:
         llm_confidence: Optional[float],
         text: str,
     ) -> dict:
+        now = datetime.now(timezone.utc)
         return {
             "type": "risk.event",
             "id": risk_id,
@@ -162,6 +189,6 @@ class RiskDetector:
             "matched_keyword": keyword,
             "llm_confidence": llm_confidence,
             "transcript_text": text,
-            "ts_ms": int(time.time() * 1000),
-            "raised_at": datetime.now(timezone.utc).isoformat(),
+            "ts_ms": int(now.timestamp() * 1000),
+            "raised_at": now.isoformat(),
         }
