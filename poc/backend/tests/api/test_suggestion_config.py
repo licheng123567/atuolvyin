@@ -38,3 +38,19 @@ async def test_put_config_validates_range(client, admin_auth_headers):
         headers=admin_auth_headers,
     )
     assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_put_config_validates_max_per_push_range(client, admin_auth_headers):
+    resp = await client.put(
+        "/api/v1/admin/suggestion-config",
+        json={"sensitivity": 3, "max_per_push": 11},
+        headers=admin_auth_headers,
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_config_requires_admin_role(client, agent_auth_headers):
+    resp = await client.get("/api/v1/admin/suggestion-config", headers=agent_auth_headers)
+    assert resp.status_code in (401, 403)
