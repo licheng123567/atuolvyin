@@ -1,4 +1,4 @@
-import { Authenticated, Refine } from "@refinedev/core";
+import { Authenticated, Refine, useGetIdentity } from "@refinedev/core";
 import routerBindings from "@refinedev/react-router";
 import {
   BrowserRouter,
@@ -23,8 +23,24 @@ import { AgentWorkstationPage } from "./pages/agent/cases/detail";
 import { CallDetailPage } from "./pages/calls/detail";
 import { AgentLiveWorkstationPage } from "./pages/agent/workstation/live";
 import { AdminLiveWorkstationPage } from "./pages/admin/workstation/live";
-import { authProvider } from "./providers/auth-provider";
+import { authProvider, getToken } from "./providers/auth-provider";
 import { dataProvider } from "./providers";
+import { useSupervisorAlerts } from "./hooks/useSupervisorAlerts";
+import { SupervisorAlertsPage } from "./pages/supervisor/alerts";
+import type { AuthUser } from "./providers/auth-provider";
+
+const SUPERVISOR_ROLES = new Set(["supervisor", "admin", "platform_super"]);
+
+function AuthenticatedShell() {
+  const { data: identity } = useGetIdentity<AuthUser>();
+  const isSupervisor = SUPERVISOR_ROLES.has(identity?.role ?? "");
+  useSupervisorAlerts(isSupervisor ? getToken() : null);
+  return (
+    <AppLayout>
+      <Outlet />
+    </AppLayout>
+  );
+}
 
 function App() {
   return (
@@ -60,6 +76,10 @@ function App() {
             name: "calls",
             show: "/calls/:id",
           },
+          {
+            name: "supervisor/alerts",
+            list: "/supervisor/alerts",
+          },
         ]}
         options={{ syncWithLocation: true, warnWhenUnsavedChanges: false }}
       >
@@ -74,9 +94,7 @@ function App() {
                 key="app"
                 fallback={<Navigate to="/login" replace />}
               >
-                <AppLayout>
-                  <Outlet />
-                </AppLayout>
+                <AuthenticatedShell />
               </Authenticated>
             }
           >
@@ -115,6 +133,8 @@ function App() {
             <Route path="/agent/workstation/:call_id" element={<AgentLiveWorkstationPage />} />
             {/* Admin Observer Workstation */}
             <Route path="/admin/workstation/:call_id" element={<AdminLiveWorkstationPage />} />
+            {/* Supervisor Alerts */}
+            <Route path="/supervisor/alerts" element={<SupervisorAlertsPage />} />
           </Route>
 
           {/* Catch-all */}
