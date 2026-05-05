@@ -20,13 +20,13 @@ class RiskEventOut(BaseModel):
     llm_confidence: Optional[float] = None
     transcript_text: str
     ts_ms: int
-    raised_at: str      # ISO 8601
+    raised_at: datetime
 
 
 class SupervisorAlertOut(BaseModel):
     type: str = "supervisor.alert"
     call_id: int
-    case_id: Optional[int]
+    case_id: Optional[int] = None
     agent_user_id: int
     agent_name: str
     callee_phone_masked: str
@@ -47,14 +47,13 @@ class RiskKeywordCreate(BaseModel):
 class RiskKeywordUpdate(BaseModel):
     is_active: Optional[bool] = None
     level: Optional[str] = None
-    category: Optional[str] = None
 
 
 class RiskKeywordOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    tenant_id: Optional[int]
+    tenant_id: Optional[int] = None
     category: str
     speaker: str
     level: str
