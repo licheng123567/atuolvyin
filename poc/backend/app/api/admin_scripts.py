@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import io
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi import status as http_status
 from sqlalchemy import select, or_
 from sqlalchemy.orm import Session
@@ -11,7 +12,7 @@ from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
 from app.models.script import ScriptTemplate, ScriptTemplateVersion
 from app.schemas.script import (
-    RollbackIn, ScriptTemplateCreate,
+    ImportResultOut, RollbackIn, ScriptTemplateCreate,
     ScriptTemplateOut, ScriptTemplateUpdate, ScriptVersionOut,
 )
 from app.schemas.common import PaginatedResponse
@@ -19,6 +20,8 @@ from app.schemas.common import PaginatedResponse
 router = APIRouter()
 
 ADMIN_ROLES = ("admin", "platform_superadmin")
+
+VALID_INTENTS = frozenset({"房屋质量", "经济困难", "服务不满", "联系困难", "其他"})
 
 
 def _write_snapshot(db: Session, script: ScriptTemplate, editor_id: int) -> None:
@@ -233,3 +236,80 @@ def rollback_script(
     db.commit()
     db.refresh(script)
     return script
+
+
+@router.post("/scripts/import", response_model=ImportResultOut)
+def import_scripts(
+    file: Annotated[UploadFile, File(...)],
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> ImportResultOut:
+    import openpyxl
+
+    role = payload.get("role", "")
+    tenant_id = int(payload.get("tenant_id") or 0) if role != "platform_superadmin" else None
+    user_id = int(payload.get("user_id") or 0)
+
+    contents = file.file.read()
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(contents))
+    except Exception:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail={"code": "ERR_INVALID_FILE", "message": "无法解析 Excel 文件"},
+        )
+
+    ws = wb.active
+    tenant_filter = (
+        or_(ScriptTemplate.tenant_id == tenant_id, ScriptTemplate.tenant_id.is_(None))
+        if tenant_id is not None
+        else ScriptTemplate.tenant_id.is_(None)
+    )
+    existing_titles = {
+        row[0] for row in db.execute(
+            select(ScriptTemplate.title).where(tenant_filter)
+        ).all()
+    }
+
+    success = skipped = failed = 0
+    errors: list[str] = []
+
+    for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        title, intent, content, notes = (row[j] if j < len(row) else None for j in range(4))
+        title = str(title).strip() if title else ""
+        intent = str(intent).strip() if intent else ""
+        content = str(content).strip() if content else ""
+        notes = str(notes).strip() if notes else None
+
+        if not title or not intent or not content:
+            if len(errors) < 10:
+                errors.append(f"第 {i} 行：标题/异议类型/内容不能为空")
+            failed += 1
+            continue
+        if intent not in VALID_INTENTS:
+            if len(errors) < 10:
+                errors.append(f"第 {i} 行：异议类型「{intent}」不在枚举范围内")
+            failed += 1
+            continue
+        if title in existing_titles:
+            skipped += 1
+            continue
+
+        script = ScriptTemplate(
+            tenant_id=tenant_id,
+            title=title,
+            trigger_intent=intent,
+            content=content,
+            notes=notes or None,
+            version=1,
+            created_by=user_id,
+        )
+        db.add(script)
+        db.flush()
+        _write_snapshot(db, script, user_id)
+        existing_titles.add(title)
+        success += 1
+
+    db.commit()
+    return ImportResultOut(success=success, skipped=skipped, failed=failed, errors=errors)
