@@ -23,6 +23,9 @@ import { AgentWorkstationPage } from "./pages/agent/cases/detail";
 import { CallDetailPage } from "./pages/calls/detail";
 import { AgentLiveWorkstationPage } from "./pages/agent/workstation/live";
 import { AdminLiveWorkstationPage } from "./pages/admin/workstation/live";
+import { ScriptListPage } from "./pages/admin/scripts/list";
+import { ScriptVersionsPage } from "./pages/admin/scripts/versions";
+import { SupervisorScriptLabelsPage } from "./pages/supervisor/script-labels";
 import { authProvider, getToken } from "./providers/auth-provider";
 import { dataProvider } from "./providers";
 import { useSupervisorAlerts } from "./hooks/useSupervisorAlerts";
@@ -89,6 +92,17 @@ function App() {
             create: "/admin/risk-keywords/new",
             edit: "/admin/risk-keywords/:id/edit",
           },
+          {
+            name: "admin/scripts",
+            list: "/admin/scripts",
+            show: "/admin/scripts/:id/versions",
+            meta: { label: "话术库" },
+          },
+          {
+            name: "supervisor/script-labels",
+            list: "/supervisor/script-labels",
+            meta: { label: "话术标注" },
+          },
         ]}
         options={{ syncWithLocation: true, warnWhenUnsavedChanges: false }}
       >
@@ -148,6 +162,11 @@ function App() {
             <Route path="/admin/risk-keywords" element={<RiskKeywordListPage />} />
             <Route path="/admin/risk-keywords/new" element={<RiskKeywordCreatePage />} />
             <Route path="/admin/risk-keywords/:id/edit" element={<RiskKeywordEditPage />} />
+            {/* Admin - Script Library */}
+            <Route path="/admin/scripts" element={<ScriptListPage />} />
+            <Route path="/admin/scripts/:id/versions" element={<ScriptVersionsPage />} />
+            {/* Supervisor - Script Labels */}
+            <Route path="/supervisor/script-labels" element={<SupervisorScriptLabelsPage />} />
           </Route>
 
           {/* Catch-all */}

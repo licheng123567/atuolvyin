@@ -53,7 +53,25 @@ class CallSession:
         self._tenant_id = call.tenant_id
         case = db.get(CollectionCase, call.case_id)
         owner = db.get(OwnerProfile, case.owner_id) if case and case.owner_id else None
-        self._llm_engine = RealtimeSuggestionEngine(case=case, owner=owner)
+        from app.services.realtime_llm import _load_scripts, SENSITIVITY_THRESHOLD
+        from app.models.script import TenantSuggestionConfig
+        from sqlalchemy import select
+
+        scripts = _load_scripts(db, call.tenant_id)
+        cfg = db.execute(
+            select(TenantSuggestionConfig).where(
+                TenantSuggestionConfig.tenant_id == call.tenant_id
+            )
+        ).scalar_one_or_none()
+        sensitivity = SENSITIVITY_THRESHOLD.get(cfg.sensitivity if cfg else 3, 0.65)
+        max_per_push = cfg.max_per_push if cfg else 3
+
+        self._llm_engine = RealtimeSuggestionEngine(
+            case=case, owner=owner,
+            scripts=scripts,
+            sensitivity_threshold=sensitivity,
+            max_per_push=max_per_push,
+        )
         self._risk_detector = RiskDetector(
             call_id=self.call_id,
             tenant_id=call.tenant_id,
@@ -98,13 +116,7 @@ class CallSession:
         if self._llm_engine:
             suggestion = await self._llm_engine.on_transcript(chunk)
             if suggestion:
-                await self._on_suggestion({
-                    "type": "suggestion.ready",
-                    "id": suggestion.id,
-                    "text": suggestion.text,
-                    "intent": suggestion.intent,
-                    "confidence": suggestion.confidence,
-                })
+                await self._on_suggestion(suggestion.to_message())
         if self._risk_detector and self._db:
             await self._risk_detector.on_utterance(chunk, db=self._db)
 

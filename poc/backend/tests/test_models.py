@@ -57,3 +57,41 @@ def test_tenant_minute_usage_unique_per_month(db_session):
     db_session.add(u2)
     with pytest.raises(IntegrityError):
         db_session.flush()
+
+
+def test_script_template_model_exists(db_session):
+    from app.models.script import ScriptTemplate, ScriptTemplateVersion, TenantSuggestionConfig
+
+    # Create tenant first
+    tenant = Tenant(name="话术测试", admin_phone_enc="enc", plan="basic")
+    db_session.add(tenant)
+    db_session.flush()
+
+    s = ScriptTemplate(
+        tenant_id=tenant.id,
+        title="测试话术",
+        trigger_intent="经济困难",
+        content="您好，了解到您目前有资金压力，可以考虑分期缴纳。",
+        version=1,
+        is_active=True,
+        usage_count=0,
+    )
+    db_session.add(s)
+    db_session.flush()
+    assert s.id is not None
+
+    v = ScriptTemplateVersion(
+        script_template_id=s.id,
+        version=1,
+        title=s.title,
+        trigger_intent=s.trigger_intent,
+        content=s.content,
+    )
+    db_session.add(v)
+    db_session.flush()
+    assert v.id is not None
+
+    cfg = TenantSuggestionConfig(tenant_id=tenant.id, sensitivity=3, max_per_push=3)
+    db_session.add(cfg)
+    db_session.flush()
+    assert cfg.id is not None

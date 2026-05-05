@@ -17,12 +17,17 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
+from typing import Optional
+
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 
 from .streaming_asr import TranscriptChunk
 
 TRANSCRIPT_CONTEXT_WINDOW = 10  # number of most-recent transcript chunks fed to the LLM
+
+SENSITIVITY_THRESHOLD: dict[int, float] = {1: 0.85, 2: 0.75, 3: 0.65, 4: 0.55, 5: 0.45}
 
 
 @dataclass
@@ -31,15 +36,19 @@ class Suggestion:
     text: str
     intent: str
     confidence: float
+    script_template_id: Optional[int] = None
 
     def to_message(self) -> dict:
-        return {
+        msg = {
             "type": "suggestion.ready",
             "id": self.id,
             "text": self.text,
             "intent": self.intent,
             "confidence": self.confidence,
         }
+        if self.script_template_id is not None:
+            msg["script_template_id"] = self.script_template_id
+        return msg
 
 
 @dataclass
@@ -56,6 +65,9 @@ class RealtimeSuggestionEngine:
         owner: object,
         debounce_sec: int | None = None,
         timeout_sec: int | None = None,
+        scripts: Optional[dict[str, list[str]]] = None,
+        sensitivity_threshold: float = 0.65,
+        max_per_push: int = 3,
     ):
         self._ctx = _CaseCtx(case=case, owner=owner)
         self._debounce_sec = (
@@ -69,6 +81,15 @@ class RealtimeSuggestionEngine:
         # enough that a finite timeout_sec > debounce_sec does NOT fire on the
         # very first chunk.
         self._last_llm_at: float = time.monotonic() - self._debounce_sec
+        self._scripts: dict[str, list[str]] = scripts or {}
+        self._sensitivity_threshold = sensitivity_threshold
+        self._max_per_push = max_per_push
+        self._system_prompt: str = _build_system_prompt(
+            self._scripts,
+            "你是物业费催收实时辅助助手。根据业主最近一句话，给坐席生成 1 条简短话术建议。"
+            "严格输出 JSON，字段：{\"text\": \"建议内容\", \"intent\": \"意图标签\", \"confidence\": 0~1}"
+            "不要输出 JSON 以外的任何内容。",
+        )
 
     async def on_transcript(self, chunk: TranscriptChunk) -> Suggestion | None:
         self._ctx.transcript.append(chunk)
@@ -90,13 +111,16 @@ class RealtimeSuggestionEngine:
         result = await _call_final_analysis(self._build_messages(final=True))
         return result
 
-    async def _invoke_llm(self) -> Suggestion:
-        result = await _call_llm(self._build_messages(final=False))
+    async def _invoke_llm(self) -> Optional[Suggestion]:
+        result = await _call_llm(self._build_messages(final=False), self._system_prompt)
+        confidence = float(result.get("confidence", 0.0))
+        if confidence < self._sensitivity_threshold:
+            return None
         return Suggestion(
             id=str(uuid.uuid4()),
             text=result.get("text", ""),
             intent=result.get("intent", "unknown"),
-            confidence=float(result.get("confidence", 0.0)),
+            confidence=confidence,
         )
 
     def _build_messages(self, final: bool) -> list[dict]:
@@ -119,7 +143,7 @@ class RealtimeSuggestionEngine:
         return [{"role": "user", "content": prompt}]
 
 
-async def _call_llm(messages: list[dict]) -> dict:
+async def _call_llm(messages: list[dict], system_prompt: str) -> dict:
     """Default impl calls the LLM backend directly with an OpenAI-compatible
     messages list.  Tests monkeypatch this module-level symbol so they never
     reach this path.
@@ -148,12 +172,7 @@ async def _call_llm(messages: list[dict]) -> dict:
         _KEY = settings.llm_api_key
         _MODEL = settings.llm_model or "deepseek-chat"
 
-        system = (
-            "你是物业费催收实时辅助助手。根据业主最近一句话，给坐席生成 1 条简短话术建议。"
-            "严格输出 JSON，字段：{\"text\": \"建议内容\", \"intent\": \"意图标签\", \"confidence\": 0~1}"
-            "不要输出 JSON 以外的任何内容。"
-        )
-        full_messages = [{"role": "system", "content": system}] + messages
+        full_messages = [{"role": "system", "content": system_prompt}] + messages
 
         client = AsyncOpenAI(api_key=_KEY, base_url=_BASE)
         resp = await client.chat.completions.create(
@@ -230,3 +249,34 @@ async def _call_final_analysis(messages: list[dict]) -> dict:
         }
 
     raise RuntimeError(f"unknown LLM_BACKEND: {settings.llm_backend}")
+
+
+def _load_scripts(db: Session, tenant_id: Optional[int]) -> dict[str, list[str]]:
+    from sqlalchemy import select, or_
+    from app.models.script import ScriptTemplate
+    rows = db.execute(
+        select(ScriptTemplate)
+        .where(
+            ScriptTemplate.is_active.is_(True),
+            or_(
+                ScriptTemplate.tenant_id == tenant_id,
+                ScriptTemplate.tenant_id.is_(None),
+            ),
+        )
+        .order_by(ScriptTemplate.trigger_intent)
+    ).scalars().all()
+    result: dict[str, list[str]] = {}
+    for row in rows:
+        result.setdefault(row.trigger_intent, []).append(row.content)
+    return result
+
+
+def _build_system_prompt(scripts: dict[str, list[str]], base_prompt: str) -> str:
+    if not scripts:
+        return base_prompt
+    sections = []
+    for intent, contents in scripts.items():
+        examples = "\n".join(f"  - 「{c[:80]}」" for c in contents[:3])
+        sections.append(f"[参考话术 - {intent}]\n{examples}")
+    script_block = "\n\n".join(sections)
+    return f"{base_prompt}\n\n{script_block}"

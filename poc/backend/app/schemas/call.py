@@ -132,3 +132,4 @@ class CallTagOut(BaseModel):
 class SuggestionFeedbackIn(BaseModel):
     action: str  # "adopt" | "ignore"
     suggestion_text: str | None = None
+    script_template_id: int | None = None

@@ -12,6 +12,7 @@ from .tenant import (
 )
 from .user import PlatformOpsAssignment, UserAccount
 from .work import LegalCase, WorkOrder
+from .script import ScriptTemplate, ScriptTemplateVersion, TenantSuggestionConfig
 
 __all__ = [
     "Base",
@@ -29,9 +30,13 @@ __all__ = [
     "Transcript",
     "AnalysisResult",
     "RiskEvent",
+    "SuggestionFeedback",
     "WorkOrder",
     "LegalCase",
     "SettlementStatement",
     "DisputeRecord",
     "RiskKeyword",
+    "ScriptTemplate",
+    "ScriptTemplateVersion",
+    "TenantSuggestionConfig",
 ]

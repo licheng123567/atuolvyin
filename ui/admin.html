@@ -805,7 +805,7 @@
 
 <!-- ═══════════ 话术库管理 ═══════════ -->
 <div id="a-scripts" class="page-section">
-  <div class="page-header"><div class="page-title">话术库管理</div><div style="display:flex;gap:8px;"><button class="btn btn-secondary">批量导入</button><button class="btn btn-primary" onclick="openModal('modal-new-script')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>新增话术</button></div></div>
+  <div class="page-header"><div class="page-title">话术库管理</div><div style="display:flex;gap:8px;"><button class="btn btn-secondary" onclick="openModal('modal-script-import')">批量导入</button><button class="btn btn-primary" onclick="openModal('modal-new-script')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>新增话术</button></div></div>
   <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:10px;margin-bottom:16px;font-size:13.5px;color:#854d0e;">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
     1 条 <strong>D 级话术</strong>（综合评分过低）已被自动禁用，建议修订后重新启用。
@@ -814,11 +814,11 @@
     <div class="table-toolbar"><div class="search-box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:10px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input class="form-control" placeholder="搜索话术标题或内容" style="padding-left:34px;min-width:200px;"></div><select class="form-control" style="width:130px;"><option>全部异议类型</option><option>房屋质量</option><option>经济困难</option><option>服务不满</option></select><select class="form-control" style="width:100px;"><option>全部状态</option><option>启用</option><option>已禁用</option></select></div>
     <table><thead><tr><th>话术标题</th><th>异议类型</th><th>级别</th><th>使用次数</th><th>采用率</th><th>转化率</th><th>综合评分</th><th>状态</th><th>操作</th></tr></thead>
     <tbody>
-      <tr><td style="font-weight:500;">房屋质量问题回应话术</td><td>房屋质量</td><td><span class="badge badge-gray">公司通用</span></td><td>1,247次</td><td>73%</td><td>28%</td><td><span class="score-a">A</span></td><td><span class="badge badge-green">启用</span></td><td><button class="btn btn-ghost btn-sm">编辑</button><button class="btn btn-ghost btn-sm" style="color:#e02424;">禁用</button></td></tr>
-      <tr><td style="font-weight:500;">经济困难分期缴费建议</td><td>经济困难</td><td><span class="badge badge-gray">公司通用</span></td><td>892次</td><td>68%</td><td>22%</td><td><span class="score-b">B</span></td><td><span class="badge badge-green">启用</span></td><td><button class="btn btn-ghost btn-sm">编辑</button><button class="btn btn-ghost btn-sm" style="color:#e02424;">禁用</button></td></tr>
-      <tr><td style="font-weight:500;">服务不满意情绪安抚话术</td><td>服务不满</td><td><span class="badge badge-gray">公司通用</span></td><td>654次</td><td>45%</td><td>14%</td><td><span class="score-c">C</span></td><td><span class="badge badge-green">启用</span></td><td><button class="btn btn-ghost btn-sm">编辑</button><button class="btn btn-ghost btn-sm" style="color:#e02424;">禁用</button></td></tr>
-      <tr style="opacity:.6;"><td style="font-weight:500;">强硬催缴最后通牒话术</td><td>联系困难</td><td><span class="badge badge-gray">公司通用</span></td><td>234次</td><td>28%</td><td>5%</td><td><span class="score-d">D</span></td><td><span class="badge badge-red">已禁用</span></td><td><button class="btn btn-ghost btn-sm">编辑</button><button class="btn btn-ghost btn-sm" style="color:#057a55;">启用</button></td></tr>
-      <tr><td style="font-weight:500;">公共设施问题解释话术</td><td>服务不满</td><td><span class="badge badge-gray">公司通用</span></td><td>489次</td><td>61%</td><td>19%</td><td><span class="score-b">B</span></td><td><span class="badge badge-green">启用</span></td><td><button class="btn btn-ghost btn-sm">编辑</button><button class="btn btn-ghost btn-sm" style="color:#e02424;">禁用</button></td></tr>
+      <tr><td style="font-weight:500;">房屋质量问题回应话术</td><td>房屋质量</td><td><span class="badge badge-gray">v3</span></td><td>1,247次</td><td>73%</td><td>28%</td><td><span class="score-a">A</span></td><td><span class="badge badge-green">启用</span></td><td><button class="btn btn-ghost btn-sm" onclick="openModal('modal-new-script')">编辑</button><button class="btn btn-ghost btn-sm" onclick="openModal('modal-script-versions')">版本历史</button><button class="btn btn-ghost btn-sm" style="color:#e02424;">禁用</button></td></tr>
+      <tr><td style="font-weight:500;">经济困难分期缴费建议</td><td>经济困难</td><td><span class="badge badge-gray">v2</span></td><td>892次</td><td>68%</td><td>22%</td><td><span class="score-b">B</span></td><td><span class="badge badge-green">启用</span></td><td><button class="btn btn-ghost btn-sm" onclick="openModal('modal-new-script')">编辑</button><button class="btn btn-ghost btn-sm" onclick="openModal('modal-script-versions')">版本历史</button><button class="btn btn-ghost btn-sm" style="color:#e02424;">禁用</button></td></tr>
+      <tr><td style="font-weight:500;">服务不满意情绪安抚话术</td><td>服务不满</td><td><span class="badge badge-gray">v1</span></td><td>654次</td><td>45%</td><td>14%</td><td><span class="score-c">C</span></td><td><span class="badge badge-green">启用</span></td><td><button class="btn btn-ghost btn-sm" onclick="openModal('modal-new-script')">编辑</button><button class="btn btn-ghost btn-sm" onclick="openModal('modal-script-versions')">版本历史</button><button class="btn btn-ghost btn-sm" style="color:#e02424;">禁用</button></td></tr>
+      <tr style="opacity:.6;"><td style="font-weight:500;">强硬催缴最后通牒话术</td><td>联系困难</td><td><span class="badge badge-gray">v1</span></td><td>234次</td><td>28%</td><td>5%</td><td><span class="score-d">D</span></td><td><span class="badge badge-red">已禁用（自动）</span></td><td><button class="btn btn-ghost btn-sm" onclick="openModal('modal-new-script')">编辑</button><button class="btn btn-ghost btn-sm" onclick="openModal('modal-script-versions')">版本历史</button><button class="btn btn-ghost btn-sm" style="color:#057a55;">启用</button></td></tr>
+      <tr><td style="font-weight:500;">公共设施问题解释话术</td><td>服务不满</td><td><span class="badge badge-gray">v2</span></td><td>489次</td><td>61%</td><td>19%</td><td><span class="score-b">B</span></td><td><span class="badge badge-green">启用</span></td><td><button class="btn btn-ghost btn-sm" onclick="openModal('modal-new-script')">编辑</button><button class="btn btn-ghost btn-sm" onclick="openModal('modal-script-versions')">版本历史</button><button class="btn btn-ghost btn-sm" style="color:#e02424;">禁用</button></td></tr>
     </tbody></table>
   </div>
 </div>
@@ -981,10 +981,112 @@
     <div class="modal-header"><span class="modal-title">新增话术</span><button class="modal-close" onclick="closeModal('modal-new-script')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div class="modal-body">
       <div class="form-group"><label class="form-label">话术标题<span class="req">*</span></label><input class="form-control" placeholder="简明描述话术适用场景"></div>
-      <div class="two-col"><div class="form-group"><label class="form-label">异议类型<span class="req">*</span></label><select class="form-control"><option>房屋质量</option><option>经济困难</option><option>服务不满</option><option>联系困难</option><option>其他</option></select></div><div class="form-group"><label class="form-label">级别</label><select class="form-control"><option>公司通用</option></select></div></div>
-      <div class="form-group"><label class="form-label">话术内容<span class="req">*</span></label><textarea class="form-control" style="height:120px;" placeholder="请输入推荐的应对话术，建议包含：情绪安抚→异议回应→引导付款 三个步骤"></textarea></div>
+      <div class="form-group"><label class="form-label">异议类型<span class="req">*</span></label><select class="form-control"><option>房屋质量</option><option>经济困难</option><option>服务不满</option><option>联系困难</option><option>其他</option></select></div>
+      <div class="form-group"><label class="form-label">话术内容<span class="req">*</span></label><textarea class="form-control" style="height:140px;" placeholder="请输入推荐的应对话术，建议包含：情绪安抚→异议回应→引导付款 三个步骤"></textarea></div>
+      <div class="form-group"><label class="form-label">编写说明</label><textarea class="form-control" style="height:60px;" placeholder="可选：说明适用场景、注意事项等"></textarea></div>
+      <div style="background:#f0f9ff;border-radius:6px;padding:10px 12px;font-size:12px;color:#0369a1;">编辑已有话术时：保存后自动升版为 v{n+1}，历史版本可在「版本历史」查看和回滚。</div>
     </div>
     <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-new-script')">取消</button><button class="btn btn-primary">保存话术</button></div>
+  </div>
+</div>
+
+<!-- 版本历史弹窗 -->
+<div id="modal-script-versions" class="modal-overlay" style="display:none;">
+  <div class="modal" style="max-width:620px;">
+    <div class="modal-header"><span class="modal-title">版本历史 — 房屋质量问题回应话术</span><button class="modal-close" onclick="closeModal('modal-script-versions')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body" style="padding:0;">
+      <div style="border-bottom:1px solid #e5e7eb;padding:12px 20px;background:#f9fafb;font-size:12px;color:#6b7280;">共 3 个版本，当前为 v3</div>
+      <!-- v3 -->
+      <div style="padding:16px 20px;border-bottom:1px solid #f3f4f6;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;color:#111827;">v3</span>
+            <span style="font-size:12px;background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:99px;">当前版本</span>
+          </div>
+          <span style="font-size:12px;color:#9ca3af;">王管理员 · 2026-04-28 14:23</span>
+        </div>
+        <p style="font-size:13px;color:#374151;margin:0 0 8px;line-height:1.6;">理解您对房屋质量的顾虑，我们已将您的情况提交至维修工单系统（工单编号已发短信），预计 5 个工作日内上门勘查。物业费与维修费是独立账目，缴纳物业费不影响您申请维修...</p>
+        <button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:12px;">展开全文</button>
+      </div>
+      <!-- v2 -->
+      <div style="padding:16px 20px;border-bottom:1px solid #f3f4f6;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span style="font-size:13px;font-weight:600;color:#374151;">v2</span>
+          <span style="font-size:12px;color:#9ca3af;">李督导 · 2026-04-15 09:11</span>
+        </div>
+        <p style="font-size:13px;color:#6b7280;margin:0 0 8px;line-height:1.6;">理解您对房屋质量的不满，我们会尽快安排维修。物业费是用于公共区域维护，与您反映的户内维修是分开的账目，请您...</p>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:12px;">展开全文</button>
+          <button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:12px;color:#1A56DB;" onclick="openModal('modal-rollback-confirm')">回滚到此版本</button>
+        </div>
+      </div>
+      <!-- v1 -->
+      <div style="padding:16px 20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span style="font-size:13px;font-weight:600;color:#374151;">v1</span>
+          <span style="font-size:12px;color:#9ca3af;">王管理员 · 2026-04-01 10:00</span>
+        </div>
+        <p style="font-size:13px;color:#6b7280;margin:0 0 8px;line-height:1.6;">您好，关于房屋质量问题，我们会尽快安排处理，请您先缴清物业费，我们会优先处理您的维修请求...</p>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:12px;">展开全文</button>
+          <button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:12px;color:#1A56DB;" onclick="openModal('modal-rollback-confirm')">回滚到此版本</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-script-versions')">关闭</button></div>
+  </div>
+</div>
+
+<!-- 回滚确认弹窗 -->
+<div id="modal-rollback-confirm" class="modal-overlay alert-dialog" style="display:none;">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-body" style="padding:28px 24px;">
+      <div style="display:flex;align-items:flex-start;gap:12px;">
+        <div style="width:40px;height:40px;border-radius:50%;background:#fef9c3;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+        <div>
+          <div class="alert-title">确认回滚？</div>
+          <div class="alert-desc" style="margin-top:6px;">将覆盖当前 v3，生成新版本 v4。历史版本不会丢失。</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-rollback-confirm')">取消</button><button class="btn btn-primary" onclick="closeModal('modal-rollback-confirm');closeModal('modal-script-versions')">确认回滚</button></div>
+  </div>
+</div>
+
+<!-- Excel 批量导入弹窗 -->
+<div id="modal-script-import" class="modal-overlay" style="display:none;">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header"><span class="modal-title">批量导入话术</span><button class="modal-close" onclick="closeModal('modal-script-import')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <p style="font-size:13.5px;color:#374151;margin:0;">按模板格式填写后上传 Excel 文件，系统将自动导入话术。</p>
+        <button class="btn btn-ghost btn-sm" style="white-space:nowrap;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>下载模板</button>
+      </div>
+      <!-- 文件上传区域 -->
+      <div id="import-dropzone" style="border:2px dashed #d1d5db;border-radius:8px;padding:28px;text-align:center;cursor:pointer;background:#fafafa;margin-bottom:14px;" onclick="document.getElementById('import-file-input').click()">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.5" style="margin:0 auto 8px;display:block;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <p style="font-size:13px;color:#6b7280;margin:0;">点击或拖拽 Excel 文件到此处</p>
+        <p style="font-size:11px;color:#9ca3af;margin:4px 0 0;">.xlsx / .xls，最大 5MB</p>
+        <input id="import-file-input" type="file" accept=".xlsx,.xls" style="display:none;">
+      </div>
+      <!-- 解析预览（文件选中后显示） -->
+      <div id="import-preview" style="display:none;">
+        <div style="font-size:12px;color:#6b7280;margin-bottom:8px;">预览（前 5 行）：</div>
+        <table style="width:100%;font-size:12px;border-collapse:collapse;">
+          <thead><tr style="background:#f9fafb;"><th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">标题</th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">异议类型</th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">内容摘要</th></tr></thead>
+          <tbody>
+            <tr><td style="padding:6px 8px;border-bottom:1px solid #f3f4f6;">房屋质量安抚话术</td><td style="padding:6px 8px;border-bottom:1px solid #f3f4f6;">房屋质量</td><td style="padding:6px 8px;border-bottom:1px solid #f3f4f6;color:#6b7280;">理解您的顾虑，我们已提交维修工单...</td></tr>
+            <tr><td style="padding:6px 8px;border-bottom:1px solid #f3f4f6;">分期缴费引导</td><td style="padding:6px 8px;border-bottom:1px solid #f3f4f6;">经济困难</td><td style="padding:6px 8px;border-bottom:1px solid #f3f4f6;color:#6b7280;">考虑到您的实际情况，可以申请3个月分期...</td></tr>
+          </tbody>
+        </table>
+        <div style="margin-top:10px;font-size:12px;color:#374151;">共解析 <strong>8</strong> 行，其中有效 <strong>8</strong> 行，跳过重复 <strong>0</strong> 行</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-script-import')">取消</button>
+      <button class="btn btn-primary" onclick="document.getElementById('import-preview').style.display='block'">解析文件</button>
+      <button class="btn btn-primary" style="background:#057a55;" onclick="closeModal('modal-script-import')">确认导入</button>
+    </div>
   </div>
 </div>
 
