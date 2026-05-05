@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.models.risk import RiskKeyword
 
+# Matcher cache TTL: re-query DB after this many seconds to pick up keyword changes.
+# Separate concern from risk_dedup_window_sec (which controls alert dedup, not cache refresh).
 _TTL_SEC = 60
 
 
@@ -19,7 +21,7 @@ class KeywordHit:
     category: str
     level: str
     keyword_id: int
-    end_pos: int
+    span: tuple[int, int]   # (start_inclusive, end_inclusive) from AC automaton
 
 
 class RiskKeywordMatcher:
@@ -36,9 +38,9 @@ class RiskKeywordMatcher:
 
     async def ensure_loaded(self, db: Session) -> None:
         if self._automaton is None or (time.monotonic() - self._loaded_at) > _TTL_SEC:
-            await self._load_from_db(db)
+            self._load_from_db(db)    # no await — sync call
 
-    async def _load_from_db(self, db: Session) -> None:
+    def _load_from_db(self, db: Session) -> None:
         rows = db.execute(
             select(RiskKeyword).where(
                 or_(RiskKeyword.tenant_id == self.tenant_id, RiskKeyword.tenant_id.is_(None)),
@@ -60,7 +62,11 @@ class RiskKeywordMatcher:
             return []
         results: list[KeywordHit] = []
         for end_idx, (kw, cat, lv, kid) in self._automaton.iter(text):
-            results.append(KeywordHit(keyword=kw, category=cat, level=lv, keyword_id=kid, end_pos=end_idx))
+            start_idx = end_idx - len(kw) + 1
+            results.append(KeywordHit(
+                keyword=kw, category=cat, level=lv, keyword_id=kid,
+                span=(start_idx, end_idx),
+            ))
         return results
 
 
