@@ -33,11 +33,10 @@ def list_script_labels(
             CallRecord.tenant_id == tenant_id,
             SuggestionFeedback.script_template_id.is_not(None),
         )
-        .order_by(CallRecord.started_at.desc())
-        .limit(200)
     )
     if unread_only:
         stmt = stmt.where(SuggestionFeedback.supervisor_label.is_(None))
+    stmt = stmt.order_by(CallRecord.started_at.desc()).limit(200)
     rows = db.execute(stmt).scalars().all()
     return [
         SupervisorLabelOut(

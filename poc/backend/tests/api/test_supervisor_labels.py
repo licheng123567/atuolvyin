@@ -56,6 +56,8 @@ async def test_post_good_label(client, supervisor_auth_headers, seeded_feedback_
     assert resp.status_code == 200, resp.text
     db_session.expire(seeded_feedback_with_script)
     assert seeded_feedback_with_script.supervisor_label == "good"
+    assert seeded_feedback_with_script.supervisor_id is not None
+    assert seeded_feedback_with_script.supervisor_at is not None
 
 
 @pytest.mark.asyncio
@@ -79,3 +81,5 @@ async def test_post_bad_label_with_note(client, supervisor_auth_headers, seeded_
     db_session.expire(seeded_feedback_with_script)
     assert seeded_feedback_with_script.supervisor_label == "bad"
     assert seeded_feedback_with_script.supervisor_note == "话术效果差"
+    assert seeded_feedback_with_script.supervisor_id is not None
+    assert seeded_feedback_with_script.supervisor_at is not None
