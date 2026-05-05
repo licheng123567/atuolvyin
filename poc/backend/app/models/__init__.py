@@ -11,6 +11,7 @@ from .case import OwnerProfile, Project, CollectionCase
 from .call import CallRecord, Transcript, AnalysisResult, RiskEvent
 from .work import WorkOrder, LegalCase
 from .settlement import SettlementStatement, DisputeRecord
+from .risk import RiskKeyword  # noqa: F401
 
 __all__ = [
     "Base",
@@ -32,4 +33,5 @@ __all__ = [
     "LegalCase",
     "SettlementStatement",
     "DisputeRecord",
+    "RiskKeyword",
 ]
