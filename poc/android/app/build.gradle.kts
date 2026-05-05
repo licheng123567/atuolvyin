@@ -61,4 +61,13 @@ dependencies {
     // JUnit 5 for unit tests
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+    // JUnit 4 for Robolectric
+    testImplementation("junit:junit:4.13.2")
+
+    // Robolectric for Android unit tests
+    testImplementation("org.robolectric:robolectric:4.12.1")
+
+    // JSON library for unit tests
+    testImplementation("org.json:json:20231013")
 }

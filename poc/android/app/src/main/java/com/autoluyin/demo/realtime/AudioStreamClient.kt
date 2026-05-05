@@ -25,6 +25,7 @@ class AudioStreamClient(
     private val onSuggestion: (id: String, text: String) -> Unit,
     private val onTagReady: (TagPayload) -> Unit,
     private val onStateChange: (State) -> Unit,
+    private val onRisk: (RiskEvent) -> Unit = {},
     private val context: Context? = null,
     private val baseUrl: String = "ws://10.0.2.2:8000",  // emulator → host loopback
 ) {
@@ -146,6 +147,7 @@ class AudioStreamClient(
                 )
             }
             "pong" -> Unit  // heartbeat ack
+            "risk.event" -> RiskEvent.fromJson(obj)?.let { onRisk(it) }
         }
     }
 
