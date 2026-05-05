@@ -72,3 +72,27 @@ async def test_soft_delete(client, db_session, seeded_tenant):
     assert resp.status_code == 200
     db_session.refresh(kw)
     assert kw.is_active is False
+
+
+@pytest.mark.asyncio
+async def test_wrong_role_gets_403(client, db_session):
+    """A non-admin/non-platform_super role cannot access the endpoint."""
+    from app.core.security import create_access_token
+    token = create_access_token({"sub": "1", "user_id": 1, "tenant_id": 1,
+                                 "role": "agent_internal", "scope": "tenant:1"})
+    resp = await client.get("/api/v1/admin/risk-keywords",
+                            headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_duplicate_keyword_returns_409(client, db_session, seeded_tenant):
+    """Creating the same keyword twice for the same tenant returns 409."""
+    token = _tenant_admin_token(seeded_tenant.id, 1)
+    payload = {"category": "owner_abuse", "speaker": "customer", "level": "L1", "keyword": "无赖"}
+    resp1 = await client.post("/api/v1/admin/risk-keywords", json=payload,
+                              headers={"Authorization": f"Bearer {token}"})
+    assert resp1.status_code == 201
+    resp2 = await client.post("/api/v1/admin/risk-keywords", json=payload,
+                              headers={"Authorization": f"Bearer {token}"})
+    assert resp2.status_code == 409

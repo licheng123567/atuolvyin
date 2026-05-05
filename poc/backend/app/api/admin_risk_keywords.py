@@ -3,6 +3,7 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -14,6 +15,7 @@ from app.schemas.risk import RiskKeywordCreate, RiskKeywordOut, RiskKeywordUpdat
 router = APIRouter()
 
 _ALLOWED_ROLES = {"admin", "platform_super"}
+_MAX_PAGE_SIZE = 100  # cap per-page rows to limit memory usage
 
 
 def _check_auth(payload: dict) -> tuple[str, Optional[int]]:
@@ -25,6 +27,14 @@ def _check_auth(payload: dict) -> tuple[str, Optional[int]]:
     return role, int(tenant_id) if tenant_id else None
 
 
+def _assert_can_modify(role: str, tenant_id: Optional[int], kw: RiskKeyword) -> None:
+    """Raise 403 if admin tries to modify a keyword they don't own."""
+    if role == "admin":
+        if kw.tenant_id is None or kw.tenant_id != tenant_id:
+            raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN,
+                                detail={"code": "ERR_403", "message": "cannot modify platform preset"})
+
+
 @router.get("/risk-keywords", response_model=PaginatedResponse[RiskKeywordOut])
 async def list_risk_keywords(
     payload: Annotated[dict, Depends(get_token_payload)],
@@ -33,7 +43,7 @@ async def list_risk_keywords(
     speaker: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=_MAX_PAGE_SIZE),
 ):
     role, tenant_id = _check_auth(payload)
     stmt = select(RiskKeyword)
@@ -65,7 +75,8 @@ async def create_risk_keyword(
     role, caller_tenant_id = _check_auth(payload)
     if role == "admin":
         if body.tenant_id is not None and body.tenant_id != caller_tenant_id:
-            raise HTTPException(status_code=403, detail={"code": "ERR_403", "message": "cross-tenant denied"})
+            raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN,
+                                detail={"code": "ERR_403", "message": "cross-tenant denied"})
         effective_tenant = caller_tenant_id
     else:
         effective_tenant = body.tenant_id  # platform_super may use None
@@ -78,7 +89,13 @@ async def create_risk_keyword(
         keyword=body.keyword,
     )
     db.add(kw)
-    db.flush()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=http_status.HTTP_409_CONFLICT,
+                            detail={"code": "ERR_409", "message": "keyword already exists"})
+    db.refresh(kw)
     return RiskKeywordOut.model_validate(kw)
 
 
@@ -92,14 +109,15 @@ async def update_risk_keyword(
     role, tenant_id = _check_auth(payload)
     kw = db.get(RiskKeyword, keyword_id)
     if not kw:
-        raise HTTPException(status_code=404, detail={"code": "ERR_404", "message": "not found"})
-    if role == "admin" and kw.tenant_id != tenant_id:
-        raise HTTPException(status_code=403, detail={"code": "ERR_403", "message": "cannot modify platform preset"})
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND,
+                            detail={"code": "ERR_404", "message": "not found"})
+    _assert_can_modify(role, tenant_id, kw)
     if body.is_active is not None:
         kw.is_active = body.is_active
     if body.level is not None:
         kw.level = body.level
-    db.flush()
+    db.commit()
+    db.refresh(kw)
     return RiskKeywordOut.model_validate(kw)
 
 
@@ -112,9 +130,10 @@ async def delete_risk_keyword(
     role, tenant_id = _check_auth(payload)
     kw = db.get(RiskKeyword, keyword_id)
     if not kw:
-        raise HTTPException(status_code=404, detail={"code": "ERR_404", "message": "not found"})
-    if role == "admin" and kw.tenant_id != tenant_id:
-        raise HTTPException(status_code=403, detail={"code": "ERR_403", "message": "cannot delete platform preset"})
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND,
+                            detail={"code": "ERR_404", "message": "not found"})
+    _assert_can_modify(role, tenant_id, kw)
     kw.is_active = False
-    db.flush()
+    db.commit()
+    db.refresh(kw)
     return RiskKeywordOut.model_validate(kw)
