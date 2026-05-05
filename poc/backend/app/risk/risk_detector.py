@@ -134,7 +134,8 @@ class RiskDetector:
         self._mark_emit(verdict.category)
 
     def _should_emit(self, category: str) -> bool:
-        last = self._last_emit.get(category, 0.0)
+        # float('-inf') ensures first-ever emit for each category always passes
+        last = self._last_emit.get(category, float("-inf"))
         return (time.monotonic() - last) >= settings.risk_dedup_window_sec
 
     def _mark_emit(self, category: str) -> None:

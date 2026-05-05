@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.models.call import CallRecord
+from app.risk.supervisor_manager import get_supervisor_manager
 from app.ws.auth import decode_ws_token
 from app.ws.call_session import CallSession
 from app.ws.connection_manager import get_connection_manager
@@ -78,11 +79,20 @@ async def ws_calls(
         async def broadcast_tag(tag: dict) -> None:
             await manager.broadcast(call_id, {"type": "tag.ready", **tag})
 
+        _tenant_id = call.tenant_id
+
+        async def broadcast_risk(event: dict) -> None:
+            await manager.broadcast(call_id, event)
+            if _tenant_id:
+                sup = get_supervisor_manager()
+                await sup.broadcast(_tenant_id, {**event, "type": "supervisor.alert"})
+
         session = CallSession(
             call_id=call_id,
             on_transcript_broadcast=broadcast_transcript,
             on_suggestion_broadcast=broadcast_suggestion,
             on_tag_ready=broadcast_tag,
+            on_risk_broadcast=broadcast_risk,
         )
         _sessions[call_id] = session  # claim slot BEFORE awaiting
         await session.start(db)
