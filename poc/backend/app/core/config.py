@@ -68,5 +68,12 @@ class Settings(BaseSettings):
     realtime_llm_timeout_sec: int = 20
     realtime_llm_silence_ms: int = 1500
 
+    # Sprint 5a — risk detection
+    risk_analyzer_backend: str = "mock"         # "mock" | "api"
+    risk_llm_confidence_min: float = 0.70       # discard LLM verdict below this
+    risk_llm_block_confidence: float = 0.85     # threshold for keyword+llm blocking modal
+    risk_llm_free_throttle_sec: int = 10        # min seconds between free-form LLM scans
+    risk_dedup_window_sec: int = 60             # seconds to suppress same category re-emit
+
 
 settings = Settings()
