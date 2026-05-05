@@ -5,7 +5,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import admin, admin_cases, agent_cases, auth, calls, calls_v1, devices, devices_v1, ops, recordings, supervisor, tasks, users, ws_calls, ws_supervisor
+from app.api import admin, admin_cases, admin_risk_keywords, agent_cases, auth, calls, calls_v1, devices, devices_v1, ops, recordings, supervisor, tasks, users, ws_calls, ws_supervisor
 
 
 @asynccontextmanager
@@ -74,6 +74,7 @@ app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 app.include_router(ops.router, prefix="/api/v1/ops", tags=["ops"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 app.include_router(admin_cases.router, prefix="/api/v1/admin", tags=["admin-cases"])
+app.include_router(admin_risk_keywords.router, prefix="/api/v1/admin", tags=["admin-risk-keywords"])
 app.include_router(supervisor.router, prefix="/api/v1/supervisor", tags=["supervisor"])
 app.include_router(agent_cases.router, prefix="/api/v1/agent", tags=["agent"])
 app.include_router(devices_v1.router, prefix="/api/v1/devices", tags=["devices-v1"])
