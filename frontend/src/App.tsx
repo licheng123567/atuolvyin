@@ -37,6 +37,33 @@ import type { AuthUser } from "./providers/auth-provider";
 
 const SUPERVISOR_ROLES = new Set(["supervisor", "admin", "platform_super"]);
 
+const ROLE_HOME: Record<string, string> = {
+  platform_superadmin: "/ops/tenants",
+  platform_super: "/ops/tenants",
+  platform_ops: "/ops/tenants",
+  admin: "/admin/cases",
+  supervisor: "/supervisor/alerts",
+  agent_internal: "/agent/cases",
+  agent_external: "/agent/cases",
+};
+
+function RoleHomeRedirect() {
+  const { data, isLoading } = useGetIdentity<{ role: string }>();
+  if (isLoading) return null;
+  const target = data?.role ? ROLE_HOME[data.role] : null;
+  if (!target) {
+    return (
+      <div className="text-[var(--color-neutral-900)]">
+        <h1 className="text-2xl font-semibold mb-2">欢迎使用有证慧催</h1>
+        <p className="text-sm text-[var(--color-neutral-600)]">
+          未识别到角色（{data?.role ?? "未知"}），请联系管理员。
+        </p>
+      </div>
+    );
+  }
+  return <Navigate to={target} replace />;
+}
+
 function AuthenticatedShell() {
   const { data: identity } = useGetIdentity<AuthUser>();
   const isSupervisor = SUPERVISOR_ROLES.has(identity?.role ?? "");
@@ -121,19 +148,7 @@ function App() {
               </Authenticated>
             }
           >
-            <Route
-              path="/"
-              element={
-                <div className="text-[var(--color-neutral-900)]">
-                  <h1 className="text-2xl font-semibold mb-2">
-                    欢迎使用有证慧催
-                  </h1>
-                  <p className="text-sm text-[var(--color-neutral-600)]">
-                    各功能模块正在开发中。
-                  </p>
-                </div>
-              }
-            />
+            <Route path="/" element={<RoleHomeRedirect />} />
             {/* Ops - Tenant Management */}
             <Route path="/ops/tenants" element={<TenantListPage />} />
             <Route path="/ops/tenants/new" element={<TenantNewPage />} />
