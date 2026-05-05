@@ -51,3 +51,6 @@ poc/android/.idea/
 
 # Claude Code
 .claude/
+
+# Git worktrees (Sprint 实施隔离)
+.worktrees/
