@@ -65,15 +65,12 @@ def upgrade() -> None:
         sa.CheckConstraint("max_per_push BETWEEN 1 AND 10", name="ck_tsc_max_per_push"),
     )
 
-    for col_def in [
-        sa.Column("supervisor_label", sa.String(16)),
-        sa.Column("supervisor_note", sa.Text),
-        sa.Column("supervisor_id", sa.BigInteger, sa.ForeignKey("user_account.id"), nullable=True),
-        sa.Column("supervisor_at", sa.DateTime(timezone=True)),
-        sa.Column("inferred_signal", sa.SmallInteger),
-        sa.Column("script_template_id", sa.BigInteger, sa.ForeignKey("script_template.id"), nullable=True),
-    ]:
-        op.add_column("suggestion_feedback", col_def)
+    op.add_column("suggestion_feedback", sa.Column("supervisor_label", sa.String(16)))
+    op.add_column("suggestion_feedback", sa.Column("supervisor_note", sa.Text))
+    op.add_column("suggestion_feedback", sa.Column("supervisor_id", sa.BigInteger, sa.ForeignKey("user_account.id"), nullable=True))
+    op.add_column("suggestion_feedback", sa.Column("supervisor_at", sa.DateTime(timezone=True)))
+    op.add_column("suggestion_feedback", sa.Column("inferred_signal", sa.SmallInteger))
+    op.add_column("suggestion_feedback", sa.Column("script_template_id", sa.BigInteger, sa.ForeignKey("script_template.id"), nullable=True))
 
 
 def downgrade() -> None:
