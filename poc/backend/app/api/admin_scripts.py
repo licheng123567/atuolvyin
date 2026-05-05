@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from fastapi import status as http_status
 from sqlalchemy import select, or_
 from sqlalchemy.orm import Session
@@ -241,7 +241,7 @@ def toggle_script(
     return script
 
 
-@router.delete("/scripts/{script_id}", status_code=204)
+@router.delete("/scripts/{script_id}", status_code=204, response_class=Response, response_model=None)
 def delete_script(
     script_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
