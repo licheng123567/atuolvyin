@@ -27,6 +27,9 @@ import { authProvider, getToken } from "./providers/auth-provider";
 import { dataProvider } from "./providers";
 import { useSupervisorAlerts } from "./hooks/useSupervisorAlerts";
 import { SupervisorAlertsPage } from "./pages/supervisor/alerts";
+import { RiskKeywordListPage } from "./pages/admin/risk-keywords/list";
+import { RiskKeywordCreatePage } from "./pages/admin/risk-keywords/create";
+import { RiskKeywordEditPage } from "./pages/admin/risk-keywords/edit";
 import type { AuthUser } from "./providers/auth-provider";
 
 const SUPERVISOR_ROLES = new Set(["supervisor", "admin", "platform_super"]);
@@ -79,6 +82,12 @@ function App() {
           {
             name: "supervisor/alerts",
             list: "/supervisor/alerts",
+          },
+          {
+            name: "admin/risk-keywords",
+            list: "/admin/risk-keywords",
+            create: "/admin/risk-keywords/new",
+            edit: "/admin/risk-keywords/:id/edit",
           },
         ]}
         options={{ syncWithLocation: true, warnWhenUnsavedChanges: false }}
@@ -135,6 +144,10 @@ function App() {
             <Route path="/admin/workstation/:call_id" element={<AdminLiveWorkstationPage />} />
             {/* Supervisor Alerts */}
             <Route path="/supervisor/alerts" element={<SupervisorAlertsPage />} />
+            {/* Admin - Risk Keywords */}
+            <Route path="/admin/risk-keywords" element={<RiskKeywordListPage />} />
+            <Route path="/admin/risk-keywords/new" element={<RiskKeywordCreatePage />} />
+            <Route path="/admin/risk-keywords/:id/edit" element={<RiskKeywordEditPage />} />
           </Route>
 
           {/* Catch-all */}
