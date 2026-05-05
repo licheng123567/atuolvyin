@@ -4,8 +4,6 @@ Revision ID: 5a001riskword
 Revises: 4001a1b2c3d4
 Create Date: 2026-05-01 00:00:00
 """
-from __future__ import annotations
-
 import sqlalchemy as sa
 from alembic import op
 
