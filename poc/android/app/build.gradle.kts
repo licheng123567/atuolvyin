@@ -70,4 +70,7 @@ dependencies {
 
     // JSON library for unit tests
     testImplementation("org.json:json:20231013")
+
+    // MockK for unit tests
+    testImplementation("io.mockk:mockk:1.13.10")
 }
