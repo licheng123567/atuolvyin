@@ -29,6 +29,20 @@ export type CallSocketStatus =
   | "failed"
   | "call_ended";
 
+export interface RiskEvent {
+  type: "risk.event";
+  risk_id: string;
+  call_id: number;
+  level: "L1" | "L2";
+  category: "owner_abuse" | "owner_threat" | "agent_violation" | "agent_minor_misconduct";
+  trigger: "keyword_only" | "llm_only" | "keyword+llm";
+  llm_confidence: number;
+  matched_keywords: string[];
+  text_snippet: string;
+  speaker: "agent" | "customer";
+  ts: string;
+}
+
 export interface CallSocketOptions {
   callId: number;
   role: "agent" | "observer";
@@ -38,6 +52,7 @@ export interface CallSocketOptions {
   onSuggestion?: (s: Suggestion) => void;
   onTagReady?: (tag: TagPayload) => void;
   onStatusChange?: (status: CallSocketStatus) => void;
+  onRisk?: (event: RiskEvent) => void;
 }
 
 export interface CallSocketHandle {

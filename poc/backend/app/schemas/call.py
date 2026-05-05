@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -7,8 +6,8 @@ from .common import PaginationQuery
 
 
 class CallListQuery(PaginationQuery):
-    case_id: Optional[int] = None
-    status: Optional[str] = None
+    case_id: int | None = None
+    status: str | None = None
 
 
 class CallResponse(BaseModel):
@@ -16,13 +15,13 @@ class CallResponse(BaseModel):
 
     id: int
     tenant_id: int
-    case_id: Optional[int]
+    case_id: int | None
     initiated_by: str
-    started_at: Optional[datetime]
-    ended_at: Optional[datetime]
-    duration_sec: Optional[int]
-    billable_duration: Optional[int]
-    result_tag: Optional[str]
+    started_at: datetime | None
+    ended_at: datetime | None
+    duration_sec: int | None
+    billable_duration: int | None
+    result_tag: str | None
     risk_flagged: bool
     status: str
     created_at: datetime
@@ -32,9 +31,9 @@ class CallMinuteQuotaStatus(BaseModel):
     tenant_id: int
     year_month: str
     used_minutes: int
-    quota: Optional[int]
-    remaining: Optional[int]
-    pct_used: Optional[float]
+    quota: int | None
+    remaining: int | None
+    pct_used: float | None
     is_exhausted: bool
 
 
@@ -50,11 +49,11 @@ class CallListItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    case_id: Optional[int]
+    case_id: int | None
     callee_phone_masked: str
-    started_at: Optional[datetime]
-    ended_at: Optional[datetime]
-    duration_sec: Optional[int]
+    started_at: datetime | None
+    ended_at: datetime | None
+    duration_sec: int | None
     status: str
     created_at: datetime
 
@@ -71,18 +70,18 @@ class TranscriptSegment(BaseModel):
 
 class TranscriptOut(BaseModel):
     full_text: str
-    segments: Optional[list[TranscriptSegment]]
-    asr_model: Optional[str]
+    segments: list[TranscriptSegment] | None
+    asr_model: str | None
 
 
 class AnalysisResultOut(BaseModel):
-    summary: Optional[str]
-    intent: Optional[str]
-    promise_date: Optional[str]
-    excuse_category: Optional[str]
-    compliance_disclosed: Optional[bool]
-    risk_keywords: Optional[list[str]]
-    confidence: Optional[float]
+    summary: str | None
+    intent: str | None
+    promise_date: str | None
+    excuse_category: str | None
+    compliance_disclosed: bool | None
+    risk_keywords: list[str] | None
+    confidence: float | None
     needs_review: bool
 
 
@@ -90,15 +89,15 @@ class CallDetailResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    case_id: Optional[int]
+    case_id: int | None
     callee_phone_masked: str
-    started_at: Optional[datetime]
-    ended_at: Optional[datetime]
-    duration_sec: Optional[int]
-    recording_url: Optional[str]
+    started_at: datetime | None
+    ended_at: datetime | None
+    duration_sec: int | None
+    recording_url: str | None
     status: str
-    transcript: Optional[TranscriptOut]
-    analysis: Optional[AnalysisResultOut]
+    transcript: TranscriptOut | None
+    analysis: AnalysisResultOut | None
     created_at: datetime
 
 
@@ -115,22 +114,22 @@ class DialRequestOut(BaseModel):
 
 
 class CallTagPatch(BaseModel):
-    intent: Optional[str] = None
-    promise_date: Optional[str] = None
-    promise_amount: Optional[float] = None
-    notes: Optional[str] = None
+    intent: str | None = None
+    promise_date: str | None = None
+    promise_amount: float | None = None
+    notes: str | None = None
 
 
 class CallTagOut(BaseModel):
     call_id: int
-    intent: Optional[str]
-    promise_date: Optional[str]
-    promise_amount: Optional[float]
-    summary: Optional[str]
-    user_confirmed_at: Optional[datetime]
+    intent: str | None
+    promise_date: str | None
+    promise_amount: float | None
+    summary: str | None
+    user_confirmed_at: datetime | None
 
 
 class SuggestionFeedbackIn(BaseModel):
     action: str  # "adopt" | "ignore"
-    suggestion_text: Optional[str] = None
-    script_template_id: Optional[int] = None
+    suggestion_text: str | None = None
+    script_template_id: int | None = None

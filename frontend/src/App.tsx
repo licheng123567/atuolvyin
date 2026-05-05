@@ -1,4 +1,4 @@
-import { Authenticated, Refine } from "@refinedev/core";
+import { Authenticated, Refine, useGetIdentity } from "@refinedev/core";
 import routerBindings from "@refinedev/react-router";
 import {
   BrowserRouter,
@@ -26,8 +26,27 @@ import { AdminLiveWorkstationPage } from "./pages/admin/workstation/live";
 import { ScriptListPage } from "./pages/admin/scripts/list";
 import { ScriptVersionsPage } from "./pages/admin/scripts/versions";
 import { SupervisorScriptLabelsPage } from "./pages/supervisor/script-labels";
-import { authProvider } from "./providers/auth-provider";
+import { authProvider, getToken } from "./providers/auth-provider";
 import { dataProvider } from "./providers";
+import { useSupervisorAlerts } from "./hooks/useSupervisorAlerts";
+import { SupervisorAlertsPage } from "./pages/supervisor/alerts";
+import { RiskKeywordListPage } from "./pages/admin/risk-keywords/list";
+import { RiskKeywordCreatePage } from "./pages/admin/risk-keywords/create";
+import { RiskKeywordEditPage } from "./pages/admin/risk-keywords/edit";
+import type { AuthUser } from "./providers/auth-provider";
+
+const SUPERVISOR_ROLES = new Set(["supervisor", "admin", "platform_super"]);
+
+function AuthenticatedShell() {
+  const { data: identity } = useGetIdentity<AuthUser>();
+  const isSupervisor = SUPERVISOR_ROLES.has(identity?.role ?? "");
+  useSupervisorAlerts(isSupervisor ? getToken() : null);
+  return (
+    <AppLayout>
+      <Outlet />
+    </AppLayout>
+  );
+}
 
 function App() {
   return (
@@ -64,6 +83,16 @@ function App() {
             show: "/calls/:id",
           },
           {
+            name: "supervisor/alerts",
+            list: "/supervisor/alerts",
+          },
+          {
+            name: "admin/risk-keywords",
+            list: "/admin/risk-keywords",
+            create: "/admin/risk-keywords/new",
+            edit: "/admin/risk-keywords/:id/edit",
+          },
+          {
             name: "admin/scripts",
             list: "/admin/scripts",
             show: "/admin/scripts/:id/versions",
@@ -88,9 +117,7 @@ function App() {
                 key="app"
                 fallback={<Navigate to="/login" replace />}
               >
-                <AppLayout>
-                  <Outlet />
-                </AppLayout>
+                <AuthenticatedShell />
               </Authenticated>
             }
           >
@@ -129,6 +156,12 @@ function App() {
             <Route path="/agent/workstation/:call_id" element={<AgentLiveWorkstationPage />} />
             {/* Admin Observer Workstation */}
             <Route path="/admin/workstation/:call_id" element={<AdminLiveWorkstationPage />} />
+            {/* Supervisor Alerts */}
+            <Route path="/supervisor/alerts" element={<SupervisorAlertsPage />} />
+            {/* Admin - Risk Keywords */}
+            <Route path="/admin/risk-keywords" element={<RiskKeywordListPage />} />
+            <Route path="/admin/risk-keywords/new" element={<RiskKeywordCreatePage />} />
+            <Route path="/admin/risk-keywords/:id/edit" element={<RiskKeywordEditPage />} />
             {/* Admin - Script Library */}
             <Route path="/admin/scripts" element={<ScriptListPage />} />
             <Route path="/admin/scripts/:id/versions" element={<ScriptVersionsPage />} />

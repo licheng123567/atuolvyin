@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
+from collections.abc import Generator
 from contextlib import contextmanager, suppress
-from typing import Generator, Optional
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -52,7 +52,7 @@ def process_call(self, call_id: int) -> None:
     from app.models.call import AnalysisResult, CallRecord, Transcript
     from app.models.case import CollectionCase
 
-    tmp_path: Optional[str] = None
+    tmp_path: str | None = None
     try:
         with _get_db() as db:
             call = db.get(CallRecord, call_id)
@@ -139,7 +139,7 @@ def process_call(self, call_id: int) -> None:
                     err_call.status = "failed"
         except Exception as db_exc:
             logger.error("Failed to mark call %s as failed: %s", call_id, db_exc)
-        raise self.retry(exc=exc)
+        raise self.retry(exc=exc) from exc
 
     finally:
         if tmp_path:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
@@ -25,10 +25,10 @@ async def list_cases(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[UserAccount, Depends(require_roles(*SUPERVISOR_ROLES))],
     db: Annotated[Session, Depends(get_db)],
-    stage: Optional[str] = Query(None),
-    pool_type: Optional[str] = Query(None),
-    assigned_to: Optional[int] = Query(None),
-    keyword: Optional[str] = Query(None, max_length=100),
+    stage: str | None = Query(None),
+    pool_type: str | None = Query(None),
+    assigned_to: int | None = Query(None),
+    keyword: str | None = Query(None, max_length=100),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[CaseWithOwnerResponse]:

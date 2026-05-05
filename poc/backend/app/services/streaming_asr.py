@@ -2,9 +2,10 @@
 """Streaming ASR dispatcher — mirrors app/services/asr.py pattern."""
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Awaitable, Callable, Optional, Protocol
+from datetime import datetime
+from typing import Protocol
 
 from app.core.config import settings
 

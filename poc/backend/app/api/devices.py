@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -13,9 +12,9 @@ router = APIRouter()
 
 class SelfCheckIn(BaseModel):
     device_id: str
-    brand: Optional[str] = None
-    model: Optional[str] = None
-    os_version: Optional[str] = None
+    brand: str | None = None
+    model: str | None = None
+    os_version: str | None = None
     recording_dir_ok: bool
     recording_toggle_on: bool
     permissions_ok: bool

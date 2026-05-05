@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
@@ -30,7 +30,6 @@ from app.schemas.case import (
     CaseStageUpdate,
     CaseWithOwnerResponse,
     OwnerInfo,
-    TimelineEvent,
 )
 from app.schemas.common import PaginatedResponse
 
@@ -40,7 +39,7 @@ ADMIN_ROLES = ("admin",)
 
 
 def _require_tenant(payload: dict) -> int:
-    tenant_id: Optional[int] = payload.get("tenant_id")
+    tenant_id: int | None = payload.get("tenant_id")
     if not tenant_id:
         raise HTTPException(
             status_code=http_status.HTTP_403_FORBIDDEN,
@@ -50,7 +49,7 @@ def _require_tenant(payload: dict) -> int:
 
 
 def _calc_priority(
-    amount_owed: Optional[Decimal], months_overdue: Optional[int]
+    amount_owed: Decimal | None, months_overdue: int | None
 ) -> int:
     return int(float(amount_owed or 0) * 0.4 + float(months_overdue or 0) * 0.3)
 
@@ -137,10 +136,10 @@ async def list_cases(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
-    stage: Optional[str] = Query(None),
-    pool_type: Optional[str] = Query(None),
-    assigned_to: Optional[int] = Query(None),
-    keyword: Optional[str] = Query(None, max_length=100),
+    stage: str | None = Query(None),
+    pool_type: str | None = Query(None),
+    assigned_to: int | None = Query(None),
+    keyword: str | None = Query(None, max_length=100),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[CaseWithOwnerResponse]:

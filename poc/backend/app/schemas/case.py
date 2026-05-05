@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -8,10 +8,10 @@ from .common import PaginationQuery
 
 
 class CaseListQuery(PaginationQuery):
-    status: Optional[str] = None
-    pool_type: Optional[str] = None
-    assigned_to: Optional[int] = None
-    keyword: Optional[str] = None
+    status: str | None = None
+    pool_type: str | None = None
+    assigned_to: int | None = None
+    keyword: str | None = None
 
 
 class CaseResponse(BaseModel):
@@ -19,15 +19,15 @@ class CaseResponse(BaseModel):
 
     id: int
     tenant_id: int
-    project_id: Optional[int]
+    project_id: int | None
     owner_id: int
-    assigned_to: Optional[int]
+    assigned_to: int | None
     pool_type: str
     stage: str
-    amount_owed: Optional[Decimal]
-    months_overdue: Optional[int]
+    amount_owed: Decimal | None
+    months_overdue: int | None
     priority_score: int
-    last_contact_at: Optional[datetime]
+    last_contact_at: datetime | None
     monthly_contact_count: int
     status: str
     created_at: datetime
@@ -42,10 +42,10 @@ class CaseAssignRequest(BaseModel):
 class CaseImportRow(BaseModel):
     name: str = Field(..., min_length=1)
     phone: str = Field(..., pattern=r"^1[3-9]\d{9}$")
-    building: Optional[str] = None
-    room: Optional[str] = None
-    amount_owed: Optional[Decimal] = None
-    months_overdue: Optional[int] = None
+    building: str | None = None
+    room: str | None = None
+    amount_owed: Decimal | None = None
+    months_overdue: int | None = None
 
 
 class OwnerInfo(BaseModel):
@@ -53,25 +53,25 @@ class OwnerInfo(BaseModel):
 
     id: int
     name: str
-    phone: Optional[str] = None        # decrypted, only for agent_internal
+    phone: str | None = None        # decrypted, only for agent_internal
     phone_masked: str
-    building: Optional[str]
-    room: Optional[str]
+    building: str | None
+    room: str | None
     do_not_call: bool
 
 
 class CaseWithOwnerResponse(BaseModel):
     id: int
     tenant_id: int
-    project_id: Optional[int]
+    project_id: int | None
     owner: OwnerInfo
-    assigned_to: Optional[int]
+    assigned_to: int | None
     pool_type: str
     stage: str
-    amount_owed: Optional[Decimal]
-    months_overdue: Optional[int]
+    amount_owed: Decimal | None
+    months_overdue: int | None
     priority_score: int
-    last_contact_at: Optional[datetime]
+    last_contact_at: datetime | None
     monthly_contact_count: int
     status: str
     created_at: datetime
@@ -101,34 +101,34 @@ class CaseAssignResponse(BaseModel):
 
 class CaseCallItem(BaseModel):
     id: int
-    started_at: Optional[datetime]
-    duration_sec: Optional[int]
+    started_at: datetime | None
+    duration_sec: int | None
     status: str
-    transcript_preview: Optional[str]
-    result_tag: Optional[str]
-    confidence: Optional[float]
-    agent_name: Optional[str]
+    transcript_preview: str | None
+    result_tag: str | None
+    confidence: float | None
+    agent_name: str | None
 
 
 class TimelineEvent(BaseModel):
     type: str
     ts: datetime
-    actor: Optional[str]
-    note: Optional[str]
+    actor: str | None
+    note: str | None
 
 
 class CaseDetailResponse(BaseModel):
     id: int
     tenant_id: int
-    project_id: Optional[int]
+    project_id: int | None
     owner: OwnerInfo
-    assigned_to: Optional[int]
+    assigned_to: int | None
     pool_type: str
     stage: str
-    amount_owed: Optional[Decimal]
-    months_overdue: Optional[int]
+    amount_owed: Decimal | None
+    months_overdue: int | None
     priority_score: int
-    last_contact_at: Optional[datetime]
+    last_contact_at: datetime | None
     monthly_contact_count: int
     status: str
     created_at: datetime

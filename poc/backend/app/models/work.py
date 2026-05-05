@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,21 +13,21 @@ class WorkOrder(Base, TimestampMixin):
     tenant_id: Mapped[int] = mapped_column(
         sa.BigInteger, sa.ForeignKey("tenant.id"), nullable=False
     )
-    case_id: Mapped[Optional[int]] = mapped_column(
+    case_id: Mapped[int | None] = mapped_column(
         sa.BigInteger, sa.ForeignKey("collection_case.id")
     )
-    call_id: Mapped[Optional[int]] = mapped_column(
+    call_id: Mapped[int | None] = mapped_column(
         sa.BigInteger, sa.ForeignKey("call_record.id")
     )
     order_type: Mapped[str] = mapped_column(
         sa.Text, nullable=False
     )  # quality / reduction / dispute / other
     description: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    assigned_to: Mapped[Optional[int]] = mapped_column(
+    assigned_to: Mapped[int | None] = mapped_column(
         sa.BigInteger, sa.ForeignKey("user_account.id")
     )
     status: Mapped[str] = mapped_column(sa.Text, nullable=False, default="open")
-    resolution: Mapped[Optional[str]] = mapped_column(sa.Text)
+    resolution: Mapped[str | None] = mapped_column(sa.Text)
 
 
 class LegalCase(Base, TimestampMixin):
@@ -43,8 +41,8 @@ class LegalCase(Base, TimestampMixin):
         sa.BigInteger, sa.ForeignKey("collection_case.id"), nullable=False
     )
     stage: Mapped[str] = mapped_column(sa.Text, nullable=False, default="pending_eval")
-    amount_disputed: Mapped[Optional[sa.Numeric]] = mapped_column(sa.Numeric(12, 2))
-    lawyer_name: Mapped[Optional[str]] = mapped_column(sa.Text)
-    law_firm: Mapped[Optional[str]] = mapped_column(sa.Text)
-    next_milestone: Mapped[Optional[str]] = mapped_column(sa.Text)
-    notes: Mapped[Optional[str]] = mapped_column(sa.Text)
+    amount_disputed: Mapped[sa.Numeric | None] = mapped_column(sa.Numeric(12, 2))
+    lawyer_name: Mapped[str | None] = mapped_column(sa.Text)
+    law_firm: Mapped[str | None] = mapped_column(sa.Text)
+    next_milestone: Mapped[str | None] = mapped_column(sa.Text)
+    notes: Mapped[str | None] = mapped_column(sa.Text)

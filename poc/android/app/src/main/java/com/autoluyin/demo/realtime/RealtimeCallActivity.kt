@@ -36,6 +36,8 @@ class RealtimeCallActivity : AppCompatActivity() {
 
     private lateinit var transcriptAdapter: TranscriptAdapter
     private lateinit var suggestionCard: SuggestionCardView
+    private lateinit var riskBanner: RiskBannerView
+    private lateinit var riskAlertController: RiskAlertController
     private lateinit var connectionBadge: TextView
     private lateinit var timerView: TextView
     private lateinit var streamClient: AudioStreamClient
@@ -68,6 +70,35 @@ class RealtimeCallActivity : AppCompatActivity() {
         connectionBadge = findViewById(R.id.connectionBadge)
         timerView = findViewById(R.id.timer)
         suggestionCard = findViewById(R.id.suggestionCard)
+        riskBanner = findViewById(R.id.riskBanner)
+        riskAlertController = RiskAlertController(object : RiskAlertController.AlertListener {
+            override fun showToast(message: String) {
+                mainHandler.post {
+                    android.widget.Toast.makeText(this@RealtimeCallActivity, message, android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+            override fun showBanner(event: RiskEvent) {
+                mainHandler.post { riskBanner.showForEvent(event) }
+            }
+            override fun showBlockingModal(event: RiskEvent) {
+                mainHandler.post {
+                    streamClient.pauseRecording()
+                    RiskBlockingModal(
+                        context = this@RealtimeCallActivity,
+                        event = event,
+                        onConfirmContinue = {
+                            if (!isFinishing && !isDestroyed) streamClient.resumeRecording()
+                        },
+                        onEndCall = {
+                            if (!isFinishing && !isDestroyed) {
+                                streamClient.resumeRecording()
+                                hangUp()
+                            }
+                        },
+                    ).show()
+                }
+            }
+        })
 
         val list = findViewById<RecyclerView>(R.id.transcriptList)
         list.layoutManager = LinearLayoutManager(this).apply { stackFromEnd = true }
@@ -117,6 +148,7 @@ class RealtimeCallActivity : AppCompatActivity() {
             onSuggestion = { id, text -> mainHandler.post { suggestionCard.show(id, text) } },
             onTagReady = { tag -> mainHandler.post { showTagDialog(tag) } },
             onStateChange = { state -> mainHandler.post { renderState(state) } },
+            onRisk = { event -> mainHandler.post { riskAlertController.onRiskEvent(event) } },
         )
         suggestionCard.onAdopt = { id -> postFeedback(id, "adopt") }
         suggestionCard.onIgnore = { id -> suggestionCard.hide(); postFeedback(id, "ignore") }

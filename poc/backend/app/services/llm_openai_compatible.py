@@ -3,6 +3,7 @@
 按 settings.llm_base_url + llm_model + llm_api_key 选择。
 """
 import json
+
 from openai import OpenAI
 
 from app.core.config import settings

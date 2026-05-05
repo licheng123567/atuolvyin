@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Annotated, Optional
+from datetime import UTC, datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
@@ -40,7 +40,7 @@ def _tenant_to_response(tenant: Tenant) -> TenantResponse:
 async def list_tenants(
     _user: Annotated[UserAccount, Depends(require_roles(*OPS_ROLES))],
     db: Annotated[Session, Depends(get_db)],
-    q: Optional[str] = Query(None, max_length=100),
+    q: str | None = Query(None, max_length=100),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[TenantResponse]:
@@ -91,7 +91,7 @@ async def create_tenant(
                 "code": "ERR_DUPLICATE_CREDIT_CODE",
                 "message": "统一社会信用代码已存在",
             },
-        )
+        ) from None
     db.commit()
     db.refresh(tenant)
     return _tenant_to_response(tenant)
@@ -126,7 +126,7 @@ async def update_tenant_quota(
             detail={"code": "ERR_NOT_FOUND", "message": "租户不存在"},
         )
     tenant.monthly_minute_quota = body.monthly_minute_quota
-    tenant.minute_quota_updated_at = datetime.now(timezone.utc)
+    tenant.minute_quota_updated_at = datetime.now(UTC)
     db.commit()
     db.refresh(tenant)
     return _tenant_to_response(tenant)

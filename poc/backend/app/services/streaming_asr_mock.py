@@ -2,10 +2,9 @@
 """Mock streaming ASR — emits canned chunks every ~1s of audio."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from .streaming_asr import OnError, OnTranscript, StreamingASRSession, TranscriptChunk
-
+from .streaming_asr import OnError, OnTranscript, TranscriptChunk
 
 CANNED_TURNS = [
     ("customer", "您好哪位"),
@@ -37,7 +36,7 @@ class MockStreamingASRSession:
                 seq=self._seq,
                 speaker=speaker,
                 text=text,
-                ts=datetime.now(timezone.utc),
+                ts=datetime.now(UTC),
                 utterance_end=True,
             )
             self._seq += 1

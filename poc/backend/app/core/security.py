@@ -1,7 +1,5 @@
-from __future__ import annotations
-
-from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Annotated, Optional
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -29,10 +27,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def create_access_token(
     payload: dict,
-    expires_delta: Optional[timedelta] = None,
+    expires_delta: timedelta | None = None,
 ) -> str:
     to_encode = payload.copy()
-    expire = datetime.now(timezone.utc) + (
+    expire = datetime.now(UTC) + (
         expires_delta or timedelta(minutes=settings.jwt_expires_minutes)
     )
     to_encode["exp"] = expire
@@ -49,7 +47,7 @@ def decode_access_token(token: str) -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "ERR_INVALID_TOKEN", "message": "Token invalid or expired"},
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from None
 
 
 async def get_token_payload(
@@ -64,7 +62,7 @@ async def get_current_user(
 ) -> "UserAccount":
     from app.models.user import UserAccount  # avoid circular at module level
 
-    user_id: Optional[int] = payload.get("user_id")
+    user_id: int | None = payload.get("user_id")
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

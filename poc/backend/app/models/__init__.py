@@ -1,16 +1,17 @@
 from .base import Base
+from .call import AnalysisResult, CallRecord, RiskEvent, Transcript
+from .case import CollectionCase, OwnerProfile, Project
+from .risk import RiskKeyword  # noqa: F401
+from .settlement import DisputeRecord, SettlementStatement
 from .tenant import (
-    Tenant,
-    ServiceProvider,
     ProviderTenantContract,
+    ServiceProvider,
+    Tenant,
     TenantMinuteUsage,
     UserTenantMembership,
 )
-from .user import UserAccount, PlatformOpsAssignment
-from .case import OwnerProfile, Project, CollectionCase
-from .call import CallRecord, Transcript, AnalysisResult, RiskEvent, SuggestionFeedback
-from .work import WorkOrder, LegalCase
-from .settlement import SettlementStatement, DisputeRecord
+from .user import PlatformOpsAssignment, UserAccount
+from .work import LegalCase, WorkOrder
 from .script import ScriptTemplate, ScriptTemplateVersion, TenantSuggestionConfig
 
 __all__ = [
@@ -34,6 +35,7 @@ __all__ = [
     "LegalCase",
     "SettlementStatement",
     "DisputeRecord",
+    "RiskKeyword",
     "ScriptTemplate",
     "ScriptTemplateVersion",
     "TenantSuggestionConfig",

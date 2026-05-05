@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import math
 import uuid
-from datetime import datetime, timezone
-from typing import Annotated, Optional
+from datetime import UTC, datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi import status as http_status
@@ -33,8 +33,8 @@ from app.schemas.call import (
     TranscriptOut,
     TranscriptSegment,
 )
-from app.services import mipush
 from app.schemas.common import PaginatedResponse
+from app.services import mipush
 
 router = APIRouter()
 
@@ -223,7 +223,7 @@ async def upload_call(
 
     # 4. Quota check
     tenant = db.get(Tenant, tenant_id)
-    year_month = datetime.now(timezone.utc).strftime("%Y-%m")
+    year_month = datetime.now(UTC).strftime("%Y-%m")
     if tenant and tenant.monthly_minute_quota is not None:
         usage = _get_or_create_usage(db, tenant_id, year_month)
         needed = math.ceil(duration_sec / 60)
@@ -254,7 +254,7 @@ async def upload_call(
         raise HTTPException(
             status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"code": "ERR_VALIDATION", "message": "无效的时间格式，使用 ISO8601"},
-        )
+        ) from None
 
     # 7. Insert CallRecord
     call = CallRecord(
@@ -293,7 +293,7 @@ def list_calls(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[object, Depends(require_roles(*AGENT_ROLES, *SUPERVISOR_ROLES))],
     db: Annotated[Session, Depends(get_db)],
-    case_id: Optional[int] = Query(None),
+    case_id: int | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[CallListItem]:
@@ -374,8 +374,8 @@ def get_call_detail(
             detail={"code": "ERR_FORBIDDEN", "message": "无权访问此通话记录"},
         )
 
-    transcript_out: Optional[TranscriptOut] = None
-    analysis_out: Optional[AnalysisResultOut] = None
+    transcript_out: TranscriptOut | None = None
+    analysis_out: AnalysisResultOut | None = None
 
     if call.status == "processed":
         t = db.execute(
@@ -470,7 +470,7 @@ def patch_call_tag(
     if body.notes is not None:
         analysis.summary = body.notes
 
-    call.user_confirmed_at = datetime.now(timezone.utc)
+    call.user_confirmed_at = datetime.now(UTC)
     db.commit()
 
     # 推断业务信号
@@ -502,6 +502,7 @@ def post_suggestion_feedback(
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     from fastapi.responses import JSONResponse
+
     from app.models.call import SuggestionFeedback
 
     user_id = int(payload.get("user_id") or 0)

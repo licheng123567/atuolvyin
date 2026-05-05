@@ -9,15 +9,15 @@
 非 local 后端（MinIO/OSS）由各自服务直接提供 URL，本路由仅 local 模式生效。
 """
 import os
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import FileResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.db import get_db
 from app.core.signing import verify_token
-from app.core.storage import storage, LocalFileStorage
+from app.core.storage import LocalFileStorage, storage
 
 router = APIRouter()
 

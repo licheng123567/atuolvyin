@@ -16,7 +16,7 @@ class CallRecord(Base, TimestampMixin):
     tenant_id: Mapped[int] = mapped_column(
         sa.BigInteger, sa.ForeignKey("tenant.id"), nullable=False
     )
-    case_id: Mapped[Optional[int]] = mapped_column(
+    case_id: Mapped[int | None] = mapped_column(
         sa.BigInteger, sa.ForeignKey("collection_case.id")
     )
     caller_user_id: Mapped[int] = mapped_column(
@@ -24,18 +24,18 @@ class CallRecord(Base, TimestampMixin):
     )
     callee_phone_enc: Mapped[str] = mapped_column(sa.Text, nullable=False)
     initiated_by: Mapped[str] = mapped_column(sa.Text, nullable=False, default="app")  # app / pc
-    started_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True))
-    ended_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True))
-    duration_sec: Mapped[Optional[int]] = mapped_column(sa.Integer)
-    billable_duration: Mapped[Optional[int]] = mapped_column(sa.Integer)  # 接通后时长（秒）
-    result_tag: Mapped[Optional[str]] = mapped_column(sa.Text)
-    emotion_tag: Mapped[Optional[str]] = mapped_column(sa.Text)
+    started_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    ended_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    duration_sec: Mapped[int | None] = mapped_column(sa.Integer)
+    billable_duration: Mapped[int | None] = mapped_column(sa.Integer)  # 接通后时长（秒）
+    result_tag: Mapped[str | None] = mapped_column(sa.Text)
+    emotion_tag: Mapped[str | None] = mapped_column(sa.Text)
     risk_flagged: Mapped[bool] = mapped_column(sa.Boolean, default=False)
-    recording_url: Mapped[Optional[str]] = mapped_column(sa.Text)
-    object_key: Mapped[Optional[str]] = mapped_column(sa.Text)
-    data_hash: Mapped[Optional[str]] = mapped_column(sa.Text)
+    recording_url: Mapped[str | None] = mapped_column(sa.Text)
+    object_key: Mapped[str | None] = mapped_column(sa.Text)
+    data_hash: Mapped[str | None] = mapped_column(sa.Text)
     status: Mapped[str] = mapped_column(sa.Text, nullable=False, default="pending")
-    user_confirmed_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True))
+    user_confirmed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
 
     __table_args__ = (
         sa.Index("idx_callrecord_tenant", "tenant_id"),
@@ -50,10 +50,10 @@ class Transcript(Base, TimestampMixin):
     call_id: Mapped[int] = mapped_column(
         sa.BigInteger, sa.ForeignKey("call_record.id"), nullable=False
     )
-    full_text: Mapped[Optional[str]] = mapped_column(sa.Text)
-    segments: Mapped[Optional[dict]] = mapped_column(sa.JSON)  # [{speaker, start_ms, end_ms, text}]
-    asr_model: Mapped[Optional[str]] = mapped_column(sa.Text)
-    data_hash: Mapped[Optional[str]] = mapped_column(sa.Text)
+    full_text: Mapped[str | None] = mapped_column(sa.Text)
+    segments: Mapped[dict | None] = mapped_column(sa.JSON)  # [{speaker, start_ms, end_ms, text}]
+    asr_model: Mapped[str | None] = mapped_column(sa.Text)
+    data_hash: Mapped[str | None] = mapped_column(sa.Text)
 
 
 class AnalysisResult(Base, TimestampMixin):
@@ -63,11 +63,11 @@ class AnalysisResult(Base, TimestampMixin):
     call_id: Mapped[int] = mapped_column(
         sa.BigInteger, sa.ForeignKey("call_record.id"), nullable=False
     )
-    summary: Mapped[Optional[str]] = mapped_column(sa.Text)
-    key_segments: Mapped[Optional[dict]] = mapped_column(sa.JSON)
-    followup_suggestion: Mapped[Optional[str]] = mapped_column(sa.Text)
-    prompt_version: Mapped[Optional[str]] = mapped_column(sa.Text)
-    llm_model: Mapped[Optional[str]] = mapped_column(sa.Text)
+    summary: Mapped[str | None] = mapped_column(sa.Text)
+    key_segments: Mapped[dict | None] = mapped_column(sa.JSON)
+    followup_suggestion: Mapped[str | None] = mapped_column(sa.Text)
+    prompt_version: Mapped[str | None] = mapped_column(sa.Text)
+    llm_model: Mapped[str | None] = mapped_column(sa.Text)
     needs_review: Mapped[bool] = mapped_column(sa.Boolean, default=False)
 
 
@@ -80,10 +80,10 @@ class RiskEvent(Base, TimestampMixin):
     )
     level: Mapped[str] = mapped_column(sa.Text, nullable=False)  # L1 / L2 / L3
     category: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    trigger_text: Mapped[Optional[str]] = mapped_column(sa.Text)
-    audio_offset_ms: Mapped[Optional[int]] = mapped_column(sa.Integer)
+    trigger_text: Mapped[str | None] = mapped_column(sa.Text)
+    audio_offset_ms: Mapped[int | None] = mapped_column(sa.Integer)
     intervention: Mapped[str] = mapped_column(sa.Text, nullable=False)  # warn / interrupt / terminate
-    data_hash: Mapped[Optional[str]] = mapped_column(sa.Text)
+    data_hash: Mapped[str | None] = mapped_column(sa.Text)
 
 
 class SuggestionFeedback(Base):

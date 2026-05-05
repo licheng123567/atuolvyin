@@ -63,8 +63,8 @@ class RealtimeSuggestionEngine:
         self,
         case: object,
         owner: object,
-        debounce_sec: Optional[int] = None,
-        timeout_sec: Optional[int] = None,
+        debounce_sec: int | None = None,
+        timeout_sec: int | None = None,
         scripts: Optional[dict[str, list[str]]] = None,
         sensitivity_threshold: float = 0.65,
         max_per_push: int = 3,
@@ -91,7 +91,7 @@ class RealtimeSuggestionEngine:
             "不要输出 JSON 以外的任何内容。",
         )
 
-    async def on_transcript(self, chunk: TranscriptChunk) -> Optional[Suggestion]:
+    async def on_transcript(self, chunk: TranscriptChunk) -> Suggestion | None:
         self._ctx.transcript.append(chunk)
         now = time.monotonic()
 
@@ -163,6 +163,7 @@ async def _call_llm(messages: list[dict], system_prompt: str) -> dict:
         }
     if backend == "api":
         import json
+
         from openai import AsyncOpenAI
 
         if not settings.llm_api_key:
@@ -206,6 +207,7 @@ async def _call_final_analysis(messages: list[dict]) -> dict:
         }
     if backend == "api":
         import json
+
         from openai import AsyncOpenAI
 
         if not settings.llm_api_key:

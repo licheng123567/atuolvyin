@@ -1,6 +1,6 @@
 // frontend/src/pages/calls/detail.tsx
 import { useGo, useOne } from "@refinedev/core";
-import { ArrowLeft, Mic } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Mic } from "lucide-react";
 import { useParams } from "react-router-dom";
 
 interface TranscriptSegment {
@@ -16,6 +16,52 @@ interface TranscriptData {
   asr_model: string | null;
 }
 
+export interface RiskEntry {
+  risk_id: string;
+  level: string;
+  category: string;
+  trigger: string;
+  text_snippet: string;
+  matched_keywords: string[];
+  llm_confidence: number;
+  speaker: string;
+}
+
+export interface RiskAnnotation {
+  risk_id: string;
+  level: string;
+  category: string;
+  trigger: string;
+  matched_keywords: string[];
+  llm_confidence: number;
+}
+
+export function getRiskAnnotationForSegment(
+  segmentText: string,
+  risks: RiskEntry[]
+): RiskAnnotation | null {
+  for (const risk of risks) {
+    if (risk.text_snippet && segmentText.includes(risk.text_snippet)) {
+      return {
+        risk_id: risk.risk_id,
+        level: risk.level,
+        category: risk.category,
+        trigger: risk.trigger,
+        matched_keywords: risk.matched_keywords,
+        llm_confidence: risk.llm_confidence,
+      };
+    }
+  }
+  return null;
+}
+
+const CAT_LABELS: Record<string, string> = {
+  owner_abuse: "业主辱骂",
+  owner_threat: "业主威胁",
+  agent_violation: "催收员违规",
+  agent_minor_misconduct: "轻微不当",
+};
+
 interface AnalysisData {
   summary: string | null;
   intent: string | null;
@@ -25,6 +71,10 @@ interface AnalysisData {
   risk_keywords: string[] | null;
   confidence: number | null;
   needs_review: boolean;
+  key_segments?: {
+    risks?: RiskEntry[];
+    [key: string]: unknown;
+  };
 }
 
 interface CallDetailData {
@@ -110,21 +160,43 @@ export function CallDetailPage() {
             {detail.transcript ? (
               <div className="space-y-2">
                 {detail.transcript.segments ? (
-                  detail.transcript.segments.map((seg: TranscriptSegment, i: number) => (
-                    <div key={i} className="flex gap-3 text-sm">
-                      <span
-                        className="shrink-0 font-medium w-12"
-                        style={{
-                          color: seg.speaker === 0
-                            ? "var(--color-primary)"
-                            : "var(--color-neutral-700)",
-                        }}
-                      >
-                        {seg.speaker === 0 ? "坐席" : "业主"}
-                      </span>
-                      <span className="text-[var(--color-neutral-700)]">{seg.text}</span>
+                  detail.transcript.segments.map((seg: TranscriptSegment, i: number) => {
+                    const risks = detail.analysis?.key_segments?.risks ?? [];
+                    const annotation = getRiskAnnotationForSegment(seg.text, risks);
+                    return (
+                    <div key={i} className="text-sm">
+                      <div className="flex gap-3">
+                        <span
+                          className="shrink-0 font-medium w-12"
+                          style={{
+                            color: seg.speaker === 0
+                              ? "var(--color-primary)"
+                              : "var(--color-neutral-700)",
+                          }}
+                        >
+                          {seg.speaker === 0 ? "坐席" : "业主"}
+                        </span>
+                        <span className="text-[var(--color-neutral-700)]">{seg.text}</span>
+                      </div>
+                      {annotation && (
+                        <p className="mt-1 text-xs text-red-700 bg-red-50 px-2 py-1 rounded flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3 shrink-0" />
+                          <span>
+                            {CAT_LABELS[annotation.category] ?? annotation.category}（{annotation.level}
+                            {annotation.matched_keywords.length > 0
+                              ? ` · 关键词「${annotation.matched_keywords.slice(0, 2).join("、")}」`
+                              : ""}）
+                          </span>
+                          {annotation.llm_confidence > 0 && (
+                            <span className="text-neutral-400 ml-auto">
+                              置信度 {(annotation.llm_confidence * 100).toFixed(0)}%
+                            </span>
+                          )}
+                        </p>
+                      )}
                     </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <p className="text-sm text-[var(--color-neutral-700)] whitespace-pre-wrap">
                     {detail.transcript.full_text}

@@ -5,7 +5,27 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import admin, admin_cases, admin_scripts, agent_cases, auth, calls, calls_v1, devices, devices_v1, ops, recordings, supervisor, supervisor_labels, tasks, users, ws_calls, admin_suggestion_config
+from app.api import (
+    admin,
+    admin_cases,
+    admin_risk_keywords,
+    admin_scripts,
+    admin_suggestion_config,
+    agent_cases,
+    auth,
+    calls,
+    calls_v1,
+    devices,
+    devices_v1,
+    ops,
+    recordings,
+    supervisor,
+    supervisor_labels,
+    tasks,
+    users,
+    ws_calls,
+    ws_supervisor,
+)
 
 
 @asynccontextmanager
@@ -74,6 +94,7 @@ app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 app.include_router(ops.router, prefix="/api/v1/ops", tags=["ops"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 app.include_router(admin_cases.router, prefix="/api/v1/admin", tags=["admin-cases"])
+app.include_router(admin_risk_keywords.router, prefix="/api/v1/admin", tags=["admin-risk-keywords"])
 app.include_router(supervisor.router, prefix="/api/v1/supervisor", tags=["supervisor"])
 app.include_router(agent_cases.router, prefix="/api/v1/agent", tags=["agent"])
 app.include_router(devices_v1.router, prefix="/api/v1/devices", tags=["devices-v1"])
@@ -84,6 +105,7 @@ app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(calls.router, prefix="/api/calls", tags=["calls"])
 app.include_router(recordings.router, prefix="/api/recordings", tags=["recordings"])
 app.include_router(ws_calls.router)  # no prefix — /ws/calls/{id} stays as-is
+app.include_router(ws_supervisor.router)  # /ws/supervisor
 app.include_router(admin_scripts.router, prefix="/api/v1/admin", tags=["admin-scripts"])
 app.include_router(supervisor_labels.router, prefix="/api/v1/supervisor", tags=["supervisor-labels"])
 app.include_router(admin_suggestion_config.router, prefix="/api/v1/admin", tags=["suggestion-config"])
