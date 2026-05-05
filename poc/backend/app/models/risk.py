@@ -21,4 +21,5 @@ class RiskKeyword(Base, TimestampMixin):
 
     __table_args__ = (
         sa.UniqueConstraint("tenant_id", "category", "keyword", name="uq_risk_keyword_tenant_cat_kw"),
+        sa.Index("idx_riskkw_tenant_cat_speaker_active", "tenant_id", "category", "speaker", "is_active"),
     )

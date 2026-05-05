@@ -27,6 +27,8 @@ _SEED = [
     ("owner_threat",          "customer", "L2", "媒体"),
     ("owner_threat",          "customer", "L2", "律师"),
     ("owner_threat",          "customer", "L2", "曝光"),
+    ("agent_violation",       "agent",    "L2", "你妈"),
+    ("agent_violation",       "agent",    "L2", "傻逼"),
     ("agent_violation",       "agent",    "L2", "再不还"),
     ("agent_violation",       "agent",    "L2", "黑名单"),
     ("agent_violation",       "agent",    "L2", "找你单位"),
@@ -34,7 +36,6 @@ _SEED = [
     ("agent_minor_misconduct","agent",    "L1", "随便你"),
     ("agent_minor_misconduct","agent",    "L1", "爱交不交"),
     ("agent_minor_misconduct","agent",    "L1", "给你减免"),
-    ("agent_minor_misconduct","agent",    "L1", "打折"),
 ]
 
 
@@ -53,9 +54,9 @@ def upgrade() -> None:
         sa.UniqueConstraint("tenant_id", "category", "keyword", name="uq_risk_keyword_tenant_cat_kw"),
     )
     op.create_index(
-        "idx_risk_keyword_tenant_speaker",
+        "idx_riskkw_tenant_cat_speaker_active",
         "risk_keyword",
-        ["tenant_id", "speaker", "is_active"],
+        ["tenant_id", "category", "speaker", "is_active"],
     )
 
     # Seed platform-wide keywords (tenant_id = NULL)
@@ -73,5 +74,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("idx_risk_keyword_tenant_speaker", table_name="risk_keyword")
+    op.drop_index("idx_riskkw_tenant_cat_speaker_active", table_name="risk_keyword")
     op.drop_table("risk_keyword")
