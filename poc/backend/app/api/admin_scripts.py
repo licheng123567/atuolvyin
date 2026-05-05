@@ -11,7 +11,7 @@ from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
 from app.models.script import ScriptTemplate, ScriptTemplateVersion
 from app.schemas.script import (
-    ImportResultOut, RollbackIn, ScriptTemplateCreate,
+    RollbackIn, ScriptTemplateCreate,
     ScriptTemplateOut, ScriptTemplateUpdate, ScriptVersionOut,
 )
 from app.schemas.common import PaginatedResponse
@@ -128,7 +128,6 @@ def update_script(
     user_id = int(payload.get("user_id") or 0)
 
     script = _get_script_or_404(db, script_id, role, tenant_id)
-    _write_snapshot(db, script, user_id)
 
     if body.title is not None:
         script.title = body.title
@@ -139,6 +138,7 @@ def update_script(
     if body.notes is not None:
         script.notes = body.notes
     script.version += 1
+    _write_snapshot(db, script, user_id)
 
     db.commit()
     db.refresh(script)
