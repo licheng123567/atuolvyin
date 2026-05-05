@@ -80,3 +80,8 @@ class TenantSuggestionConfig(Base):
         sa.DateTime(timezone=True), server_default=sa.func.now(),
         onupdate=sa.func.now(), nullable=False
     )
+
+    __table_args__ = (
+        sa.CheckConstraint("sensitivity BETWEEN 1 AND 5", name="ck_tsc_sensitivity"),
+        sa.CheckConstraint("max_per_push BETWEEN 1 AND 10", name="ck_tsc_max_per_push"),
+    )
