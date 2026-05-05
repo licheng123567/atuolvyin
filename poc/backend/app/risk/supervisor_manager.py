@@ -35,6 +35,7 @@ class SupervisorManager:
                 await ws.send_json(event)
             except Exception as exc:
                 logger.warning("supervisor broadcast failed tenant=%s: %s", tenant_id, exc)
+                await self.disconnect(tenant_id, ws)
 
 
 _supervisor_manager: Optional[SupervisorManager] = None

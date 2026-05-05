@@ -11,7 +11,7 @@ from app.ws.auth import decode_ws_token
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-_SUPERVISOR_ROLES = {"supervisor", "admin", "platform_super"}
+_SUPERVISOR_ROLES = {"supervisor", "admin"}
 
 
 @router.websocket("/ws/supervisor")
