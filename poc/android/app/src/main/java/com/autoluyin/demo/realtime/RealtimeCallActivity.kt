@@ -86,8 +86,15 @@ class RealtimeCallActivity : AppCompatActivity() {
                     RiskBlockingModal(
                         context = this@RealtimeCallActivity,
                         event = event,
-                        onConfirmContinue = { streamClient.resumeRecording() },
-                        onEndCall = { streamClient.resumeRecording(); hangUp() },
+                        onConfirmContinue = {
+                            if (!isFinishing && !isDestroyed) streamClient.resumeRecording()
+                        },
+                        onEndCall = {
+                            if (!isFinishing && !isDestroyed) {
+                                streamClient.resumeRecording()
+                                hangUp()
+                            }
+                        },
                     ).show()
                 }
             }
@@ -141,7 +148,7 @@ class RealtimeCallActivity : AppCompatActivity() {
             onSuggestion = { id, text -> mainHandler.post { suggestionCard.show(id, text) } },
             onTagReady = { tag -> mainHandler.post { showTagDialog(tag) } },
             onStateChange = { state -> mainHandler.post { renderState(state) } },
-            onRisk = { event -> riskAlertController.onRiskEvent(event) },
+            onRisk = { event -> mainHandler.post { riskAlertController.onRiskEvent(event) } },
         )
         suggestionCard.onAdopt = { id -> postFeedback(id, "adopt") }
         suggestionCard.onIgnore = { id -> suggestionCard.hide(); postFeedback(id, "ignore") }
