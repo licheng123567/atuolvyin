@@ -4,10 +4,8 @@ import org.json.JSONObject
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
-import org.robolectric.RobolectricTestRunner
-import org.junit.runner.RunWith
+import org.junit.jupiter.api.Assertions.assertNull
 
-@RunWith(RobolectricTestRunner::class)
 class RiskEventDeserTest {
 
     private val sampleJson = """
@@ -52,5 +50,33 @@ class RiskEventDeserTest {
     fun `dedup key is riskId`() {
         val event = RiskEvent.fromJson(JSONObject(sampleJson))!!
         assertEquals("r-call42-1714500000000", event.dedupKey)
+    }
+
+    @Test
+    fun `fromJson returns null if both riskId fields are missing`() {
+        val json = JSONObject("""{"type":"risk.event","level":"L2"}""")
+        assertNull(RiskEvent.fromJson(json))
+    }
+
+    @Test
+    fun `fromJson uses transcript_text fallback when text_snippet absent`() {
+        val json = JSONObject("""
+            {"type":"risk.event","id":"r-1","call_id":1,"level":"L1",
+             "category":"owner_abuse","trigger":"keyword","speaker":"customer",
+             "transcript_text":"我没钱"}
+        """.trimIndent())
+        val event = RiskEvent.fromJson(json)!!
+        assertEquals("我没钱", event.textSnippet)
+    }
+
+    @Test
+    fun `fromJson uses single matched_keyword string when array absent`() {
+        val json = JSONObject("""
+            {"type":"risk.event","id":"r-2","call_id":1,"level":"L1",
+             "category":"owner_abuse","trigger":"keyword","speaker":"customer",
+             "matched_keyword":"骂人"}
+        """.trimIndent())
+        val event = RiskEvent.fromJson(json)!!
+        assertEquals(listOf("骂人"), event.matchedKeywords)
     }
 }

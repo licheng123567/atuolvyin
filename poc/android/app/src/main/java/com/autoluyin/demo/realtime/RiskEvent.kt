@@ -19,9 +19,10 @@ data class RiskEvent(
         fun fromJson(obj: JSONObject): RiskEvent? {
             if (obj.optString("type") != "risk.event") return null
             val riskId = obj.optString("risk_id").ifEmpty { obj.optString("id") }
+            if (riskId.isEmpty()) return null
             val keywords = obj.optJSONArray("matched_keywords")
             val kwList = if (keywords != null) {
-                (0 until keywords.length()).map { keywords.getString(it) }
+                (0 until keywords.length()).mapNotNull { keywords.optString(it).takeIf { s -> s.isNotEmpty() } }
             } else {
                 val single = obj.optString("matched_keyword")
                 if (single.isNotEmpty()) listOf(single) else emptyList()
