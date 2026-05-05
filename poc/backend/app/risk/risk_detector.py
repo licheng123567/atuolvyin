@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.risk.keyword_matcher import KeywordHit, get_matcher
-from app.risk.risk_analyzer import LLMRiskVerdict, analyze_risk_with_llm
+from app.risk.risk_analyzer import analyze_risk_with_llm
 from app.services.streaming_asr import TranscriptChunk
 
 
@@ -37,8 +37,6 @@ class RiskDetector:
         self._last_emit: dict[str, float] = {}
         # Per-speaker free LLM throttle timestamp
         self._last_free_llm: dict[str, float] = {}
-        # risk_id -> emitted event dict (for in-place upgrade by LLM confirmation)
-        self._pending_events: dict[str, dict] = {}
 
     async def on_utterance(self, chunk: TranscriptChunk, db: Session) -> None:
         if not chunk.utterance_end:
@@ -67,10 +65,7 @@ class RiskDetector:
                 )
                 await self._on_event(event)
                 self._mark_emit(primary.category)
-                # Keep reference to the emitted event for potential LLM upgrade
-                self._pending_events[risk_id] = event
-
-                # Schedule LLM confirmation to potentially upgrade the emitted event
+                        # Schedule LLM confirmation — emits upgraded keyword+llm event if confirmed
                 asyncio.create_task(
                     self._llm_confirm(risk_id=risk_id, chunk=chunk, hint=primary)
                 )
@@ -94,18 +89,25 @@ class RiskDetector:
             keyword_hint=hint,
         )
         if not verdict.is_risk:
-            # High-confidence LLM override: treat as false positive, no upgrade
-            # Low-confidence negative: keep keyword event as-is, no upgrade
-            self._pending_events.pop(risk_id, None)
+            # LLM says false positive — keep keyword-only event as-is, no upgrade
             return
 
-        # LLM confirms → upgrade the previously emitted event in-place
-        event = self._pending_events.pop(risk_id, None)
-        if event is not None:
-            event["trigger"] = "keyword+llm"
-            event["llm_confidence"] = verdict.confidence
-            event["category"] = verdict.category
-            event["level"] = verdict.level
+        # LLM confirms → emit upgraded event with keyword+llm trigger so client can
+        # escalate from dismissible banner to blocking modal.
+        # NOTE: no dedup check here — this is an upgrade of an already-emitted keyword
+        # event, not a new independent detection; dedup only blocks new keyword hits.
+        event = self._build_event(
+            risk_id=risk_id,
+            category=verdict.category,
+            speaker=chunk.speaker,
+            level=verdict.level,
+            trigger="keyword+llm",
+            keyword=hint.keyword,
+            llm_confidence=verdict.confidence,
+            text=chunk.text,
+        )
+        await self._on_event(event)
+        self._mark_emit(verdict.category)
 
     async def _llm_free_scan(self, chunk: TranscriptChunk) -> None:
         verdict = await analyze_risk_with_llm(
@@ -159,6 +161,6 @@ class RiskDetector:
             "matched_keyword": keyword,
             "llm_confidence": llm_confidence,
             "transcript_text": text,
-            "ts_ms": int(time.monotonic() * 1000),
+            "ts_ms": int(time.time() * 1000),
             "raised_at": datetime.now(timezone.utc).isoformat(),
         }

@@ -42,10 +42,12 @@ async def test_keyword_hit_emits_risk_event():
         await detector.on_utterance(chunk, db=None)
         await asyncio.sleep(0.1)  # let async LLM task complete
 
-    assert len(emitted) == 1
-    assert emitted[0]["type"] == "risk.event"
-    assert emitted[0]["category"] == "owner_threat"
-    assert emitted[0]["trigger"] == "keyword+llm"
+    # keyword event fires immediately, then LLM confirmation emits upgraded keyword+llm event
+    assert len(emitted) == 2
+    assert emitted[0]["trigger"] == "keyword"
+    assert emitted[1]["trigger"] == "keyword+llm"
+    assert emitted[1]["category"] == "owner_threat"
+    assert emitted[1]["llm_confidence"] == 0.90
 
 
 @pytest.mark.asyncio
@@ -89,8 +91,11 @@ async def test_dedup_within_window():
         await detector.on_utterance(chunk, db=None)
         await asyncio.sleep(0.1)
 
-    # Second identical event within dedup window → only 1 emitted
-    assert len(emitted) == 1
+    # First utterance: keyword + keyword+llm = 2 events
+    # Second utterance: dedup blocks keyword hit → 0 additional events
+    assert len(emitted) == 2
+    assert emitted[0]["trigger"] == "keyword"
+    assert emitted[1]["trigger"] == "keyword+llm"
 
 
 @pytest.mark.asyncio
