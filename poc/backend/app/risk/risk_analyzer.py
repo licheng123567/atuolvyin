@@ -102,13 +102,16 @@ async def _api_analyze(
         temperature=0.1,
         max_tokens=200,
     )
-    raw = json.loads(resp.choices[0].message.content or "{}")
-    confidence = float(raw.get("confidence", 0.0))
-    is_risk = bool(raw.get("is_risk", False)) and confidence >= settings.risk_llm_confidence_min
-    return LLMRiskVerdict(
-        is_risk=is_risk,
-        category=raw.get("category", "none") if is_risk else "none",
-        level=raw.get("level", "none") if is_risk else "none",
-        confidence=confidence,
-        reason=raw.get("reason", ""),
-    )
+    try:
+        raw = json.loads(resp.choices[0].message.content or "{}")
+        confidence = float(raw.get("confidence", 0.0))
+        is_risk = bool(raw.get("is_risk", False)) and confidence >= settings.risk_llm_confidence_min
+        return LLMRiskVerdict(
+            is_risk=is_risk,
+            category=raw.get("category", "none") if is_risk else "none",
+            level=raw.get("level", "none") if is_risk else "none",
+            confidence=confidence,
+            reason=raw.get("reason", ""),
+        )
+    except (json.JSONDecodeError, ValueError, KeyError):
+        return LLMRiskVerdict(is_risk=False, category="none", level="none", confidence=0.0, reason="parse_error")
