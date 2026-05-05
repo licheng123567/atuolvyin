@@ -3,6 +3,7 @@ import type {
   CallSocketHandle,
   CallSocketOptions,
   CallSocketStatus,
+  RiskEvent,
   TranscriptChunk,
   Suggestion,
   TagPayload,
@@ -57,6 +58,9 @@ export function openCallSocket(opts: CallSocketOptions): CallSocketHandle {
           break;
         case "tag.ready":
           opts.onTagReady?.(msg as unknown as TagPayload);
+          break;
+        case "risk.event":
+          opts.onRisk?.(msg as unknown as RiskEvent);
           break;
         case "pong":
         case "ack":

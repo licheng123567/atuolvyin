@@ -1,9 +1,9 @@
-// frontend/src/hooks/useCallSocket.ts
 import { useEffect, useRef, useState } from "react";
 import { openCallSocket } from "../lib/realtime/ws-client";
 import type {
   CallSocketHandle,
   CallSocketStatus,
+  RiskEvent,
   Suggestion,
   TagPayload,
   TranscriptChunk,
@@ -20,6 +20,7 @@ export interface UseCallSocketResult {
   transcript: TranscriptChunk[];
   suggestions: Suggestion[];
   tag: TagPayload | null;
+  risks: RiskEvent[];
   sendFeedback: (id: string, action: "adopt" | "ignore") => void;
 }
 
@@ -28,6 +29,7 @@ export function useCallSocket(args: UseCallSocketArgs): UseCallSocketResult {
   const [transcript, setTranscript] = useState<TranscriptChunk[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [tag, setTag] = useState<TagPayload | null>(null);
+  const [risks, setRisks] = useState<RiskEvent[]>([]);
   const handleRef = useRef<CallSocketHandle | null>(null);
 
   useEffect(() => {
@@ -39,6 +41,11 @@ export function useCallSocket(args: UseCallSocketArgs): UseCallSocketResult {
       onTranscript: (c) => setTranscript((prev) => [...prev, c]),
       onSuggestion: (s) => setSuggestions((prev) => [...prev, s]),
       onTagReady: (t) => setTag(t),
+      onRisk: (e) =>
+        setRisks((prev) => {
+          if (prev.some((r) => r.risk_id === e.risk_id)) return prev;
+          return [...prev, e];
+        }),
     });
     handleRef.current = handle;
     return () => handle.close();
@@ -49,6 +56,7 @@ export function useCallSocket(args: UseCallSocketArgs): UseCallSocketResult {
     transcript,
     suggestions,
     tag,
+    risks,
     sendFeedback: (id, action) => handleRef.current?.sendFeedback(id, action),
   };
 }
