@@ -25,22 +25,13 @@ class RiskBannerView @JvmOverloads constructor(
     }
 
     fun showForEvent(event: RiskEvent) {
-        val catLabel = categoryLabel(event.category)
         val kwHint = if (event.matchedKeywords.isNotEmpty())
             " · 关键词「${event.matchedKeywords.take(2).joinToString("、")}」" else ""
-        msgView.text = "⚠ ${catLabel}（${event.level}$kwHint）"
+        msgView.text = "⚠ ${event.displayCategory}（${event.level}$kwHint）"
         visibility = VISIBLE
     }
 
     fun dismiss() {
         visibility = GONE
-    }
-
-    private fun categoryLabel(c: String) = when (c) {
-        "owner_abuse" -> "业主辱骂"
-        "owner_threat" -> "业主威胁"
-        "agent_violation" -> "催收员违规"
-        "agent_minor_misconduct" -> "催收员轻微不当"
-        else -> c
     }
 }

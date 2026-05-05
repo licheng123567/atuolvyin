@@ -31,18 +31,9 @@ class RiskAlertController(private val listener: AlertListener) {
     }
 
     private fun buildToastMessage(event: RiskEvent): String {
-        val catLabel = categoryLabel(event.category)
         val kwHint = if (event.matchedKeywords.isNotEmpty())
             "（关键词：${event.matchedKeywords.take(2).joinToString("、")}）"
         else ""
-        return "⚠ 风控提示：$catLabel$kwHint"
-    }
-
-    private fun categoryLabel(category: String): String = when (category) {
-        "owner_abuse" -> "业主辱骂"
-        "owner_threat" -> "业主威胁"
-        "agent_violation" -> "催收员违规"
-        "agent_minor_misconduct" -> "催收员轻微不当"
-        else -> category
+        return "⚠ 风控提示：${event.displayCategory}$kwHint"
     }
 }

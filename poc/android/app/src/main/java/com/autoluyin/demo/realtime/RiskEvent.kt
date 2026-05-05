@@ -15,6 +15,14 @@ data class RiskEvent(
 ) {
     val dedupKey: String get() = riskId
 
+    val displayCategory: String get() = when (category) {
+        "owner_abuse" -> "业主辱骂"
+        "owner_threat" -> "业主威胁"
+        "agent_violation" -> "催收员违规"
+        "agent_minor_misconduct" -> "催收员轻微不当"
+        else -> category
+    }
+
     companion object {
         fun fromJson(obj: JSONObject): RiskEvent? {
             if (obj.optString("type") != "risk.event") return null
