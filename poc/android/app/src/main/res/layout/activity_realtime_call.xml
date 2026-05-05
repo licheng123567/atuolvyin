@@ -60,6 +60,17 @@
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 
+    <!-- Risk alert banner -->
+    <com.autoluyin.demo.realtime.RiskBannerView
+        android:id="@+id/riskBanner"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/ownerCard"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="4dp" />
+
     <!-- Transcript stream -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/transcriptList"
@@ -67,7 +78,7 @@
         android:layout_height="0dp"
         android:background="#1E293B"
         android:padding="8dp"
-        app:layout_constraintTop_toBottomOf="@id/ownerCard"
+        app:layout_constraintTop_toBottomOf="@id/riskBanner"
         app:layout_constraintBottom_toTopOf="@id/suggestionCard"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"

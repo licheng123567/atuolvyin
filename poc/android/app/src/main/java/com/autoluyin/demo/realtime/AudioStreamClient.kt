@@ -46,6 +46,7 @@ class AudioStreamClient(
     }
 
     private val running = AtomicBoolean(false)
+    private val recordingPaused = AtomicBoolean(false)
     private val sendQueue = LinkedBlockingQueue<ByteArray>(QUEUE_CAPACITY)
     private var ws: WebSocket? = null
     private var recorder: AudioRecord? = null
@@ -84,6 +85,9 @@ class AudioStreamClient(
         recordThread?.interrupt()
         senderThread?.interrupt()
     }
+
+    fun pauseRecording() { recordingPaused.set(true) }
+    fun resumeRecording() { recordingPaused.set(false) }
 
     /**
      * Stop streaming and finalize any fallback WAV file.
@@ -197,10 +201,11 @@ class AudioStreamClient(
                 val read = rec.read(frame, 0, FRAME_BYTES)
                 if (read > 0) {
                     val copy = frame.copyOf(read)
-                    if (!sendQueue.offer(copy)) {
-                        // queue full: drop oldest 5 frames
+                    val toSend = if (recordingPaused.get()) ByteArray(FRAME_BYTES) else copy
+                    if (!sendQueue.offer(toSend)) {
+                        // drop oldest frames to prevent queue buildup
                         repeat(5) { sendQueue.poll() }
-                        sendQueue.offer(copy)
+                        sendQueue.offer(toSend)
                         if (state == State.NORMAL) transition(State.DEGRADED)
                     }
                 }
