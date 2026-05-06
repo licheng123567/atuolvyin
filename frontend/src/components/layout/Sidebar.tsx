@@ -1,5 +1,5 @@
 import { useGetIdentity, useLogout } from "@refinedev/core";
-import { Home, Building2, Users, LogOut } from "lucide-react";
+import { Home, Building2, Users, LogOut, LayoutDashboard, Receipt } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import type { AuthUser } from "../../providers/auth-provider";
 import { getNavSections } from "../../config/nav";
@@ -23,6 +23,10 @@ const ICON_MAP: Record<string, React.ElementType> = {
   "/": Home,
   "/ops/tenants": Building2,
   "/admin/users": Users,
+  "/provider/dashboard": LayoutDashboard,
+  "/provider/tenants": Building2,
+  "/provider/team": Users,
+  "/provider/settlements": Receipt,
 };
 
 export function Sidebar() {
