@@ -160,6 +160,14 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
   ],
 };
 
+// Sprint 14.3 — 「下载 App」对所有角色都展示（modal 关掉后还能找到）
+const HELP_SECTION: NavSection = {
+  title: "帮助",
+  items: [{ label: "下载 App", path: "/help/app", icon: "Smartphone" }],
+};
+
 export function getNavSections(role: UserRole | string): NavSection[] {
-  return NAV_CONFIG[role as UserRole] ?? [{ items: [{ label: "控制台", path: "/" }] }];
+  const base =
+    NAV_CONFIG[role as UserRole] ?? [{ items: [{ label: "控制台", path: "/" }] }];
+  return [...base, HELP_SECTION];
 }

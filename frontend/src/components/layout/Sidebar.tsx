@@ -18,6 +18,7 @@ import {
   RadioTower,
   Receipt,
   Settings,
+  Smartphone,
   Tag,
   TrendingUp,
   Users,
@@ -71,6 +72,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   "/super/audit": FileText,
   "/super/cost": TrendingUp,
   "/super/plans": Package,
+  "/help/app": Smartphone,
 };
 
 export function Sidebar() {
