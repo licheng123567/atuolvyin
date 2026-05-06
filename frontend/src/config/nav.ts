@@ -35,6 +35,7 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
         { label: "用户管理", path: "/admin/users", icon: "Users" },
         { label: "案件管理", path: "/admin/cases", icon: "Briefcase" },
         { label: "案件看板", path: "/admin/cases/kanban", icon: "KanbanSquare" },
+        { label: "公海管理", path: "/admin/pool", icon: "Globe" },
         { label: "导入案件", path: "/admin/cases/import", icon: "Upload" },
       ],
     },

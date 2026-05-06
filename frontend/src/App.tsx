@@ -27,6 +27,7 @@ import { AdminLiveWorkstationPage } from "./pages/admin/workstation/live";
 import { ScriptListPage } from "./pages/admin/scripts/list";
 import { ScriptVersionsPage } from "./pages/admin/scripts/versions";
 import { AdminDashboardPage } from "./pages/admin/dashboard";
+import { AdminPoolPage } from "./pages/admin/pool";
 import { SupervisorScriptLabelsPage } from "./pages/supervisor/script-labels";
 import { authProvider, getToken } from "./providers/auth-provider";
 import { dataProvider } from "./providers";
@@ -128,6 +129,11 @@ function App() {
             meta: { label: "话术库" },
           },
           {
+            name: "admin/pool",
+            list: "/admin/pool",
+            meta: { label: "公海管理" },
+          },
+          {
             name: "supervisor/script-labels",
             list: "/supervisor/script-labels",
             meta: { label: "话术标注" },
@@ -185,6 +191,8 @@ function App() {
             {/* Admin - Script Library */}
             <Route path="/admin/scripts" element={<ScriptListPage />} />
             <Route path="/admin/scripts/:id/versions" element={<ScriptVersionsPage />} />
+            {/* Admin - Public Pool Management */}
+            <Route path="/admin/pool" element={<AdminPoolPage />} />
             {/* Supervisor - Script Labels */}
             <Route path="/supervisor/script-labels" element={<SupervisorScriptLabelsPage />} />
           </Route>
