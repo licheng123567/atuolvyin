@@ -43,8 +43,9 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
   supervisor: [
     {
       items: [
-        { label: "控制台", path: "/" },
-        { label: "案件总览", path: "/supervisor/cases" },
+        { label: "质检复核", path: "/supervisor/reviews", icon: "ClipboardCheck" },
+        { label: "风险警报", path: "/supervisor/alerts", icon: "Bell" },
+        { label: "话术标注", path: "/supervisor/script-labels", icon: "Tag" },
       ],
     },
   ],
