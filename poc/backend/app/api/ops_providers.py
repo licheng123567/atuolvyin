@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.core.crypto import encrypt_phone, mask_phone
 from app.core.db import get_db
-from app.core.security import require_roles
+from app.core.security import get_token_payload, require_roles
 from app.models.tenant import (
     ProviderTenantContract,
     ServiceProvider,
@@ -36,6 +36,7 @@ from app.schemas.provider import (
     ProviderOut,
     ProviderPatch,
 )
+from app.services.audit import log_audit
 
 router = APIRouter()
 
@@ -178,6 +179,7 @@ async def audit_provider(
     provider_id: int,
     body: ProviderAuditIn,
     _user: Annotated[UserAccount, Depends(require_roles(*OPS_ROLES))],
+    payload: Annotated[dict, Depends(get_token_payload)],
     db: Annotated[Session, Depends(get_db)],
 ) -> ProviderOut:
     p = _load_provider(db, provider_id)
@@ -194,6 +196,16 @@ async def audit_provider(
     p.audit_status = body.decision
     p.audit_reason = body.reason
     p.audit_at = datetime.now(UTC)
+    log_audit(
+        db,
+        actor_user_id=int(payload.get("user_id") or 0) or None,
+        actor_role=payload.get("role"),
+        tenant_id=None,
+        action="provider.audit",
+        target_type="provider",
+        target_id=p.id,
+        payload={"decision": body.decision, "reason": body.reason},
+    )
     db.commit()
     db.refresh(p)
     return _provider_to_out(p)

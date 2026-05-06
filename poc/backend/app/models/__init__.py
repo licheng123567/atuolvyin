@@ -1,3 +1,4 @@
+from .audit import AuditLog, PlanConfig
 from .base import Base
 from .call import AnalysisResult, CallRecord, RiskEvent, Transcript
 from .case import CollectionCase, OwnerProfile, Project
@@ -39,4 +40,6 @@ __all__ = [
     "ScriptTemplate",
     "ScriptTemplateVersion",
     "TenantSuggestionConfig",
+    "AuditLog",
+    "PlanConfig",
 ]

@@ -28,6 +28,7 @@ from app.schemas.settlement import (
     SettlementDetailOut,
     SettlementOut,
 )
+from app.services.audit import log_audit
 
 router = APIRouter()
 
@@ -243,6 +244,19 @@ def pay_settlement(
     s.paid_at = datetime.now(timezone.utc)
     if body.payment_proof_url is not None:
         s.payment_proof_url = body.payment_proof_url
+    log_audit(
+        db,
+        actor_user_id=int(payload.get("user_id") or 0) or None,
+        actor_role=payload.get("role"),
+        tenant_id=tenant_id,
+        action="settlement.pay",
+        target_type="settlement",
+        target_id=s.id,
+        payload={
+            "amount": str(s.total_amount) if s.total_amount is not None else None,
+            "proof_url": body.payment_proof_url,
+        },
+    )
     db.commit()
     db.refresh(s)
     return _statement_to_out(s, provider)

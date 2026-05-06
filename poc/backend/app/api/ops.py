@@ -11,10 +11,11 @@ from sqlalchemy.orm import Session
 
 from app.core.crypto import encrypt_phone
 from app.core.db import get_db
-from app.core.security import mask_phone, require_roles
+from app.core.security import get_token_payload, mask_phone, require_roles
 from app.models.tenant import Tenant
 from app.models.user import UserAccount
 from app.schemas.common import PaginatedResponse
+from app.services.audit import log_audit
 from app.schemas.tenant import (
     TenantCreate,
     TenantDisableIn,
@@ -114,6 +115,7 @@ async def list_tenants(
 async def create_tenant(
     body: TenantCreate,
     _user: Annotated[UserAccount, Depends(require_roles(*OPS_ROLES))],
+    payload: Annotated[dict, Depends(get_token_payload)],
     db: Annotated[Session, Depends(get_db)],
 ) -> TenantResponse:
     tenant = Tenant(
@@ -137,6 +139,16 @@ async def create_tenant(
                 "message": "统一社会信用代码已存在",
             },
         ) from None
+    log_audit(
+        db,
+        actor_user_id=int(payload.get("user_id") or 0) or None,
+        actor_role=payload.get("role"),
+        tenant_id=tenant.id,
+        action="tenant.create",
+        target_type="tenant",
+        target_id=tenant.id,
+        payload={"name": body.name, "plan": body.plan},
+    )
     db.commit()
     db.refresh(tenant)
     return _tenant_to_response(tenant)
@@ -240,12 +252,23 @@ async def disable_tenant(
     tenant_id: int,
     body: TenantDisableIn,
     _user: Annotated[UserAccount, Depends(require_roles(*OPS_ROLES))],
+    payload: Annotated[dict, Depends(get_token_payload)],
     db: Annotated[Session, Depends(get_db)],
 ) -> TenantResponse:
     tenant = _load_tenant(db, tenant_id)
     tenant.is_active = False
     tenant.disabled_at = datetime.now(UTC)
     tenant.disabled_reason = body.reason
+    log_audit(
+        db,
+        actor_user_id=int(payload.get("user_id") or 0) or None,
+        actor_role=payload.get("role"),
+        tenant_id=tenant.id,
+        action="tenant.disable",
+        target_type="tenant",
+        target_id=tenant.id,
+        payload={"reason": body.reason},
+    )
     db.commit()
     db.refresh(tenant)
     return _tenant_to_response(tenant)
