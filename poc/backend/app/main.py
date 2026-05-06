@@ -19,14 +19,17 @@ from app.api import (
     calls_v1,
     devices,
     devices_v1,
+    legal_cases,
     ops,
     ops_providers,
+    pm_dashboard,
     recordings,
     supervisor,
     supervisor_labels,
     supervisor_review,
     tasks,
     users,
+    work_orders,
     ws_calls,
     ws_supervisor,
 )
@@ -117,6 +120,9 @@ app.include_router(supervisor_labels.router, prefix="/api/v1/supervisor", tags=[
 app.include_router(supervisor_review.router, prefix="/api/v1/supervisor", tags=["supervisor-review"])
 app.include_router(admin_suggestion_config.router, prefix="/api/v1/admin", tags=["suggestion-config"])
 app.include_router(admin_settlements.router, prefix="/api/v1/admin", tags=["admin-settlements"])
+app.include_router(legal_cases.router, prefix="/api/v1/legal", tags=["legal"])
+app.include_router(work_orders.router, prefix="/api/v1/workorders", tags=["workorders"])
+app.include_router(pm_dashboard.router, prefix="/api/v1/pm", tags=["pm"])
 
 
 @app.get("/health")
