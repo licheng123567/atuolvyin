@@ -11,6 +11,7 @@ from app.api import (
     admin_dashboard,
     admin_risk_keywords,
     admin_scripts,
+    admin_settlements,
     admin_suggestion_config,
     agent_cases,
     auth,
@@ -113,6 +114,7 @@ app.include_router(admin_dashboard.router, prefix="/api/v1/admin", tags=["admin-
 app.include_router(supervisor_labels.router, prefix="/api/v1/supervisor", tags=["supervisor-labels"])
 app.include_router(supervisor_review.router, prefix="/api/v1/supervisor", tags=["supervisor-review"])
 app.include_router(admin_suggestion_config.router, prefix="/api/v1/admin", tags=["suggestion-config"])
+app.include_router(admin_settlements.router, prefix="/api/v1/admin", tags=["admin-settlements"])
 
 
 @app.get("/health")

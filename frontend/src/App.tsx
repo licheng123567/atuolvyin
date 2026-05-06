@@ -28,6 +28,8 @@ import { ScriptListPage } from "./pages/admin/scripts/list";
 import { ScriptVersionsPage } from "./pages/admin/scripts/versions";
 import { AdminDashboardPage } from "./pages/admin/dashboard";
 import { AdminPoolPage } from "./pages/admin/pool";
+import { AdminSettlementListPage } from "./pages/admin/settlements";
+import { AdminSettlementDetailPage } from "./pages/admin/settlements/detail";
 import { SupervisorScriptLabelsPage } from "./pages/supervisor/script-labels";
 import { SupervisorReviewsPage } from "./pages/supervisor/reviews";
 import { authProvider, getToken } from "./providers/auth-provider";
@@ -135,6 +137,12 @@ function App() {
             meta: { label: "公海管理" },
           },
           {
+            name: "admin/settlements",
+            list: "/admin/settlements",
+            show: "/admin/settlements/:id",
+            meta: { label: "结算管理" },
+          },
+          {
             name: "supervisor/script-labels",
             list: "/supervisor/script-labels",
             meta: { label: "话术标注" },
@@ -199,6 +207,9 @@ function App() {
             <Route path="/admin/scripts/:id/versions" element={<ScriptVersionsPage />} />
             {/* Admin - Public Pool Management */}
             <Route path="/admin/pool" element={<AdminPoolPage />} />
+            {/* Admin - Settlement Management */}
+            <Route path="/admin/settlements" element={<AdminSettlementListPage />} />
+            <Route path="/admin/settlements/:id" element={<AdminSettlementDetailPage />} />
             {/* Supervisor - Script Labels */}
             <Route path="/supervisor/script-labels" element={<SupervisorScriptLabelsPage />} />
             {/* Supervisor - Reviews */}
