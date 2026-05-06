@@ -26,6 +26,7 @@ from app.api import (
     devices_v1,
     legal_cases,
     legal_documents,
+    notifications as notifications_api,
     ops,
     ops_extras,
     ops_providers,
@@ -141,6 +142,7 @@ app.include_router(calls_v1.router, prefix="/api/v1/calls", tags=["calls-v1"])
 app.include_router(public_verify.router, prefix="/api/v1/public", tags=["public-verify"])
 app.include_router(public_app_info.router, prefix="/api/v1/public", tags=["public-app-info"])
 app.include_router(user_preferences.router, prefix="/api/v1/users", tags=["user-preferences"])
+app.include_router(notifications_api.router, prefix="/api/v1/users", tags=["notifications"])
 # Legacy PoC routers (Sprint 1 migrates these to ORM + /api/v1/ prefix)
 app.include_router(devices.router, prefix="/api/devices", tags=["devices"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])

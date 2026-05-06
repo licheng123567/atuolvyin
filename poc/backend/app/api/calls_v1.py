@@ -671,8 +671,19 @@ async def upload_call(
     if tenant and tenant.monthly_minute_quota is not None:
         usage = _get_or_create_usage(db, tenant_id, year_month)
         minutes = math.ceil(duration_sec / 60)
+        prev_used = usage.used_minutes
         usage.used_minutes += minutes
         usage.post_minutes += minutes
+
+        # Sprint 15.4 — 配额预警通知 (PRD §L412)：80% / 95% / 100% 三档
+        from app.services.quota_alerts import check_and_notify_quota_thresholds
+        check_and_notify_quota_thresholds(
+            db,
+            tenant=tenant,
+            previous_used=prev_used,
+            current_used=usage.used_minutes,
+            quota=tenant.monthly_minute_quota,
+        )
 
     db.commit()
     db.refresh(call)

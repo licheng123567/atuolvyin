@@ -25,6 +25,7 @@ from .platform import (  # noqa: F401
 )
 from .blockchain_attestation import BlockchainAttestation  # noqa: F401
 from .active_session import ActiveSession  # noqa: F401
+from .notification import Notification  # noqa: F401
 
 __all__ = [
     "Base",
