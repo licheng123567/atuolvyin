@@ -25,6 +25,7 @@ import { AgentLiveWorkstationPage } from "./pages/agent/workstation/live";
 import { AdminLiveWorkstationPage } from "./pages/admin/workstation/live";
 import { ScriptListPage } from "./pages/admin/scripts/list";
 import { ScriptVersionsPage } from "./pages/admin/scripts/versions";
+import { AdminDashboardPage } from "./pages/admin/dashboard";
 import { SupervisorScriptLabelsPage } from "./pages/supervisor/script-labels";
 import { authProvider, getToken } from "./providers/auth-provider";
 import { dataProvider } from "./providers";
@@ -41,7 +42,7 @@ const ROLE_HOME: Record<string, string> = {
   platform_superadmin: "/ops/tenants",
   platform_super: "/ops/tenants",
   platform_ops: "/ops/tenants",
-  admin: "/admin/cases",
+  admin: "/admin/dashboard",
   supervisor: "/supervisor/alerts",
   agent_internal: "/agent/cases",
   agent_external: "/agent/cases",
@@ -153,6 +154,8 @@ function App() {
             <Route path="/ops/tenants" element={<TenantListPage />} />
             <Route path="/ops/tenants/new" element={<TenantNewPage />} />
             <Route path="/ops/tenants/:id" element={<TenantDetailPage />} />
+            {/* Admin - Dashboard */}
+            <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
             {/* Admin - User Management */}
             <Route path="/admin/users" element={<UserListPage />} />
             <Route path="/admin/users/new" element={<UserNewPage />} />
