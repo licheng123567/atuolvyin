@@ -16,6 +16,12 @@ from .user import PlatformOpsAssignment, UserAccount
 from .work import LegalCase, WorkOrder
 from .script import ScriptTemplate, ScriptTemplateVersion, TenantSuggestionConfig
 from .settings import TenantSettings
+from .platform import (  # noqa: F401
+    BlockchainConfig,
+    CustomerFollowup,
+    LLMPromptTemplate,
+    SystemAnnouncement,
+)
 
 __all__ = [
     "Base",

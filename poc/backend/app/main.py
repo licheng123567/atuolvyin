@@ -25,11 +25,13 @@ from app.api import (
     devices_v1,
     legal_cases,
     ops,
+    ops_extras,
     ops_providers,
     pm_dashboard,
     provider_admin,
     recordings,
     super_audit,
+    super_config,
     super_cost,
     super_health,
     super_plans,
@@ -110,6 +112,7 @@ app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 app.include_router(ops.router, prefix="/api/v1/ops", tags=["ops"])
 app.include_router(ops_providers.router, prefix="/api/v1/ops", tags=["ops-providers"])
+app.include_router(ops_extras.router, prefix="/api/v1/ops", tags=["ops-extras"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 app.include_router(admin_cases.router, prefix="/api/v1/admin", tags=["admin-cases"])
 app.include_router(admin_risk_keywords.router, prefix="/api/v1/admin", tags=["admin-risk-keywords"])
@@ -143,6 +146,7 @@ app.include_router(super_audit.router, prefix="/api/v1/super", tags=["super-audi
 app.include_router(super_health.router, prefix="/api/v1/super", tags=["super-health"])
 app.include_router(super_cost.router, prefix="/api/v1/super", tags=["super-cost"])
 app.include_router(super_plans.router, prefix="/api/v1/super", tags=["super-plans"])
+app.include_router(super_config.router, prefix="/api/v1/super", tags=["super-config"])
 
 
 @app.get("/health")
