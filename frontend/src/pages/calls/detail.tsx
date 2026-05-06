@@ -1,7 +1,9 @@
 // frontend/src/pages/calls/detail.tsx
-import { useGo, useOne } from "@refinedev/core";
+import { useCustomMutation, useGetIdentity, useGo, useOne } from "@refinedev/core";
 import { AlertTriangle, ArrowLeft, Mic } from "lucide-react";
+import { useState } from "react";
 import { useParams } from "react-router-dom";
+import type { AuthUser } from "../../providers/auth-provider";
 
 interface TranscriptSegment {
   speaker: number;
@@ -91,9 +93,107 @@ interface CallDetailData {
   created_at: string;
 }
 
+function SupervisorReviewSection({ callId }: { callId: number }) {
+  const [quality, setQuality] = useState<"good" | "bad" | "needs_improvement" | null>(null);
+  const [note, setNote] = useState("");
+  const [intentCorrection, setIntentCorrection] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const { mutate, isPending } = useCustomMutation();
+
+  const handleSubmit = () => {
+    if (!quality) return;
+    mutate(
+      {
+        url: `supervisor/reviews/${callId}`,
+        method: "patch",
+        values: {
+          quality,
+          note: note || null,
+          intent_correction: intentCorrection || null,
+        },
+      },
+      { onSuccess: () => setSubmitted(true) },
+    );
+  };
+
+  return (
+    <div className="bg-white border border-[var(--color-neutral-200)] rounded-lg p-5 mt-4">
+      <h3 className="text-sm font-semibold text-[var(--color-neutral-900)] mb-3">督导质检打标</h3>
+      {submitted ? (
+        <div className="text-sm" style={{ color: "#15803d" }}>✓ 已提交</div>
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
+            {(["good", "bad", "needs_improvement"] as const).map((q) => (
+              <label key={q} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 14, cursor: "pointer" }}>
+                <input
+                  type="radio"
+                  name={`quality-${callId}`}
+                  value={q}
+                  checked={quality === q}
+                  onChange={() => setQuality(q)}
+                />
+                {q === "good" ? "优质" : q === "bad" ? "差" : "需改进"}
+              </label>
+            ))}
+          </div>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="复核备注（可选）"
+            rows={2}
+            style={{
+              width: "100%",
+              padding: "8px 10px",
+              border: "1px solid #d1d5db",
+              borderRadius: 6,
+              fontSize: 13,
+              resize: "vertical",
+              marginBottom: 8,
+              boxSizing: "border-box",
+            }}
+          />
+          <input
+            value={intentCorrection}
+            onChange={(e) => setIntentCorrection(e.target.value)}
+            placeholder="AI 意图修正（可选）"
+            style={{
+              width: "100%",
+              padding: "8px 10px",
+              border: "1px solid #d1d5db",
+              borderRadius: 6,
+              fontSize: 13,
+              marginBottom: 12,
+              boxSizing: "border-box",
+            }}
+          />
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!quality || isPending}
+            style={{
+              padding: "6px 16px",
+              background: "var(--color-primary)",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              cursor: !quality || isPending ? "default" : "pointer",
+              fontSize: 13,
+              opacity: !quality || isPending ? 0.5 : 1,
+            }}
+          >
+            {isPending ? "提交中…" : "提交复核"}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function CallDetailPage() {
   const { id } = useParams<{ id: string }>();
   const go = useGo();
+  const { data: identity } = useGetIdentity<AuthUser>();
 
   const { query } = useOne<CallDetailData>({
     resource: "calls",
@@ -102,6 +202,7 @@ export function CallDetailPage() {
 
   const detail = query.data?.data;
   const isLoading = query.isLoading;
+  const isReviewer = identity?.role === "supervisor" || identity?.role === "admin";
 
   if (isLoading) {
     return <div className="text-sm text-[var(--color-neutral-400)] p-8">加载中…</div>;
@@ -281,6 +382,11 @@ export function CallDetailPage() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Supervisor quality labeling section */}
+      {isReviewer && id && (
+        <SupervisorReviewSection callId={Number(id)} />
       )}
     </div>
   );

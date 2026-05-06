@@ -29,6 +29,7 @@ import { ScriptVersionsPage } from "./pages/admin/scripts/versions";
 import { AdminDashboardPage } from "./pages/admin/dashboard";
 import { AdminPoolPage } from "./pages/admin/pool";
 import { SupervisorScriptLabelsPage } from "./pages/supervisor/script-labels";
+import { SupervisorReviewsPage } from "./pages/supervisor/reviews";
 import { authProvider, getToken } from "./providers/auth-provider";
 import { dataProvider } from "./providers";
 import { useSupervisorAlerts } from "./hooks/useSupervisorAlerts";
@@ -45,7 +46,7 @@ const ROLE_HOME: Record<string, string> = {
   platform_super: "/ops/tenants",
   platform_ops: "/ops/tenants",
   admin: "/admin/dashboard",
-  supervisor: "/supervisor/alerts",
+  supervisor: "/supervisor/reviews",
   agent_internal: "/agent/cases",
   agent_external: "/agent/cases",
 };
@@ -138,6 +139,11 @@ function App() {
             list: "/supervisor/script-labels",
             meta: { label: "话术标注" },
           },
+          {
+            name: "supervisor/reviews",
+            list: "/supervisor/reviews",
+            meta: { label: "质检复核" },
+          },
         ]}
         options={{ syncWithLocation: true, warnWhenUnsavedChanges: false }}
       >
@@ -195,6 +201,8 @@ function App() {
             <Route path="/admin/pool" element={<AdminPoolPage />} />
             {/* Supervisor - Script Labels */}
             <Route path="/supervisor/script-labels" element={<SupervisorScriptLabelsPage />} />
+            {/* Supervisor - Reviews */}
+            <Route path="/supervisor/reviews" element={<SupervisorReviewsPage />} />
           </Route>
 
           {/* Catch-all */}
