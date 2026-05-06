@@ -5,6 +5,7 @@ POST   /api/v1/legal/cases                    create from existing collection_ca
 GET    /api/v1/legal/cases/{id}               detail incl. collection_case ref
 PATCH  /api/v1/legal/cases/{id}               partial update (stage / lawyer / etc.)
 """
+
 from __future__ import annotations
 
 from typing import Annotated
@@ -47,9 +48,7 @@ def _require_tenant(payload: dict) -> int:
     return tenant_id
 
 
-def _legal_to_out(
-    lc: LegalCase, owner_name: str | None, phone_enc: str | None
-) -> LegalCaseOut:
+def _legal_to_out(lc: LegalCase, owner_name: str | None, phone_enc: str | None) -> LegalCaseOut:
     return LegalCaseOut(
         id=lc.id,
         tenant_id=lc.tenant_id,
@@ -90,14 +89,10 @@ async def list_legal_cases(
     if q:
         stmt = stmt.where(OwnerProfile.name.ilike(f"%{q}%"))
 
-    total: int = db.execute(
-        select(func.count()).select_from(stmt.subquery())
-    ).scalar_one()
+    total: int = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
 
     rows = db.execute(
-        stmt.order_by(LegalCase.id.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
+        stmt.order_by(LegalCase.id.desc()).offset((page - 1) * page_size).limit(page_size)
     ).all()
 
     items = [_legal_to_out(lc, name, phone_enc) for lc, name, phone_enc in rows]

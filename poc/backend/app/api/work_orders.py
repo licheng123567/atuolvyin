@@ -5,6 +5,7 @@ POST   /api/v1/workorders                     create
 GET    /api/v1/workorders/{id}                detail incl. case/call refs
 PATCH  /api/v1/workorders/{id}                partial update
 """
+
 from __future__ import annotations
 
 from typing import Annotated
@@ -94,24 +95,17 @@ async def list_work_orders(
     if q:
         stmt = stmt.where(WorkOrder.description.ilike(f"%{q}%"))
 
-    total: int = db.execute(
-        select(func.count()).select_from(stmt.subquery())
-    ).scalar_one()
+    total: int = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
 
     rows = (
         db.execute(
-            stmt.order_by(WorkOrder.id.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+            stmt.order_by(WorkOrder.id.desc()).offset((page - 1) * page_size).limit(page_size)
         )
         .scalars()
         .all()
     )
 
-    items = [
-        _wo_to_out(wo, _resolve_assignee_name(db, wo.assigned_to))
-        for wo in rows
-    ]
+    items = [_wo_to_out(wo, _resolve_assignee_name(db, wo.assigned_to)) for wo in rows]
     return PaginatedResponse(
         items=items,
         total=total,

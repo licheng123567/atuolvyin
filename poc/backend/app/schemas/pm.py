@@ -1,4 +1,5 @@
 """Sprint 13 — Project Manager dashboard schemas."""
+
 from __future__ import annotations
 
 from decimal import Decimal

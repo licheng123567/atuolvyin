@@ -1,4 +1,5 @@
 """Sprint 13 — Legal Case schemas (legal role)."""
+
 from __future__ import annotations
 
 from datetime import datetime
