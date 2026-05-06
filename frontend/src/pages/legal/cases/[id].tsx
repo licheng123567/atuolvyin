@@ -1,6 +1,14 @@
 import { useGo, useOne, useUpdate } from "@refinedev/core";
-import { ArrowLeft, Download, Save, Scale } from "lucide-react";
-import { useState } from "react";
+import {
+  ArrowLeft,
+  Download,
+  FileText,
+  Save,
+  Scale,
+  Trash2,
+  Upload,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getToken } from "../../../providers/auth-provider";
 import {
@@ -382,6 +390,229 @@ export function LegalCaseDetailPage() {
           </div>
         </div>
       </div>
+
+      <LegalDocumentsPanel legalCaseId={detail.id} />
+    </div>
+  );
+}
+
+// ─── Legal Documents Panel (Sprint 11.6) ────────────────────────────
+
+interface LegalDocument {
+  id: number;
+  legal_case_id: number;
+  name: string;
+  category: string;
+  mime_type: string | null;
+  size_bytes: number;
+  uploaded_by: number;
+  uploaded_by_name: string | null;
+  created_at: string;
+}
+
+const CATEGORY_LABEL: Record<string, string> = {
+  contract: "合同",
+  judgment: "判决书",
+  notice: "通知函",
+  evidence: "证据材料",
+  other: "其他",
+};
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function LegalDocumentsPanel({ legalCaseId }: { legalCaseId: number }) {
+  const [docs, setDocs] = useState<LegalDocument[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [category, setCategory] = useState<string>("contract");
+  const [error, setError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const apiBase = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
+  const authHeader = (): HeadersInit => ({
+    Authorization: `Bearer ${getToken() ?? ""}`,
+  });
+
+  const fetchDocs = async () => {
+    setLoading(true);
+    try {
+      const resp = await fetch(
+        `${apiBase}/api/v1/legal/cases/${legalCaseId}/documents`,
+        { headers: authHeader() },
+      );
+      if (resp.ok) setDocs(await resp.json());
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void fetchDocs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [legalCaseId]);
+
+  const handleUpload = async (file: File) => {
+    setError("");
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("category", category);
+      const resp = await fetch(
+        `${apiBase}/api/v1/legal/cases/${legalCaseId}/documents`,
+        { method: "POST", headers: authHeader(), body: fd },
+      );
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        setError(data.message ?? `上传失败: ${resp.status}`);
+        return;
+      }
+      await fetchDocs();
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDownload = async (doc: LegalDocument) => {
+    const resp = await fetch(
+      `${apiBase}/api/v1/legal/documents/${doc.id}/download`,
+      { headers: authHeader() },
+    );
+    if (!resp.ok) return;
+    const data = (await resp.json()) as { download_url: string };
+    window.open(data.download_url, "_blank");
+  };
+
+  const handleDelete = async (doc: LegalDocument) => {
+    if (!confirm(`确定删除「${doc.name}」?`)) return;
+    const resp = await fetch(
+      `${apiBase}/api/v1/legal/documents/${doc.id}`,
+      { method: "DELETE", headers: authHeader() },
+    );
+    if (resp.ok) await fetchDocs();
+  };
+
+  return (
+    <div className="bg-white rounded-lg border border-[var(--color-neutral-200)] p-5 mt-6">
+      <div className="flex items-center gap-2 mb-4">
+        <FileText className="w-4 h-4 text-[var(--color-primary)]" />
+        <h3 className="text-sm font-semibold text-[var(--color-neutral-900)]">
+          法律文件
+        </h3>
+        <span className="text-xs text-[var(--color-neutral-400)]">
+          共 {docs.length} 份
+        </span>
+      </div>
+
+      <div className="flex items-center gap-3 mb-4">
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className="px-3 py-2 text-sm border border-[var(--color-neutral-200)]"
+          style={{ borderRadius: "var(--radius-md)" }}
+        >
+          {Object.entries(CATEGORY_LABEL).map(([k, v]) => (
+            <option key={k} value={k}>
+              {v}
+            </option>
+          ))}
+        </select>
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void handleUpload(f);
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+          style={{
+            background: "var(--color-primary)",
+            borderRadius: "var(--radius-md)",
+          }}
+        >
+          <Upload className="w-4 h-4" />
+          {uploading ? "上传中…" : "上传文件"}
+        </button>
+        {error && (
+          <span className="text-xs text-[var(--color-danger)]">{error}</span>
+        )}
+      </div>
+
+      {loading && (
+        <p className="text-sm text-[var(--color-neutral-400)]">加载中…</p>
+      )}
+      {!loading && docs.length === 0 && (
+        <p className="text-sm text-[var(--color-neutral-400)]">
+          尚未上传任何法律文件
+        </p>
+      )}
+      {docs.length > 0 && (
+        <table className="w-full text-sm">
+          <thead className="text-left text-[var(--color-neutral-500)]">
+            <tr className="border-b border-[var(--color-neutral-200)]">
+              <th className="py-2 font-medium">名称</th>
+              <th className="py-2 font-medium">类别</th>
+              <th className="py-2 font-medium">大小</th>
+              <th className="py-2 font-medium">上传人</th>
+              <th className="py-2 font-medium">时间</th>
+              <th className="py-2 font-medium text-right">操作</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-neutral-100)]">
+            {docs.map((doc) => (
+              <tr key={doc.id}>
+                <td className="py-2 font-medium text-[var(--color-neutral-700)]">
+                  {doc.name}
+                </td>
+                <td className="py-2">
+                  <span className="px-2 py-0.5 text-xs rounded-full font-medium bg-[var(--color-neutral-100)] text-[var(--color-neutral-700)]">
+                    {CATEGORY_LABEL[doc.category] ?? doc.category}
+                  </span>
+                </td>
+                <td className="py-2 text-[var(--color-neutral-500)]">
+                  {formatFileSize(doc.size_bytes)}
+                </td>
+                <td className="py-2 text-[var(--color-neutral-500)]">
+                  {doc.uploaded_by_name ?? "—"}
+                </td>
+                <td className="py-2 text-[var(--color-neutral-500)]">
+                  {doc.created_at?.slice(0, 10)}
+                </td>
+                <td className="py-2 text-right">
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(doc)}
+                    className="text-[var(--color-primary)] mr-3"
+                    aria-label="下载"
+                  >
+                    <Download className="w-4 h-4 inline" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(doc)}
+                    className="text-[var(--color-danger)]"
+                    aria-label="删除"
+                  >
+                    <Trash2 className="w-4 h-4 inline" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

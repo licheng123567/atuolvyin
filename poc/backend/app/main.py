@@ -25,6 +25,7 @@ from app.api import (
     devices,
     devices_v1,
     legal_cases,
+    legal_documents,
     ops,
     ops_extras,
     ops_providers,
@@ -141,6 +142,7 @@ app.include_router(admin_reports.router, prefix="/api/v1/admin", tags=["admin-re
 app.include_router(admin_compliance.router, prefix="/api/v1/admin", tags=["admin-compliance"])
 app.include_router(admin_settings.router, prefix="/api/v1/admin", tags=["admin-settings"])
 app.include_router(legal_cases.router, prefix="/api/v1/legal", tags=["legal"])
+app.include_router(legal_documents.router, prefix="/api/v1/legal", tags=["legal-documents"])
 app.include_router(work_orders.router, prefix="/api/v1/workorders", tags=["workorders"])
 app.include_router(pm_dashboard.router, prefix="/api/v1/pm", tags=["pm"])
 app.include_router(provider_admin.router, prefix="/api/v1/provider", tags=["provider"])
