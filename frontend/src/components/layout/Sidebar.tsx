@@ -9,6 +9,7 @@ import {
   LogOut,
   Package,
   Receipt,
+  Settings,
   TrendingUp,
   Users,
 } from "lucide-react";
@@ -40,6 +41,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   "/admin/scripts/effectiveness": BarChart3,
   "/admin/reports": TrendingUp,
   "/admin/compliance": FileText,
+  "/admin/settings": Settings,
   "/provider/dashboard": LayoutDashboard,
   "/provider/tenants": Building2,
   "/provider/team": Users,

@@ -1,0 +1,93 @@
+"""Sprint 8.5 — Admin tenant settings (PRD §3.14 / L2049).
+
+Covers the gaps in 系统配置 not handled elsewhere:
+  - 录音模式（live/post/auto）
+  - L3 挂断开关
+  - 联系频次上限
+  - 数据保留期
+
+Existing settings handled by their own routers:
+  - AI 推送灵敏度 → admin_suggestion_config
+  - 风控自定义词 → admin_risk_keywords
+"""
+from __future__ import annotations
+
+from typing import Annotated
+
+from fastapi import APIRouter, Depends
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.core.db import get_db
+from app.core.security import get_token_payload, require_roles
+from app.models.settings import TenantSettings
+from app.schemas.settings import TenantSettingsOut, TenantSettingsUpdate
+from app.services.audit import log_audit
+
+router = APIRouter()
+
+ADMIN_ROLES = ("admin", "platform_superadmin")
+
+DEFAULTS = TenantSettingsOut(
+    recording_mode="auto",
+    l3_hangup_enabled=False,
+    contact_freq_max=3,
+    retention_days=365,
+)
+
+
+def _to_out(s: TenantSettings) -> TenantSettingsOut:
+    return TenantSettingsOut(
+        recording_mode=s.recording_mode,  # type: ignore[arg-type]
+        l3_hangup_enabled=s.l3_hangup_enabled,
+        contact_freq_max=s.contact_freq_max,
+        retention_days=s.retention_days,
+    )
+
+
+@router.get("/settings", response_model=TenantSettingsOut)
+def get_settings(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> TenantSettingsOut:
+    tenant_id = int(payload.get("tenant_id") or 0)
+    s = db.execute(
+        select(TenantSettings).where(TenantSettings.tenant_id == tenant_id)
+    ).scalar_one_or_none()
+    return _to_out(s) if s else DEFAULTS
+
+
+@router.patch("/settings", response_model=TenantSettingsOut)
+def patch_settings(
+    body: TenantSettingsUpdate,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> TenantSettingsOut:
+    tenant_id = int(payload.get("tenant_id") or 0)
+
+    s = db.execute(
+        select(TenantSettings).where(TenantSettings.tenant_id == tenant_id)
+    ).scalar_one_or_none()
+    if s is None:
+        s = TenantSettings(tenant_id=tenant_id)
+        db.add(s)
+
+    data = body.model_dump(exclude_unset=True)
+    for field, value in data.items():
+        setattr(s, field, value)
+
+    log_audit(
+        db,
+        actor_user_id=int(payload.get("user_id") or 0) or None,
+        actor_role=payload.get("role"),
+        tenant_id=tenant_id,
+        action="settings.update",
+        target_type="tenant_settings",
+        target_id=tenant_id,
+        payload=body.model_dump(mode="json", exclude_unset=True),
+    )
+    db.commit()
+    db.refresh(s)
+    return _to_out(s)

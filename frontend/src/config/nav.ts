@@ -73,6 +73,7 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
         { label: "话术效果", path: "/admin/scripts/effectiveness", icon: "BarChart3" },
         { label: "数据报表", path: "/admin/reports", icon: "TrendingUp" },
         { label: "合规月报", path: "/admin/compliance", icon: "FileText" },
+        { label: "系统配置", path: "/admin/settings", icon: "Settings" },
         { label: "导入案件", path: "/admin/cases/import", icon: "Upload" },
       ],
     },

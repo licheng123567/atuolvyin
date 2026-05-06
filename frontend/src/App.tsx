@@ -34,6 +34,7 @@ import { ScriptEffectivenessPage } from "./pages/admin/scripts/effectiveness";
 import { AdminReportsPage } from "./pages/admin/reports/index";
 import { ComplianceListPage } from "./pages/admin/compliance/index";
 import { ComplianceDetailPage } from "./pages/admin/compliance/detail";
+import { AdminSettingsPage } from "./pages/admin/settings/index";
 import { AdminDashboardPage } from "./pages/admin/dashboard";
 import { AdminPoolPage } from "./pages/admin/pool";
 import { AdminSettlementListPage } from "./pages/admin/settlements";
@@ -296,6 +297,8 @@ function App() {
             {/* Admin - Compliance Monthly Report (Sprint 8.4) */}
             <Route path="/admin/compliance" element={<ComplianceListPage />} />
             <Route path="/admin/compliance/:yearMonth" element={<ComplianceDetailPage />} />
+            {/* Admin - System Settings (Sprint 8.5) */}
+            <Route path="/admin/settings" element={<AdminSettingsPage />} />
             {/* Supervisor - Script Labels */}
             <Route path="/supervisor/script-labels" element={<SupervisorScriptLabelsPage />} />
             {/* Supervisor - Reviews */}
