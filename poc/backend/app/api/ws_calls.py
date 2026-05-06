@@ -35,7 +35,7 @@ def _authorize(payload: dict, role: str, call: CallRecord) -> bool:
     if role == "agent":
         return call.caller_user_id == user_id
     if role == "observer":
-        return user_role in {"admin", "supervisor"}
+        return user_role in {"admin", "supervisor", "project_manager_property"}  # Sprint 14.2
     return False
 
 

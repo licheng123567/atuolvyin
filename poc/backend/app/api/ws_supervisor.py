@@ -11,7 +11,7 @@ from app.ws.auth import decode_ws_token
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-_SUPERVISOR_ROLES = {"supervisor", "admin"}
+_SUPERVISOR_ROLES = {"supervisor", "admin", "project_manager_property"}  # Sprint 14.2 — 实时通话墙观察者
 
 
 @router.websocket("/ws/supervisor")

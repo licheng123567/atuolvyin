@@ -1,0 +1,79 @@
+"""Sprint 14.2 — 实时通话墙数据源 (PRD §11.6)。
+
+GET /api/v1/supervisor/live-calls
+  返回当前租户内 status IN ('dialing','live') 的全部通话快照。
+  WS /ws/supervisor 推增量；本端点用于页面初次加载。
+
+权限：supervisor / admin / project_manager_property
+"""
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi import status as http_status
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.core.crypto import mask_phone
+from app.core.db import get_db
+from app.core.security import get_token_payload, require_roles
+from app.models.call import CallRecord
+from app.models.case import CollectionCase, OwnerProfile
+from app.models.user import UserAccount
+from app.schemas.call import LiveCallItem, LiveCallsOut
+
+router = APIRouter()
+
+WALL_ROLES = ("supervisor", "admin", "project_manager_property")
+
+
+@router.get("/live-calls", response_model=LiveCallsOut)
+def list_live_calls(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*WALL_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> LiveCallsOut:
+    tenant_id = int(payload.get("tenant_id") or 0)
+    if not tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "ERR_INVALID_TOKEN", "message": "Token 缺少 tenant_id"},
+        )
+
+    rows = db.execute(
+        select(CallRecord)
+        .where(
+            CallRecord.tenant_id == tenant_id,
+            CallRecord.status.in_(("dialing", "live")),
+        )
+        .order_by(CallRecord.started_at.desc().nulls_last())
+    ).scalars().all()
+
+    now = datetime.now(UTC)
+    items: list[LiveCallItem] = []
+    for c in rows:
+        caller = db.get(UserAccount, c.caller_user_id) if c.caller_user_id else None
+        case = db.get(CollectionCase, c.case_id) if c.case_id else None
+        owner = db.get(OwnerProfile, case.owner_id) if case and case.owner_id else None
+        duration = 0
+        if c.started_at:
+            duration = max(0, int((now - c.started_at).total_seconds()))
+        items.append(
+            LiveCallItem(
+                call_id=c.id,
+                case_id=c.case_id,
+                caller_user_id=c.caller_user_id,
+                caller_name=caller.name if caller else "未知坐席",
+                owner_name=owner.name if owner else None,
+                owner_phone_masked=mask_phone(owner.phone_enc) if owner and owner.phone_enc else None,
+                started_at=c.started_at,
+                last_heartbeat_at=c.last_heartbeat_at,
+                duration_sec=duration,
+                recording_mode=c.recording_mode,
+                status=c.status,
+                risk_flagged=bool(c.risk_flagged),
+            )
+        )
+    return LiveCallsOut(items=items)

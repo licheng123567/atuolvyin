@@ -41,6 +41,7 @@ from app.api import (
     supervisor,
     supervisor_extras,
     supervisor_labels,
+    supervisor_live,
     supervisor_review,
     tasks,
     users,
@@ -52,14 +53,25 @@ from app.api import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import asyncio
     from app.core.crypto import _get_key
+    from app.services.call_lifecycle import heartbeat_cleanup_loop
     try:
         _get_key()
     except RuntimeError as exc:
         import sys
         print(f"FATAL: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc
-    yield
+    # Sprint 14.2 — 启动通话心跳超时清理后台任务（90s 无心跳 → call.aborted）
+    cleanup_task = asyncio.create_task(heartbeat_cleanup_loop())
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except (asyncio.CancelledError, Exception):
+            pass
 
 
 app = FastAPI(
@@ -136,6 +148,7 @@ app.include_router(admin_scripts.router, prefix="/api/v1/admin", tags=["admin-sc
 app.include_router(admin_dashboard.router, prefix="/api/v1/admin", tags=["admin-dashboard"])
 app.include_router(supervisor_labels.router, prefix="/api/v1/supervisor", tags=["supervisor-labels"])
 app.include_router(supervisor_review.router, prefix="/api/v1/supervisor", tags=["supervisor-review"])
+app.include_router(supervisor_live.router, prefix="/api/v1/supervisor", tags=["supervisor-live"])
 app.include_router(supervisor_extras.router, prefix="/api/v1/supervisor", tags=["supervisor-extras"])
 app.include_router(admin_suggestion_config.router, prefix="/api/v1/admin", tags=["suggestion-config"])
 app.include_router(admin_settlements.router, prefix="/api/v1/admin", tags=["admin-settlements"])

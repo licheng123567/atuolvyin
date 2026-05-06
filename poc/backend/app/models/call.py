@@ -41,6 +41,10 @@ class CallRecord(Base, TimestampMixin):
     recording_mode: Mapped[str] = mapped_column(
         sa.String(16), nullable=False, default="post", server_default="post"
     )
+    # Sprint 14.2 — agent App 30s 一次心跳；后台任务 90s 无心跳 → status='aborted' + 配额回滚
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
+    )
 
     __table_args__ = (
         sa.Index("idx_callrecord_tenant", "tenant_id"),
@@ -48,6 +52,13 @@ class CallRecord(Base, TimestampMixin):
         sa.CheckConstraint(
             "recording_mode IN ('live','post')",
             name="ck_call_record_recording_mode",
+        ),
+        # Sprint 14.2 — 同一 caller 同时只能有一通 active call（dialing/live）
+        sa.Index(
+            "uq_active_call_per_caller",
+            "caller_user_id",
+            unique=True,
+            postgresql_where=sa.text("status IN ('dialing','live')"),
         ),
     )
 

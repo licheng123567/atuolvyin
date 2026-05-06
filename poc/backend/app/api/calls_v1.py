@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import math
 import secrets
 import uuid
@@ -22,7 +23,9 @@ from app.models.call import AnalysisResult, CallRecord, Transcript
 from app.models.case import CollectionCase, OwnerProfile
 from app.models.device import DeviceProfile
 from app.models.dial_token import DialToken
+from app.models.settings import TenantSettings
 from app.models.tenant import Tenant, TenantMinuteUsage
+from app.models.user import UserAccount
 from app.schemas.call import (
     AnalysisResultOut,
     CallDetailResponse,
@@ -33,6 +36,11 @@ from app.schemas.call import (
     DialInfoOut,
     DialRequestIn,
     DialRequestOut,
+    DialStartIn,
+    DialStartOut,
+    HeartbeatOut,
+    LiveCallItem,
+    LiveCallsOut,
     SuggestionFeedbackIn,
     TranscriptOut,
     TranscriptSegment,
@@ -201,6 +209,228 @@ async def dial_request(
 
     db.commit()
     return DialRequestOut(call_id=call.id, status="dispatched")
+
+
+# ── Sprint 14.2 — App 端发起拨号同步 (PRD §10.1 / §11.6) ────────
+
+# 软配额阈值：剩余低于此值才拒绝（避免半路砍断通话）
+SOFT_QUOTA_MIN_REMAINING = 3
+# 实时模式 auto 决议时所需的 realtime 余量阈值
+AUTO_LIVE_THRESHOLD_MIN = 10
+
+
+def _resolve_recording_mode(
+    db: Session, tenant_id: int, year_month: str, settings_mode: str | None
+) -> str:
+    """决议本次通话的 recording_mode。冻结到 CallRecord 后不再受 TenantSettings 影响。
+
+    规则：
+    - settings_mode 显式 live/post → 直接使用
+    - settings_mode 'auto' 或缺省 → 看 realtime 余量：
+        余量 ≥ AUTO_LIVE_THRESHOLD_MIN → live；否则 post
+    """
+    mode = (settings_mode or "auto").lower()
+    if mode == "live":
+        return "live"
+    if mode == "post":
+        return "post"
+    # auto
+    usage = db.execute(
+        select(TenantMinuteUsage).where(
+            TenantMinuteUsage.tenant_id == tenant_id,
+            TenantMinuteUsage.year_month == year_month,
+        )
+    ).scalar_one_or_none()
+    realtime_used = usage.realtime_minutes if usage else 0
+    tenant = db.get(Tenant, tenant_id)
+    realtime_quota: int | None = tenant.monthly_minute_quota if tenant else None
+    if realtime_quota is None:
+        return "live"  # 无限套餐 → 默认走 live
+    return "live" if (realtime_quota - realtime_used) >= AUTO_LIVE_THRESHOLD_MIN else "post"
+
+
+def _check_soft_quota(
+    db: Session, tenant_id: int, year_month: str, mode: str
+) -> tuple[bool, int]:
+    """软配额检查：余量 ≥ SOFT_QUOTA_MIN_REMAINING 才放行。返回 (is_ok, remaining_minutes)."""
+    tenant = db.get(Tenant, tenant_id)
+    if tenant is None or tenant.monthly_minute_quota is None:
+        return True, 99999
+    usage = db.execute(
+        select(TenantMinuteUsage).where(
+            TenantMinuteUsage.tenant_id == tenant_id,
+            TenantMinuteUsage.year_month == year_month,
+        )
+    ).scalar_one_or_none()
+    used = usage.used_minutes if usage else 0
+    remaining = tenant.monthly_minute_quota - used
+    return remaining >= SOFT_QUOTA_MIN_REMAINING, max(0, remaining)
+
+
+async def _broadcast_call_event(
+    db: Session, call: CallRecord, event_type: str
+) -> None:
+    """向 supervisor 房间推 call.started / call.ended / call.aborted 事件。"""
+    from app.risk.supervisor_manager import get_supervisor_manager
+
+    caller = db.get(UserAccount, call.caller_user_id) if call.caller_user_id else None
+    case = db.get(CollectionCase, call.case_id) if call.case_id else None
+    owner = db.get(OwnerProfile, case.owner_id) if case and case.owner_id else None
+    payload = {
+        "type": event_type,  # "call.started" | "call.ended" | "call.aborted"
+        "call_id": call.id,
+        "case_id": call.case_id,
+        "caller_user_id": call.caller_user_id,
+        "caller_name": caller.name if caller else None,
+        "owner_name": owner.name if owner else None,
+        "owner_phone_masked": mask_phone(owner.phone_enc) if owner and owner.phone_enc else None,
+        "started_at": call.started_at.isoformat() if call.started_at else None,
+        "recording_mode": call.recording_mode,
+        "status": call.status,
+    }
+    sup = get_supervisor_manager()
+    await sup.broadcast(call.tenant_id, payload)
+
+
+@router.post("/dial-start", response_model=DialStartOut, status_code=201)
+async def dial_start(
+    body: DialStartIn,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> DialStartOut:
+    """Agent App 内点「拨打」时调用。冻结 recording_mode + 检查软配额 + WS 推送 supervisor。
+
+    并发保护：DB 部分唯一索引 uq_active_call_per_caller 防同一 caller 双开（409）。
+    Heartbeat：客户端拿到 call_id 后必须每 30s POST /calls/{id}/heartbeat，
+    后台任务 90s 无心跳 → status='aborted'。
+    """
+    user_id = int(payload.get("user_id") or 0)
+    tenant_id = int(payload.get("tenant_id") or 0)
+    if not user_id or not tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "ERR_INVALID_TOKEN", "message": "Token 缺少必要字段"},
+        )
+
+    # 1. 案件归属
+    case = db.execute(
+        select(CollectionCase).where(
+            CollectionCase.id == body.case_id,
+            CollectionCase.tenant_id == tenant_id,
+        )
+    ).scalar_one_or_none()
+    if case is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在或不属于当前租户"},
+        )
+    if case.assigned_to != user_id and not (
+        case.pool_type == "public" and case.assigned_to is None
+    ):
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_FORBIDDEN", "message": "案件未分配给当前催收员"},
+        )
+
+    # 2. 决议 recording_mode（冻结）
+    year_month = datetime.now(UTC).strftime("%Y-%m")
+    settings = db.execute(
+        select(TenantSettings).where(TenantSettings.tenant_id == tenant_id)
+    ).scalar_one_or_none()
+    mode = _resolve_recording_mode(
+        db, tenant_id, year_month, settings.recording_mode if settings else None
+    )
+
+    # 3. 软配额检查
+    ok, remaining = _check_soft_quota(db, tenant_id, year_month, mode)
+    if not ok:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "ERR_QUOTA_EXHAUSTED",
+                "message": f"本月通话分钟剩余 {remaining} 分钟，低于 {SOFT_QUOTA_MIN_REMAINING} 分钟阈值，无法发起新通话",
+            },
+        )
+
+    # 4. 拿 owner phone（写 callee_phone_enc）
+    owner = db.get(OwnerProfile, case.owner_id) if case.owner_id else None
+    callee_enc = owner.phone_enc if owner and owner.phone_enc else ""
+
+    # 5. 插入 CallRecord(status='dialing')
+    #    并发保护由 DB partial unique index 触发：同一 caller_user_id 已有
+    #    status IN ('dialing','live') 的记录时插入失败 → 409
+    now = datetime.now(UTC)
+    call = CallRecord(
+        tenant_id=tenant_id,
+        case_id=case.id,
+        caller_user_id=user_id,
+        callee_phone_enc=callee_enc,
+        initiated_by="app",
+        status="dialing",
+        recording_mode=mode,
+        started_at=now,
+        last_heartbeat_at=now,
+    )
+    db.add(call)
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail={
+                "code": "ERR_ACTIVE_CALL_EXISTS",
+                "message": "您当前已有一通进行中的通话，不能并发拨号",
+            },
+        ) from exc
+
+    db.commit()
+    db.refresh(call)
+
+    # 6. WS 广播 supervisor / admin / project_manager_property
+    try:
+        await _broadcast_call_event(db, call, "call.started")
+    except Exception as exc:
+        logger = logging.getLogger(__name__)
+        logger.warning("broadcast call.started failed: %s", exc)
+
+    return DialStartOut(call_id=call.id, recording_mode=mode, status="dialing")
+
+
+@router.post("/{call_id}/heartbeat", response_model=HeartbeatOut)
+async def call_heartbeat(
+    call_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> HeartbeatOut:
+    """agent App 30s 一次心跳，证明通话还在进行。后台任务 90s 无心跳自动 abort。"""
+    user_id = int(payload.get("user_id") or 0)
+    tenant_id = int(payload.get("tenant_id") or 0)
+
+    call = db.execute(
+        select(CallRecord).where(
+            CallRecord.id == call_id,
+            CallRecord.tenant_id == tenant_id,
+            CallRecord.caller_user_id == user_id,
+        )
+    ).scalar_one_or_none()
+    if call is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "通话不存在或不属于当前坐席"},
+        )
+    if call.status not in ("dialing", "live"):
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail={"code": "ERR_CALL_NOT_ACTIVE", "message": f"通话状态 {call.status} 不接受心跳"},
+        )
+
+    call.last_heartbeat_at = datetime.now(UTC)
+    db.commit()
+    db.refresh(call)
+    return HeartbeatOut(call_id=call.id, status=call.status, last_heartbeat_at=call.last_heartbeat_at)
 
 
 @router.get("/{call_id}/dial-info", response_model=DialInfoOut)

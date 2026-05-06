@@ -116,6 +116,45 @@ class DialRequestOut(BaseModel):
     expires_at: datetime | None = None  # 仅 qr 模式
 
 
+# ── Sprint 14.2: dial-start (App 端发起) ──────────────────────
+
+
+class DialStartIn(BaseModel):
+    case_id: int
+    device_id: str
+
+
+class DialStartOut(BaseModel):
+    call_id: int
+    recording_mode: str  # live | post，已冻结
+    status: str  # "dialing"
+
+
+class HeartbeatOut(BaseModel):
+    call_id: int
+    status: str
+    last_heartbeat_at: datetime
+
+
+class LiveCallItem(BaseModel):
+    call_id: int
+    case_id: int | None
+    caller_user_id: int
+    caller_name: str
+    owner_name: str | None
+    owner_phone_masked: str | None
+    started_at: datetime | None
+    last_heartbeat_at: datetime | None
+    duration_sec: int  # 已通话时长（秒）= now - started_at
+    recording_mode: str
+    status: str  # dialing | live
+    risk_flagged: bool
+
+
+class LiveCallsOut(BaseModel):
+    items: list[LiveCallItem]
+
+
 class DialInfoOut(BaseModel):
     """坐席 App 扫码后获取的案件信息。
 
