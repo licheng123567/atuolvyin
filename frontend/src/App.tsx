@@ -44,6 +44,13 @@ import { AdminProviderDetailPage } from "./pages/admin/providers/detail";
 import { SupervisorScriptLabelsPage } from "./pages/supervisor/script-labels";
 import { SupervisorReviewsPage } from "./pages/supervisor/reviews";
 import { SupervisorReviewDetailPage } from "./pages/supervisor/reviews/detail";
+import { SupervisorRiskEventsPage } from "./pages/supervisor/risk-events";
+import { SupervisorTeamPerformancePage } from "./pages/supervisor/team-performance";
+import { OpsSettlementsOverviewPage } from "./pages/ops/settlements";
+import { OpsAnnouncementsPage } from "./pages/ops/announcements";
+import { OpsMyAuditLogsPage } from "./pages/ops/audit-logs";
+import { SuperLlmPromptsPage } from "./pages/super/llm-prompts";
+import { SuperBlockchainConfigPage } from "./pages/super/blockchain-config";
 import { authProvider, getToken } from "./providers/auth-provider";
 import { dataProvider } from "./providers";
 import { useSupervisorAlerts } from "./hooks/useSupervisorAlerts";
@@ -305,6 +312,15 @@ function App() {
             {/* Supervisor - Reviews */}
             <Route path="/supervisor/reviews" element={<SupervisorReviewsPage />} />
             <Route path="/supervisor/reviews/:call_id" element={<SupervisorReviewDetailPage />} />
+            {/* Sprint 9.4 / 9.5 */}
+            <Route path="/supervisor/risk-events" element={<SupervisorRiskEventsPage />} />
+            <Route path="/supervisor/team-performance" element={<SupervisorTeamPerformancePage />} />
+            {/* Sprint 10 ops + super */}
+            <Route path="/ops/settlements" element={<OpsSettlementsOverviewPage />} />
+            <Route path="/ops/announcements" element={<OpsAnnouncementsPage />} />
+            <Route path="/ops/audit-logs" element={<OpsMyAuditLogsPage />} />
+            <Route path="/super/llm-prompts" element={<SuperLlmPromptsPage />} />
+            <Route path="/super/blockchain-config" element={<SuperBlockchainConfigPage />} />
             {/* Legal - Cases */}
             <Route path="/legal/cases" element={<LegalCaseListPage />} />
             <Route path="/legal/cases/:id" element={<LegalCaseDetailPage />} />
