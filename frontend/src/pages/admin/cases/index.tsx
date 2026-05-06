@@ -1,6 +1,6 @@
 import { useCreate, useGo, useList } from "@refinedev/core";
 import type { CrudFilter } from "@refinedev/core";
-import { Briefcase, Plus, Search, UserCheck } from "lucide-react";
+import { Briefcase, KanbanSquare, List, Plus, Search, UserCheck } from "lucide-react";
 import { useState } from "react";
 import type { PaginatedResponse } from "../../../types";
 
@@ -138,7 +138,27 @@ export function CaseListPage() {
             共 {total} 件
           </span>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {/* List / Kanban toggle */}
+          <div className="flex items-center gap-1 border border-[var(--color-neutral-200)] rounded-md overflow-hidden">
+            <button
+              type="button"
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white"
+              style={{ background: "var(--color-primary)" }}
+            >
+              <List className="w-4 h-4" />
+              列表
+            </button>
+            <button
+              type="button"
+              onClick={() => go({ to: "/admin/cases/kanban" })}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm text-[var(--color-neutral-600)] hover:bg-[var(--color-neutral-50)]"
+            >
+              <KanbanSquare className="w-4 h-4" />
+              看板
+            </button>
+          </div>
+
           {selectedIds.length > 0 && (
             <button
               type="button"

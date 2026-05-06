@@ -17,6 +17,7 @@ import { UserListPage } from "./pages/admin/users/index";
 import { UserNewPage } from "./pages/admin/users/new";
 import { CaseListPage } from "./pages/admin/cases/index";
 import { CaseImportPage } from "./pages/admin/cases/import";
+import { CaseKanbanPage } from "./pages/admin/cases/kanban";
 import { AgentCaseListPage } from "./pages/agent/cases/index";
 import { AdminCaseDetailPage } from "./pages/admin/cases/detail";
 import { AgentWorkstationPage } from "./pages/agent/cases/detail";
@@ -25,6 +26,8 @@ import { AgentLiveWorkstationPage } from "./pages/agent/workstation/live";
 import { AdminLiveWorkstationPage } from "./pages/admin/workstation/live";
 import { ScriptListPage } from "./pages/admin/scripts/list";
 import { ScriptVersionsPage } from "./pages/admin/scripts/versions";
+import { AdminDashboardPage } from "./pages/admin/dashboard";
+import { AdminPoolPage } from "./pages/admin/pool";
 import { SupervisorScriptLabelsPage } from "./pages/supervisor/script-labels";
 import { authProvider, getToken } from "./providers/auth-provider";
 import { dataProvider } from "./providers";
@@ -41,7 +44,7 @@ const ROLE_HOME: Record<string, string> = {
   platform_superadmin: "/ops/tenants",
   platform_super: "/ops/tenants",
   platform_ops: "/ops/tenants",
-  admin: "/admin/cases",
+  admin: "/admin/dashboard",
   supervisor: "/supervisor/alerts",
   agent_internal: "/agent/cases",
   agent_external: "/agent/cases",
@@ -126,6 +129,11 @@ function App() {
             meta: { label: "话术库" },
           },
           {
+            name: "admin/pool",
+            list: "/admin/pool",
+            meta: { label: "公海管理" },
+          },
+          {
             name: "supervisor/script-labels",
             list: "/supervisor/script-labels",
             meta: { label: "话术标注" },
@@ -153,11 +161,14 @@ function App() {
             <Route path="/ops/tenants" element={<TenantListPage />} />
             <Route path="/ops/tenants/new" element={<TenantNewPage />} />
             <Route path="/ops/tenants/:id" element={<TenantDetailPage />} />
+            {/* Admin - Dashboard */}
+            <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
             {/* Admin - User Management */}
             <Route path="/admin/users" element={<UserListPage />} />
             <Route path="/admin/users/new" element={<UserNewPage />} />
             {/* Admin - Case Management */}
             <Route path="/admin/cases" element={<CaseListPage />} />
+            <Route path="/admin/cases/kanban" element={<CaseKanbanPage />} />
             <Route path="/admin/cases/import" element={<CaseImportPage />} />
             {/* Agent - Case List */}
             <Route path="/agent/cases" element={<AgentCaseListPage />} />
@@ -180,6 +191,8 @@ function App() {
             {/* Admin - Script Library */}
             <Route path="/admin/scripts" element={<ScriptListPage />} />
             <Route path="/admin/scripts/:id/versions" element={<ScriptVersionsPage />} />
+            {/* Admin - Public Pool Management */}
+            <Route path="/admin/pool" element={<AdminPoolPage />} />
             {/* Supervisor - Script Labels */}
             <Route path="/supervisor/script-labels" element={<SupervisorScriptLabelsPage />} />
           </Route>
