@@ -1,6 +1,7 @@
 // frontend/src/pages/supervisor/reviews/index.tsx
-import { useList, useNavigation } from "@refinedev/core";
+import { useList } from "@refinedev/core";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 interface ReviewItemOut {
   call_id: number;
@@ -33,7 +34,7 @@ export function SupervisorReviewsPage() {
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
-  const { show } = useNavigation();
+  const navigate = useNavigate();
 
   const { query } = useList<ReviewItemOut>({
     resource: "supervisor/reviews",
@@ -126,7 +127,7 @@ export function SupervisorReviewsPage() {
                   </td>
                   <td style={{ padding: "10px 12px" }}>
                     <button
-                      onClick={() => show("calls", String(item.call_id))}
+                      onClick={() => navigate(`/supervisor/reviews/${item.call_id}`)}
                       style={{
                         padding: "4px 10px",
                         background: "var(--color-primary)",

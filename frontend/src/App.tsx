@@ -43,6 +43,7 @@ import { AdminProvidersPage } from "./pages/admin/providers/index";
 import { AdminProviderDetailPage } from "./pages/admin/providers/detail";
 import { SupervisorScriptLabelsPage } from "./pages/supervisor/script-labels";
 import { SupervisorReviewsPage } from "./pages/supervisor/reviews";
+import { SupervisorReviewDetailPage } from "./pages/supervisor/reviews/detail";
 import { authProvider, getToken } from "./providers/auth-provider";
 import { dataProvider } from "./providers";
 import { useSupervisorAlerts } from "./hooks/useSupervisorAlerts";
@@ -303,6 +304,7 @@ function App() {
             <Route path="/supervisor/script-labels" element={<SupervisorScriptLabelsPage />} />
             {/* Supervisor - Reviews */}
             <Route path="/supervisor/reviews" element={<SupervisorReviewsPage />} />
+            <Route path="/supervisor/reviews/:call_id" element={<SupervisorReviewDetailPage />} />
             {/* Legal - Cases */}
             <Route path="/legal/cases" element={<LegalCaseListPage />} />
             <Route path="/legal/cases/:id" element={<LegalCaseDetailPage />} />

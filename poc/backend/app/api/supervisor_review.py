@@ -16,9 +16,15 @@ from sqlalchemy.orm import Session
 from app.core.crypto import mask_phone
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
-from app.models.call import AnalysisResult, CallRecord
+from app.models.call import AnalysisResult, CallRecord, RiskEvent, Transcript
 from app.schemas.common import PaginatedResponse
-from app.schemas.review import ReviewItemOut, ReviewLabelIn
+from app.schemas.review import (
+    ReviewDetailOut,
+    ReviewItemOut,
+    ReviewLabelIn,
+    ReviewRiskEventOut,
+    TranscriptSegmentOut,
+)
 
 router = APIRouter()
 
@@ -153,3 +159,81 @@ def label_review(
     db.refresh(analysis)
 
     return _to_review_item(call, analysis)
+
+
+@router.get("/reviews/{call_id}", response_model=ReviewDetailOut)
+def get_review_detail(
+    call_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*REVIEW_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> ReviewDetailOut:
+    """Sprint 12.2 — 单条复核详情：含录音 URL + 转写 + 风控时间点列表，
+    供前端复核工作台播放器使用（点击事件可跳转到对应 audio_offset_ms）。"""
+    tenant_id = _require_tenant(payload)
+
+    row = db.execute(
+        select(CallRecord, AnalysisResult)
+        .join(AnalysisResult, AnalysisResult.call_id == CallRecord.id)
+        .where(
+            CallRecord.id == call_id,
+            CallRecord.tenant_id == tenant_id,
+        )
+    ).first()
+    if row is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "复核条目不存在"},
+        )
+    call, analysis = row
+
+    transcript = db.execute(
+        select(Transcript).where(Transcript.call_id == call_id)
+    ).scalar_one_or_none()
+
+    risk_events = (
+        db.execute(
+            select(RiskEvent)
+            .where(RiskEvent.call_id == call_id)
+            .order_by(RiskEvent.audio_offset_ms.asc().nulls_last(), RiskEvent.id.asc())
+        )
+        .scalars()
+        .all()
+    )
+
+    base = _to_review_item(call, analysis)
+
+    segments_out: list[TranscriptSegmentOut] = []
+    if transcript and transcript.segments:
+        for seg in transcript.segments:
+            if isinstance(seg, dict):
+                segments_out.append(
+                    TranscriptSegmentOut(
+                        speaker=seg.get("speaker"),
+                        start_ms=seg.get("start_ms"),
+                        end_ms=seg.get("end_ms"),
+                        text=seg.get("text"),
+                    )
+                )
+
+    risk_out = [
+        ReviewRiskEventOut(
+            id=r.id,
+            level=r.level,
+            category=r.category,
+            intervention=r.intervention,
+            trigger_text=r.trigger_text,
+            audio_offset_ms=r.audio_offset_ms,
+            occurred_at=r.created_at,
+        )
+        for r in risk_events
+    ]
+
+    return ReviewDetailOut(
+        **base.model_dump(),
+        recording_url=call.recording_url,
+        transcript_text=transcript.full_text if transcript else None,
+        transcript_segments=segments_out,
+        risk_events=risk_out,
+        asr_model=transcript.asr_model if transcript else None,
+    )
