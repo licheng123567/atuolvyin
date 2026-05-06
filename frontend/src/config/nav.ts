@@ -71,16 +71,32 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
     },
   ],
   legal: [
-    { items: [{ label: "控制台", path: "/" }] },
+    {
+      items: [
+        { label: "法务案件", path: "/legal/cases", icon: "Scale" },
+      ],
+    },
   ],
   workorder: [
-    { items: [{ label: "控制台", path: "/" }] },
+    {
+      items: [
+        { label: "工单管理", path: "/workorder/orders", icon: "ClipboardList" },
+      ],
+    },
   ],
   project_manager_property: [
-    { items: [{ label: "控制台", path: "/" }] },
+    {
+      items: [
+        { label: "项目看板", path: "/pm/dashboard", icon: "LayoutDashboard" },
+      ],
+    },
   ],
   project_manager_provider: [
-    { items: [{ label: "控制台", path: "/" }] },
+    {
+      items: [
+        { label: "项目看板", path: "/pm/dashboard", icon: "LayoutDashboard" },
+      ],
+    },
   ],
   provider_admin: [
     { items: [{ label: "控制台", path: "/" }] },
