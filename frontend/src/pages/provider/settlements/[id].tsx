@@ -1,8 +1,9 @@
 // frontend/src/pages/provider/settlements/[id].tsx
 //
 // PA.3.4 — Provider settlement detail (read-only).
-import { useGo, useOne } from "@refinedev/core";
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { useCustomMutation, useGo, useOne } from "@refinedev/core";
+import { AlertCircle, ArrowLeft, ExternalLink, X } from "lucide-react";
+import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { formatRevenue } from "../helpers";
 import {
@@ -146,9 +147,17 @@ export function ProviderSettlementDetailPage() {
         </div>
 
         <div className="bg-white border border-[var(--color-neutral-200)] rounded-lg p-5">
-          <h2 className="text-sm font-semibold text-[var(--color-neutral-900)] mb-4">
-            争议历史
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-[var(--color-neutral-900)]">
+              争议历史
+            </h2>
+            {detail.status !== "PAID" && (
+              <DisputeSubmitButton
+                statementId={detail.id}
+                onSubmitted={() => query.refetch()}
+              />
+            )}
+          </div>
           {detail.disputes.length === 0 ? (
             <div className="text-sm text-[var(--color-neutral-400)]">
               暂无争议记录
@@ -198,5 +207,119 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
       <dt className="text-xs text-[var(--color-neutral-500)] pt-1">{label}</dt>
       <dd className="text-right text-[var(--color-neutral-900)]">{value}</dd>
     </div>
+  );
+}
+
+// Sprint 9.3 — 提交结算异议
+function DisputeSubmitButton({
+  statementId,
+  onSubmitted,
+}: {
+  statementId: number;
+  onSubmitted: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+  const { mutate: submit, mutation } = useCustomMutation();
+
+  const handleSubmit = () => {
+    setError("");
+    if (!reason.trim()) {
+      setError("请填写异议原因");
+      return;
+    }
+    submit(
+      {
+        url: `provider/settlements/${statementId}/dispute`,
+        method: "post",
+        values: { reason: reason.trim() },
+      },
+      {
+        onSuccess: () => {
+          setOpen(false);
+          setReason("");
+          onSubmitted();
+        },
+        onError: (err) => {
+          const code =
+            (err as { response?: { data?: { code?: string } } }).response?.data?.code;
+          if (code === "ERR_INVALID_TRANSITION")
+            setError("已结清的结算单不能再提交异议");
+          else setError("提交失败");
+        },
+      },
+    );
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white"
+        style={{
+          background: "var(--color-warning)",
+          borderRadius: "var(--radius-md)",
+        }}
+      >
+        <AlertCircle className="w-3 h-3" />
+        提交异议
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div
+            className="bg-white p-6 w-[480px]"
+            style={{ borderRadius: "var(--radius-lg)" }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold">提交结算异议</h3>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="text-[var(--color-neutral-400)]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-[var(--color-neutral-500)] mb-3">
+              提交后结算单状态将变更为「有异议」，等待租户方回复处理意见。
+            </p>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={5}
+              placeholder="请详细说明异议原因（如金额、统计口径、计费规则等）"
+              className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-200)]"
+              style={{ borderRadius: "var(--radius-md)" }}
+            />
+            {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
+            <div className="flex justify-end gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="px-3 py-2 text-sm border border-[var(--color-neutral-200)]"
+                style={{ borderRadius: "var(--radius-md)" }}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={mutation.isPending}
+                className="px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                style={{
+                  background: "var(--color-warning)",
+                  borderRadius: "var(--radius-md)",
+                }}
+              >
+                {mutation.isPending ? "提交中…" : "确认提交"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
