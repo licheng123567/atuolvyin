@@ -42,6 +42,8 @@ from app.schemas.call import (
     LiveCallItem,
     LiveCallsOut,
     SuggestionFeedbackIn,
+    TakeoverResponseIn,
+    TakeoverResponseOut,
     TranscriptOut,
     TranscriptSegment,
 )
@@ -431,6 +433,44 @@ async def call_heartbeat(
     db.commit()
     db.refresh(call)
     return HeartbeatOut(call_id=call.id, status=call.status, last_heartbeat_at=call.last_heartbeat_at)
+
+
+# ── Sprint 15.3 — agent 响应督导转接请求 (PRD §11.2) ────────
+
+
+@router.post("/{call_id}/takeover-response", response_model=TakeoverResponseOut)
+async def respond_takeover(
+    call_id: int,
+    body: TakeoverResponseIn,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> TakeoverResponseOut:
+    user_id = int(payload.get("user_id") or 0)
+    tenant_id = int(payload.get("tenant_id") or 0)
+    call = db.execute(
+        select(CallRecord).where(
+            CallRecord.id == call_id,
+            CallRecord.tenant_id == tenant_id,
+            CallRecord.caller_user_id == user_id,
+        )
+    ).scalar_one_or_none()
+    if call is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "通话不存在或不属于当前坐席"},
+        )
+
+    from app.services.call_intervention import dispatch_takeover_response
+    await dispatch_takeover_response(
+        db,
+        call_id=call.id,
+        tenant_id=tenant_id,
+        agent_user_id=user_id,
+        accepted=body.accepted,
+        note=body.note,
+    )
+    return TakeoverResponseOut(call_id=call.id, accepted=body.accepted)
 
 
 @router.get("/{call_id}/dial-info", response_model=DialInfoOut)

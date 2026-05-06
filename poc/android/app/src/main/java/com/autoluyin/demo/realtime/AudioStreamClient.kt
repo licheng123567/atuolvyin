@@ -26,6 +26,9 @@ class AudioStreamClient(
     private val onTagReady: (TagPayload) -> Unit,
     private val onStateChange: (State) -> Unit,
     private val onRisk: (RiskEvent) -> Unit = {},
+    // Sprint 15.2 / 15.3 — 主管干预消息
+    private val onForceHangup: (reason: String, triggeredBy: String) -> Unit = { _, _ -> },
+    private val onTakeoverRequest: (supervisorName: String, reason: String) -> Unit = { _, _ -> },
     private val context: Context? = null,
     private val baseUrl: String = "ws://10.0.2.2:8000",  // emulator → host loopback
 ) {
@@ -152,6 +155,16 @@ class AudioStreamClient(
             }
             "pong" -> Unit  // heartbeat ack
             "risk.event" -> RiskEvent.fromJson(obj)?.let { onRisk(it) }
+            // Sprint 15.2 — L3 风控自动挂断 / 督导手动强制结束
+            "call.force_hangup" -> onForceHangup(
+                obj.optString("reason", "未知原因"),
+                obj.optString("triggered_by", "system"),
+            )
+            // Sprint 15.3 — 督导接管请求
+            "supervisor.takeover_request" -> onTakeoverRequest(
+                obj.optString("supervisor_name", "主管"),
+                obj.optString("reason", ""),
+            )
         }
     }
 

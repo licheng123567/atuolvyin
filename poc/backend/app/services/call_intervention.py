@@ -126,3 +126,111 @@ async def maybe_auto_hangup_for_l3(
         triggered_by="risk.l3_auto",
     )
     return True
+
+
+# ── Sprint 15.3 — 督导一键介入 (SUPERVISOR_TAKEOVER, PRD §11.2) ──
+
+
+async def dispatch_takeover_request(
+    db: Session,
+    *,
+    call_id: int,
+    tenant_id: int,
+    supervisor_user_id: int,
+    supervisor_name: str,
+    reason: str,
+) -> dict:
+    """督导发起强制转接请求：WS 推 agent + audit。等 agent 决策后调
+    dispatch_takeover_response 通知 supervisor。"""
+    from app.ws.connection_manager import get_connection_manager
+    from app.risk.supervisor_manager import get_supervisor_manager
+
+    payload = {
+        "type": "supervisor.takeover_request",
+        "call_id": call_id,
+        "supervisor_user_id": supervisor_user_id,
+        "supervisor_name": supervisor_name,
+        "reason": reason,
+        "ts": datetime.now(UTC).isoformat(),
+    }
+    try:
+        await get_connection_manager().broadcast(call_id, payload)
+    except Exception as exc:
+        logger.warning("takeover request broadcast (agent) failed call=%s: %s", call_id, exc)
+
+    # Supervisor wall 同时收到一个 pending 状态
+    sup_payload = {
+        "type": "call.intervention",
+        "call_id": call_id,
+        "action": "takeover_requested",
+        "supervisor_user_id": supervisor_user_id,
+        "supervisor_name": supervisor_name,
+        "reason": reason,
+        "ts": payload["ts"],
+    }
+    try:
+        await get_supervisor_manager().broadcast(tenant_id, sup_payload)
+    except Exception as exc:
+        logger.warning("takeover request broadcast (sup) failed tenant=%s: %s", tenant_id, exc)
+
+    log_audit(
+        db,
+        actor_user_id=supervisor_user_id,
+        actor_role="supervisor",
+        tenant_id=tenant_id,
+        action="call.takeover_requested",
+        target_type="call_record",
+        target_id=call_id,
+        payload={"reason": reason},
+    )
+    db.commit()
+    return payload
+
+
+async def dispatch_takeover_response(
+    db: Session,
+    *,
+    call_id: int,
+    tenant_id: int,
+    agent_user_id: int,
+    accepted: bool,
+    note: str | None = None,
+) -> dict:
+    """agent 响应督导转接：accepted=True/False。"""
+    from app.risk.supervisor_manager import get_supervisor_manager
+    from app.ws.connection_manager import get_connection_manager
+
+    action = "takeover_accepted" if accepted else "takeover_rejected"
+    payload = {
+        "type": "call.intervention",
+        "call_id": call_id,
+        "action": action,
+        "agent_user_id": agent_user_id,
+        "note": note,
+        "ts": datetime.now(UTC).isoformat(),
+    }
+    # 给 supervisor wall 推
+    try:
+        await get_supervisor_manager().broadcast(tenant_id, payload)
+    except Exception as exc:
+        logger.warning("takeover response broadcast failed: %s", exc)
+
+    # 同步给 agent 房间一个 ack（清掉 modal）
+    ack = {"type": "supervisor.takeover_ack", "call_id": call_id, "accepted": accepted}
+    try:
+        await get_connection_manager().broadcast(call_id, ack)
+    except Exception as exc:
+        logger.warning("takeover ack to agent room failed: %s", exc)
+
+    log_audit(
+        db,
+        actor_user_id=agent_user_id,
+        actor_role="agent",
+        tenant_id=tenant_id,
+        action=f"call.{action}",
+        target_type="call_record",
+        target_id=call_id,
+        payload={"note": note},
+    )
+    db.commit()
+    return payload

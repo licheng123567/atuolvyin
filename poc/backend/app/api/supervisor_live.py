@@ -42,6 +42,17 @@ class ForceHangupResp(BaseModel):
     reason: str
 
 
+class TakeoverReq(BaseModel):
+    reason: str  # 主管填写原因
+
+
+class TakeoverResp(BaseModel):
+    call_id: int
+    status: str  # "requested"
+    supervisor_name: str
+    reason: str
+
+
 @router.get("/live-calls", response_model=LiveCallsOut)
 def list_live_calls(
     payload: Annotated[dict, Depends(get_token_payload)],
@@ -138,5 +149,61 @@ async def supervisor_force_hangup(
     return ForceHangupResp(
         call_id=call.id,
         triggered_by="supervisor.manual",
+        reason=body.reason,
+    )
+
+
+@router.post("/calls/{call_id}/takeover", response_model=TakeoverResp)
+async def supervisor_takeover(
+    call_id: int,
+    body: TakeoverReq,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*WALL_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> TakeoverResp:
+    """督导发起强制转接请求 (Sprint 15.3, PRD §11.2)。
+
+    后续动作：agent App 收到 supervisor.takeover_request → 弹层选择
+    accept/reject → POST /calls/{call_id}/takeover-response 回应。
+    """
+    tenant_id = int(payload.get("tenant_id") or 0)
+    user_id = int(payload.get("user_id") or 0)
+    if not tenant_id or not user_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "ERR_INVALID_TOKEN", "message": "Token 缺少必要字段"},
+        )
+    call = db.execute(
+        select(CallRecord).where(
+            CallRecord.id == call_id, CallRecord.tenant_id == tenant_id
+        )
+    ).scalar_one_or_none()
+    if call is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "通话不存在或不属于当前租户"},
+        )
+    if call.status not in ("dialing", "live"):
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail={"code": "ERR_CALL_NOT_ACTIVE", "message": f"通话状态 {call.status} 不可转接"},
+        )
+
+    supervisor = db.get(UserAccount, user_id)
+    supervisor_name = supervisor.name if supervisor else "未知主管"
+
+    from app.services.call_intervention import dispatch_takeover_request
+    await dispatch_takeover_request(
+        db,
+        call_id=call.id,
+        tenant_id=tenant_id,
+        supervisor_user_id=user_id,
+        supervisor_name=supervisor_name,
+        reason=body.reason,
+    )
+    return TakeoverResp(
+        call_id=call.id,
+        status="requested",
+        supervisor_name=supervisor_name,
         reason=body.reason,
     )

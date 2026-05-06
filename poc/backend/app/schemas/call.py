@@ -155,6 +155,19 @@ class LiveCallsOut(BaseModel):
     items: list[LiveCallItem]
 
 
+# ── Sprint 15.3 — 督导一键介入 (SUPERVISOR_TAKEOVER) ─────────
+
+
+class TakeoverResponseIn(BaseModel):
+    accepted: bool  # agent 选择是否接受转接
+    note: str | None = None
+
+
+class TakeoverResponseOut(BaseModel):
+    call_id: int
+    accepted: bool
+
+
 class DialInfoOut(BaseModel):
     """坐席 App 扫码后获取的案件信息。
 

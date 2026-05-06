@@ -1,12 +1,14 @@
-// Sprint 14.2 — 实时通话墙 (PRD §11.6)
-// supervisor / admin / project_manager_property 角色看到所有正在通话的坐席
-import { useCustom, useGo } from "@refinedev/core";
+// Sprint 14.2 / 15.2 / 15.3 — 实时通话墙 + 督导干预 (PRD §11.6 / §13 / §11.2)
+// supervisor / admin / project_manager_property 角色看到所有正在通话的坐席 + 强制结束 / 申请接管
+import { useCustom, useCustomMutation, useGo } from "@refinedev/core";
 import {
   Activity,
   AlertTriangle,
   Headphones,
   PhoneCall,
+  PhoneOff,
   RadioTower,
+  ShieldQuestion,
   User2,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -91,6 +93,69 @@ export function SupervisorLiveWallPage() {
   );
 }
 
+function InterventionButtons({ call }: { call: LiveCall }) {
+  const { mutate, mutation } = useCustomMutation();
+
+  const onForceHangup = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const reason = window.prompt(
+      `确认强制结束 ${call.caller_name} 与 ${call.owner_name ?? "业主"} 的通话？\n请填写原因（将记入审计）：`,
+    );
+    if (!reason || !reason.trim()) return;
+    mutate(
+      {
+        url: `supervisor/calls/${call.call_id}/force-hangup`,
+        method: "post",
+        values: { reason: reason.trim() },
+      },
+      {
+        onSuccess: () => alert("已发起强制结束指令"),
+        onError: (err) => alert(`失败：${(err as { message?: string }).message ?? "未知"}`),
+      },
+    );
+  };
+
+  const onTakeover = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const reason = window.prompt(
+      `向坐席 ${call.caller_name} 发起接管请求？请填写原因：`,
+    );
+    if (!reason || !reason.trim()) return;
+    mutate(
+      {
+        url: `supervisor/calls/${call.call_id}/takeover`,
+        method: "post",
+        values: { reason: reason.trim() },
+      },
+      {
+        onSuccess: () => alert("接管请求已发出，等待坐席响应"),
+        onError: (err) => alert(`失败：${(err as { message?: string }).message ?? "未知"}`),
+      },
+    );
+  };
+
+  return (
+    <div className="flex gap-1.5 mt-2">
+      <button
+        type="button"
+        onClick={onTakeover}
+        disabled={mutation.isPending}
+        className="flex-1 flex items-center justify-center gap-1 text-xs px-2 py-1.5 border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded disabled:opacity-50"
+      >
+        <ShieldQuestion className="w-3 h-3" /> 申请接管
+      </button>
+      <button
+        type="button"
+        onClick={onForceHangup}
+        disabled={mutation.isPending}
+        className="flex-1 flex items-center justify-center gap-1 text-xs px-2 py-1.5 border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 rounded disabled:opacity-50"
+      >
+        <PhoneOff className="w-3 h-3" /> 强制结束
+      </button>
+    </div>
+  );
+}
+
 function CallCard({
   call,
   now,
@@ -110,9 +175,13 @@ function CallCard({
   const statusColor = call.status === "live" ? "text-green-600" : "text-amber-600";
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") onClick();
+      }}
       className={`text-left bg-white p-4 border rounded-lg shadow-sm hover:shadow-md transition cursor-pointer ${
         call.risk_flagged
           ? "border-red-300 ring-2 ring-red-200"
@@ -166,6 +235,8 @@ function CallCard({
         <Headphones className="w-3 h-3" />
         点击进入实时跟单
       </div>
-    </button>
+
+      <InterventionButtons call={call} />
+    </div>
   );
 }
