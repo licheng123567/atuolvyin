@@ -40,6 +40,7 @@ import { ScriptEffectivenessPage } from "./pages/admin/scripts/effectiveness";
 import { AdminReportsPage } from "./pages/admin/reports/index";
 import { ComplianceListPage } from "./pages/admin/compliance/index";
 import { ComplianceDetailPage } from "./pages/admin/compliance/detail";
+import { AdminLegalConversionListPage } from "./pages/admin/legal-conversion/index";
 import { AdminSettingsPage } from "./pages/admin/settings/index";
 import { AdminDashboardPage } from "./pages/admin/dashboard";
 import { AdminPoolPage } from "./pages/admin/pool";
@@ -363,6 +364,8 @@ function App() {
             {/* Admin - Compliance Monthly Report (Sprint 8.4) */}
             <Route path="/admin/compliance" element={<ComplianceListPage />} />
             <Route path="/admin/compliance/:yearMonth" element={<ComplianceDetailPage />} />
+            {/* Sprint 16.1 — Legal conversion channel (PRD §20.4) */}
+            <Route path="/admin/legal-conversion" element={<AdminLegalConversionListPage />} />
             {/* Admin - System Settings (Sprint 8.5) */}
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
             {/* Supervisor - Script Labels */}

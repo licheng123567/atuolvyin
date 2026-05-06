@@ -10,6 +10,7 @@ from app.api import (
     admin_cases,
     admin_compliance,
     admin_dashboard,
+    admin_legal_conversion,
     admin_providers,
     admin_reports,
     admin_risk_keywords,
@@ -133,6 +134,7 @@ app.include_router(ops_providers.router, prefix="/api/v1/ops", tags=["ops-provid
 app.include_router(ops_extras.router, prefix="/api/v1/ops", tags=["ops-extras"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 app.include_router(admin_cases.router, prefix="/api/v1/admin", tags=["admin-cases"])
+app.include_router(admin_legal_conversion.router, prefix="/api/v1/admin", tags=["admin-legal-conversion"])
 app.include_router(admin_risk_keywords.router, prefix="/api/v1/admin", tags=["admin-risk-keywords"])
 app.include_router(supervisor.router, prefix="/api/v1/supervisor", tags=["supervisor"])
 app.include_router(agent_cases.router, prefix="/api/v1/agent", tags=["agent"])

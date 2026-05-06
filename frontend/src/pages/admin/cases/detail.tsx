@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import type { UserRole } from "../../../types";
 import type { CaseCallItem, CaseDetailResponse } from "../../../types/case";
+import { ConvertToLegalModal } from "../../../components/legal-conversion/ConvertToLegalModal";
 
 const STAGE_LABELS: Record<string, string> = {
   new: "待处理",
@@ -35,6 +36,7 @@ export function AdminCaseDetailPage() {
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
+  const [convertOpen, setConvertOpen] = useState(false);
 
   const { query } = useOne<CaseDetailResponse>({
     resource: "admin/cases",
@@ -143,7 +145,7 @@ export function AdminCaseDetailPage() {
           </button>
           <button
             type="button"
-            onClick={() => alert("转法务功能将在 v1.1 上线")}
+            onClick={() => setConvertOpen(true)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-[var(--color-neutral-300)] text-[var(--color-neutral-600)] hover:bg-[var(--color-neutral-50)] transition-colors"
           >
             <GitBranch className="w-4 h-4" />
@@ -374,6 +376,18 @@ export function AdminCaseDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {convertOpen && (
+        <ConvertToLegalModal
+          caseId={detail.id}
+          onClose={() => setConvertOpen(false)}
+          onSuccess={(orderId) => {
+            setConvertOpen(false);
+            alert(`法务转化订单 #${orderId} 已创建，等待平台运营撮合律所`);
+            go({ to: "/admin/legal-conversion" });
+          }}
+        />
       )}
     </div>
   );
