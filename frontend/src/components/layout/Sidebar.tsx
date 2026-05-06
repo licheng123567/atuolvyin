@@ -38,6 +38,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   "/admin/users": Users,
   "/admin/providers": Building2,
   "/admin/scripts/effectiveness": BarChart3,
+  "/admin/reports": TrendingUp,
   "/provider/dashboard": LayoutDashboard,
   "/provider/tenants": Building2,
   "/provider/team": Users,

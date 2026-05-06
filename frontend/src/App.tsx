@@ -31,6 +31,7 @@ import { AdminLiveWorkstationPage } from "./pages/admin/workstation/live";
 import { ScriptListPage } from "./pages/admin/scripts/list";
 import { ScriptVersionsPage } from "./pages/admin/scripts/versions";
 import { ScriptEffectivenessPage } from "./pages/admin/scripts/effectiveness";
+import { AdminReportsPage } from "./pages/admin/reports/index";
 import { AdminDashboardPage } from "./pages/admin/dashboard";
 import { AdminPoolPage } from "./pages/admin/pool";
 import { AdminSettlementListPage } from "./pages/admin/settlements";
@@ -288,6 +289,8 @@ function App() {
             {/* Admin - Service Provider Cooperation (Sprint 8.1) */}
             <Route path="/admin/providers" element={<AdminProvidersPage />} />
             <Route path="/admin/providers/:id" element={<AdminProviderDetailPage />} />
+            {/* Admin - Data Reports (Sprint 8.3) */}
+            <Route path="/admin/reports" element={<AdminReportsPage />} />
             {/* Supervisor - Script Labels */}
             <Route path="/supervisor/script-labels" element={<SupervisorScriptLabelsPage />} />
             {/* Supervisor - Reviews */}
