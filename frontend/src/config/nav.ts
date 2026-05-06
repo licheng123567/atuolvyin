@@ -21,6 +21,34 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
         { label: "服务商管理", path: "/ops/providers", icon: "Briefcase" },
       ],
     },
+    {
+      title: "系统管理",
+      items: [
+        { label: "系统健康", path: "/super/health", icon: "Activity" },
+        { label: "审计日志", path: "/super/audit", icon: "FileText" },
+        { label: "成本看板", path: "/super/cost", icon: "TrendingUp" },
+        { label: "套餐配置", path: "/super/plans", icon: "Package" },
+      ],
+    },
+  ],
+  platform_super: [
+    {
+      items: [
+        { label: "控制台", path: "/" },
+        { label: "租户管理", path: "/ops/tenants", icon: "Building2" },
+        { label: "试用跟进", path: "/ops/tenants/trial", icon: "Clock" },
+        { label: "服务商管理", path: "/ops/providers", icon: "Briefcase" },
+      ],
+    },
+    {
+      title: "系统管理",
+      items: [
+        { label: "系统健康", path: "/super/health", icon: "Activity" },
+        { label: "审计日志", path: "/super/audit", icon: "FileText" },
+        { label: "成本看板", path: "/super/cost", icon: "TrendingUp" },
+        { label: "套餐配置", path: "/super/plans", icon: "Package" },
+      ],
+    },
   ],
   platform_ops: [
     {

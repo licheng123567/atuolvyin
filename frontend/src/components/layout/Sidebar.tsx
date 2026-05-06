@@ -1,5 +1,16 @@
 import { useGetIdentity, useLogout } from "@refinedev/core";
-import { Home, Building2, Users, LogOut, LayoutDashboard, Receipt } from "lucide-react";
+import {
+  Activity,
+  Building2,
+  FileText,
+  Home,
+  LayoutDashboard,
+  LogOut,
+  Package,
+  Receipt,
+  TrendingUp,
+  Users,
+} from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import type { AuthUser } from "../../providers/auth-provider";
 import { getNavSections } from "../../config/nav";
@@ -7,6 +18,7 @@ import { cn } from "../../lib/utils";
 
 const ROLE_LABELS: Record<string, string> = {
   platform_superadmin: "平台超管",
+  platform_super: "平台超管",
   platform_ops: "平台运营员",
   provider_admin: "服务商管理员",
   admin: "物业管理员",
@@ -27,6 +39,10 @@ const ICON_MAP: Record<string, React.ElementType> = {
   "/provider/tenants": Building2,
   "/provider/team": Users,
   "/provider/settlements": Receipt,
+  "/super/health": Activity,
+  "/super/audit": FileText,
+  "/super/cost": TrendingUp,
+  "/super/plans": Package,
 };
 
 export function Sidebar() {

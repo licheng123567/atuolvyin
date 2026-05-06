@@ -4,6 +4,7 @@
 
 export type UserRole =
   | "platform_superadmin"
+  | "platform_super"
   | "platform_ops"
   | "provider_admin"
   | "admin"

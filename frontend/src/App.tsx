@@ -54,6 +54,10 @@ import { ProviderTenantsPage } from "./pages/provider/tenants";
 import { ProviderTeamPage } from "./pages/provider/team";
 import { ProviderSettlementListPage } from "./pages/provider/settlements";
 import { ProviderSettlementDetailPage } from "./pages/provider/settlements/[id]";
+import { SuperHealthPage } from "./pages/super/health";
+import { SuperAuditPage } from "./pages/super/audit";
+import { SuperCostPage } from "./pages/super/cost";
+import { SuperPlansPage } from "./pages/super/plans";
 import type { AuthUser } from "./providers/auth-provider";
 
 const SUPERVISOR_ROLES = new Set(["supervisor", "admin", "platform_super"]);
@@ -290,6 +294,11 @@ function App() {
             <Route path="/provider/team" element={<ProviderTeamPage />} />
             <Route path="/provider/settlements" element={<ProviderSettlementListPage />} />
             <Route path="/provider/settlements/:id" element={<ProviderSettlementDetailPage />} />
+            {/* Sprint 15 — platform_super system management */}
+            <Route path="/super/health" element={<SuperHealthPage />} />
+            <Route path="/super/audit" element={<SuperAuditPage />} />
+            <Route path="/super/cost" element={<SuperCostPage />} />
+            <Route path="/super/plans" element={<SuperPlansPage />} />
           </Route>
 
           {/* Catch-all */}

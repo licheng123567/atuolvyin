@@ -108,6 +108,76 @@ def ops_auth_headers(seeded_user):
 
 
 @pytest.fixture
+def super_auth_headers(seeded_user):
+    from app.core.security import create_access_token
+    token = create_access_token({
+        "sub": str(seeded_user.id),
+        "user_id": seeded_user.id,
+        "tenant_id": None,
+        "role": "platform_super",
+        "scope": "platform",
+    })
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def superadmin_auth_headers(seeded_user):
+    from app.core.security import create_access_token
+    token = create_access_token({
+        "sub": str(seeded_user.id),
+        "user_id": seeded_user.id,
+        "tenant_id": None,
+        "role": "platform_superadmin",
+        "scope": "platform",
+    })
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def seeded_audit_log(db_session, seeded_user, seeded_tenant):
+    from app.models.audit import AuditLog
+    log = AuditLog(
+        actor_user_id=seeded_user.id,
+        actor_role="platform_super",
+        tenant_id=seeded_tenant.id,
+        action="tenant.create",
+        target_type="tenant",
+        target_id=seeded_tenant.id,
+        payload={"name": "测试物业公司", "plan": "trial"},
+    )
+    db_session.add(log)
+    db_session.flush()
+    return log
+
+
+@pytest.fixture
+def seeded_plan_config(db_session):
+    from app.models.audit import PlanConfig
+    plans = [
+        PlanConfig(
+            plan_name="trial",
+            display_name="试用版",
+            monthly_minutes=60,
+            price_monthly=0,
+            features={"realtime_assist": False},
+            is_active=True,
+        ),
+        PlanConfig(
+            plan_name="basic",
+            display_name="基础版",
+            monthly_minutes=500,
+            price_monthly=99,
+            features={"script_library": True},
+            is_active=True,
+        ),
+    ]
+    for p in plans:
+        db_session.add(p)
+    db_session.flush()
+    return plans
+
+
+@pytest.fixture
 def seeded_member_user(db_session, seeded_tenant):
     from app.core.security import get_password_hash
     user = UserAccount(
