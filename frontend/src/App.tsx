@@ -49,6 +49,11 @@ import { WorkOrderListPage } from "./pages/workorder/orders/index";
 import { WorkOrderNewPage } from "./pages/workorder/orders/new";
 import { WorkOrderDetailPage } from "./pages/workorder/orders/[id]";
 import { PMDashboardPage } from "./pages/pm/dashboard";
+import { ProviderDashboardPage } from "./pages/provider/dashboard";
+import { ProviderTenantsPage } from "./pages/provider/tenants";
+import { ProviderTeamPage } from "./pages/provider/team";
+import { ProviderSettlementListPage } from "./pages/provider/settlements";
+import { ProviderSettlementDetailPage } from "./pages/provider/settlements/[id]";
 import type { AuthUser } from "./providers/auth-provider";
 
 const SUPERVISOR_ROLES = new Set(["supervisor", "admin", "platform_super"]);
@@ -65,6 +70,7 @@ const ROLE_HOME: Record<string, string> = {
   workorder: "/workorder/orders",
   project_manager_property: "/pm/dashboard",
   project_manager_provider: "/pm/dashboard",
+  provider_admin: "/provider/dashboard",
 };
 
 function RoleHomeRedirect() {
@@ -186,6 +192,22 @@ function App() {
             show: "/workorder/orders/:id",
             meta: { label: "工单管理" },
           },
+          {
+            name: "provider/tenants",
+            list: "/provider/tenants",
+            meta: { label: "合作租户" },
+          },
+          {
+            name: "provider/team",
+            list: "/provider/team",
+            meta: { label: "团队管理" },
+          },
+          {
+            name: "provider/settlements",
+            list: "/provider/settlements",
+            show: "/provider/settlements/:id",
+            meta: { label: "收入结算" },
+          },
         ]}
         options={{ syncWithLocation: true, warnWhenUnsavedChanges: false }}
       >
@@ -262,6 +284,12 @@ function App() {
             <Route path="/workorder/orders/:id" element={<WorkOrderDetailPage />} />
             {/* Project Manager - Dashboard */}
             <Route path="/pm/dashboard" element={<PMDashboardPage />} />
+            {/* Provider Admin — Service Provider Workstation (Sprint 14) */}
+            <Route path="/provider/dashboard" element={<ProviderDashboardPage />} />
+            <Route path="/provider/tenants" element={<ProviderTenantsPage />} />
+            <Route path="/provider/team" element={<ProviderTeamPage />} />
+            <Route path="/provider/settlements" element={<ProviderSettlementListPage />} />
+            <Route path="/provider/settlements/:id" element={<ProviderSettlementDetailPage />} />
           </Route>
 
           {/* Catch-all */}

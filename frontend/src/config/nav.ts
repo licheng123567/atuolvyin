@@ -99,7 +99,14 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
     },
   ],
   provider_admin: [
-    { items: [{ label: "控制台", path: "/" }] },
+    {
+      items: [
+        { label: "总览", path: "/provider/dashboard", icon: "LayoutDashboard" },
+        { label: "合作租户", path: "/provider/tenants", icon: "Building2" },
+        { label: "团队管理", path: "/provider/team", icon: "Users" },
+        { label: "收入结算", path: "/provider/settlements", icon: "Receipt" },
+      ],
+    },
   ],
 };
 
