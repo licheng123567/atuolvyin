@@ -70,6 +70,7 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
         { label: "公海管理", path: "/admin/pool", icon: "Globe" },
         { label: "结算管理", path: "/admin/settlements", icon: "Receipt" },
         { label: "服务商合作", path: "/admin/providers", icon: "Building2" },
+        { label: "话术效果", path: "/admin/scripts/effectiveness", icon: "BarChart3" },
         { label: "导入案件", path: "/admin/cases/import", icon: "Upload" },
       ],
     },

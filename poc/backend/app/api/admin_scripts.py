@@ -1,18 +1,21 @@
 from __future__ import annotations
 
 import io
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from fastapi import status as http_status
-from sqlalchemy import select, or_
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
+from app.models.call import CallRecord, SuggestionFeedback
 from app.models.script import ScriptTemplate, ScriptTemplateVersion
 from app.schemas.script import (
-    ImportResultOut, RollbackIn, ScriptTemplateCreate,
+    ImportResultOut, RollbackIn, ScriptEffectivenessItem,
+    ScriptEffectivenessOut, ScriptTemplateCreate,
     ScriptTemplateOut, ScriptTemplateUpdate, ScriptVersionOut,
 )
 from app.schemas.common import PaginatedResponse
@@ -276,6 +279,123 @@ def get_versions(
         .order_by(ScriptTemplateVersion.version.desc())
     ).scalars().all()
     return list(versions)
+
+
+@router.get("/scripts/effectiveness", response_model=ScriptEffectivenessOut)
+def script_effectiveness(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+    intent: Optional[str] = Query(None),
+    period_days: int = Query(30, ge=1, le=365),
+) -> ScriptEffectivenessOut:
+    """采用率 / 督导好评率 / 综合评分（A-D 四级）— 按 trigger_intent 可筛。
+
+    采用率 = adopt / (adopt + ignore)
+    好评率 = good / (good + bad)（仅计入有督导标注的反馈）
+    综合得分 = 0.6 * adoption_rate + 0.4 * good_ratio（无督导标注则跳过该项权重）
+    评级阈值：>=0.8 A，>=0.6 B，>=0.4 C，<0.4 D
+    """
+    role = payload.get("role", "")
+    tenant_id = int(payload.get("tenant_id") or 0)
+
+    cutoff = datetime.now(UTC) - timedelta(days=period_days)
+
+    template_stmt = select(ScriptTemplate)
+    if role != "platform_superadmin":
+        template_stmt = template_stmt.where(
+            or_(ScriptTemplate.tenant_id == tenant_id, ScriptTemplate.tenant_id.is_(None))
+        )
+    if intent:
+        template_stmt = template_stmt.where(ScriptTemplate.trigger_intent == intent)
+
+    templates = db.execute(template_stmt).scalars().all()
+    if not templates:
+        return ScriptEffectivenessOut(period_days=period_days, items=[])
+
+    template_ids = [t.id for t in templates]
+
+    feedback_stmt = (
+        select(
+            SuggestionFeedback.script_template_id,
+            func.count().label("total_shown"),
+            func.sum(case((SuggestionFeedback.action == "adopt", 1), else_=0)).label(
+                "total_adopted"
+            ),
+            func.sum(
+                case((SuggestionFeedback.supervisor_label.is_not(None), 1), else_=0)
+            ).label("total_supervised"),
+            func.sum(
+                case((SuggestionFeedback.supervisor_label == "good", 1), else_=0)
+            ).label("total_good"),
+        )
+        .join(CallRecord, CallRecord.id == SuggestionFeedback.call_id)
+        .where(SuggestionFeedback.script_template_id.in_(template_ids))
+        .where(SuggestionFeedback.created_at >= cutoff)
+        .group_by(SuggestionFeedback.script_template_id)
+    )
+    if role != "platform_superadmin":
+        feedback_stmt = feedback_stmt.where(CallRecord.tenant_id == tenant_id)
+
+    agg: dict[int, tuple[int, int, int, int]] = {
+        row.script_template_id: (
+            int(row.total_shown or 0),
+            int(row.total_adopted or 0),
+            int(row.total_supervised or 0),
+            int(row.total_good or 0),
+        )
+        for row in db.execute(feedback_stmt).all()
+    }
+
+    items: list[ScriptEffectivenessItem] = []
+    for t in templates:
+        shown, adopted, supervised, good = agg.get(t.id, (0, 0, 0, 0))
+        adoption_rate = adopted / shown if shown else None
+        good_ratio = good / supervised if supervised else None
+
+        composite_score: Optional[float]
+        if adoption_rate is None and good_ratio is None:
+            composite_score = None
+        elif good_ratio is None:
+            composite_score = adoption_rate
+        elif adoption_rate is None:
+            composite_score = good_ratio
+        else:
+            composite_score = 0.6 * adoption_rate + 0.4 * good_ratio
+
+        grade: Optional[str]
+        if composite_score is None:
+            grade = None
+        elif composite_score >= 0.8:
+            grade = "A"
+        elif composite_score >= 0.6:
+            grade = "B"
+        elif composite_score >= 0.4:
+            grade = "C"
+        else:
+            grade = "D"
+
+        items.append(
+            ScriptEffectivenessItem(
+                template_id=t.id,
+                title=t.title,
+                trigger_intent=t.trigger_intent,
+                is_active=t.is_active,
+                total_shown=shown,
+                total_adopted=adopted,
+                adoption_rate=adoption_rate,
+                total_supervised=supervised,
+                total_good=good,
+                good_ratio=good_ratio,
+                composite_score=composite_score,
+                composite_grade=grade,  # type: ignore[arg-type]
+            )
+        )
+
+    items.sort(
+        key=lambda x: (x.composite_score is None, -(x.composite_score or 0), -x.total_shown)
+    )
+    return ScriptEffectivenessOut(period_days=period_days, items=items)
 
 
 @router.post("/scripts/{script_id}/rollback", response_model=ScriptTemplateOut)

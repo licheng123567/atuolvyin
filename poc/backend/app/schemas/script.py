@@ -90,3 +90,25 @@ class SuggestionConfigOut(BaseModel):
 class SuggestionConfigUpdate(BaseModel):
     sensitivity: int = Field(..., ge=1, le=5)
     max_per_push: int = Field(..., ge=1, le=10)
+
+
+class ScriptEffectivenessItem(BaseModel):
+    """Sprint 8.2 — aggregated effectiveness signal for one script template."""
+
+    template_id: int
+    title: str
+    trigger_intent: str
+    is_active: bool
+    total_shown: int
+    total_adopted: int
+    adoption_rate: Optional[float] = None
+    total_supervised: int
+    total_good: int
+    good_ratio: Optional[float] = None
+    composite_score: Optional[float] = None
+    composite_grade: Optional[Literal["A", "B", "C", "D"]] = None
+
+
+class ScriptEffectivenessOut(BaseModel):
+    period_days: int
+    items: list[ScriptEffectivenessItem]

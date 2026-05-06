@@ -30,6 +30,7 @@ import { AgentLiveWorkstationPage } from "./pages/agent/workstation/live";
 import { AdminLiveWorkstationPage } from "./pages/admin/workstation/live";
 import { ScriptListPage } from "./pages/admin/scripts/list";
 import { ScriptVersionsPage } from "./pages/admin/scripts/versions";
+import { ScriptEffectivenessPage } from "./pages/admin/scripts/effectiveness";
 import { AdminDashboardPage } from "./pages/admin/dashboard";
 import { AdminPoolPage } from "./pages/admin/pool";
 import { AdminSettlementListPage } from "./pages/admin/settlements";
@@ -277,6 +278,7 @@ function App() {
             <Route path="/admin/risk-keywords/:id/edit" element={<RiskKeywordEditPage />} />
             {/* Admin - Script Library */}
             <Route path="/admin/scripts" element={<ScriptListPage />} />
+            <Route path="/admin/scripts/effectiveness" element={<ScriptEffectivenessPage />} />
             <Route path="/admin/scripts/:id/versions" element={<ScriptVersionsPage />} />
             {/* Admin - Public Pool Management */}
             <Route path="/admin/pool" element={<AdminPoolPage />} />

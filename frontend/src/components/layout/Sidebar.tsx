@@ -1,6 +1,7 @@
 import { useGetIdentity, useLogout } from "@refinedev/core";
 import {
   Activity,
+  BarChart3,
   Building2,
   FileText,
   Home,
@@ -36,6 +37,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   "/ops/tenants": Building2,
   "/admin/users": Users,
   "/admin/providers": Building2,
+  "/admin/scripts/effectiveness": BarChart3,
   "/provider/dashboard": LayoutDashboard,
   "/provider/tenants": Building2,
   "/provider/team": Users,
