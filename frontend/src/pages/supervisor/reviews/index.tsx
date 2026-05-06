@@ -40,7 +40,7 @@ export function SupervisorReviewsPage() {
     filters: onlyPending
       ? [{ field: "only_pending", operator: "eq", value: true }]
       : [{ field: "only_pending", operator: "eq", value: false }],
-    pagination: { current: page, pageSize },
+    pagination: { currentPage: page, pageSize },
   });
 
   const items: ReviewItemOut[] = (query.data?.data as unknown as ReviewItemOut[]) ?? [];

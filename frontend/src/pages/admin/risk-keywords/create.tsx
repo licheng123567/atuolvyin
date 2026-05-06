@@ -79,7 +79,6 @@ export function RiskKeywordCreatePage() {
             style={{
               borderColor: "var(--color-neutral-300)",
               borderRadius: "var(--radius-md)",
-              focusRing: "var(--color-primary)",
             }}
             placeholder="如：投诉、威胁..."
           />

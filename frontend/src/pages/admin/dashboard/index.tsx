@@ -35,14 +35,14 @@ interface DashboardStats {
 }
 
 export function AdminDashboardPage() {
-  const { data, isLoading, isError } = useCustom<DashboardStats>({
+  const { query } = useCustom<DashboardStats>({
     url: "admin/dashboard/stats",
     method: "get",
   });
-  const stats = data?.data;
+  const stats = query.data?.data;
 
-  if (isLoading) return <div className="p-6 text-neutral-500">加载中…</div>;
-  if (isError || !stats) return <div className="p-6 text-red-600">加载失败，请刷新重试</div>;
+  if (query.isLoading) return <div className="p-6 text-neutral-500">加载中…</div>;
+  if (query.isError || !stats) return <div className="p-6 text-red-600">加载失败，请刷新重试</div>;
 
   const quotaState = getQuotaWarning(
     stats.minute_quota.used_min,
@@ -113,7 +113,7 @@ export function AdminDashboardPage() {
             </tr>
           </thead>
           <tbody>
-            {stats.top_agents.map((a, i) => (
+            {stats.top_agents.map((a: AgentRanking, i: number) => (
               <tr key={a.user_id} style={{ borderTop: "1px solid #f3f4f6" }}>
                 <td style={{ padding: "8px 10px" }}>
                   <RankBadge rank={i + 1} />

@@ -47,7 +47,8 @@ export function TenantTrialPage() {
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const isLoading = query.isLoading;
 
-  const { mutate: runAction, isLoading: actionLoading } = useCustomMutation();
+  const { mutate: runAction, mutation: actionMutation } = useCustomMutation();
+  const actionLoading = actionMutation.isPending;
 
   function openRenewModal(t: TrialItem) {
     setRenewForm({

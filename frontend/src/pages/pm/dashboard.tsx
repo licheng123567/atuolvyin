@@ -72,14 +72,14 @@ export function PMDashboardPage() {
 }
 
 function PropertyView() {
-  const { data, isLoading, isError } = useCustom<PMPropertyStats>({
+  const { query } = useCustom<PMPropertyStats>({
     url: "pm/dashboard/property",
     method: "get",
   });
-  const stats = data?.data;
+  const stats = query.data?.data;
 
-  if (isLoading) return <div className="p-6 text-neutral-500">加载中…</div>;
-  if (isError || !stats)
+  if (query.isLoading) return <div className="p-6 text-neutral-500">加载中…</div>;
+  if (query.isError || !stats)
     return <div className="p-6 text-red-600">加载失败，请刷新重试</div>;
 
   return (
@@ -180,14 +180,14 @@ function PropertyView() {
 }
 
 function ProviderView() {
-  const { data, isLoading, isError } = useCustom<PMProviderStats>({
+  const { query } = useCustom<PMProviderStats>({
     url: "pm/dashboard/provider",
     method: "get",
   });
-  const stats = data?.data;
+  const stats = query.data?.data;
 
-  if (isLoading) return <div className="p-6 text-neutral-500">加载中…</div>;
-  if (isError || !stats)
+  if (query.isLoading) return <div className="p-6 text-neutral-500">加载中…</div>;
+  if (query.isError || !stats)
     return <div className="p-6 text-red-600">加载失败，请刷新重试</div>;
 
   return (

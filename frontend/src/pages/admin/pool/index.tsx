@@ -59,15 +59,15 @@ export function AdminPoolPage() {
   const isLoading = casesQuery.isLoading;
 
   // Load all agents for the assign modal and private-pool overview
-  const { data: agentsData } = useList<UserItem>({
+  const { query: agentsQuery, result: agentsResult } = useList<UserItem>({
     resource: "admin/users",
     pagination: { currentPage: 1, pageSize: 100 },
   });
 
-  const rawAgents = agentsData?.data;
+  const rawAgents = agentsQuery.data?.data;
   const allUsers: UserItem[] =
     (rawAgents as unknown as PaginatedResponse<UserItem>)?.items ??
-    (rawAgents as UserItem[] | undefined) ??
+    (agentsResult.data as UserItem[] | undefined) ??
     [];
 
   // Filter to agents only (agent_internal and agent_external)

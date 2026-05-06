@@ -41,16 +41,17 @@ export function AdminCaseDetailPage() {
     id: id!,
   });
 
-  const { data: agentsData } = useList<AdminUser>({
+  const { result: agentsResult } = useList<AdminUser>({
     resource: "admin/users",
     pagination: { pageSize: 100 },
   });
 
-  const agents = (agentsData?.data ?? []).filter(
-    (u) => u.role === "agent_internal" || u.role === "agent_external",
+  const agents = (agentsResult.data ?? []).filter(
+    (u: AdminUser) => u.role === "agent_internal" || u.role === "agent_external",
   );
 
-  const { mutate: assignCase, isLoading: assigning } = useCustomMutation();
+  const { mutate: assignCase, mutation: assignMutation } = useCustomMutation();
+  const assigning = assignMutation.isPending;
 
   const detail = query.data?.data;
   const isLoading = query.isLoading;
@@ -331,7 +332,7 @@ export function AdminCaseDetailPage() {
               </div>
             ) : (
               <ul className="space-y-1 mb-4 max-h-60 overflow-y-auto">
-                {agents.map((agent) => (
+                {agents.map((agent: AdminUser) => (
                   <li key={agent.id}>
                     <button
                       type="button"

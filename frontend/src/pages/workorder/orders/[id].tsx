@@ -72,12 +72,12 @@ export function WorkOrderDetailPage() {
   const detail = query.data?.data;
 
   // Try to load admin users for assignee picker; if user lacks role, list will be empty.
-  const { data: usersData } = useList<AdminUser>({
+  const { result: usersResult } = useList<AdminUser>({
     resource: "admin/users",
     pagination: { pageSize: 100 },
     queryOptions: { retry: 0 },
   });
-  const rawUsers = usersData?.data;
+  const rawUsers = usersResult.data;
   const users: AdminUser[] =
     (rawUsers as unknown as PaginatedResponse<AdminUser>)?.items ??
     (rawUsers as AdminUser[] | undefined) ??
