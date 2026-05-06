@@ -59,6 +59,7 @@ import { authProvider, getToken } from "./providers/auth-provider";
 import { dataProvider } from "./providers";
 import { useSupervisorAlerts } from "./hooks/useSupervisorAlerts";
 import { SupervisorAlertsPage } from "./pages/supervisor/alerts";
+import { SupervisorLiveWallPage } from "./pages/supervisor/live-wall";
 import { RiskKeywordListPage } from "./pages/admin/risk-keywords/list";
 import { RiskKeywordCreatePage } from "./pages/admin/risk-keywords/create";
 import { RiskKeywordEditPage } from "./pages/admin/risk-keywords/edit";
@@ -319,6 +320,7 @@ function App() {
             <Route path="/supervisor/reviews" element={<SupervisorReviewsPage />} />
             <Route path="/supervisor/reviews/:call_id" element={<SupervisorReviewDetailPage />} />
             {/* Sprint 9.4 / 9.5 */}
+            <Route path="/supervisor/live-wall" element={<SupervisorLiveWallPage />} />
             <Route path="/supervisor/risk-events" element={<SupervisorRiskEventsPage />} />
             <Route path="/supervisor/team-performance" element={<SupervisorTeamPerformancePage />} />
             {/* Sprint 10 ops + super */}

@@ -1,4 +1,5 @@
 import type { SupervisorAlert } from "../../store/supervisor-alerts";
+import type { CallEvent } from "../../store/live-calls";
 
 const PING_INTERVAL_MS = 30_000;
 
@@ -10,6 +11,7 @@ export function openSupervisorSocket(opts: {
   token: string;
   baseWsUrl?: string;
   onAlert: (alert: SupervisorAlert) => void;
+  onCallEvent?: (evt: CallEvent) => void;  // Sprint 14.2 — call.started/ended/aborted
   onStatusChange?: (status: "connecting" | "connected" | "reconnecting" | "closed") => void;
 }): SupervisorSocketHandle {
   let socket: WebSocket | null = null;
@@ -49,6 +51,12 @@ export function openSupervisorSocket(opts: {
       }
       if (msg.type === "supervisor.alert") {
         opts.onAlert({ ...(msg as unknown as SupervisorAlert), read: false });
+      } else if (
+        msg.type === "call.started" ||
+        msg.type === "call.ended" ||
+        msg.type === "call.aborted"
+      ) {
+        opts.onCallEvent?.(msg as unknown as CallEvent);
       }
     };
 

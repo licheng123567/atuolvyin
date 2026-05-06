@@ -76,6 +76,7 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
     {
       items: [
         { label: "管理看板", path: "/admin/dashboard", icon: "LayoutDashboard" },
+        { label: "实时通话墙", path: "/supervisor/live-wall", icon: "RadioTower" },
         { label: "用户管理", path: "/admin/users", icon: "Users" },
         { label: "案件管理", path: "/admin/cases", icon: "Briefcase" },
         { label: "案件看板", path: "/admin/cases/kanban", icon: "KanbanSquare" },
@@ -93,6 +94,7 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
   supervisor: [
     {
       items: [
+        { label: "实时通话墙", path: "/supervisor/live-wall", icon: "RadioTower" },
         { label: "质检复核", path: "/supervisor/reviews", icon: "ClipboardCheck" },
         { label: "风险警报", path: "/supervisor/alerts", icon: "Bell" },
         { label: "风控时间线", path: "/supervisor/risk-events", icon: "AlertTriangle" },

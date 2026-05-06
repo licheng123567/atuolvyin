@@ -82,6 +82,27 @@ data class RegisterDeviceResponse(
     val device_id: String? = null,
 )
 
+// Sprint 14.2 — App 内拨号 dial-start (PRD §10.1 / §11.6)
+@JsonClass(generateAdapter = true)
+data class DialStartReq(
+    val case_id: Long,
+    val device_id: String,
+)
+
+@JsonClass(generateAdapter = true)
+data class DialStartResp(
+    val call_id: Long,
+    val recording_mode: String, // live | post (已冻结)
+    val status: String,         // "dialing"
+)
+
+@JsonClass(generateAdapter = true)
+data class HeartbeatResp(
+    val call_id: Long,
+    val status: String,
+    val last_heartbeat_at: String,
+)
+
 // Sprint 12.4 — QR dial info response (consumed once per token, no JWT needed)
 @JsonClass(generateAdapter = true)
 data class DialInfoResp(
@@ -162,6 +183,13 @@ interface BackendApi {
     // Sprint 11.4 — agent personal performance dashboard
     @GET("/api/v1/agent/me/performance")
     suspend fun getMyPerformance(): AgentPerformanceResp
+
+    // Sprint 14.2 — App 内拨号同步 PC (PRD §11.6)
+    @POST("/api/v1/calls/dial-start")
+    suspend fun dialStart(@Body body: DialStartReq): DialStartResp
+
+    @POST("/api/v1/calls/{call_id}/heartbeat")
+    suspend fun callHeartbeat(@Path("call_id") callId: Long): HeartbeatResp
 
     @Multipart
     @POST("/api/v1/calls/upload")

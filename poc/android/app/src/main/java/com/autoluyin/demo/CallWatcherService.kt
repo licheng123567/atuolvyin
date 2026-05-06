@@ -45,13 +45,53 @@ class CallWatcherService : Service() {
             Log.i(TAG, "resumed by PhoneStateReceiver, starting scan")
             updateNotif("挂机，匹配录音…")
             scope.launch { matchAndUpload() }
+            // Sprint 14.2 — 通话挂机后停止心跳
+            stopHeartbeat()
         } else {
             val caseId = intent?.getLongExtra(EXTRA_CASE_ID, 0) ?: 0
             val callee = intent?.getStringExtra(EXTRA_CALLEE).orEmpty()
             saveState(caseId = caseId, callee = callee, startedAt = 0, endedAt = 0, observed = false)
             updateNotif("等待呼叫 ${maskPhone(callee)}…")
+            // Sprint 14.2 — App 拨号同步给 PC 主管：先调 dial-start 再启动心跳
+            scope.launch { startDialAndHeartbeat(caseId) }
         }
         return START_NOT_STICKY
+    }
+
+    // Sprint 14.2 — 通话同步 PC 实时墙
+    private var heartbeatJob: Job? = null
+    private var serverCallId: Long = 0L
+
+    private suspend fun startDialAndHeartbeat(caseId: Long) {
+        if (caseId <= 0) return
+        try {
+            val resp = ApiClient.get(this@CallWatcherService).dialStart(
+                DialStartReq(case_id = caseId, device_id = DeviceId.get(this@CallWatcherService))
+            )
+            serverCallId = resp.call_id
+            Log.i(TAG, "dial-start ok call=${resp.call_id} mode=${resp.recording_mode}")
+            updateNotif("通话已同步 PC 监控（${resp.recording_mode}）")
+            // 启动 30s 心跳循环
+            heartbeatJob?.cancel()
+            heartbeatJob = scope.launch {
+                while (isActive) {
+                    delay(30_000)
+                    runCatching {
+                        ApiClient.get(this@CallWatcherService).callHeartbeat(serverCallId)
+                    }.onFailure { Log.w(TAG, "heartbeat failed call=$serverCallId: ${it.message}") }
+                }
+            }
+        } catch (t: Throwable) {
+            // dial-start 失败不阻断本地拨号；PC 端就不显示而已
+            Log.w(TAG, "dial-start failed (PC sync disabled for this call): ${t.message}")
+            updateNotif("PC 同步失败（不影响拨号）")
+        }
+    }
+
+    private fun stopHeartbeat() {
+        heartbeatJob?.cancel()
+        heartbeatJob = null
+        serverCallId = 0L
     }
 
     private suspend fun matchAndUpload() {
@@ -128,6 +168,7 @@ class CallWatcherService : Service() {
     }
 
     override fun onDestroy() {
+        stopHeartbeat()
         scope.cancel()
         super.onDestroy()
     }
