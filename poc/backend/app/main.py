@@ -23,6 +23,7 @@ from app.api import (
     ops,
     ops_providers,
     pm_dashboard,
+    provider_admin,
     recordings,
     supervisor,
     supervisor_labels,
@@ -123,6 +124,7 @@ app.include_router(admin_settlements.router, prefix="/api/v1/admin", tags=["admi
 app.include_router(legal_cases.router, prefix="/api/v1/legal", tags=["legal"])
 app.include_router(work_orders.router, prefix="/api/v1/workorders", tags=["workorders"])
 app.include_router(pm_dashboard.router, prefix="/api/v1/pm", tags=["pm"])
+app.include_router(provider_admin.router, prefix="/api/v1/provider", tags=["provider"])
 
 
 @app.get("/health")
