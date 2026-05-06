@@ -23,6 +23,7 @@ from .platform import (  # noqa: F401
     LLMPromptTemplate,
     SystemAnnouncement,
 )
+from .blockchain_attestation import BlockchainAttestation  # noqa: F401
 
 __all__ = [
     "Base",

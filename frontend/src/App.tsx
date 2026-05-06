@@ -10,6 +10,7 @@ import {
 
 import { AppLayout } from "./components/layout/AppLayout";
 import { LoginPage } from "./pages/login";
+import { VerifyPage } from "./pages/verify";
 import { TenantListPage } from "./pages/ops/tenants/index";
 import { TenantNewPage } from "./pages/ops/tenants/new";
 import { TenantDetailPage } from "./pages/ops/tenants/[id]";
@@ -242,6 +243,8 @@ function App() {
         <Routes>
           {/* Public */}
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/verify" element={<VerifyPage />} />
+          <Route path="/verify/:tx_hash" element={<VerifyPage />} />
 
           {/* Protected — wrapped in layout shell */}
           <Route

@@ -31,10 +31,10 @@ from app.core.security import (
 from app.core.storage import storage
 from app.models.call import AnalysisResult, CallRecord, Transcript
 from app.models.case import CollectionCase, OwnerProfile
-from app.models.platform import BlockchainConfig
 from app.models.tenant import Tenant
 from app.models.user import UserAccount
 from app.models.work import LegalCase
+from app.services import blockchain as blockchain_svc
 from app.schemas.common import PaginatedResponse
 from app.schemas.legal import (
     CollectionCaseRef,
@@ -240,24 +240,16 @@ def _ext_from_object_key(object_key: str) -> str:
     return "bin"
 
 
-def _resolve_blockchain_meta(db: Session) -> dict[str, Any]:
-    cfg = db.execute(
-        select(BlockchainConfig)
-        .where(BlockchainConfig.is_active.is_(True))
-        .limit(1)
-    ).scalar_one_or_none()
-    if cfg is None:
-        return {
-            "provider": "unconfigured",
-            "endpoint": None,
-            "transaction_id": None,
-            "status": "pending_chain",
-        }
+def _attestation_to_blockchain_meta(att: Any) -> dict[str, Any]:
+    """Convert BlockchainAttestation row to JSON-serializable dict for attestation.json."""
     return {
-        "provider": cfg.provider,
-        "endpoint": cfg.api_endpoint,
-        "transaction_id": None,  # MVP: BlockchainConfig has no SDK integration yet
-        "status": "pending_chain",
+        "provider": att.chain_provider,
+        "endpoint": att.chain_endpoint,
+        "transaction_id": att.tx_hash,
+        "block_height": att.block_height,
+        "status": att.status,
+        "submitted_at": att.submitted_at.isoformat() if att.submitted_at else None,
+        "verify_url": f"/verify/{att.tx_hash}",
     }
 
 
@@ -287,7 +279,6 @@ async def download_evidence_bundle(
         )
 
     tenant = db.get(Tenant, tenant_id)
-    blockchain_meta = _resolve_blockchain_meta(db)
     generated_at = datetime.now(UTC)
 
     # Pull all calls for this collection_case
@@ -424,7 +415,37 @@ async def download_evidence_bundle(
                     }
                 )
 
-            # 4. attestation
+            # 4. submit recording hash on-chain (mock provider — see services/blockchain.py)
+            blockchain_meta: dict[str, Any]
+            if recording_sha:
+                att = blockchain_svc.submit_attestation(
+                    db,
+                    tenant_id=tenant_id,
+                    data_sha256=recording_sha,
+                    data_type="call_recording",
+                    call_id=call.id,
+                    legal_case_id=lc.id,
+                    payload_metadata={
+                        "tenant_name": tenant.name if tenant else None,
+                        "call_id": call.id,
+                        "case_id": cc.id,
+                        "started_at": call.started_at.isoformat() if call.started_at else None,
+                        "duration_sec": call.duration_sec,
+                    },
+                )
+                blockchain_meta = _attestation_to_blockchain_meta(att)
+            else:
+                blockchain_meta = {
+                    "provider": None,
+                    "endpoint": None,
+                    "transaction_id": None,
+                    "block_height": None,
+                    "status": "skipped_no_recording",
+                    "submitted_at": None,
+                    "verify_url": None,
+                }
+
+            # 5. attestation
             attestation = {
                 "call_id": call.id,
                 "tenant_id": tenant_id,
@@ -464,6 +485,9 @@ async def download_evidence_bundle(
             f"{base_dir}/bundle_manifest.json",
             json.dumps(manifest, ensure_ascii=False, indent=2),
         )
+
+    # Persist all on-chain attestations created during bundle generation
+    db.commit()
 
     buffer.seek(0)
     filename = (

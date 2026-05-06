@@ -393,8 +393,11 @@ async def test_bundle_blockchain_unconfigured(
     attestation = json.loads(
         zf.read(f"case_{seeded_case.id}/calls/call_{call.id}/attestation.json")
     )
-    assert attestation["blockchain"]["provider"] == "unconfigured"
-    assert attestation["blockchain"]["status"] == "pending_chain"
+    # Sprint 13.1 — 无 BlockchainConfig 时落到 mock provider，仍产出真实 tx_hash
+    assert attestation["blockchain"]["provider"] == "mock"
+    assert attestation["blockchain"]["status"] == "confirmed"
+    assert len(attestation["blockchain"]["transaction_id"]) == 64
+    assert attestation["blockchain"]["block_height"] >= 1
 
 
 @pytest.mark.asyncio
@@ -432,6 +435,8 @@ async def test_bundle_blockchain_active_provider(
     )
     assert attestation["blockchain"]["provider"] == "antchain"
     assert attestation["blockchain"]["endpoint"].endswith("/attest")
+    assert attestation["blockchain"]["status"] == "confirmed"
+    assert len(attestation["blockchain"]["transaction_id"]) == 64
 
 
 @pytest.mark.asyncio

@@ -31,6 +31,7 @@ from app.api import (
     ops_providers,
     pm_dashboard,
     provider_admin,
+    public_verify,
     recordings,
     super_audit,
     super_config,
@@ -123,6 +124,7 @@ app.include_router(agent_cases.router, prefix="/api/v1/agent", tags=["agent"])
 app.include_router(agent_me.router, prefix="/api/v1/agent", tags=["agent-me"])
 app.include_router(devices_v1.router, prefix="/api/v1/devices", tags=["devices-v1"])
 app.include_router(calls_v1.router, prefix="/api/v1/calls", tags=["calls-v1"])
+app.include_router(public_verify.router, prefix="/api/v1/public", tags=["public-verify"])
 # Legacy PoC routers (Sprint 1 migrates these to ORM + /api/v1/ prefix)
 app.include_router(devices.router, prefix="/api/devices", tags=["devices"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
