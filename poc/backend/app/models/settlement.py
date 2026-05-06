@@ -23,6 +23,9 @@ class SettlementStatement(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(
         sa.Text, nullable=False, default="DRAFT"
     )  # DRAFT/CONFIRMED/PAID/DISPUTED
+    payment_proof_url: Mapped[str | None] = mapped_column(sa.Text)
+    confirmed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    paid_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
 
     __table_args__ = (
         sa.CheckConstraint(
