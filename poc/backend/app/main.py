@@ -18,6 +18,7 @@ from app.api import (
     admin_settlements,
     admin_suggestion_config,
     agent_cases,
+    agent_me,
     auth,
     calls,
     calls_v1,
@@ -118,6 +119,7 @@ app.include_router(admin_cases.router, prefix="/api/v1/admin", tags=["admin-case
 app.include_router(admin_risk_keywords.router, prefix="/api/v1/admin", tags=["admin-risk-keywords"])
 app.include_router(supervisor.router, prefix="/api/v1/supervisor", tags=["supervisor"])
 app.include_router(agent_cases.router, prefix="/api/v1/agent", tags=["agent"])
+app.include_router(agent_me.router, prefix="/api/v1/agent", tags=["agent-me"])
 app.include_router(devices_v1.router, prefix="/api/v1/devices", tags=["devices-v1"])
 app.include_router(calls_v1.router, prefix="/api/v1/calls", tags=["calls-v1"])
 # Legacy PoC routers (Sprint 1 migrates these to ORM + /api/v1/ prefix)

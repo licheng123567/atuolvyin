@@ -8,6 +8,7 @@ PATCH  /api/v1/workorders/{id}                partial update
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -82,6 +83,9 @@ async def list_work_orders(
     q: str | None = Query(None, max_length=100),
     status: str | None = Query(None, max_length=50),
     order_type: str | None = Query(None, max_length=50),
+    since: datetime | None = Query(None, description="filter created_at >= since"),
+    until: datetime | None = Query(None, description="filter created_at < until"),
+    room: str | None = Query(None, max_length=20, description="filter by owner.room"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[WorkOrderOut]:
@@ -94,6 +98,19 @@ async def list_work_orders(
         stmt = stmt.where(WorkOrder.order_type == order_type)
     if q:
         stmt = stmt.where(WorkOrder.description.ilike(f"%{q}%"))
+    if since:
+        stmt = stmt.where(WorkOrder.created_at >= since)
+    if until:
+        stmt = stmt.where(WorkOrder.created_at < until)
+    if room:
+        # Sprint 11.7 — filter by owner room via case join
+        from app.models.case import CollectionCase, OwnerProfile
+
+        stmt = (
+            stmt.join(CollectionCase, CollectionCase.id == WorkOrder.case_id)
+            .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
+            .where(OwnerProfile.room == room)
+        )
 
     total: int = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
 
