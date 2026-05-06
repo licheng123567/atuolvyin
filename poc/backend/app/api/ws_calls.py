@@ -86,6 +86,13 @@ async def ws_calls(
             if _tenant_id:
                 sup = get_supervisor_manager()
                 await sup.broadcast(_tenant_id, {**event, "type": "supervisor.alert"})
+            # Sprint 15.2 — L3 自动挂断（PRD §13）：尊重 TenantSettings.l3_hangup_enabled
+            if event.get("level") == "L3":
+                from app.services.call_intervention import maybe_auto_hangup_for_l3
+                try:
+                    await maybe_auto_hangup_for_l3(db, call_id=call_id, risk_event=event)
+                except Exception as exc:
+                    logger.warning("L3 auto-hangup hook failed call=%s: %s", call_id, exc)
 
         session = CallSession(
             call_id=call_id,

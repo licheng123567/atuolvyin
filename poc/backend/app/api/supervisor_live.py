@@ -1,10 +1,12 @@
-"""Sprint 14.2 — 实时通话墙数据源 (PRD §11.6)。
+"""Sprint 14.2 / 15.2 — 实时通话墙数据源 + 干预 (PRD §11.6 / §13)。
 
-GET /api/v1/supervisor/live-calls
+GET  /api/v1/supervisor/live-calls
   返回当前租户内 status IN ('dialing','live') 的全部通话快照。
   WS /ws/supervisor 推增量；本端点用于页面初次加载。
 
-权限：supervisor / admin / project_manager_property
+POST /api/v1/supervisor/calls/{call_id}/force-hangup
+  督导手动结束某通话；走 call_intervention.dispatch_force_hangup。
+  权限：supervisor / admin / project_manager_property
 """
 from __future__ import annotations
 
@@ -13,6 +15,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi import status as http_status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -27,6 +30,16 @@ from app.schemas.call import LiveCallItem, LiveCallsOut
 router = APIRouter()
 
 WALL_ROLES = ("supervisor", "admin", "project_manager_property")
+
+
+class ForceHangupReq(BaseModel):
+    reason: str  # 督导填写原因，存入 audit
+
+
+class ForceHangupResp(BaseModel):
+    call_id: int
+    triggered_by: str
+    reason: str
 
 
 @router.get("/live-calls", response_model=LiveCallsOut)
@@ -77,3 +90,53 @@ def list_live_calls(
             )
         )
     return LiveCallsOut(items=items)
+
+
+@router.post("/calls/{call_id}/force-hangup", response_model=ForceHangupResp)
+async def supervisor_force_hangup(
+    call_id: int,
+    body: ForceHangupReq,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*WALL_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> ForceHangupResp:
+    """督导手动结束某通话 (Sprint 15.2 / 15.3)。"""
+    tenant_id = int(payload.get("tenant_id") or 0)
+    user_id = int(payload.get("user_id") or 0)
+    if not tenant_id or not user_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "ERR_INVALID_TOKEN", "message": "Token 缺少必要字段"},
+        )
+    call = db.execute(
+        select(CallRecord).where(
+            CallRecord.id == call_id,
+            CallRecord.tenant_id == tenant_id,
+        )
+    ).scalar_one_or_none()
+    if call is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "通话不存在或不属于当前租户"},
+        )
+    if call.status not in ("dialing", "live"):
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail={"code": "ERR_CALL_NOT_ACTIVE", "message": f"通话状态 {call.status} 无法结束"},
+        )
+
+    from app.services.call_intervention import dispatch_force_hangup
+    await dispatch_force_hangup(
+        db,
+        call_id=call.id,
+        tenant_id=tenant_id,
+        reason=body.reason,
+        triggered_by="supervisor.manual",
+        supervisor_user_id=user_id,
+    )
+
+    return ForceHangupResp(
+        call_id=call.id,
+        triggered_by="supervisor.manual",
+        reason=body.reason,
+    )

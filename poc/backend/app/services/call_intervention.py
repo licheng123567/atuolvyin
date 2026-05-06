@@ -1,0 +1,128 @@
+"""Sprint 15.2 — 通话干预服务 (PRD §13 / §11.2)。
+
+两个触发路径：
+  1. 风控检测器检测到 L3 事件 + TenantSettings.l3_hangup_enabled=True → 自动触发
+  2. 督导从实时通话墙手动点「强制结束」(Sprint 15.3 SUPERVISOR_TAKEOVER 共用此通道)
+
+WS 推送：
+  - 通道 /ws/calls/{call_id} 房间内广播 `{"type":"call.force_hangup", "reason":"..."}`
+  - agent App 端收到后弹紧急对话框 + 强振动 + 提示坐席立即挂断
+  - 同步推 supervisor 房间 `{"type":"call.intervention","call_id":X,"action":"force_hangup",...}`
+
+Audit：每次干预写一条 audit_log，留法律存证。
+"""
+from __future__ import annotations
+
+import logging
+from datetime import UTC, datetime
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models.call import CallRecord
+from app.models.settings import TenantSettings
+from app.services.audit import log_audit
+
+logger = logging.getLogger(__name__)
+
+
+def is_l3_hangup_enabled(db: Session, tenant_id: int) -> bool:
+    """读取 TenantSettings.l3_hangup_enabled；默认 False。"""
+    settings = db.execute(
+        select(TenantSettings).where(TenantSettings.tenant_id == tenant_id)
+    ).scalar_one_or_none()
+    return bool(settings and settings.l3_hangup_enabled)
+
+
+async def dispatch_force_hangup(
+    db: Session,
+    *,
+    call_id: int,
+    tenant_id: int,
+    reason: str,
+    triggered_by: str,  # "risk.l3_auto" | "supervisor.manual"
+    supervisor_user_id: int | None = None,
+) -> dict:
+    """触发强制挂断：WS 推 agent + supervisor 房间 + audit log。
+    返回事件 payload 给调用方做 ack。
+    """
+    # WS push 给 agent 房间（call-level）
+    from app.api.ws_calls import _sessions
+    from app.ws.connection_manager import get_connection_manager
+    from app.risk.supervisor_manager import get_supervisor_manager
+
+    payload_agent = {
+        "type": "call.force_hangup",
+        "call_id": call_id,
+        "reason": reason,
+        "triggered_by": triggered_by,
+    }
+    try:
+        await get_connection_manager().broadcast(call_id, payload_agent)
+    except Exception as exc:
+        logger.warning("force_hangup agent broadcast failed call=%s: %s", call_id, exc)
+
+    # 同步给 supervisor 房间
+    payload_sup = {
+        "type": "call.intervention",
+        "call_id": call_id,
+        "action": "force_hangup",
+        "reason": reason,
+        "triggered_by": triggered_by,
+        "supervisor_user_id": supervisor_user_id,
+        "ts": datetime.now(UTC).isoformat(),
+    }
+    try:
+        await get_supervisor_manager().broadcast(tenant_id, payload_sup)
+    except Exception as exc:
+        logger.warning("force_hangup supervisor broadcast failed tenant=%s: %s", tenant_id, exc)
+
+    # Audit log
+    log_audit(
+        db,
+        actor_user_id=supervisor_user_id,  # None for auto-triggered
+        actor_role="system" if triggered_by == "risk.l3_auto" else "supervisor",
+        tenant_id=tenant_id,
+        action="call.force_hangup",
+        target_type="call_record",
+        target_id=call_id,
+        payload={"reason": reason, "triggered_by": triggered_by},
+    )
+    db.commit()
+
+    # 标记 CallSession 也清理（in-process）
+    sess = _sessions.get(call_id)
+    if sess is not None:
+        try:
+            await sess.stop()
+        except Exception as exc:
+            logger.warning("session.stop failed call=%s: %s", call_id, exc)
+        _sessions.pop(call_id, None)
+
+    return payload_agent
+
+
+async def maybe_auto_hangup_for_l3(
+    db: Session, *, call_id: int, risk_event: dict
+) -> bool:
+    """风控管线检测到 L3 时调用。返回是否实际触发了挂断。"""
+    if risk_event.get("level") != "L3":
+        return False
+    call = db.get(CallRecord, call_id)
+    if call is None:
+        return False
+    if not is_l3_hangup_enabled(db, call.tenant_id):
+        logger.info("L3 detected on call=%s but l3_hangup_enabled=False; skip", call_id)
+        return False
+    reason = (
+        f"L3 风控触发：{risk_event.get('category', 'unknown')}（"
+        f"匹配「{(risk_event.get('matched_keywords') or ['?'])[0]}」）"
+    )
+    await dispatch_force_hangup(
+        db,
+        call_id=call_id,
+        tenant_id=call.tenant_id,
+        reason=reason,
+        triggered_by="risk.l3_auto",
+    )
+    return True
