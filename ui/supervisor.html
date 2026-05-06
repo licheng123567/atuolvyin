@@ -180,6 +180,128 @@
 
     /* section title in team */
     .section-subtitle { font-size: 15px; font-weight: 600; color: var(--color-neutral-800); margin-bottom: 14px; }
+
+    /* ─── Live Wall (sv-livewall) ─── */
+    .livewall-pulse {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--color-success); display: inline-block;
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+      animation: livewall-pulse-anim 1.6s infinite;
+    }
+    @keyframes livewall-pulse-anim {
+      0%   { box-shadow: 0 0 0 0 rgba(16,185,129,0.55); }
+      70%  { box-shadow: 0 0 0 7px rgba(16,185,129,0); }
+      100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+    }
+
+    .livewall-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+      gap: 14px;
+    }
+
+    .livewall-card {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: 14px 16px;
+      box-shadow: var(--shadow-sm);
+      transition: box-shadow 0.15s ease, transform 0.15s ease;
+      cursor: pointer;
+    }
+    .livewall-card:hover { box-shadow: var(--shadow-md); }
+    .livewall-card--risk {
+      border-color: #FCA5A5;
+      box-shadow: 0 0 0 2px #FECACA, var(--shadow-sm);
+    }
+
+    .livewall-card-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .livewall-caller {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 14.5px; font-weight: 600; color: var(--color-neutral-900);
+    }
+    .livewall-caller svg { width: 16px; height: 16px; color: var(--color-neutral-500); }
+    .livewall-tags { display: flex; align-items: center; gap: 8px; }
+    .livewall-tags svg { width: 16px; height: 16px; }
+
+    .livewall-mode {
+      font-size: 11.5px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 500;
+    }
+    .livewall-mode--live { background: #DBEAFE; color: #1D4ED8; }
+    .livewall-mode--post { background: var(--color-neutral-100); color: var(--color-neutral-600); }
+
+    .livewall-meta {
+      font-size: 13px; color: var(--color-neutral-700); line-height: 1.55;
+    }
+    .livewall-meta .livewall-sub {
+      font-size: 12px; color: var(--color-neutral-500); margin-top: 2px;
+    }
+
+    .livewall-status-row {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 10px; padding-top: 8px;
+      border-top: 1px solid var(--color-neutral-100);
+    }
+    .livewall-status {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 13px; font-weight: 500;
+    }
+    .livewall-status svg { width: 14px; height: 14px; }
+    .livewall-status--live    { color: var(--color-success); }
+    .livewall-status--dialing { color: var(--color-warning); }
+    .livewall-timer {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 13.5px; color: var(--color-neutral-700); font-weight: 600;
+    }
+
+    .livewall-enter {
+      display: flex; align-items: center; gap: 4px;
+      margin-top: 8px;
+      font-size: 12px; color: var(--color-primary);
+    }
+    .livewall-enter svg { width: 12px; height: 12px; }
+
+    .livewall-actions { display: flex; gap: 6px; margin-top: 10px; }
+    .livewall-btn {
+      flex: 1;
+      display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+      font-size: 12px; padding: 6px 8px;
+      border-radius: var(--radius-sm);
+      border: 1px solid;
+      cursor: pointer;
+      background: transparent;
+      transition: background 0.15s ease;
+    }
+    .livewall-btn svg { width: 12px; height: 12px; }
+    .livewall-btn--takeover {
+      border-color: #FCD34D; color: #B45309; background: #FFFBEB;
+    }
+    .livewall-btn--takeover:hover { background: #FEF3C7; }
+    .livewall-btn--hangup {
+      border-color: #FCA5A5; color: #B91C1C; background: #FEF2F2;
+    }
+    .livewall-btn--hangup:hover { background: #FEE2E2; }
+
+    .livewall-empty {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: 60px 20px;
+      text-align: center;
+    }
+    .livewall-empty svg {
+      width: 40px; height: 40px;
+      color: var(--color-neutral-300);
+      margin: 0 auto 12px;
+      display: block;
+    }
+    .livewall-empty p { font-size: 13.5px; color: var(--color-neutral-500); }
   </style>
 </head>
 <body>
@@ -205,6 +327,11 @@
     <div class="sidebar-item active" data-page="sv-workspace">
       <i data-lucide="layout-dashboard"></i>
       督导工作台
+    </div>
+    <div class="sidebar-item" data-page="sv-livewall">
+      <i data-lucide="radio-tower"></i>
+      实时通话墙
+      <span class="sidebar-badge">3</span>
     </div>
     <div class="sidebar-item" data-page="sv-review">
       <i data-lucide="shield-check"></i>
@@ -1061,6 +1188,133 @@
             </tr>
           </tbody>
         </table>
+      </div>
+    </section>
+
+    <!-- ══════════════ sv-livewall (实时通话墙 / Sprint 14.2 + 15.2 + 15.3) ══════════════ -->
+    <section id="sv-livewall" class="page-section">
+      <div class="page-header">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <i data-lucide="radio-tower" style="color:var(--color-primary);width:22px;height:22px;"></i>
+          <div>
+            <div class="page-title">实时通话墙</div>
+            <div class="page-subtitle">所有正在通话坐席 · 主管 / 管理员 / 项目经理可直接干预</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--color-neutral-500);">
+          <span class="livewall-pulse"></span> 实时同步中 · 当前 <strong style="color:var(--color-neutral-800);">3</strong> 通
+        </div>
+      </div>
+
+      <!-- Cards grid -->
+      <div class="livewall-grid">
+
+        <!-- Card 1 — risk_flagged + live -->
+        <div class="livewall-card livewall-card--risk">
+          <div class="livewall-card-head">
+            <div class="livewall-caller">
+              <i data-lucide="user-2"></i><span>李小红</span>
+            </div>
+            <div class="livewall-tags">
+              <i data-lucide="alert-triangle" style="color:var(--color-danger);" title="风控告警"></i>
+              <span class="livewall-mode livewall-mode--live">实时</span>
+            </div>
+          </div>
+          <div class="livewall-meta">
+            <div>业主：张大伟 · 138****6677</div>
+            <div class="livewall-sub">案件 #C-20260315-0042</div>
+          </div>
+          <div class="livewall-status-row">
+            <div class="livewall-status livewall-status--live">
+              <i data-lucide="activity"></i>通话中
+            </div>
+            <div class="livewall-timer">03:42</div>
+          </div>
+          <div class="livewall-enter">
+            <i data-lucide="headphones"></i>点击进入实时跟单
+          </div>
+          <div class="livewall-actions">
+            <button class="livewall-btn livewall-btn--takeover">
+              <i data-lucide="shield-question"></i>申请接管
+            </button>
+            <button class="livewall-btn livewall-btn--hangup">
+              <i data-lucide="phone-off"></i>强制结束
+            </button>
+          </div>
+        </div>
+
+        <!-- Card 2 — normal live -->
+        <div class="livewall-card">
+          <div class="livewall-card-head">
+            <div class="livewall-caller">
+              <i data-lucide="user-2"></i><span>王芳芳</span>
+            </div>
+            <div class="livewall-tags">
+              <span class="livewall-mode livewall-mode--live">实时</span>
+            </div>
+          </div>
+          <div class="livewall-meta">
+            <div>业主：陈秀英 · 139****1023</div>
+            <div class="livewall-sub">案件 #C-20260311-0019</div>
+          </div>
+          <div class="livewall-status-row">
+            <div class="livewall-status livewall-status--live">
+              <i data-lucide="activity"></i>通话中
+            </div>
+            <div class="livewall-timer">01:55</div>
+          </div>
+          <div class="livewall-enter">
+            <i data-lucide="headphones"></i>点击进入实时跟单
+          </div>
+          <div class="livewall-actions">
+            <button class="livewall-btn livewall-btn--takeover">
+              <i data-lucide="shield-question"></i>申请接管
+            </button>
+            <button class="livewall-btn livewall-btn--hangup">
+              <i data-lucide="phone-off"></i>强制结束
+            </button>
+          </div>
+        </div>
+
+        <!-- Card 3 — dialing + post mode -->
+        <div class="livewall-card">
+          <div class="livewall-card-head">
+            <div class="livewall-caller">
+              <i data-lucide="user-2"></i><span>赵志远</span>
+            </div>
+            <div class="livewall-tags">
+              <span class="livewall-mode livewall-mode--post">事后</span>
+            </div>
+          </div>
+          <div class="livewall-meta">
+            <div>业主：刘建国 · 137****5588</div>
+            <div class="livewall-sub">案件 #C-20260318-0007</div>
+          </div>
+          <div class="livewall-status-row">
+            <div class="livewall-status livewall-status--dialing">
+              <i data-lucide="activity"></i>拨号中
+            </div>
+            <div class="livewall-timer">00:08</div>
+          </div>
+          <div class="livewall-enter">
+            <i data-lucide="headphones"></i>点击进入实时跟单
+          </div>
+          <div class="livewall-actions">
+            <button class="livewall-btn livewall-btn--takeover">
+              <i data-lucide="shield-question"></i>申请接管
+            </button>
+            <button class="livewall-btn livewall-btn--hangup">
+              <i data-lucide="phone-off"></i>强制结束
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Empty-state hint (visible when 无通话) — keep DOM, hidden in this demo -->
+      <div class="livewall-empty" style="display:none;">
+        <i data-lucide="phone-call"></i>
+        <p>当前无坐席通话中。坐席在 App 内点「拨打」后，本页会自动显示。</p>
       </div>
     </section>
 

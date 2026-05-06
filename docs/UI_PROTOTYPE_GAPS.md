@@ -133,7 +133,7 @@
 
 | React 页 | 备注 |
 |---|---|
-| **supervisor/live-wall** | v1.3 主推功能，必须配原型 |
+| ~~supervisor/live-wall~~ | ✅ Sprint 15.4 反向出原型，作为 supervisor.html 子 section（sv-livewall） |
 | **agent/workstation/live** | 实时通话 PC 主控页，无原型 |
 | **admin/workstation/live** | 实时通话 PC 管理员视图，无原型 |
 | **calls/detail** | 通话详情页（录音回放/转写/AI/风控时间线）|
@@ -172,7 +172,7 @@
 ## C. 优先级总结（执行顺序）
 
 **第一批（v1.3 hero + 公开页 5 个）**：
-1. supervisor/live-wall
+1. ~~supervisor/live-wall~~ ✅ 已落（supervisor.html#sv-livewall, Sprint 15.4）
 2. help/app
 3. verify
 4. agent/workstation/live
