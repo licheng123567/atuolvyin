@@ -75,3 +75,129 @@ async def test_register_requires_auth(client):
         json={"device_id": "no-auth"},
     )
     assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_register_with_push_reg_id_persists_field(
+    client, agent_auth_headers, db_session
+):
+    """Sprint 12 — push_reg_id must be persisted to DeviceProfile column."""
+    from sqlalchemy import select
+    from app.models.device import DeviceProfile
+
+    resp = await client.post(
+        "/api/v1/devices/register",
+        json={
+            "device_id": "dev-uuid-push-1",
+            "brand": "Xiaomi",
+            "push_reg_id": "xiaomi-reg-id-aaa111",
+            "push_provider": "xiaomi",
+        },
+        headers=agent_auth_headers,
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["push_reg_id_set"] is True
+
+    device = db_session.execute(
+        select(DeviceProfile).where(DeviceProfile.device_id == "dev-uuid-push-1")
+    ).scalar_one()
+    assert device.push_reg_id == "xiaomi-reg-id-aaa111"
+    assert device.push_provider == "xiaomi"
+
+
+@pytest.mark.asyncio
+async def test_register_without_push_reg_id_preserves_existing(
+    client, agent_auth_headers, db_session
+):
+    """A re-register without push fields must keep the previously stored token."""
+    from sqlalchemy import select
+    from app.models.device import DeviceProfile
+
+    # First register with push fields
+    await client.post(
+        "/api/v1/devices/register",
+        json={
+            "device_id": "dev-uuid-push-2",
+            "brand": "Xiaomi",
+            "push_reg_id": "preserve-me-bbb222",
+            "push_provider": "xiaomi",
+        },
+        headers=agent_auth_headers,
+    )
+    # Re-register without push fields (e.g. before MiPush has reissued a token)
+    resp = await client.post(
+        "/api/v1/devices/register",
+        json={"device_id": "dev-uuid-push-2", "brand": "Xiaomi", "model": "13"},
+        headers=agent_auth_headers,
+    )
+    assert resp.status_code == 201
+    assert resp.json()["push_reg_id_set"] is True  # still set
+
+    device = db_session.execute(
+        select(DeviceProfile).where(DeviceProfile.device_id == "dev-uuid-push-2")
+    ).scalar_one()
+    assert device.push_reg_id == "preserve-me-bbb222"
+    assert device.push_provider == "xiaomi"
+    assert device.model == "13"  # other fields still update normally
+
+
+@pytest.mark.asyncio
+async def test_register_with_different_push_provider(
+    client, agent_auth_headers, db_session
+):
+    """Switching xiaomi -> huawei should overwrite both columns."""
+    from sqlalchemy import select
+    from app.models.device import DeviceProfile
+
+    await client.post(
+        "/api/v1/devices/register",
+        json={
+            "device_id": "dev-uuid-push-3",
+            "push_reg_id": "xm-token",
+            "push_provider": "xiaomi",
+        },
+        headers=agent_auth_headers,
+    )
+    resp = await client.post(
+        "/api/v1/devices/register",
+        json={
+            "device_id": "dev-uuid-push-3",
+            "push_reg_id": "hw-token",
+            "push_provider": "huawei",
+        },
+        headers=agent_auth_headers,
+    )
+    assert resp.status_code == 201
+
+    device = db_session.execute(
+        select(DeviceProfile).where(DeviceProfile.device_id == "dev-uuid-push-3")
+    ).scalar_one()
+    assert device.push_reg_id == "hw-token"
+    assert device.push_provider == "huawei"
+
+
+@pytest.mark.asyncio
+async def test_register_response_includes_push_reg_id_set_flag(
+    client, agent_auth_headers
+):
+    """push_reg_id_set is False when no token stored, True when one is."""
+    resp_without = await client.post(
+        "/api/v1/devices/register",
+        json={"device_id": "dev-uuid-flag-no"},
+        headers=agent_auth_headers,
+    )
+    assert resp_without.status_code == 201
+    assert resp_without.json()["push_reg_id_set"] is False
+
+    resp_with = await client.post(
+        "/api/v1/devices/register",
+        json={
+            "device_id": "dev-uuid-flag-yes",
+            "push_reg_id": "some-token",
+            "push_provider": "xiaomi",
+        },
+        headers=agent_auth_headers,
+    )
+    assert resp_with.status_code == 201
+    assert resp_with.json()["push_reg_id_set"] is True
