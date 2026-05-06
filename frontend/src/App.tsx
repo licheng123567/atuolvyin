@@ -17,6 +17,7 @@ import { UserListPage } from "./pages/admin/users/index";
 import { UserNewPage } from "./pages/admin/users/new";
 import { CaseListPage } from "./pages/admin/cases/index";
 import { CaseImportPage } from "./pages/admin/cases/import";
+import { CaseKanbanPage } from "./pages/admin/cases/kanban";
 import { AgentCaseListPage } from "./pages/agent/cases/index";
 import { AdminCaseDetailPage } from "./pages/admin/cases/detail";
 import { AgentWorkstationPage } from "./pages/agent/cases/detail";
@@ -161,6 +162,7 @@ function App() {
             <Route path="/admin/users/new" element={<UserNewPage />} />
             {/* Admin - Case Management */}
             <Route path="/admin/cases" element={<CaseListPage />} />
+            <Route path="/admin/cases/kanban" element={<CaseKanbanPage />} />
             <Route path="/admin/cases/import" element={<CaseImportPage />} />
             {/* Agent - Case List */}
             <Route path="/agent/cases" element={<AgentCaseListPage />} />
