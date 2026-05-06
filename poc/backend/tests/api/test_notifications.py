@@ -207,3 +207,109 @@ async def test_cannot_read_others_notification(
         f"/api/v1/users/me/notifications/{n.id}/read", headers=ops_auth_headers,
     )
     assert resp.status_code == 404
+
+
+# ── Sprint 15.4b: event_subscribers (script_disabled / case_escalated / wo_completed) ─
+
+
+def test_notify_script_disabled_writes_to_admin(
+    db_session, seeded_user, seeded_tenant, seeded_supervisor_user
+):
+    """script_disabled 事件应给本租户 admin + supervisor 都发通知。"""
+    from app.models.notification import Notification
+    from app.models.tenant import UserTenantMembership
+    from app.services.notifications.event_subscribers import notify_script_disabled
+
+    _seed_admin(db_session, seeded_user, seeded_tenant)
+    db_session.add(UserTenantMembership(
+        user_id=seeded_supervisor_user.id,
+        tenant_id=seeded_tenant.id,
+        role="supervisor",
+        source_type="INTERNAL",
+        is_active=True,
+    ))
+    db_session.flush()
+
+    notify_script_disabled(
+        db_session,
+        tenant_id=seeded_tenant.id,
+        script_id=42,
+        script_name="测试话术",
+    )
+    db_session.commit()
+    rows = db_session.query(Notification).filter_by(event_type="script_disabled").all()
+    user_ids = {r.user_id for r in rows}
+    assert seeded_user.id in user_ids
+    assert seeded_supervisor_user.id in user_ids
+
+
+def test_notify_script_disabled_excludes_operator(
+    db_session, seeded_user, seeded_tenant
+):
+    """禁用人不应收到自己触发的通知。"""
+    from app.models.notification import Notification
+    from app.services.notifications.event_subscribers import notify_script_disabled
+
+    _seed_admin(db_session, seeded_user, seeded_tenant)
+    notify_script_disabled(
+        db_session,
+        tenant_id=seeded_tenant.id,
+        script_id=42,
+        script_name="测试话术",
+        operator_user_id=seeded_user.id,
+    )
+    db_session.commit()
+    cnt = db_session.query(Notification).filter_by(event_type="script_disabled").count()
+    assert cnt == 0  # 仅 admin 是 operator 自己
+
+
+def test_notify_case_escalated(
+    db_session, seeded_user, seeded_tenant
+):
+    from app.models.notification import Notification
+    from app.services.notifications.event_subscribers import notify_case_escalated
+
+    _seed_admin(db_session, seeded_user, seeded_tenant)
+    notify_case_escalated(
+        db_session,
+        tenant_id=seeded_tenant.id,
+        case_id=123,
+        owner_name="张大伟",
+        new_stage="escalated",
+    )
+    db_session.commit()
+    rows = db_session.query(Notification).filter_by(event_type="case_escalated").all()
+    assert len(rows) == 1
+    assert rows[0].severity == "warn"
+    assert "升级" in rows[0].title
+
+
+def test_notify_work_order_completed_falls_back_to_admin(
+    db_session, seeded_user, seeded_tenant
+):
+    from app.models.notification import Notification
+    from app.services.notifications.event_subscribers import notify_work_order_completed
+
+    _seed_admin(db_session, seeded_user, seeded_tenant)
+    notify_work_order_completed(
+        db_session,
+        tenant_id=seeded_tenant.id,
+        work_order_id=99,
+        title="工单测试",
+        creator_user_id=None,
+    )
+    db_session.commit()
+    rows = db_session.query(Notification).filter_by(
+        event_type="work_order_completed",
+    ).all()
+    assert len(rows) == 1
+    assert rows[0].user_id == seeded_user.id
+
+
+def test_promise_expiring_scan_no_op_without_field(db_session):
+    """promise_due_at 字段未建模时扫描应优雅返回 0。"""
+    from app.services.notifications.event_subscribers import (
+        scan_and_notify_promise_expiring,
+    )
+    n = scan_and_notify_promise_expiring(db_session)
+    assert n == 0

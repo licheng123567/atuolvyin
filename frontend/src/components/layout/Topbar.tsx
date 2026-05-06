@@ -1,5 +1,6 @@
 import { useGetIdentity } from "@refinedev/core";
 import type { AuthUser } from "../../providers/auth-provider";
+import { NotificationBell } from "../notifications/NotificationBell";
 import { AlertNotificationCenter } from "../supervisor/AlertNotificationCenter";
 
 const SUPERVISOR_ROLES = new Set(["supervisor", "admin", "platform_super"]);
@@ -19,6 +20,7 @@ export function Topbar() {
       {/* Breadcrumb slot — filled by individual pages via React context in Sprint 1 */}
       <div className="flex-1" />
 
+      <NotificationBell />
       {isSupervisor && <AlertNotificationCenter />}
 
       {user && (

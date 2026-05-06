@@ -245,9 +245,33 @@ async def patch_work_order(
         )
 
     data = body.model_dump(exclude_unset=True)
+    prev_status = wo.status
     for field, value in data.items():
         setattr(wo, field, value)
 
     db.commit()
     db.refresh(wo)
+    # Sprint 15.4b — work_order_completed 通知（open/in_progress → completed）
+    if (
+        wo.status == "completed"
+        and prev_status != "completed"
+    ):
+        from app.services.notifications.event_subscribers import (
+            notify_work_order_completed,
+        )
+        # 工单无 creator 字段，回落给 admin 角色 + 案件 assigned_to（如有）
+        creator_uid: int | None = None
+        if wo.case_id is not None:
+            case = db.get(CollectionCase, wo.case_id)
+            if case is not None:
+                creator_uid = case.assigned_to
+        notify_work_order_completed(
+            db,
+            tenant_id=int(wo.tenant_id),
+            work_order_id=int(wo.id),
+            title=wo.description[:80] if wo.description else f"工单#{wo.id}",
+            creator_user_id=creator_uid,
+            completer_user_id=int(payload.get("user_id") or 0) or None,
+        )
+        db.commit()
     return _wo_to_out(wo, _resolve_assignee_name(db, wo.assigned_to))

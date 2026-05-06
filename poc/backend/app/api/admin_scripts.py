@@ -238,9 +238,21 @@ def toggle_script(
     role = payload.get("role", "")
     tenant_id = int(payload.get("tenant_id") or 0)
     script = _get_script_or_404(db, script_id, role, tenant_id)
+    was_active = script.is_active
     script.is_active = not script.is_active
     db.commit()
     db.refresh(script)
+    # Sprint 15.4b — script_disabled 通知（仅 active→inactive 时触发；租户级话术才发）
+    if was_active and not script.is_active and script.tenant_id is not None:
+        from app.services.notifications.event_subscribers import notify_script_disabled
+        notify_script_disabled(
+            db,
+            tenant_id=int(script.tenant_id),
+            script_id=int(script.id),
+            script_name=script.title,
+            operator_user_id=int(payload.get("user_id") or 0) or None,
+        )
+        db.commit()
     return script
 
 

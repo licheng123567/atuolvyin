@@ -319,7 +319,26 @@ async def update_case_stage(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
         )
+    prev_stage = case.stage
     case.stage = body.stage
     db.commit()
     db.refresh(case)
+    # Sprint 15.4b — case_escalated 通知：进入 escalated/legal 阶段时触发
+    _ESCALATED_STAGES = {"escalated", "legal", "litigation"}
+    if (
+        body.stage in _ESCALATED_STAGES
+        and prev_stage not in _ESCALATED_STAGES
+    ):
+        from app.models.case import OwnerProfile
+        from app.services.notifications.event_subscribers import notify_case_escalated
+        owner = db.get(OwnerProfile, case.owner_id) if case.owner_id else None
+        notify_case_escalated(
+            db,
+            tenant_id=int(case.tenant_id),
+            case_id=int(case.id),
+            owner_name=owner.name if owner else None,
+            new_stage=body.stage,
+            operator_user_id=int(payload.get("user_id") or 0) or None,
+        )
+        db.commit()
     return case
