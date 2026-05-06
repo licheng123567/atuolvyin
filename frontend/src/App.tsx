@@ -34,6 +34,8 @@ import { AdminDashboardPage } from "./pages/admin/dashboard";
 import { AdminPoolPage } from "./pages/admin/pool";
 import { AdminSettlementListPage } from "./pages/admin/settlements";
 import { AdminSettlementDetailPage } from "./pages/admin/settlements/detail";
+import { AdminProvidersPage } from "./pages/admin/providers/index";
+import { AdminProviderDetailPage } from "./pages/admin/providers/detail";
 import { SupervisorScriptLabelsPage } from "./pages/supervisor/script-labels";
 import { SupervisorReviewsPage } from "./pages/supervisor/reviews";
 import { authProvider, getToken } from "./providers/auth-provider";
@@ -174,6 +176,12 @@ function App() {
             meta: { label: "结算管理" },
           },
           {
+            name: "admin/providers",
+            list: "/admin/providers",
+            show: "/admin/providers/:id",
+            meta: { label: "服务商合作" },
+          },
+          {
             name: "supervisor/script-labels",
             list: "/supervisor/script-labels",
             meta: { label: "话术标注" },
@@ -275,6 +283,9 @@ function App() {
             {/* Admin - Settlement Management */}
             <Route path="/admin/settlements" element={<AdminSettlementListPage />} />
             <Route path="/admin/settlements/:id" element={<AdminSettlementDetailPage />} />
+            {/* Admin - Service Provider Cooperation (Sprint 8.1) */}
+            <Route path="/admin/providers" element={<AdminProvidersPage />} />
+            <Route path="/admin/providers/:id" element={<AdminProviderDetailPage />} />
             {/* Supervisor - Script Labels */}
             <Route path="/supervisor/script-labels" element={<SupervisorScriptLabelsPage />} />
             {/* Supervisor - Reviews */}

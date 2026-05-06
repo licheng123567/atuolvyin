@@ -9,6 +9,7 @@ from app.api import (
     admin,
     admin_cases,
     admin_dashboard,
+    admin_providers,
     admin_risk_keywords,
     admin_scripts,
     admin_settlements,
@@ -125,6 +126,7 @@ app.include_router(supervisor_labels.router, prefix="/api/v1/supervisor", tags=[
 app.include_router(supervisor_review.router, prefix="/api/v1/supervisor", tags=["supervisor-review"])
 app.include_router(admin_suggestion_config.router, prefix="/api/v1/admin", tags=["suggestion-config"])
 app.include_router(admin_settlements.router, prefix="/api/v1/admin", tags=["admin-settlements"])
+app.include_router(admin_providers.router, prefix="/api/v1/admin", tags=["admin-providers"])
 app.include_router(legal_cases.router, prefix="/api/v1/legal", tags=["legal"])
 app.include_router(work_orders.router, prefix="/api/v1/workorders", tags=["workorders"])
 app.include_router(pm_dashboard.router, prefix="/api/v1/pm", tags=["pm"])
