@@ -20,6 +20,9 @@ class Tenant(Base, TimestampMixin):
     monthly_minute_quota: Mapped[int | None] = mapped_column(sa.Integer)
     minute_quota_updated_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True)
+    is_trial: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=False)
+    disabled_reason: Mapped[str | None] = mapped_column(sa.Text)
+    disabled_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
 
     memberships: Mapped[list[UserTenantMembership]] = relationship(back_populates="tenant")
 
@@ -35,6 +38,20 @@ class ServiceProvider(Base, TimestampMixin):
     admin_phone_enc: Mapped[str] = mapped_column(sa.Text, nullable=False)
     monthly_minute_quota: Mapped[int | None] = mapped_column(sa.Integer)
     is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True)
+    audit_status: Mapped[str] = mapped_column(
+        sa.Text, nullable=False, default="pending"
+    )  # pending / approved / rejected
+    audit_reason: Mapped[str | None] = mapped_column(sa.Text)
+    audit_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    description: Mapped[str | None] = mapped_column(sa.Text)
+    contact_email: Mapped[str | None] = mapped_column(sa.Text)
+
+    __table_args__ = (
+        sa.CheckConstraint(
+            "audit_status IN ('pending','approved','rejected')",
+            name="ck_service_provider_audit_status",
+        ),
+    )
 
 
 class ProviderTenantContract(Base, TimestampMixin):

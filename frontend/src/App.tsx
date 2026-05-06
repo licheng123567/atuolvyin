@@ -13,6 +13,10 @@ import { LoginPage } from "./pages/login";
 import { TenantListPage } from "./pages/ops/tenants/index";
 import { TenantNewPage } from "./pages/ops/tenants/new";
 import { TenantDetailPage } from "./pages/ops/tenants/[id]";
+import { TenantTrialPage } from "./pages/ops/tenants/trial";
+import { ProviderListPage } from "./pages/ops/providers/index";
+import { ProviderNewPage } from "./pages/ops/providers/new";
+import { ProviderDetailPage } from "./pages/ops/providers/[id]";
 import { UserListPage } from "./pages/admin/users/index";
 import { UserNewPage } from "./pages/admin/users/new";
 import { CaseListPage } from "./pages/admin/cases/index";
@@ -96,6 +100,13 @@ function App() {
             show: "/ops/tenants/:id",
           },
           {
+            name: "ops/providers",
+            list: "/ops/providers",
+            create: "/ops/providers/new",
+            show: "/ops/providers/:id",
+            meta: { label: "服务商管理" },
+          },
+          {
             name: "admin/users",
             list: "/admin/users",
             create: "/admin/users/new",
@@ -173,8 +184,13 @@ function App() {
             <Route path="/" element={<RoleHomeRedirect />} />
             {/* Ops - Tenant Management */}
             <Route path="/ops/tenants" element={<TenantListPage />} />
+            <Route path="/ops/tenants/trial" element={<TenantTrialPage />} />
             <Route path="/ops/tenants/new" element={<TenantNewPage />} />
             <Route path="/ops/tenants/:id" element={<TenantDetailPage />} />
+            {/* Ops - Service Provider Management */}
+            <Route path="/ops/providers" element={<ProviderListPage />} />
+            <Route path="/ops/providers/new" element={<ProviderNewPage />} />
+            <Route path="/ops/providers/:id" element={<ProviderDetailPage />} />
             {/* Admin - Dashboard */}
             <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
             {/* Admin - User Management */}

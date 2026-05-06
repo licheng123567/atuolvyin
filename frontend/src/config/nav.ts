@@ -16,7 +16,9 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
     {
       items: [
         { label: "控制台", path: "/" },
-        { label: "租户管理", path: "/ops/tenants" },
+        { label: "租户管理", path: "/ops/tenants", icon: "Building2" },
+        { label: "试用跟进", path: "/ops/tenants/trial", icon: "Clock" },
+        { label: "服务商管理", path: "/ops/providers", icon: "Briefcase" },
       ],
     },
   ],
@@ -24,7 +26,9 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
     {
       items: [
         { label: "控制台", path: "/" },
-        { label: "租户管理", path: "/ops/tenants" },
+        { label: "租户管理", path: "/ops/tenants", icon: "Building2" },
+        { label: "试用跟进", path: "/ops/tenants/trial", icon: "Clock" },
+        { label: "服务商管理", path: "/ops/providers", icon: "Briefcase" },
       ],
     },
   ],

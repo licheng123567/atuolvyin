@@ -20,6 +20,7 @@ from app.api import (
     devices,
     devices_v1,
     ops,
+    ops_providers,
     recordings,
     supervisor,
     supervisor_labels,
@@ -95,6 +96,7 @@ async def validation_exception_handler(
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 app.include_router(ops.router, prefix="/api/v1/ops", tags=["ops"])
+app.include_router(ops_providers.router, prefix="/api/v1/ops", tags=["ops-providers"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 app.include_router(admin_cases.router, prefix="/api/v1/admin", tags=["admin-cases"])
 app.include_router(admin_risk_keywords.router, prefix="/api/v1/admin", tags=["admin-risk-keywords"])
