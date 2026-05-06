@@ -12,13 +12,21 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
+from datetime import datetime, timedelta, timezone
+
 from app.core.crypto import encrypt_phone
 from app.core.db import SessionLocal
 from app.core.security import get_password_hash
 from app.models.case import CollectionCase, OwnerProfile
 from app.models.risk import RiskKeyword
 from app.models.script import ScriptTemplate
-from app.models.tenant import Tenant, UserTenantMembership
+from app.models.settlement import SettlementStatement
+from app.models.tenant import (
+    ProviderTenantContract,
+    ServiceProvider,
+    Tenant,
+    UserTenantMembership,
+)
 from app.models.user import UserAccount
 
 DEMO_PASSWORD = "Demo@123!"
@@ -66,7 +74,14 @@ def _upsert_user(db, phone: str, name: str) -> tuple[UserAccount, bool]:
     return user, True
 
 
-def _upsert_membership(db, user: UserAccount, tenant: Tenant, role: str) -> None:
+def _upsert_membership(
+    db,
+    user: UserAccount,
+    tenant: Tenant,
+    role: str,
+    *,
+    provider_id: int | None = None,
+) -> None:
     existing = db.execute(
         select(UserTenantMembership).where(
             UserTenantMembership.user_id == user.id,
@@ -81,11 +96,89 @@ def _upsert_membership(db, user: UserAccount, tenant: Tenant, role: str) -> None
         tenant_id=tenant.id,
         role=role,
         source_type="INTERNAL",
+        provider_id=provider_id,
         is_active=True,
     )
     db.add(membership)
     db.flush()
-    print(f"[created] Membership: {user.name} -> {role}  tenant_id={tenant.id}")
+    suffix = f"  provider_id={provider_id}" if provider_id else ""
+    print(f"[created] Membership: {user.name} -> {role}  tenant_id={tenant.id}{suffix}")
+
+
+def _upsert_provider(db) -> ServiceProvider:
+    existing = db.execute(
+        select(ServiceProvider).where(ServiceProvider.name == "Demo 法务公司")
+    ).scalar_one_or_none()
+    if existing:
+        print("[exists]  ServiceProvider: Demo 法务公司")
+        return existing
+    provider = ServiceProvider(
+        name="Demo 法务公司",
+        provider_type="legal",
+        admin_phone_enc=encrypt_phone("13000000010"),
+        monthly_minute_quota=1000,
+        is_active=True,
+        audit_status="approved",
+        audit_at=datetime.now(timezone.utc),
+        contact_email="contact@demo-legal.example.com",
+        description="演示用第三方法务/外包催收公司",
+    )
+    db.add(provider)
+    db.flush()
+    print(f"[created] ServiceProvider: Demo 法务公司  id={provider.id}")
+    return provider
+
+
+def _upsert_provider_contract(
+    db, tenant: Tenant, provider: ServiceProvider
+) -> ProviderTenantContract:
+    existing = db.execute(
+        select(ProviderTenantContract).where(
+            ProviderTenantContract.tenant_id == tenant.id,
+            ProviderTenantContract.provider_id == provider.id,
+        )
+    ).scalar_one_or_none()
+    if existing:
+        print(
+            f"[exists]  ProviderTenantContract: tenant={tenant.id} provider={provider.id}"
+        )
+        return existing
+    now = datetime.now(timezone.utc)
+    contract = ProviderTenantContract(
+        tenant_id=tenant.id,
+        provider_id=provider.id,
+        signed_at=now - timedelta(days=30),
+        expires_at=now + timedelta(days=365),
+        service_types=["legal", "collection"],
+        status="active",
+    )
+    db.add(contract)
+    db.flush()
+    print(f"[created] ProviderTenantContract: id={contract.id}")
+    return contract
+
+
+def _upsert_settlement(db, contract: ProviderTenantContract) -> None:
+    existing = db.execute(
+        select(SettlementStatement).where(
+            SettlementStatement.contract_id == contract.id
+        )
+    ).scalar_one_or_none()
+    if existing:
+        print(f"[exists]  SettlementStatement: contract_id={contract.id}")
+        return
+    now = datetime.now(timezone.utc)
+    period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    statement = SettlementStatement(
+        contract_id=contract.id,
+        period_start=period_start - timedelta(days=30),
+        period_end=period_start - timedelta(seconds=1),
+        total_amount=Decimal("8800.00"),
+        status="DRAFT",
+    )
+    db.add(statement)
+    db.flush()
+    print(f"[created] SettlementStatement: id={statement.id}")
 
 
 def _upsert_owner(db, tenant: Tenant, name: str, phone: str, building: str, room: str) -> OwnerProfile:
@@ -218,6 +311,13 @@ def main() -> None:
         agent_internal_user, _ = _upsert_user(db, "13000000004", "内勤小张")
         agent_external_user, _ = _upsert_user(db, "13000000005", "外勤小王")
 
+        # 批 3 新增 5 个角色用户
+        legal_user, _ = _upsert_user(db, "13000000006", "法务老周")
+        workorder_user, _ = _upsert_user(db, "13000000007", "工单小赵")
+        pm_property_user, _ = _upsert_user(db, "13000000008", "项目经理（物业）")
+        pm_provider_user, _ = _upsert_user(db, "13000000009", "项目经理（服务商）")
+        provider_admin_user, _ = _upsert_user(db, "13000000010", "服务商管理员")
+
         # 3. Memberships
         # platform_super: no tenant membership (auth.py defaults to platform_superadmin)
         # platform_ops: needs membership to get role=platform_ops from login
@@ -226,6 +326,20 @@ def main() -> None:
         _upsert_membership(db, supervisor_user, tenant, "supervisor")
         _upsert_membership(db, agent_internal_user, tenant, "agent_internal")
         _upsert_membership(db, agent_external_user, tenant, "agent_external")
+        _upsert_membership(db, legal_user, tenant, "legal")
+        _upsert_membership(db, workorder_user, tenant, "workorder")
+        _upsert_membership(db, pm_property_user, tenant, "project_manager_property")
+
+        # 3b. ServiceProvider + Contract (for provider_admin & pm_provider)
+        provider = _upsert_provider(db)
+        contract = _upsert_provider_contract(db, tenant, provider)
+        _upsert_settlement(db, contract)
+        _upsert_membership(
+            db, pm_provider_user, tenant, "project_manager_provider", provider_id=provider.id
+        )
+        _upsert_membership(
+            db, provider_admin_user, tenant, "provider_admin", provider_id=provider.id
+        )
 
         # 4. OwnerProfile × 5
         owners_data = [

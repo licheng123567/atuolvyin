@@ -1,4 +1,4 @@
-"""api_smoke.py — 6 角色 API 冒烟测试.
+"""api_smoke.py — 11 角色 API 冒烟测试.
 
 用法（容器内）:
     docker exec -e BACKEND_URL=http://localhost:8000 autoluyin-backend python -m scripts.api_smoke
@@ -23,12 +23,18 @@ DEMO_PASSWORD = "Demo@123!"
 
 # 角色 → (手机号, 测试端点)
 ROLES: list[tuple[str, str, str]] = [
-    ("platform_super",    "13000000000", "/api/v1/ops/tenants?page=1"),
-    ("platform_ops",      "13000000001", "/api/v1/ops/tenants?page=1"),
-    ("admin",             "13000000002", "/api/v1/admin/scripts?page=1"),
-    ("supervisor",        "13000000003", "/api/v1/supervisor/script-labels"),
-    ("agent_internal",    "13000000004", "/api/v1/calls/?page=1"),
-    ("agent_external",    "13000000005", "/api/v1/calls/?page=1"),
+    ("platform_super",            "13000000000", "/api/v1/super/health/services"),
+    ("platform_ops",              "13000000001", "/api/v1/ops/tenants?page=1"),
+    ("admin",                     "13000000002", "/api/v1/admin/dashboard/stats"),
+    ("supervisor",                "13000000003", "/api/v1/supervisor/reviews?only_pending=false"),
+    ("agent_internal",            "13000000004", "/api/v1/calls/?page=1"),
+    ("agent_external",            "13000000005", "/api/v1/calls/?page=1"),
+    # 批 3 新增 5 角色
+    ("legal",                     "13000000006", "/api/v1/legal/cases?page=1"),
+    ("workorder",                 "13000000007", "/api/v1/workorders?page=1"),
+    ("project_manager_property",  "13000000008", "/api/v1/pm/dashboard/property"),
+    ("project_manager_provider",  "13000000009", "/api/v1/pm/dashboard/provider"),
+    ("provider_admin",            "13000000010", "/api/v1/provider/dashboard/stats"),
 ]
 
 
