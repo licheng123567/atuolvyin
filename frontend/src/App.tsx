@@ -43,6 +43,12 @@ import { SupervisorAlertsPage } from "./pages/supervisor/alerts";
 import { RiskKeywordListPage } from "./pages/admin/risk-keywords/list";
 import { RiskKeywordCreatePage } from "./pages/admin/risk-keywords/create";
 import { RiskKeywordEditPage } from "./pages/admin/risk-keywords/edit";
+import { LegalCaseListPage } from "./pages/legal/cases/index";
+import { LegalCaseDetailPage } from "./pages/legal/cases/[id]";
+import { WorkOrderListPage } from "./pages/workorder/orders/index";
+import { WorkOrderNewPage } from "./pages/workorder/orders/new";
+import { WorkOrderDetailPage } from "./pages/workorder/orders/[id]";
+import { PMDashboardPage } from "./pages/pm/dashboard";
 import type { AuthUser } from "./providers/auth-provider";
 
 const SUPERVISOR_ROLES = new Set(["supervisor", "admin", "platform_super"]);
@@ -55,6 +61,10 @@ const ROLE_HOME: Record<string, string> = {
   supervisor: "/supervisor/reviews",
   agent_internal: "/agent/cases",
   agent_external: "/agent/cases",
+  legal: "/legal/cases",
+  workorder: "/workorder/orders",
+  project_manager_property: "/pm/dashboard",
+  project_manager_provider: "/pm/dashboard",
 };
 
 function RoleHomeRedirect() {
@@ -163,6 +173,19 @@ function App() {
             list: "/supervisor/reviews",
             meta: { label: "质检复核" },
           },
+          {
+            name: "legal/cases",
+            list: "/legal/cases",
+            show: "/legal/cases/:id",
+            meta: { label: "法务案件" },
+          },
+          {
+            name: "workorders",
+            list: "/workorder/orders",
+            create: "/workorder/orders/new",
+            show: "/workorder/orders/:id",
+            meta: { label: "工单管理" },
+          },
         ]}
         options={{ syncWithLocation: true, warnWhenUnsavedChanges: false }}
       >
@@ -230,6 +253,15 @@ function App() {
             <Route path="/supervisor/script-labels" element={<SupervisorScriptLabelsPage />} />
             {/* Supervisor - Reviews */}
             <Route path="/supervisor/reviews" element={<SupervisorReviewsPage />} />
+            {/* Legal - Cases */}
+            <Route path="/legal/cases" element={<LegalCaseListPage />} />
+            <Route path="/legal/cases/:id" element={<LegalCaseDetailPage />} />
+            {/* Workorder - Orders */}
+            <Route path="/workorder/orders" element={<WorkOrderListPage />} />
+            <Route path="/workorder/orders/new" element={<WorkOrderNewPage />} />
+            <Route path="/workorder/orders/:id" element={<WorkOrderDetailPage />} />
+            {/* Project Manager - Dashboard */}
+            <Route path="/pm/dashboard" element={<PMDashboardPage />} />
           </Route>
 
           {/* Catch-all */}
