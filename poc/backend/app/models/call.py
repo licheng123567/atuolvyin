@@ -69,6 +69,15 @@ class AnalysisResult(Base, TimestampMixin):
     prompt_version: Mapped[str | None] = mapped_column(sa.Text)
     llm_model: Mapped[str | None] = mapped_column(sa.Text)
     needs_review: Mapped[bool] = mapped_column(sa.Boolean, default=False)
+    # Sprint 8 T1 — supervisor quality review fields
+    supervisor_quality: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
+    supervisor_review_note: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
+    supervisor_reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
+    )
+    supervisor_reviewed_by: Mapped[Optional[int]] = mapped_column(
+        sa.BigInteger, sa.ForeignKey("user_account.id"), nullable=True
+    )
 
 
 class RiskEvent(Base, TimestampMixin):
