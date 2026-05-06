@@ -1,5 +1,6 @@
 import { Authenticated, Refine, useGetIdentity } from "@refinedev/core";
 import routerBindings from "@refinedev/react-router";
+import { useEffect, useState } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -9,8 +10,12 @@ import {
 } from "react-router-dom";
 
 import { AppLayout } from "./components/layout/AppLayout";
+import { AppIntroModal } from "./components/onboarding/AppIntroModal";
 import { LoginPage } from "./pages/login";
 import { VerifyPage } from "./pages/verify";
+import { HelpAppPage } from "./pages/help/app";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE ?? "http://localhost:18000";
 import { TenantListPage } from "./pages/ops/tenants/index";
 import { TenantNewPage } from "./pages/ops/tenants/new";
 import { TenantDetailPage } from "./pages/ops/tenants/[id]";
@@ -121,7 +126,52 @@ function AuthenticatedShell() {
   return (
     <AppLayout>
       <Outlet />
+      <AppIntroModalGate />
     </AppLayout>
+  );
+}
+
+// Sprint 14.3 — 首登 App 引导（所有角色）
+function AppIntroModalGate() {
+  const [open, setOpen] = useState(false);
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    if (checked) return;
+    const token = getToken();
+    if (!token) return;
+    fetch(`${API_BASE_URL}/api/v1/users/me/preferences`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((d: { preferences?: { app_intro_dismissed?: boolean } }) => {
+        if (!d.preferences?.app_intro_dismissed) setOpen(true);
+      })
+      .catch(() => {
+        /* fail silently — modal not shown */
+      })
+      .finally(() => setChecked(true));
+  }, [checked]);
+
+  const dismissPermanent = () => {
+    const token = getToken();
+    if (!token) return;
+    void fetch(`${API_BASE_URL}/api/v1/users/me/preferences`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ preferences: { app_intro_dismissed: true } }),
+    });
+  };
+
+  return (
+    <AppIntroModal
+      open={open}
+      onDismiss={() => setOpen(false)}
+      onPermanentDismiss={dismissPermanent}
+    />
   );
 }
 
@@ -246,6 +296,7 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/verify" element={<VerifyPage />} />
           <Route path="/verify/:tx_hash" element={<VerifyPage />} />
+          <Route path="/help/app" element={<HelpAppPage />} />
 
           {/* Protected — wrapped in layout shell */}
           <Route

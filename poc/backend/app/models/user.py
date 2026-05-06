@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base, TimestampMixin
@@ -17,6 +19,10 @@ class UserAccount(Base, TimestampMixin):
     password_hash: Mapped[str] = mapped_column(sa.Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True)
     last_login_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    # Sprint 14.3 — 个人偏好 JSON（首次登录引导是否已关闭、UI 偏好等）
+    preferences: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=sa.text("'{}'::jsonb"), default=dict
+    )
 
 
 class PlatformOpsAssignment(Base, TimestampMixin):
