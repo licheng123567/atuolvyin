@@ -33,6 +33,12 @@ DEFAULTS = TenantSettingsOut(
     l3_hangup_enabled=False,
     contact_freq_max=3,
     retention_days=365,
+    notify_quota_warning=True,
+    notify_script_disabled=True,
+    notify_work_order_completed=True,
+    notify_case_escalated=True,
+    notify_promise_expiring=True,
+    notify_channels=["system"],
 )
 
 
@@ -42,6 +48,12 @@ def _to_out(s: TenantSettings) -> TenantSettingsOut:
         l3_hangup_enabled=s.l3_hangup_enabled,
         contact_freq_max=s.contact_freq_max,
         retention_days=s.retention_days,
+        notify_quota_warning=s.notify_quota_warning,
+        notify_script_disabled=s.notify_script_disabled,
+        notify_work_order_completed=s.notify_work_order_completed,
+        notify_case_escalated=s.notify_case_escalated,
+        notify_promise_expiring=s.notify_promise_expiring,
+        notify_channels=list(s.notify_channels) if s.notify_channels else ["system"],  # type: ignore[arg-type]
     )
 
 

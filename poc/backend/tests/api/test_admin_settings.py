@@ -17,6 +17,12 @@ async def test_get_settings_returns_defaults_when_unset(
         "l3_hangup_enabled": False,
         "contact_freq_max": 3,
         "retention_days": 365,
+        "notify_quota_warning": True,
+        "notify_script_disabled": True,
+        "notify_work_order_completed": True,
+        "notify_case_escalated": True,
+        "notify_promise_expiring": True,
+        "notify_channels": ["system"],
     }
 
 
@@ -115,3 +121,58 @@ async def test_settings_requires_admin(
 async def test_settings_requires_auth(client: AsyncClient):
     resp = await client.get("/api/v1/admin/settings")
     assert resp.status_code == 401
+
+
+# Sprint 12.3 — 通知规则（PRD §L412）
+
+
+@pytest.mark.asyncio
+async def test_patch_notification_flags(
+    client: AsyncClient, admin_auth_headers
+):
+    resp = await client.patch(
+        "/api/v1/admin/settings",
+        json={
+            "notify_quota_warning": False,
+            "notify_promise_expiring": False,
+            "notify_channels": ["system", "sms"],
+        },
+        headers=admin_auth_headers,
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["notify_quota_warning"] is False
+    assert data["notify_promise_expiring"] is False
+    # untouched flags retain default
+    assert data["notify_script_disabled"] is True
+    assert data["notify_case_escalated"] is True
+    assert data["notify_work_order_completed"] is True
+    assert data["notify_channels"] == ["system", "sms"]
+
+
+@pytest.mark.asyncio
+async def test_patch_notification_channels_rejects_unknown(
+    client: AsyncClient, admin_auth_headers
+):
+    resp = await client.patch(
+        "/api/v1/admin/settings",
+        json={"notify_channels": ["system", "fax"]},
+        headers=admin_auth_headers,
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_patch_notification_persists(
+    client: AsyncClient, admin_auth_headers
+):
+    await client.patch(
+        "/api/v1/admin/settings",
+        json={"notify_channels": ["sms"], "notify_case_escalated": False},
+        headers=admin_auth_headers,
+    )
+    resp = await client.get("/api/v1/admin/settings", headers=admin_auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["notify_channels"] == ["sms"]
+    assert data["notify_case_escalated"] is False
