@@ -29,11 +29,14 @@ def create_access_token(
     payload: dict,
     expires_delta: timedelta | None = None,
 ) -> str:
+    import uuid
     to_encode = payload.copy()
     expire = datetime.now(UTC) + (
         expires_delta or timedelta(minutes=settings.jwt_expires_minutes)
     )
     to_encode["exp"] = expire
+    # Sprint 15.1 — jti 保证每个 token 唯一（多设备踢出 hash 比对依赖）
+    to_encode.setdefault("jti", uuid.uuid4().hex)
     return jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
@@ -52,8 +55,32 @@ def decode_access_token(token: str) -> dict:
 
 async def get_token_payload(
     token: Annotated[str, Depends(oauth2_scheme)],
+    db: Annotated[Session, Depends(get_db)] = None,  # type: ignore[assignment]
 ) -> dict:
-    return decode_access_token(token)
+    payload = decode_access_token(token)
+    # Sprint 15.1 — 多设备踢出：验证 token_hash 是否仍是该用户该设备类型的最新会话
+    # 若该 user_id 完全没有 active_session 记录（未走过 v1.4 login，老 token），
+    # 视为合法以保持向后兼容；只有当存在记录但 hash 不匹配时才 401。
+    user_id = payload.get("user_id")
+    if user_id and db is not None:
+        from app.models.active_session import ActiveSession
+        import hashlib
+        from sqlalchemy import select
+        rows = db.execute(
+            select(ActiveSession.token_hash).where(ActiveSession.user_id == user_id)
+        ).scalars().all()
+        if rows:  # 有过 v1.4 登录记录
+            token_hash = hashlib.sha256(token.encode()).hexdigest()
+            if token_hash not in rows:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail={
+                        "code": "ERR_SESSION_EVICTED",
+                        "message": "您的账号已在其他设备登录",
+                    },
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+    return payload
 
 
 async def get_current_user(

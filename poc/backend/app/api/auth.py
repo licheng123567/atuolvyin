@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.core.crypto import encrypt_phone
 from app.core.db import get_db
 from app.core.security import create_access_token, verify_password
+from app.models.active_session import ActiveSession
 from app.models.tenant import UserTenantMembership
 from app.models.user import UserAccount
 from app.schemas.auth import LoginRequest, TokenResponse
@@ -54,7 +57,6 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
         scope = f"tenant:{membership.tenant_id}"
 
     user.last_login_at = datetime.now(UTC)
-    db.commit()
 
     token = create_access_token(
         {
@@ -65,6 +67,21 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
             "scope": scope,
         }
     )
+
+    # Sprint 15.1 — 多设备登录踢出 (PRD §11.5)
+    # upsert (user_id, device_type) → 覆盖旧 token_hash → 旧 token 下次请求 401 ERR_SESSION_EVICTED
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    stmt = pg_insert(ActiveSession).values(
+        user_id=user.id,
+        device_type=body.device_type,
+        token_hash=token_hash,
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["user_id", "device_type"],
+        set_={"token_hash": token_hash, "updated_at": datetime.now(UTC)},
+    )
+    db.execute(stmt)
+    db.commit()
 
     return TokenResponse(
         access_token=token,

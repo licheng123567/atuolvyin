@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from typing import Literal
 
 from pydantic import BaseModel, field_validator
 
@@ -8,6 +9,8 @@ from pydantic import BaseModel, field_validator
 class LoginRequest(BaseModel):
     phone: str
     password: str
+    # Sprint 15.1 — 多设备踢出：PC + App 互相独立计算，同类型新设备登录会踢旧设备
+    device_type: Literal["pc", "app"] = "pc"
 
     @field_validator("phone")
     @classmethod

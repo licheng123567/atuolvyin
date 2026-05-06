@@ -1,10 +1,20 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLogin } from "@refinedev/core";
 
 export function LoginPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  // Sprint 15.1 — 多设备踢出场景下展示原因横幅
+  const [loginReason, setLoginReason] = useState<string | null>(null);
+
+  useEffect(() => {
+    const reason = sessionStorage.getItem("login_reason");
+    if (reason) {
+      setLoginReason(reason);
+      sessionStorage.removeItem("login_reason");
+    }
+  }, []);
 
   const { mutate: login, isPending: isLoading } = useLogin<{
     phone: string;
@@ -44,6 +54,15 @@ export function LoginPage() {
             登录您的账号
           </p>
         </div>
+
+        {loginReason && (
+          <div
+            className="mb-4 px-3 py-2 text-sm text-amber-800 bg-amber-50 border border-amber-200"
+            style={{ borderRadius: "var(--radius-md)" }}
+          >
+            {loginReason}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Phone */}

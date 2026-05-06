@@ -22,7 +22,8 @@ export const authProvider: AuthProvider = {
       const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, password }),
+        // Sprint 15.1 — 多设备踢出：PC 端固定 device_type='pc'
+        body: JSON.stringify({ phone, password, device_type: "pc" }),
       });
 
       if (!res.ok) {
@@ -82,8 +83,16 @@ export const authProvider: AuthProvider = {
     return { authenticated: true };
   },
 
-  onError: async (error: { status?: number }) => {
+  onError: async (error: { status?: number; code?: string; message?: string }) => {
     if (error.status === 401 || error.status === 403) {
+      // Sprint 15.1 — 多设备踢出：友好提示而非静默跳转
+      if (error.code === "ERR_SESSION_EVICTED") {
+        // 用 sessionStorage 暂存原因，登录页读出后展示 banner
+        sessionStorage.setItem(
+          "login_reason",
+          "您的账号已在其他设备登录，请重新登录",
+        );
+      }
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
       return { logout: true, redirectTo: "/login" };

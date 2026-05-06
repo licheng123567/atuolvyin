@@ -58,7 +58,11 @@ data class SelfCheckReq(
 data class SelfCheckResp(val can_call: Boolean)
 
 @JsonClass(generateAdapter = true)
-data class LoginReq(val phone: String, val password: String)
+data class LoginReq(
+    val phone: String,
+    val password: String,
+    val device_type: String = "app",  // Sprint 15.1 — 多设备踢出
+)
 
 @JsonClass(generateAdapter = true)
 data class LoginResp(val access_token: String, val token_type: String)
