@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
 from pydantic import BaseModel
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -24,6 +24,8 @@ class DeviceRegisterRequest(BaseModel):
     brand: str | None = None
     model: str | None = None
     os_version: str | None = None
+    push_reg_id: str | None = None
+    push_provider: str | None = None  # 'xiaomi' | 'huawei' | 'google'
 
 
 class DeviceRegisterResponse(BaseModel):
@@ -32,6 +34,7 @@ class DeviceRegisterResponse(BaseModel):
     tenant_id: int
     brand: str | None = None
     created_at: datetime
+    push_reg_id_set: bool = False
 
 
 class SelfCheckRequest(BaseModel):
@@ -55,34 +58,39 @@ def register_device(
     user_id: int = payload["user_id"]
     tenant_id: int = payload["tenant_id"]
 
-    stmt = (
-        pg_insert(DeviceProfile)
-        .values(
-            device_id=body.device_id,
-            user_id=user_id,
-            tenant_id=tenant_id,
+    insert_stmt = pg_insert(DeviceProfile).values(
+        device_id=body.device_id,
+        user_id=user_id,
+        tenant_id=tenant_id,
+        brand=body.brand,
+        model=body.model,
+        os_version=body.os_version,
+        push_reg_id=body.push_reg_id,
+        push_provider=body.push_provider,
+    )
+    # On conflict: update fields. For push_reg_id / push_provider, only overwrite
+    # when the new payload provides a non-null value — otherwise preserve the
+    # previously stored value via COALESCE(EXCLUDED.x, table.x).
+    excluded = insert_stmt.excluded
+    stmt = insert_stmt.on_conflict_do_update(
+        index_elements=["device_id"],
+        set_=dict(
             brand=body.brand,
             model=body.model,
             os_version=body.os_version,
-        )
-        .on_conflict_do_update(
-            index_elements=["device_id"],
-            set_=dict(
-                brand=body.brand,
-                model=body.model,
-                os_version=body.os_version,
-                user_id=user_id,
-                tenant_id=tenant_id,
-            ),
-        )
-        .returning(
-            DeviceProfile.id,
-            DeviceProfile.device_id,
-            DeviceProfile.user_id,
-            DeviceProfile.tenant_id,
-            DeviceProfile.brand,
-            DeviceProfile.created_at,
-        )
+            user_id=user_id,
+            tenant_id=tenant_id,
+            push_reg_id=func.coalesce(excluded.push_reg_id, DeviceProfile.push_reg_id),
+            push_provider=func.coalesce(excluded.push_provider, DeviceProfile.push_provider),
+        ),
+    ).returning(
+        DeviceProfile.id,
+        DeviceProfile.device_id,
+        DeviceProfile.user_id,
+        DeviceProfile.tenant_id,
+        DeviceProfile.brand,
+        DeviceProfile.created_at,
+        DeviceProfile.push_reg_id,
     )
     row = db.execute(stmt).fetchone()
     db.commit()
@@ -93,6 +101,7 @@ def register_device(
         tenant_id=row.tenant_id,
         brand=row.brand,
         created_at=row.created_at,
+        push_reg_id_set=bool(row.push_reg_id),
     )
 
 

@@ -74,7 +74,13 @@ data class RegisterDeviceRequest(
 )
 
 @JsonClass(generateAdapter = true)
-data class RegisterDeviceResponse(val status: String)
+data class RegisterDeviceResponse(
+    val status: String? = null,
+    // Sprint 12: backend now returns push_reg_id_set so the client can confirm
+    // the MiPush token actually reached the server.
+    val push_reg_id_set: Boolean? = null,
+    val device_id: String? = null,
+)
 
 // ── API interface ─────────────────────────────────────────────
 

@@ -10,6 +10,8 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from pydantic import BaseModel
+
 from app.core.crypto import encrypt_phone
 from app.core.db import get_db
 from app.core.security import (
@@ -18,6 +20,7 @@ from app.core.security import (
     mask_phone,
     require_roles,
 )
+from app.models.device import DeviceProfile
 from app.models.tenant import UserTenantMembership
 from app.models.user import UserAccount
 from app.schemas.common import PaginatedResponse
@@ -27,6 +30,19 @@ from app.schemas.user import (
     UserCreateByAdminRequest,
     UserListResponse,
 )
+
+
+class AdminDeviceItem(BaseModel):
+    device_id: str
+    user_id: int
+    brand: str | None = None
+    model: str | None = None
+    os_version: str | None = None
+    push_reg_id_set: bool
+    push_provider: str | None = None
+    is_healthy: bool
+    last_check_at: datetime | None = None
+    created_at: datetime
 
 router = APIRouter()
 
@@ -152,3 +168,45 @@ async def generate_invite_link(
         url=f"/register?token={token}",
         expires_at=expires_at,
     )
+
+
+@router.get("/devices", response_model=list[AdminDeviceItem])
+async def list_devices(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+    user_id: int | None = Query(None),
+) -> list[AdminDeviceItem]:
+    """Sprint 12 — admin troubleshooting: see whether a user's device is push-registered.
+
+    The raw push_reg_id is never exposed; callers see only push_reg_id_set.
+    Scoped to the caller's tenant.
+    """
+    tenant_id: int | None = payload.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_NO_TENANT", "message": "此端点需要租户上下文"},
+        )
+
+    stmt = select(DeviceProfile).where(DeviceProfile.tenant_id == tenant_id)
+    if user_id is not None:
+        stmt = stmt.where(DeviceProfile.user_id == user_id)
+    stmt = stmt.order_by(DeviceProfile.id.desc())
+
+    devices = db.execute(stmt).scalars().all()
+    return [
+        AdminDeviceItem(
+            device_id=d.device_id,
+            user_id=d.user_id,
+            brand=d.brand,
+            model=d.model,
+            os_version=d.os_version,
+            push_reg_id_set=bool(d.push_reg_id),
+            push_provider=d.push_provider,
+            is_healthy=d.is_healthy,
+            last_check_at=d.last_check_at,
+            created_at=d.created_at,
+        )
+        for d in devices
+    ]

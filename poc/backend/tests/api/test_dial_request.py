@@ -79,6 +79,46 @@ async def test_dial_request_no_push_reg_id(
 
 
 @pytest.mark.asyncio
+async def test_dial_request_uses_stored_push_reg_id(
+    client,
+    agent_auth_headers,
+    seeded_assigned_case,
+):
+    """End-to-end: register-with-token -> dial-request -> mock receives that token.
+
+    Regression for Sprint 12: before this sprint, /devices/register stripped
+    push_reg_id, so DIAL_REQUEST never reached the device. This test goes
+    through the public endpoint to prove the full path works.
+    """
+    from app.services import mipush
+    mipush._reset_for_tests()
+
+    reg = await client.post(
+        "/api/v1/devices/register",
+        json={
+            "device_id": "e2e-device-1",
+            "brand": "Xiaomi",
+            "push_reg_id": "abc123",
+            "push_provider": "xiaomi",
+        },
+        headers=agent_auth_headers,
+    )
+    assert reg.status_code == 201
+    assert reg.json()["push_reg_id_set"] is True
+
+    resp = await client.post(
+        "/api/v1/calls/dial-request",
+        json={"case_id": seeded_assigned_case.id},
+        headers=agent_auth_headers,
+    )
+    assert resp.status_code == 201, resp.text
+
+    sent = mipush._get_mock_sent()
+    assert len(sent) == 1
+    assert sent[0]["reg_id"] == "abc123"
+
+
+@pytest.mark.asyncio
 async def test_dial_request_cross_tenant_case(
     client,
     agent_auth_headers,
