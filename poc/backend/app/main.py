@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from app.api import (
     admin,
     admin_cases,
+    admin_compliance,
     admin_dashboard,
     admin_providers,
     admin_reports,
@@ -129,6 +130,7 @@ app.include_router(admin_suggestion_config.router, prefix="/api/v1/admin", tags=
 app.include_router(admin_settlements.router, prefix="/api/v1/admin", tags=["admin-settlements"])
 app.include_router(admin_providers.router, prefix="/api/v1/admin", tags=["admin-providers"])
 app.include_router(admin_reports.router, prefix="/api/v1/admin", tags=["admin-reports"])
+app.include_router(admin_compliance.router, prefix="/api/v1/admin", tags=["admin-compliance"])
 app.include_router(legal_cases.router, prefix="/api/v1/legal", tags=["legal"])
 app.include_router(work_orders.router, prefix="/api/v1/workorders", tags=["workorders"])
 app.include_router(pm_dashboard.router, prefix="/api/v1/pm", tags=["pm"])
