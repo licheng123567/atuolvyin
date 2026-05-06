@@ -17,6 +17,7 @@ from app.models.call import (
     SuggestionFeedback,
 )
 from app.models.case import CollectionCase
+from app.models.audit import PlanConfig
 from app.models.tenant import Tenant, TenantMinuteUsage, UserTenantMembership
 from app.models.user import UserAccount
 from app.schemas.dashboard import (
@@ -86,11 +87,24 @@ def get_dashboard_stats(
     ).scalar_one_or_none()
 
     used_min: int = usage.used_minutes if usage else 0
+    realtime_min: int = usage.realtime_minutes if usage else 0
+    post_min: int = usage.post_minutes if usage else 0
     total_min: int | None = tenant.monthly_minute_quota if tenant else None
     remaining_min: int | None = (
         (total_min - used_min) if total_min is not None else None
     )
     warning: bool = bool(total_min and used_min >= total_min * 0.8)
+
+    # Sprint 14.1 — 套餐细分配额（PlanConfig.monthly_realtime/post_minutes）
+    realtime_quota: int | None = None
+    post_quota: int | None = None
+    if tenant and tenant.plan:
+        plan = db.execute(
+            select(PlanConfig).where(PlanConfig.plan_name == tenant.plan)
+        ).scalar_one_or_none()
+        if plan:
+            realtime_quota = plan.monthly_realtime_minutes
+            post_quota = plan.monthly_post_minutes
 
     # ── 3. Public pool count ──────────────────────────────────────────────────
 
@@ -187,6 +201,10 @@ def get_dashboard_stats(
             total_min=total_min,
             remaining_min=remaining_min,
             warning=warning,
+            realtime_min=realtime_min,
+            post_min=post_min,
+            realtime_quota=realtime_quota,
+            post_quota=post_quota,
         ),
         public_pool_count=public_pool_count,
         risk_alert_count_7d=risk_alert_count_7d,

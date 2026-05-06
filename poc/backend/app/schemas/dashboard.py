@@ -11,10 +11,15 @@ class TodayStats(BaseModel):
 
 
 class QuotaStats(BaseModel):
-    used_min: int
+    used_min: int                # 总分钟（兼容字段 = realtime + post）
     total_min: int | None
     remaining_min: int | None
     warning: bool                # used >= 80% total
+    # Sprint 14.1 — 实时 vs 事后分别（PRD §20.1.1）
+    realtime_min: int = 0
+    post_min: int = 0
+    realtime_quota: int | None = None  # 套餐细分配额，None 表示不分别拦截
+    post_quota: int | None = None
 
 
 class AgentRanking(BaseModel):

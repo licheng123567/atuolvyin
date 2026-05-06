@@ -36,10 +36,19 @@ class CallRecord(Base, TimestampMixin):
     data_hash: Mapped[str | None] = mapped_column(sa.Text)
     status: Mapped[str] = mapped_column(sa.Text, nullable=False, default="pending")
     user_confirmed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    # Sprint 14.1 — 实时 vs 事后分别计费（PRD §20.1.1）
+    # 在 dial-start 时按 TenantSettings.recording_mode 决议并冻结，事后改 settings 不影响
+    recording_mode: Mapped[str] = mapped_column(
+        sa.String(16), nullable=False, default="post", server_default="post"
+    )
 
     __table_args__ = (
         sa.Index("idx_callrecord_tenant", "tenant_id"),
         sa.Index("idx_callrecord_case", "case_id"),
+        sa.CheckConstraint(
+            "recording_mode IN ('live','post')",
+            name="ck_call_record_recording_mode",
+        ),
     )
 
 

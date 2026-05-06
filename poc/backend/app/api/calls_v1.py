@@ -378,7 +378,8 @@ async def upload_call(
             detail={"code": "ERR_VALIDATION", "message": "无效的时间格式，使用 ISO8601"},
         ) from None
 
-    # 7. Insert CallRecord
+    # 7. Insert CallRecord — upload path = post mode (Sprint 14.1 / PRD §20.1.1)
+    # 实时模式的 CallRecord 由 dial-start 提前创建，本端点只处理事后上传
     call = CallRecord(
         tenant_id=tenant_id,
         case_id=case_id,
@@ -391,14 +392,17 @@ async def upload_call(
         recording_url=recording_url,
         object_key=object_key,
         status="uploaded",
+        recording_mode="post",
     )
     db.add(call)
     db.flush()
 
-    # 8. Update quota usage
+    # 8. Update quota usage — 同时累计 used_minutes（兼容总量）和 post_minutes
     if tenant and tenant.monthly_minute_quota is not None:
         usage = _get_or_create_usage(db, tenant_id, year_month)
-        usage.used_minutes += math.ceil(duration_sec / 60)
+        minutes = math.ceil(duration_sec / 60)
+        usage.used_minutes += minutes
+        usage.post_minutes += minutes
 
     db.commit()
     db.refresh(call)

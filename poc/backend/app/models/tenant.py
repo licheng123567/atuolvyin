@@ -79,6 +79,14 @@ class TenantMinuteUsage(Base):
     )
     year_month: Mapped[str] = mapped_column(sa.Text, nullable=False)  # "2026-04"
     used_minutes: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=0)
+    # Sprint 14.1 — 实时 vs 事后分别计费（PRD §20.1.1）
+    # used_minutes 保留为兼容总量 = realtime_minutes + post_minutes
+    realtime_minutes: Mapped[int] = mapped_column(
+        sa.Integer, nullable=False, default=0, server_default="0"
+    )
+    post_minutes: Mapped[int] = mapped_column(
+        sa.Integer, nullable=False, default=0, server_default="0"
+    )
     quota_at_time: Mapped[int | None] = mapped_column(sa.Integer)
 
     __table_args__ = (sa.UniqueConstraint("tenant_id", "year_month"),)

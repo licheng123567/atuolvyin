@@ -25,7 +25,9 @@ SUPER_ROLES = ("platform_super", "platform_superadmin")
 class TenantUsageItem(BaseModel):
     tenant_id: int
     name: str
-    used_minutes: int
+    used_minutes: int          # 总分钟（兼容字段）
+    realtime_minutes: int = 0  # Sprint 14.1
+    post_minutes: int = 0      # Sprint 14.1
     quota: int | None
     utilization_pct: float
 
@@ -38,6 +40,8 @@ class MonthlyTrendPoint(BaseModel):
 class CostDashboardOut(BaseModel):
     total_quota_pool: int
     total_used_this_month: int
+    total_realtime_this_month: int = 0  # Sprint 14.1
+    total_post_this_month: int = 0      # Sprint 14.1
     tenant_ranking: list[TenantUsageItem]
     monthly_trend: list[MonthlyTrendPoint]
 
@@ -63,11 +67,16 @@ async def get_cost_dashboard(
     ).scalar() or 0
 
     # ── Total used this month ─────────────────────────────────
-    total_used_this_month: int = db.execute(
-        select(func.coalesce(func.sum(TenantMinuteUsage.used_minutes), 0)).where(
-            TenantMinuteUsage.year_month == current_ym
-        )
-    ).scalar() or 0
+    totals = db.execute(
+        select(
+            func.coalesce(func.sum(TenantMinuteUsage.used_minutes), 0),
+            func.coalesce(func.sum(TenantMinuteUsage.realtime_minutes), 0),
+            func.coalesce(func.sum(TenantMinuteUsage.post_minutes), 0),
+        ).where(TenantMinuteUsage.year_month == current_ym)
+    ).first()
+    total_used_this_month = int(totals[0]) if totals else 0
+    total_realtime_this_month = int(totals[1]) if totals else 0
+    total_post_this_month = int(totals[2]) if totals else 0
 
     # ── Top-10 tenants by used minutes (current month) ────────
     rows = db.execute(
@@ -76,6 +85,8 @@ async def get_cost_dashboard(
             Tenant.name,
             Tenant.monthly_minute_quota,
             func.coalesce(TenantMinuteUsage.used_minutes, 0).label("used"),
+            func.coalesce(TenantMinuteUsage.realtime_minutes, 0).label("rt"),
+            func.coalesce(TenantMinuteUsage.post_minutes, 0).label("po"),
         )
         .outerjoin(
             TenantMinuteUsage,
@@ -87,7 +98,7 @@ async def get_cost_dashboard(
     ).all()
 
     ranking: list[TenantUsageItem] = []
-    for tid, tname, quota, used in rows:
+    for tid, tname, quota, used, rt, po in rows:
         used_int = int(used or 0)
         utilization_pct = (
             round(used_int / quota * 100, 2) if quota and quota > 0 else 0.0
@@ -97,6 +108,8 @@ async def get_cost_dashboard(
                 tenant_id=tid,
                 name=tname,
                 used_minutes=used_int,
+                realtime_minutes=int(rt or 0),
+                post_minutes=int(po or 0),
                 quota=quota,
                 utilization_pct=utilization_pct,
             )
@@ -124,6 +137,8 @@ async def get_cost_dashboard(
     return CostDashboardOut(
         total_quota_pool=int(total_quota_pool),
         total_used_this_month=int(total_used_this_month),
+        total_realtime_this_month=total_realtime_this_month,
+        total_post_this_month=total_post_this_month,
         tenant_ranking=ranking,
         monthly_trend=monthly_trend,
     )

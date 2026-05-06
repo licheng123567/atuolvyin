@@ -47,6 +47,10 @@ class PlanConfig(Base, TimestampMixin):
     plan_name: Mapped[str] = mapped_column(sa.Text, nullable=False, unique=True)
     display_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
     monthly_minutes: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    # Sprint 14.1 — 实时 vs 事后配额分别（PRD §20.1.1）
+    # NULL 表示该套餐不区分（按 monthly_minutes 共用），非 NULL 时分别拦截
+    monthly_realtime_minutes: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+    monthly_post_minutes: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
     price_monthly: Mapped[Decimal] = mapped_column(
         sa.Numeric(10, 2), nullable=False, server_default=sa.text("0")
     )
