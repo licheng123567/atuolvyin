@@ -117,13 +117,17 @@ class DialRequestOut(BaseModel):
 
 
 class DialInfoOut(BaseModel):
-    """坐席 App 扫码后获取的案件信息（手机号已脱敏，密文用于实际拨号）。"""
+    """坐席 App 扫码后获取的案件信息。
+
+    owner_phone 是明文。安全前提：本端点 token 一次性消费、与 call_id 绑定、
+    10 分钟过期，并写 audit 流水。明文仅在该窗口内、给已认领的扫码客户端。
+    """
 
     call_id: int
     case_id: int
     owner_name: str
     owner_phone_masked: str
-    owner_phone_enc: str  # AES 密文，App 端解密拨号
+    owner_phone: str  # 明文电话，App 端用于 ACTION_CALL
     address: str | None
     debt_amount: float | None
     months_overdue: int | None

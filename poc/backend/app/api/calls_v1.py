@@ -14,7 +14,7 @@ from sqlalchemy import func, select, update as sa_update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.crypto import encrypt_phone, mask_phone
+from app.core.crypto import decrypt_phone, encrypt_phone, mask_phone
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
 from app.core.storage import storage
@@ -279,7 +279,7 @@ def get_dial_info(
         case_id=case.id,
         owner_name=owner.name,
         owner_phone_masked=mask_phone(owner.phone_enc),
-        owner_phone_enc=owner.phone_enc,
+        owner_phone=decrypt_phone(owner.phone_enc),
         address=address,
         debt_amount=float(case.amount_owed) if case.amount_owed else None,
         months_overdue=case.months_overdue,

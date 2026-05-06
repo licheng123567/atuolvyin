@@ -82,6 +82,36 @@ data class RegisterDeviceResponse(
     val device_id: String? = null,
 )
 
+// Sprint 12.4 — QR dial info response (consumed once per token, no JWT needed)
+@JsonClass(generateAdapter = true)
+data class DialInfoResp(
+    val call_id: Long,
+    val case_id: Long,
+    val owner_name: String,
+    val owner_phone_masked: String,
+    val owner_phone: String, // 明文（token 一次性消费 + audit 流水）
+    val address: String?,
+    val debt_amount: Double?,
+    val months_overdue: Int?,
+)
+
+// Sprint 11.4 — agent personal performance
+@JsonClass(generateAdapter = true)
+data class AgentPerformanceResp(
+    val user_id: Long,
+    val name: String,
+    val year_month: String,
+    val month_calls: Int,
+    val month_connected: Int,
+    val month_promised_cases: Int,
+    val month_paid_cases: Int,
+    val month_paid_amount: String,
+    val conversion_rate: Double?,
+    val minutes_used: Int,
+    val minutes_quota: Int?,
+    val rank_in_tenant: Int,
+)
+
 // ── API interface ─────────────────────────────────────────────
 
 interface BackendApi {
@@ -120,6 +150,18 @@ interface BackendApi {
         @Path("call_id") callId: Long,
         @Body body: Map<String, @JvmSuppressWildcards Any>,
     ): retrofit2.Response<Unit>
+
+    // Sprint 12.4 — QR dial info: token in query string is the auth credential
+    // (one-shot, 10-min TTL). No Authorization header required.
+    @GET("/api/v1/calls/{call_id}/dial-info")
+    suspend fun getDialInfo(
+        @Path("call_id") callId: Long,
+        @Query("token") token: String,
+    ): DialInfoResp
+
+    // Sprint 11.4 — agent personal performance dashboard
+    @GET("/api/v1/agent/me/performance")
+    suspend fun getMyPerformance(): AgentPerformanceResp
 
     @Multipart
     @POST("/api/v1/calls/upload")

@@ -131,7 +131,8 @@ async def test_dial_info_returns_case_payload(
     assert data["case_id"] == assigned_case_for_agent.id
     assert data["owner_name"] == seeded_owner.name
     assert "****" in data["owner_phone_masked"]
-    assert data["owner_phone_enc"]  # ciphertext present for App-side decrypt
+    assert data["owner_phone"]  # plaintext for App ACTION_CALL — token is one-shot
+    assert "*" not in data["owner_phone"]
     assert data["debt_amount"] == 4500.0
     assert data["months_overdue"] == 2
 

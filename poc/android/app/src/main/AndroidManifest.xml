@@ -26,6 +26,10 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- Sprint 12.4 — 二维码扫码拨号备份方案 -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
     <application
         android:allowBackup="false"
         android:label="autoluyin-demo"
@@ -76,5 +80,29 @@
                   android:showWhenLocked="true"
                   android:turnScreenOn="true"
                   android:exported="false" />
+
+        <!-- Sprint 11.2 — 本月绩效小结 -->
+        <activity android:name=".MyPerformanceActivity" android:exported="false" />
+
+        <!-- Sprint 11.3 — 个人设置 -->
+        <activity android:name=".SettingsActivity" android:exported="false" />
+
+        <!-- Sprint 12.4 — 扫码 Activity（CameraX + ML Kit barcode）-->
+        <activity android:name=".scan.QrScanActivity"
+                  android:exported="false"
+                  android:screenOrientation="portrait"
+                  tools:ignore="LockedOrientationActivity" />
+
+        <!-- Sprint 12.4 — autoluyin://dial deeplink 落地页 -->
+        <activity android:name=".scan.DialFromQrActivity"
+                  android:exported="true"
+                  android:launchMode="singleTask">
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="autoluyin" android:host="dial" />
+            </intent-filter>
+        </activity>
     </application>
 </manifest>

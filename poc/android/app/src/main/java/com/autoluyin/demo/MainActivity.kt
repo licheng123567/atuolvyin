@@ -56,6 +56,15 @@ class MainActivity : AppCompatActivity() {
         binding.btnRefresh.setOnClickListener { loadTasks() }
         binding.btnGrantStorage.setOnClickListener { openManageAllFiles() }
         binding.btnServerUrl.setOnClickListener { showBackendUrlDialog() }
+        binding.btnScanQr.setOnClickListener {
+            startActivity(Intent(this, com.autoluyin.demo.scan.QrScanActivity::class.java))
+        }
+        binding.btnPerf.setOnClickListener {
+            startActivity(Intent(this, MyPerformanceActivity::class.java))
+        }
+        binding.btnSettings.setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
 
         ensurePermsThenCheck()
 
@@ -250,7 +259,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ---------- 一键拨号 ----------
+    // ---------- 一键拨号（Sprint 11.1：拨号前预览）----------
     private fun onCallClick(c: CaseItem) {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
             != PackageManager.PERMISSION_GRANTED) {
@@ -259,9 +268,34 @@ class MainActivity : AppCompatActivity() {
         if (AppConfig.backendUrl(this) == null) {
             toast("请先配置后端地址"); showBackendUrlDialog(); return
         }
+        showPreDialPreview(c)
+    }
+
+    private fun showPreDialPreview(c: CaseItem) {
         val phone = c.owner.phone ?: c.owner.phone_masked
-        CallWatcherService.start(this, c.id, phone)
-        startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:$phone")))
+        val location = listOfNotNull(c.owner.building, c.owner.room).joinToString("")
+        val tag = if (c.stage == "vote") "[投票邀请]" else "[催收]"
+        val msg = buildString {
+            append("$tag ${c.owner.name}\n")
+            if (location.isNotBlank()) append("地址：$location\n")
+            append("电话：$phone\n")
+            if (c.stage != "vote") {
+                append("欠款：${c.amount_owed ?: "-"}\n")
+                append("逾期：${c.months_overdue ?: 0} 月\n")
+            } else {
+                append("阶段：${c.stage}\n")
+            }
+            append("\n确认要拨打吗？")
+        }
+        AlertDialog.Builder(this)
+            .setTitle("拨号前预览")
+            .setMessage(msg)
+            .setPositiveButton("拨打") { _, _ ->
+                CallWatcherService.start(this, c.id, phone)
+                startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:$phone")))
+            }
+            .setNegativeButton("取消", null)
+            .show()
     }
 
     private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
