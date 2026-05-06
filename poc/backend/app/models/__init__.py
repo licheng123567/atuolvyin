@@ -1,6 +1,7 @@
 from .audit import AuditLog, PlanConfig
 from .base import Base
 from .call import AnalysisResult, CallRecord, RiskEvent, Transcript
+from .dial_token import DialToken  # noqa: F401
 from .case import CollectionCase, OwnerProfile, Project
 from .risk import RiskKeyword  # noqa: F401
 from .settlement import DisputeRecord, SettlementStatement

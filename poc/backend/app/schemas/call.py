@@ -106,11 +106,27 @@ class CallDetailResponse(BaseModel):
 
 class DialRequestIn(BaseModel):
     case_id: int
+    mode: str = "push"  # "push" | "qr"
 
 
 class DialRequestOut(BaseModel):
     call_id: int
-    status: str  # "dispatched"
+    status: str  # "dispatched" (push 模式) / "qr_pending" (qr 模式)
+    qr_payload: str | None = None  # autoluyin://dial?call_id=...&token=...
+    expires_at: datetime | None = None  # 仅 qr 模式
+
+
+class DialInfoOut(BaseModel):
+    """坐席 App 扫码后获取的案件信息（手机号已脱敏，密文用于实际拨号）。"""
+
+    call_id: int
+    case_id: int
+    owner_name: str
+    owner_phone_masked: str
+    owner_phone_enc: str  # AES 密文，App 端解密拨号
+    address: str | None
+    debt_amount: float | None
+    months_overdue: int | None
 
 
 class CallTagPatch(BaseModel):

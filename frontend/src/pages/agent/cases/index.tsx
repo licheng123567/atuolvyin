@@ -1,9 +1,10 @@
 import { useCreate, useList } from "@refinedev/core";
 import type { CrudFilter } from "@refinedev/core";
-import { Phone } from "lucide-react";
-import { useState } from "react";
+import { ChevronDown, Phone, QrCode } from "lucide-react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { PaginatedResponse } from "../../../types";
+import { QrDialDialog } from "../../../components/dial/QrDialDialog";
 
 interface OwnerInfo {
   id: number;
@@ -50,6 +51,13 @@ export function AgentCaseListPage() {
   const [poolType, setPoolType] = useState("");
   const [claimingId, setClaimingId] = useState<number | null>(null);
   const [dialingId, setDialingId] = useState<number | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [qrState, setQrState] = useState<{
+    caseId: number;
+    qrPayload: string;
+    expiresAt: string;
+  } | null>(null);
+  const lastQrCaseId = useRef<number | null>(null);
   const PAGE_SIZE = 20;
 
   const filters: CrudFilter[] = [];
@@ -73,8 +81,9 @@ export function AgentCaseListPage() {
 
   const { mutate: claimCase } = useCreate();
 
-  async function handleDial(caseId: number) {
+  async function handleDial(caseId: number, mode: "push" | "qr" = "push") {
     setDialingId(caseId);
+    setOpenMenuId(null);
     try {
       const token = localStorage.getItem("access_token") ?? "";
       const resp = await fetch("/api/v1/calls/dial-request", {
@@ -83,14 +92,28 @@ export function AgentCaseListPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ case_id: caseId }),
+        body: JSON.stringify({ case_id: caseId, mode }),
       });
       if (!resp.ok) {
         alert("拨打失败：" + resp.status);
         return;
       }
-      const body = await resp.json() as { call_id: number };
-      navigate(`/agent/workstation/${body.call_id}`);
+      const body = (await resp.json()) as {
+        call_id: number;
+        status: string;
+        qr_payload?: string;
+        expires_at?: string;
+      };
+      if (mode === "qr" && body.qr_payload && body.expires_at) {
+        lastQrCaseId.current = caseId;
+        setQrState({
+          caseId,
+          qrPayload: body.qr_payload,
+          expiresAt: body.expires_at,
+        });
+      } else {
+        navigate(`/agent/workstation/${body.call_id}`);
+      }
     } finally {
       setDialingId(null);
     }
@@ -263,19 +286,53 @@ export function AgentCaseListPage() {
                       </button>
                     ) : null}
                     {c.assigned_to !== null && (
-                      <button
-                        type="button"
-                        disabled={dialingId === c.id}
-                        onClick={() => handleDial(c.id)}
-                        className="text-xs font-medium text-white px-2 py-1 disabled:opacity-40 flex items-center gap-1"
-                        style={{
-                          background: "var(--color-success, #16a34a)",
-                          borderRadius: "var(--radius-sm)",
-                        }}
-                      >
-                        <Phone className="w-3 h-3" />
-                        {dialingId === c.id ? "拨打中…" : "拨打"}
-                      </button>
+                      <div className="relative">
+                        <div className="inline-flex">
+                          <button
+                            type="button"
+                            disabled={dialingId === c.id}
+                            onClick={() => handleDial(c.id, "push")}
+                            className="text-xs font-medium text-white px-2 py-1 disabled:opacity-40 flex items-center gap-1 rounded-l"
+                            style={{
+                              background: "var(--color-success, #16a34a)",
+                              borderRadius: "var(--radius-sm) 0 0 var(--radius-sm)",
+                            }}
+                          >
+                            <Phone className="w-3 h-3" />
+                            {dialingId === c.id ? "拨打中…" : "拨打"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOpenMenuId(openMenuId === c.id ? null : c.id)
+                            }
+                            className="text-xs text-white px-1 py-1"
+                            style={{
+                              background: "var(--color-success, #16a34a)",
+                              borderRadius: "0 var(--radius-sm) var(--radius-sm) 0",
+                              borderLeft: "1px solid rgba(255,255,255,.3)",
+                            }}
+                            aria-label="更多拨打方式"
+                          >
+                            <ChevronDown className="w-3 h-3" />
+                          </button>
+                        </div>
+                        {openMenuId === c.id && (
+                          <div
+                            className="absolute right-0 top-full mt-1 bg-white border border-[var(--color-neutral-200)] shadow-lg z-10 min-w-[180px]"
+                            style={{ borderRadius: "var(--radius-md)" }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleDial(c.id, "qr")}
+                              className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--color-neutral-50)] flex items-center gap-2"
+                            >
+                              <QrCode className="w-3 h-3 text-[var(--color-primary)]" />
+                              扫码拨号（华为/OPPO/vivo）
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     )}
                     {c.pool_type !== "public" && c.assigned_to === null && (
                       <span className="text-xs text-[var(--color-neutral-400)]">—</span>
@@ -313,6 +370,21 @@ export function AgentCaseListPage() {
             下一页
           </button>
         </div>
+      )}
+
+      {qrState && (
+        <QrDialDialog
+          qrPayload={qrState.qrPayload}
+          expiresAt={qrState.expiresAt}
+          onClose={() => setQrState(null)}
+          onRegenerate={() => {
+            const cid = lastQrCaseId.current;
+            setQrState(null);
+            if (cid !== null) {
+              void handleDial(cid, "qr");
+            }
+          }}
+        />
       )}
     </div>
   );

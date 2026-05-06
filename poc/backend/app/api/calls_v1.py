@@ -1,14 +1,16 @@
 # poc/backend/app/api/calls_v1.py
 from __future__ import annotations
 
+import hashlib
 import math
+import secrets
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi import status as http_status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update as sa_update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -17,8 +19,9 @@ from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
 from app.core.storage import storage
 from app.models.call import AnalysisResult, CallRecord, Transcript
-from app.models.case import CollectionCase
+from app.models.case import CollectionCase, OwnerProfile
 from app.models.device import DeviceProfile
+from app.models.dial_token import DialToken
 from app.models.tenant import Tenant, TenantMinuteUsage
 from app.schemas.call import (
     AnalysisResultOut,
@@ -27,6 +30,7 @@ from app.schemas.call import (
     CallTagOut,
     CallTagPatch,
     CallUploadResponse,
+    DialInfoOut,
     DialRequestIn,
     DialRequestOut,
     SuggestionFeedbackIn,
@@ -35,6 +39,9 @@ from app.schemas.call import (
 )
 from app.schemas.common import PaginatedResponse
 from app.services import mipush
+from app.services.audit import log_audit
+
+QR_TOKEN_TTL_MIN = 10
 
 router = APIRouter()
 
@@ -85,6 +92,11 @@ async def dial_request(
             status_code=http_status.HTTP_401_UNAUTHORIZED,
             detail={"code": "ERR_INVALID_TOKEN", "message": "Token 缺少必要字段"},
         )
+    if body.mode not in ("push", "qr"):
+        raise HTTPException(
+            status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "ERR_VALIDATION", "message": "mode 必须是 push 或 qr"},
+        )
 
     case = db.execute(
         select(CollectionCase).where(
@@ -103,7 +115,53 @@ async def dial_request(
             detail={"code": "ERR_FORBIDDEN", "message": "案件未分配给当前催收员"},
         )
 
-    # Look up most-recent device with a push_reg_id
+    owner = db.get(OwnerProfile, case.owner_id) if case.owner_id else None
+    owner_name = owner.name if owner else "未知业主"
+    owner_phone_masked = mask_phone(owner.phone_enc) if owner and owner.phone_enc else ""
+
+    # Insert pending_dial CallRecord (shared by push & qr paths)
+    call = CallRecord(
+        tenant_id=tenant_id,
+        case_id=case.id,
+        caller_user_id=user_id,
+        callee_phone_enc=owner.phone_enc if owner and owner.phone_enc else "",
+        initiated_by="pc",
+        status="pending_dial",
+    )
+    db.add(call)
+    db.flush()
+
+    # ── QR backup mode: skip MiPush, hand back deeplink + token ──
+    if body.mode == "qr":
+        token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        expires_at = datetime.now(UTC) + timedelta(minutes=QR_TOKEN_TTL_MIN)
+        dt = DialToken(
+            call_id=call.id,
+            tenant_id=tenant_id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+        )
+        db.add(dt)
+        log_audit(
+            db,
+            actor_user_id=user_id,
+            actor_role=payload.get("role"),
+            tenant_id=tenant_id,
+            action="qr_dial.requested",
+            target_type="call_record",
+            target_id=call.id,
+            payload={"case_id": case.id},
+        )
+        db.commit()
+        return DialRequestOut(
+            call_id=call.id,
+            status="qr_pending",
+            qr_payload=f"autoluyin://dial?call_id={call.id}&token={token}",
+            expires_at=expires_at,
+        )
+
+    # ── Default push mode: requires registered MiPush device ──
     device = db.execute(
         select(DeviceProfile)
         .where(
@@ -120,25 +178,6 @@ async def dial_request(
             detail={"code": "ERR_PUSH_NOT_REGISTERED", "message": "设备未注册推送，请重新登录催收 App"},
         )
 
-    # Resolve owner info for the DIAL_REQUEST payload
-    from app.models.case import OwnerProfile  # local import to avoid potential cycles
-    owner = db.get(OwnerProfile, case.owner_id) if case.owner_id else None
-    owner_name = owner.name if owner else "未知业主"
-    owner_phone_masked = mask_phone(owner.phone_enc) if owner and owner.phone_enc else ""
-
-    # Insert pending_dial CallRecord
-    call = CallRecord(
-        tenant_id=tenant_id,
-        case_id=case.id,
-        caller_user_id=user_id,
-        callee_phone_enc=owner.phone_enc if owner and owner.phone_enc else "",
-        initiated_by="pc",
-        status="pending_dial",
-    )
-    db.add(call)
-    db.flush()
-
-    # Send MiPush
     push_client = mipush.get_mipush_client()
     payload_dict = {
         "type": "DIAL_REQUEST",
@@ -162,6 +201,89 @@ async def dial_request(
 
     db.commit()
     return DialRequestOut(call_id=call.id, status="dispatched")
+
+
+@router.get("/{call_id}/dial-info", response_model=DialInfoOut)
+def get_dial_info(
+    call_id: int,
+    token: Annotated[str, Query(min_length=10, max_length=128)],
+    db: Annotated[Session, Depends(get_db)],
+) -> DialInfoOut:
+    """Sprint 12 — 坐席 App 扫码后调用，凭一次性 token 拿到案件信息。
+
+    注意：本端点**不需要 JWT**，token 本身就是凭证。但 token 仅 10 分钟有效、
+    单次消费、且与 call_id 严格绑定。无认证简化了扫码流程（App 可能尚未登录
+    或 token 已过期 session），代价是 token 必须当作 bearer 处理。
+    """
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+
+    # Atomic claim — first writer wins, prevents replay
+    now = datetime.now(UTC)
+    result = db.execute(
+        sa_update(DialToken)
+        .where(DialToken.token_hash == token_hash)
+        .where(DialToken.call_id == call_id)
+        .where(DialToken.used_at.is_(None))
+        .where(DialToken.expires_at > now)
+        .values(used_at=now)
+        .returning(DialToken.id, DialToken.tenant_id)
+    ).first()
+    if result is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "code": "ERR_INVALID_DIAL_TOKEN",
+                "message": "二维码无效、已过期或已被使用",
+            },
+        )
+
+    tenant_id_from_token = int(result.tenant_id)
+
+    call = db.execute(
+        select(CallRecord).where(
+            CallRecord.id == call_id,
+            CallRecord.tenant_id == tenant_id_from_token,
+        )
+    ).scalar_one_or_none()
+    if call is None or call.case_id is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "通话或案件不存在"},
+        )
+
+    case = db.get(CollectionCase, call.case_id)
+    owner = db.get(OwnerProfile, case.owner_id) if case else None
+    if not case or not owner:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "案件或业主信息缺失"},
+        )
+
+    address_parts = [p for p in (owner.building, owner.room) if p]
+    address = " ".join(address_parts) if address_parts else None
+
+    log_audit(
+        db,
+        actor_user_id=call.caller_user_id,
+        actor_role="agent",
+        tenant_id=tenant_id_from_token,
+        action="qr_dial.consumed",
+        target_type="call_record",
+        target_id=call.id,
+        payload={"case_id": case.id},
+    )
+    db.commit()
+
+    return DialInfoOut(
+        call_id=call.id,
+        case_id=case.id,
+        owner_name=owner.name,
+        owner_phone_masked=mask_phone(owner.phone_enc),
+        owner_phone_enc=owner.phone_enc,
+        address=address,
+        debt_amount=float(case.amount_owed) if case.amount_owed else None,
+        months_overdue=case.months_overdue,
+    )
 
 
 @router.post("/upload", response_model=CallUploadResponse, status_code=201)
