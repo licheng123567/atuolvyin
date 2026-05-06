@@ -115,7 +115,7 @@ export function RiskKeywordListPage() {
                   </th>
                 </tr>
               </thead>
-              <tbody style={{ divideColor: "var(--color-neutral-100)" }} className="divide-y">
+              <tbody className="divide-y divide-[var(--color-neutral-100)]">
                 {items.map((item) => {
                   const isPreset = isPlatformPreset(item);
                   const canEdit = isPlatformSuper || !isPreset;

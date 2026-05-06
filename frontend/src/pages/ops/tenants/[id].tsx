@@ -42,7 +42,8 @@ export function TenantDetailPage() {
     id: id ?? "",
   });
   const { mutate: update, mutation: updateMutation } = useUpdate();
-  const { mutate: runAction, isLoading: actionLoading } = useCustomMutation();
+  const { mutate: runAction, mutation: actionMutation } = useCustomMutation();
+  const actionLoading = actionMutation.isPending;
 
   const [quota, setQuota] = useState("");
   const [quotaMsg, setQuotaMsg] = useState("");

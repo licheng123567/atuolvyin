@@ -98,7 +98,8 @@ function SupervisorReviewSection({ callId }: { callId: number }) {
   const [note, setNote] = useState("");
   const [intentCorrection, setIntentCorrection] = useState("");
   const [submitted, setSubmitted] = useState(false);
-  const { mutate, isPending } = useCustomMutation();
+  const { mutate, mutation } = useCustomMutation();
+  const isPending = mutation.isPending;
 
   const handleSubmit = () => {
     if (!quality) return;

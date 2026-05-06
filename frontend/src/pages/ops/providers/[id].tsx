@@ -61,7 +61,8 @@ export function ProviderDetailPage() {
     queryOptions: { enabled: !!id },
   });
 
-  const { mutate: runAction, isLoading: actionLoading } = useCustomMutation();
+  const { mutate: runAction, mutation: actionMutation } = useCustomMutation();
+  const actionLoading = actionMutation.isPending;
 
   const detail = query.data?.data;
   const isLoading = query.isLoading;

@@ -40,14 +40,16 @@ export function CaseKanbanPage() {
   // Track which card is currently being dragged
   const draggingId = useRef<number | null>(null);
 
-  const { data: rawData, isLoading } = useList<CaseItem>({
+  const { query, result } = useList<CaseItem>({
     resource: "admin/cases",
     pagination: { currentPage: 1, pageSize: 200 },
   });
+  const isLoading = query.isLoading;
 
+  const rawData = query.data;
   const items: CaseItem[] =
     (rawData?.data as unknown as PaginatedResponse<CaseItem>)?.items ??
-    (rawData?.data as CaseItem[] | undefined) ??
+    (result.data as CaseItem[] | undefined) ??
     [];
 
   const groups = groupByStage(items);
