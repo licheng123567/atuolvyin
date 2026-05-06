@@ -409,7 +409,22 @@ re.sub(r'(1[3-9]\d)\d{4}(\d{4})', r'\1****\2', transcript)
 | 话术库管理 | P1 | 按异议类型维护话术模板 |
 | 用户与角色管理 | P1 | 创建内部用户、生成外部邀请链接、设账号有效期 |
 | 数据分析报表 | P1 | 转化率趋势、未明确原因分布、员工效率对比 |
+| **PC 实时通话墙** | P1 | (v1.3) 主管/管理员/项目负责人物业可见所有正在通话的坐席卡片；点击进入实时跟单页（详 §11.7）|
+| **PC 引导手机端 + Help 页** | P1 | (v1.3) 首次登录弹引导 modal（含 APK 下载二维码 + "不再提示"）；常驻 `/help/app` 公开页（不登录可访问），含安装步骤 / 权限授予 / MIUI 录音目录设置 / 服务器地址扫码注入说明（实施细节见本节末）|
 | 系统配置 | P2 | 风控关键词自定义、通知规则、AI 推送灵敏度、数据保留策略（**存储后端地址/OSS 凭证等基础设施配置仅在服务器端 .env 维护，不在任何前端界面暴露**）|
+
+**「PC 引导手机端 + Help 页」实施细节（v1.3）**
+
+后端：
+- `UserAccount.preferences JSONB` 存个人偏好，关键 key：`app_intro_dismissed: bool`
+- `GET /api/v1/users/me/preferences` 任何认证用户读
+- `PATCH /api/v1/users/me/preferences` 局部 merge 更新
+- `GET /api/v1/public/app-info` **无需认证**，返回当前部署的 APK url / 版本 / 系统要求 / 权限说明（部署时通过环境变量 `AUTOLUYIN_APK_URL` / `AUTOLUYIN_APK_VERSION` 注入）
+
+前端：
+- 首次登录后 AuthenticatedShell 检查 `preferences.app_intro_dismissed`：false → 弹 `AppIntroModal`（含 QR + 4 章节摘要 + "不再提示"勾选）
+- 公开页 `/help/app`（不登录可访问，所有角色可分享给坐席）：完整 4 章节（为什么需要 / 安装步骤 / 权限授予含 MIUI 注意事项 / 服务器地址扫码注入）
+- 主菜单常驻入口（避免一次性 modal 关掉就找不到）
 
 ### 8.3 录音上传模式配置
 
@@ -510,13 +525,21 @@ v1.1 支持管理员为特定角色或特定用户覆盖租户默认策略，例
 
 ### 10.1 实时辅助外呼（双端联动，两种发起方式）
 
+> **PC 同步硬约束**（v1.3 落地）：坐席必须**在 App 内点击「拨打」入口**才会同步给 PC 实时通话墙；
+> 绕开 App 直接用系统拨号器发起的电话，由于 PhoneStateReceiver 拿不到号码与案件关联，
+> **PC 端不会显示，事后录音也不会上传**。这是有意的隐私边界（避免坐席私人电话被误同步）。
+
 **方式 A：App 主控（员工在外/移动场景）**
 ```
 App 催收列表 → 点击「拨打」
+    ↓ POST /api/v1/calls/dial-start  (v1.3, PRD §11.7)
+    ↓   - 决议 recording_mode (live/post) 并冻结到 CallRecord
+    ↓   - 软配额检查：剩余 ≥3 分钟才放行
+    ↓   - 部分唯一索引防同一坐席并发拨号 (409)
+    ↓   - WS /ws/supervisor 广播 call.started
     ↓ 后端建立 CallSession
-    ↓ 广播 CALL_STARTED
-PC 自动弹出三栏工作台（如果 PC 在线）
-App 显示三段式通话界面
+PC 实时通话墙立即显示该坐席卡片（主管/管理员/项目负责人物业可见）
+App 显示三段式通话界面 + 30s 一次心跳保活
 ```
 
 **方式 B：PC 主控（员工坐工位/呼叫中心场景）**
@@ -678,6 +701,43 @@ PC 端显示员工状态（来自 Redis call:session）：
 - **App 信令断线**：指数退避重连（1→2→4s），重连后发 SESSION_RESUME
 - **App 音频断线**：本地环形缓冲 60s，重连后按 sequenceNo 顺序补传
 - **PC 断线**：重连后拉 GET /api/sessions/active，自动恢复三栏工作台
+
+### 11.7 PC 实时通话墙（v1.3，Sprint 14.2）
+
+让主管/管理员/项目负责人在 PC 上集中观察全部坐席的当前通话情况，弥补 Android App 屏幕过小、坐席单兵作战时主管缺失全局视角的问题。
+
+**触发链**
+
+```
+agent App 内点「拨打」
+    ↓ POST /api/v1/calls/dial-start { case_id, device_id }
+    ↓   - 决议 recording_mode (live/post) 并冻结 (PRD §20.1.1)
+    ↓   - 软配额检查（剩余 ≥3 分钟才放行）
+    ↓   - DB partial unique index 防同一坐席并发拨号 → 409
+    ↓   - WS /ws/supervisor 广播 call.started 事件
+PC 实时通话墙立即显示卡片（无需主管手动操作）
+    ↓ agent App 30s 一次 POST /calls/{id}/heartbeat 保活
+    ↓ 90s 无心跳 → 后台任务自动 status='aborted' + 广播 call.aborted
+通话挂机：app 上报 → call.ended 广播 → 卡片消失
+```
+
+**PC 端页面 `/supervisor/live-wall`**
+
+- 角色访问：supervisor / admin / project_manager_property
+- 卡片信息：坐席名 / 案件号 / 业主名（已脱敏号码）/ 已通话时长 / recording_mode 标签 / 风控告警边框
+- 卡片点击 → 跳现有 `/admin/workstation/:call_id` 实时跟单页（看实时转写 + AI + 风控时间线）
+- WS /ws/supervisor 增加事件类型：`call.started` / `call.ended` / `call.aborted`
+- 初次加载用 GET `/api/v1/supervisor/live-calls` 拉快照
+
+**设计原则**
+
+- **不弹窗骚扰**：默认仅常驻列表，避免主管被打断；后续 P2 加「钉住关注下属」+ toast 提示
+- **强制 App 内入口**：绕开 App 直接系统拨号 → 不调用 dial-start → PC 不显示，事后录音不上传（保护坐席私人电话隐私）
+- **故障容错**：dial-start 失败不阻断本地拨号，PC 端就不显示而已（降级容错）
+
+**已知部署约束**
+
+- WebSocket session 状态当前为单进程内 dict（`ws_calls.py:_sessions`），prod 升 `--workers > 1` 前必须改造为 Redis pub/sub，否则同 call_id 跨 worker 时事件可能丢失。
 
 ---
 
@@ -1675,31 +1735,49 @@ MVP 阶段采用**平台统一池化**模型：平台维护全局通话分钟池
 | 外部兼职催收员（App）| 本人本月累计通话分钟数 |
 | 法务专员 / 工单处理员 / 项目负责人 | 不展示通话分钟字段 |
 
-**超配额行为**
+**超配额行为（v1.3 引入软配额）**
 
 | 阈值 | 触发动作 |
 |------|---------|
 | 用量达配额 **80%** | 系统推送预警通知给租户管理员 + 平台运营员 |
 | 用量达配额 **95%** | 管理员看板显示醒目警告横幅；运营员收二次提醒 |
-| 用量达配额 **100%** | **拦截新发起通话**（已在通话中的不中断）；管理员看到"配额耗尽，请联系平台提额"提示 |
-| 运营员手动临时提额 | 立即生效，当月超出部分按超出计费或合同宽限条款处理 |
+| **dial-start 检查：剩余 < 3 分钟** | **软配额拦截**：拒绝新发起通话（403 ERR_QUOTA_EXHAUSTED），但已在通话中的不挂断（避免半路砍断）|
+| 通话中超额（剩余分钟用尽） | **不挂断**，仅推 risk 事件 `quota.exhausted` 到 PC 风控告警；下一通拒绝；超的部分计入下月透支额度 |
+| 运营员手动临时提额 | 立即生效，当月超出部分按合同宽限条款或超额单价计费 |
 
-> 拦截逻辑在后端 API 层强制执行（拨号接口调用前校验），不依赖前端控制，确保绕不过去。
+> 拦截逻辑在后端 dial-start API 层强制执行，不依赖前端，确保绕不过去。
+> upload 端做兜底校验防客户端篡改本地状态绕过。
 
 **计量规则**
 
 - 计量粒度：**秒**，账单按分钟向上取整（不足 1 分钟按 1 分钟计）
 - 仅计量「接通时长」：ASR 推流开始 → 通话挂断；未接通、占线、空号**不计入**
-- 数据来源：`call_log.duration`（秒），汇总至 `tenant_minute_usage` 月度统计表
+- 数据来源：`call_record.billable_duration`（秒），汇总至 `tenant_minute_usage` 月度统计表
+
+**实时 vs 事后分别计费（v1.3，Sprint 14.1）**
+
+实时通话（live：通话进行中走 WebSocket + ASR 实时转写 + AI 提示）与事后上传（post：通话结束后批量上传录音再转写）资源成本差约 3×（实时占 ASR live 通道 + LLM token，事后仅 ASR 批处理）。系统支持分别统计与计费：
+
+- 模式决议：dial-start 时按 TenantSettings.recording_mode 决议并**冻结**到 `CallRecord.recording_mode`，事后改 settings 不影响进行中的通话
+- `auto` 模式决策：当前 realtime 余量 ≥10 分钟 → live；否则降级 post
+- 看板分别展示：admin/dashboard/stats 与 super/cost/dashboard 同时返回 realtime/post 拆分字段，PC 端分两条柱状图
 
 **数据模型新增字段**
 
 | 表 | 新增字段 | 说明 |
 |----|---------|------|
-| `tenants` | `monthly_minute_quota` INT | 当前月度配额（分钟），NULL 表示无限制（企业版面议合同）|
-| `tenants` | `minute_quota_updated_at` | 最后一次配额修改时间 |
-| `call_log` | `billable_duration` INT | 可计费秒数（接通后到挂断，不含振铃）|
-| `tenant_minute_usage` | 新表 | 月度用量聚合：tenant_id / year_month / used_minutes / quota_at_time |
+| `tenant` | `monthly_minute_quota` INT | 当前月度配额（分钟），NULL 表示无限制（企业版面议合同）|
+| `tenant` | `minute_quota_updated_at` | 最后一次配额修改时间 |
+| `call_record` | `billable_duration` INT | 可计费秒数（接通后到挂断，不含振铃）|
+| `call_record` | `recording_mode VARCHAR(16)` (v1.3) | live / post，dial-start 时冻结，CHECK 约束 |
+| `call_record` | `last_heartbeat_at TIMESTAMPTZ` (v1.3) | agent App 30s 一次心跳；超时清理 |
+| `call_record` | partial unique index `uq_active_call_per_caller` (v1.3) | 同一坐席不能并发拨号 |
+| `tenant_minute_usage` | `used_minutes` INT | 月度总用量（兼容字段 = realtime + post）|
+| `tenant_minute_usage` | `realtime_minutes` INT (v1.3) | 实时模式用量子项 |
+| `tenant_minute_usage` | `post_minutes` INT (v1.3) | 事后模式用量子项 |
+| `plan_config` | `monthly_minutes` INT | 套餐总配额 |
+| `plan_config` | `monthly_realtime_minutes` INT (v1.3) | 套餐细分配额，NULL 表示不分别拦截 |
+| `plan_config` | `monthly_post_minutes` INT (v1.3) | 套餐细分配额 |
 
 ---
 
