@@ -102,3 +102,56 @@ class ProviderSettlementOut(BaseModel):
 
 class ProviderSettlementDetailOut(ProviderSettlementOut):
     disputes: list[DisputeOut] = Field(default_factory=list)
+
+
+# ── Sprint 9.1 — cross-tenant team performance ──────────────────────────
+
+
+class ProviderMemberPerformance(BaseModel):
+    user_id: int
+    name: str
+    role: str
+    total_calls: int
+    connected_calls: int
+    promised_cases: int
+    conversion_rate: float | None
+    paid_amount: Decimal
+
+
+# ── Sprint 9.2 — single-member commission breakdown ─────────────────────
+
+
+class CommissionLineItem(BaseModel):
+    case_id: int
+    owner_name: str
+    paid_amount: Decimal
+    paid_at: datetime | None
+
+
+class ProviderMemberCommission(BaseModel):
+    user_id: int
+    name: str
+    year_month: str
+    commission_rate: float  # e.g. 0.05 = 5%
+    base_amount: Decimal  # sum of paid amounts for this user / month
+    commission: Decimal  # base_amount * rate
+    items: list[CommissionLineItem]
+
+
+# ── Sprint 9.3 — dispute submission ─────────────────────────────────────
+
+
+class ProviderDisputeIn(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+class ProviderDisputeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    statement_id: int
+    reason: str
+    status: str  # open / resolved / rejected
+    resolution: str | None
+    submitted_by: int
+    created_at: datetime

@@ -93,6 +93,14 @@ class RiskEvent(Base, TimestampMixin):
     audio_offset_ms: Mapped[int | None] = mapped_column(sa.Integer)
     intervention: Mapped[str] = mapped_column(sa.Text, nullable=False)  # warn / interrupt / terminate
     data_hash: Mapped[str | None] = mapped_column(sa.Text)
+    # Sprint 9.4 — supervisor manual disposition annotation
+    disposition_note: Mapped[str | None] = mapped_column(sa.Text)
+    disposition_by: Mapped[int | None] = mapped_column(
+        sa.BigInteger, sa.ForeignKey("user_account.id"), nullable=True
+    )
+    disposition_at: Mapped["datetime | None"] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
+    )
 
 
 class SuggestionFeedback(Base):

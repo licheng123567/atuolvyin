@@ -34,6 +34,7 @@ from app.api import (
     super_health,
     super_plans,
     supervisor,
+    supervisor_extras,
     supervisor_labels,
     supervisor_review,
     tasks,
@@ -127,6 +128,7 @@ app.include_router(admin_scripts.router, prefix="/api/v1/admin", tags=["admin-sc
 app.include_router(admin_dashboard.router, prefix="/api/v1/admin", tags=["admin-dashboard"])
 app.include_router(supervisor_labels.router, prefix="/api/v1/supervisor", tags=["supervisor-labels"])
 app.include_router(supervisor_review.router, prefix="/api/v1/supervisor", tags=["supervisor-review"])
+app.include_router(supervisor_extras.router, prefix="/api/v1/supervisor", tags=["supervisor-extras"])
 app.include_router(admin_suggestion_config.router, prefix="/api/v1/admin", tags=["suggestion-config"])
 app.include_router(admin_settlements.router, prefix="/api/v1/admin", tags=["admin-settlements"])
 app.include_router(admin_providers.router, prefix="/api/v1/admin", tags=["admin-providers"])

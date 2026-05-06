@@ -15,18 +15,20 @@ Endpoints (all under /api/v1/provider):
 """
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi import status as http_status
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.core.crypto import mask_phone
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
+from app.models.call import CallRecord
+from app.models.case import CollectionCase, OwnerProfile
 from app.models.settlement import DisputeRecord, SettlementStatement
 from app.models.tenant import (
     ProviderTenantContract,
@@ -37,8 +39,13 @@ from app.models.tenant import (
 from app.models.user import UserAccount
 from app.schemas.common import PaginatedResponse
 from app.schemas.provider_admin import (
+    CommissionLineItem,
     ProviderContractSummary,
     ProviderDashboardStats,
+    ProviderDisputeIn,
+    ProviderDisputeOut,
+    ProviderMemberCommission,
+    ProviderMemberPerformance,
     ProviderSettlementDetailOut,
     ProviderSettlementOut,
     ProviderTeamMemberDetailOut,
@@ -47,6 +54,9 @@ from app.schemas.provider_admin import (
     TeamActiveIn,
 )
 from app.schemas.settlement import DisputeOut
+
+DEFAULT_COMMISSION_RATE = 0.05  # MVP fallback; future: pull from membership.commission_rate
+PERFORMANCE_DEFAULT_DAYS = 30
 
 router = APIRouter()
 
@@ -513,4 +523,226 @@ async def get_provider_settlement(
     return ProviderSettlementDetailOut(
         **base.model_dump(),
         disputes=[DisputeOut.model_validate(d) for d in disputes],
+    )
+
+
+# ── PA.3.5 — Sprint 9.3 — submit settlement dispute ─────────────────
+
+
+@router.post(
+    "/settlements/{statement_id}/dispute",
+    response_model=ProviderDisputeOut,
+    status_code=http_status.HTTP_201_CREATED,
+)
+async def submit_dispute(
+    statement_id: int,
+    body: ProviderDisputeIn,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> ProviderDisputeOut:
+    user_id = _user_id_from_payload(payload)
+    provider_id = _resolve_provider_id(user_id, db)
+
+    row = db.execute(
+        select(SettlementStatement, ProviderTenantContract)
+        .join(
+            ProviderTenantContract,
+            ProviderTenantContract.id == SettlementStatement.contract_id,
+        )
+        .where(
+            SettlementStatement.id == statement_id,
+            ProviderTenantContract.provider_id == provider_id,
+        )
+    ).first()
+    if row is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "结算单不存在"},
+        )
+    statement, _contract = row
+
+    if statement.status not in ("DRAFT", "CONFIRMED", "DISPUTED"):
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail={
+                "code": "ERR_INVALID_TRANSITION",
+                "message": "已结清的结算单不能再提交异议",
+            },
+        )
+
+    dispute = DisputeRecord(
+        statement_id=statement_id,
+        reason=body.reason,
+        status="open",
+        submitted_by=user_id,
+    )
+    db.add(dispute)
+    statement.status = "DISPUTED"
+    db.commit()
+    db.refresh(dispute)
+    return ProviderDisputeOut.model_validate(dispute)
+
+
+# ── PA.3.6 — Sprint 9.1 — cross-tenant team performance ─────────────
+
+
+@router.get(
+    "/team-performance", response_model=list[ProviderMemberPerformance]
+)
+async def get_team_performance(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+    period_days: int = Query(PERFORMANCE_DEFAULT_DAYS, ge=1, le=365),
+) -> list[ProviderMemberPerformance]:
+    user_id = _user_id_from_payload(payload)
+    provider_id = _resolve_provider_id(user_id, db)
+    cutoff = datetime.now(UTC) - timedelta(days=period_days)
+
+    # All members of this provider (across all tenants they serve)
+    member_rows = db.execute(
+        select(UserAccount, UserTenantMembership.role, UserTenantMembership.tenant_id)
+        .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
+        .where(UserTenantMembership.provider_id == provider_id)
+    ).all()
+    if not member_rows:
+        return []
+
+    # Group memberships by user (a provider member can serve multiple tenants)
+    user_meta: dict[int, tuple[UserAccount, str, list[int]]] = {}
+    for u, role, tid in member_rows:
+        existing = user_meta.get(u.id)
+        if existing is None:
+            user_meta[u.id] = (u, role, [tid])
+        else:
+            existing[2].append(tid)
+
+    user_ids = list(user_meta.keys())
+
+    # Calls (in window) by caller across tenants
+    call_rows = db.execute(
+        select(
+            CallRecord.caller_user_id,
+            func.count().label("total"),
+            func.sum(case((CallRecord.billable_duration > 0, 1), else_=0)).label("connected"),
+        )
+        .where(CallRecord.caller_user_id.in_(user_ids))
+        .where(CallRecord.created_at >= cutoff)
+        .group_by(CallRecord.caller_user_id)
+    ).all()
+    calls_by_user: dict[int, tuple[int, int]] = {
+        r.caller_user_id: (int(r.total or 0), int(r.connected or 0)) for r in call_rows
+    }
+
+    # Promised cases assigned to these users
+    promised_rows = db.execute(
+        select(CollectionCase.assigned_to, func.count())
+        .where(CollectionCase.assigned_to.in_(user_ids))
+        .where(CollectionCase.stage == "promised")
+        .group_by(CollectionCase.assigned_to)
+    ).all()
+    promised_by_user: dict[int, int] = {r[0]: int(r[1]) for r in promised_rows}
+
+    # Paid amount by user
+    paid_rows = db.execute(
+        select(CollectionCase.assigned_to, func.coalesce(func.sum(CollectionCase.amount_owed), 0))
+        .where(CollectionCase.assigned_to.in_(user_ids))
+        .where(CollectionCase.stage == "paid")
+        .group_by(CollectionCase.assigned_to)
+    ).all()
+    paid_by_user: dict[int, Decimal] = {r[0]: Decimal(str(r[1])) for r in paid_rows}
+
+    out: list[ProviderMemberPerformance] = []
+    for uid, (u, role, _tids) in user_meta.items():
+        total, connected = calls_by_user.get(uid, (0, 0))
+        promised = promised_by_user.get(uid, 0)
+        out.append(
+            ProviderMemberPerformance(
+                user_id=u.id,
+                name=u.name,
+                role=role,
+                total_calls=total,
+                connected_calls=connected,
+                promised_cases=promised,
+                conversion_rate=(promised / total) if total else None,
+                paid_amount=paid_by_user.get(uid, Decimal("0")),
+            )
+        )
+    out.sort(key=lambda x: x.total_calls, reverse=True)
+    return out
+
+
+# ── PA.3.7 — Sprint 9.2 — single-member commission breakdown ────────
+
+
+@router.get(
+    "/team/{member_user_id}/commission",
+    response_model=ProviderMemberCommission,
+)
+async def get_member_commission(
+    member_user_id: int,
+    year_month: Annotated[str, Query(pattern=r"^\d{4}-\d{2}$")],
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> ProviderMemberCommission:
+    user_id = _user_id_from_payload(payload)
+    provider_id = _resolve_provider_id(user_id, db)
+
+    # Verify member belongs to this provider
+    row = db.execute(
+        select(UserAccount)
+        .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
+        .where(
+            UserAccount.id == member_user_id,
+            UserTenantMembership.provider_id == provider_id,
+        )
+    ).first()
+    if row is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "团队成员不存在"},
+        )
+    member = row[0]
+
+    year, month = (int(p) for p in year_month.split("-"))
+    period_start = datetime(year, month, 1, tzinfo=UTC)
+    period_end = (
+        datetime(year + 1, 1, 1, tzinfo=UTC)
+        if month == 12
+        else datetime(year, month + 1, 1, tzinfo=UTC)
+    )
+
+    # Settled cases assigned to this user, paid in target month
+    case_rows = db.execute(
+        select(CollectionCase, OwnerProfile)
+        .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
+        .where(CollectionCase.assigned_to == member_user_id)
+        .where(CollectionCase.stage == "paid")
+        .where(CollectionCase.updated_at >= period_start)
+        .where(CollectionCase.updated_at < period_end)
+    ).all()
+
+    items = [
+        CommissionLineItem(
+            case_id=c.id,
+            owner_name=o.name,
+            paid_amount=Decimal(str(c.amount_owed or 0)),
+            paid_at=c.updated_at,
+        )
+        for c, o in case_rows
+    ]
+    base = sum((i.paid_amount for i in items), Decimal("0"))
+    rate = DEFAULT_COMMISSION_RATE
+    commission = (base * Decimal(str(rate))).quantize(Decimal("0.01"))
+
+    return ProviderMemberCommission(
+        user_id=member.id,
+        name=member.name,
+        year_month=year_month,
+        commission_rate=rate,
+        base_amount=base,
+        commission=commission,
+        items=items,
     )
