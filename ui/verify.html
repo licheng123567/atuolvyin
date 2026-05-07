@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>区块链存证核验 — 有证慧催</title>
+  <link rel="stylesheet" href="assets/design-system.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    body {
+      background: var(--color-neutral-50);
+      min-height: 100vh;
+    }
+    .verify-container {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 48px 16px 60px;
+    }
+    .verify-header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .verify-header-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--color-neutral-900);
+      margin-bottom: 8px;
+    }
+    .verify-header-title svg {
+      width: 26px;
+      height: 26px;
+      color: var(--color-primary);
+    }
+    .verify-header-sub {
+      font-size: 13.5px;
+      color: var(--color-neutral-600);
+      line-height: 1.7;
+    }
+
+    /* Search form card */
+    .verify-card {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      padding: 22px 22px;
+      margin-bottom: 18px;
+    }
+    .verify-form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--color-neutral-700);
+      margin-bottom: 8px;
+    }
+    .verify-form-row {
+      display: flex;
+      gap: 8px;
+    }
+    .verify-form-input {
+      flex: 1;
+      padding: 9px 12px;
+      border: 1px solid var(--color-neutral-300);
+      border-radius: var(--radius-sm);
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 13px;
+      color: var(--color-neutral-900);
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+    .verify-form-input:focus {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(26, 86, 219, 0.1);
+    }
+    .verify-form-btn {
+      padding: 9px 16px;
+      background: var(--color-primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 13.5px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      transition: opacity 0.15s ease;
+    }
+    .verify-form-btn:hover { opacity: 0.92; }
+    .verify-form-btn svg { width: 14px; height: 14px; }
+
+    /* Result */
+    .result-card {
+      background: white;
+      border: 1px solid var(--color-success);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+    .result-header {
+      background: var(--color-success-light);
+      padding: 12px 20px;
+      border-bottom: 1px solid #A7F3D0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--color-success);
+    }
+    .result-header svg { width: 20px; height: 20px; }
+    .result-body {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .result-row {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      font-size: 13.5px;
+    }
+    .result-row-label {
+      width: 116px;
+      flex-shrink: 0;
+      font-size: 12px;
+      color: var(--color-neutral-500);
+    }
+    .result-row-value {
+      flex: 1;
+      color: var(--color-neutral-900);
+      word-break: break-all;
+    }
+    .result-row-value.mono {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 13px;
+    }
+    .result-divider {
+      height: 1px;
+      background: var(--color-neutral-100);
+      margin: 4px 0;
+    }
+    .result-footnote {
+      margin-top: 8px;
+      padding: 12px 14px;
+      background: var(--color-primary-light);
+      border: 1px solid #BFDBFE;
+      border-radius: var(--radius-sm);
+      font-size: 12.5px;
+      color: var(--color-primary);
+      line-height: 1.65;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .result-footnote svg {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .result-footnote code {
+      background: white;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 11.5px;
+      margin: 0 2px;
+    }
+
+    /* Error / placeholder */
+    .verify-error {
+      background: var(--color-danger-light);
+      border: 1px solid #FECACA;
+      border-radius: var(--radius-md);
+      padding: 14px 18px;
+      font-size: 13.5px;
+      color: var(--color-danger);
+      margin-bottom: 18px;
+    }
+    .verify-empty {
+      text-align: center;
+      font-size: 13px;
+      color: var(--color-neutral-500);
+      padding: 32px 0;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="verify-container">
+
+    <!-- Header -->
+    <header class="verify-header">
+      <div class="verify-header-title">
+        <i data-lucide="shield-alert"></i>
+        区块链存证核验
+      </div>
+      <div class="verify-header-sub">
+        输入存证回执上的 tx_hash，校验录音/转写/分析数据的链上证明。<br>
+        本页面公开访问，可向业主或法庭出示作为存证证据。
+      </div>
+    </header>
+
+    <!-- Search form -->
+    <div class="verify-card">
+      <label class="verify-form-label">交易哈希（tx_hash）</label>
+      <div class="verify-form-row">
+        <input
+          type="text"
+          class="verify-form-input"
+          value="a3f8b9c2d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f50617283940a1b2c3d4e"
+          placeholder="例如 a3f8b9... (64 位 16 进制字符)"
+        >
+        <button type="button" class="verify-form-btn">
+          <i data-lucide="search"></i> 核验
+        </button>
+      </div>
+    </div>
+
+    <!-- Result (success) -->
+    <div class="result-card">
+      <div class="result-header">
+        <i data-lucide="check-circle-2"></i>
+        存证有效 · 状态：confirmed
+      </div>
+      <div class="result-body">
+        <div class="result-row">
+          <div class="result-row-label">链上交易哈希</div>
+          <div class="result-row-value mono">a3f8b9c2d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f50617283940a1b2c3d4e</div>
+        </div>
+        <div class="result-row">
+          <div class="result-row-label">数据 SHA-256</div>
+          <div class="result-row-value mono">7d4c4f9e2b0a1c8e5f3d6a9b2c1e4d7a8b5f6c9e0d3a2b1c4e5f6a7b8c9d0e1f</div>
+        </div>
+        <div class="result-row">
+          <div class="result-row-label">区块高度</div>
+          <div class="result-row-value">2,463,189</div>
+        </div>
+        <div class="result-row">
+          <div class="result-row-label">存证类型</div>
+          <div class="result-row-value">通话录音</div>
+        </div>
+        <div class="result-row">
+          <div class="result-row-label">链方提供商</div>
+          <div class="result-row-value">阿里云蚂蚁链</div>
+        </div>
+        <div class="result-row">
+          <div class="result-row-label">链方接入点</div>
+          <div class="result-row-value mono">https://chain.aliyun.com/v1/antchain</div>
+        </div>
+        <div class="result-row">
+          <div class="result-row-label">提交时间</div>
+          <div class="result-row-value">2026-04-21 14:32:18</div>
+        </div>
+        <div class="result-row">
+          <div class="result-row-label">确认时间</div>
+          <div class="result-row-value">2026-04-21 14:32:34</div>
+        </div>
+
+        <div class="result-divider"></div>
+
+        <div class="result-row">
+          <div class="result-row-label">数据归属租户</div>
+          <div class="result-row-value">绿城锦绣物业</div>
+        </div>
+        <div class="result-row">
+          <div class="result-row-label">通话 ID</div>
+          <div class="result-row-value">208341</div>
+        </div>
+        <div class="result-row">
+          <div class="result-row-label">通话开始时间</div>
+          <div class="result-row-value">2026-04-21 14:08:02</div>
+        </div>
+        <div class="result-row">
+          <div class="result-row-label">通话时长</div>
+          <div class="result-row-value">214 秒</div>
+        </div>
+
+        <div class="result-footnote">
+          <i data-lucide="file-check-2"></i>
+          <div>
+            本回执确认 SHA-256 为「7d4c4f9e2b0a1c8e…」的数据 在
+            2026-04-21 14:32:18 已提交至阿里云蚂蚁链。您可使用
+            <code>sha256sum</code> 自行计算原始数据哈希，并与上方
+            SHA-256 比对，从而独立验证数据未被篡改。
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error state demo (default hidden) -->
+    <!--
+    <div class="verify-error">未找到该 tx_hash 的存证记录</div>
+    -->
+
+  </div>
+
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>
