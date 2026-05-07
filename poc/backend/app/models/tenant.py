@@ -38,6 +38,8 @@ class ServiceProvider(Base, TimestampMixin):
     admin_phone_enc: Mapped[str] = mapped_column(sa.Text, nullable=False)
     monthly_minute_quota: Mapped[int | None] = mapped_column(sa.Integer)
     is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True)
+    # v1.4 S17.4 — 服务商统一社会信用代码（可选；用于 admin 入口登录）
+    credit_code: Mapped[str | None] = mapped_column(sa.String(32), unique=True)
     audit_status: Mapped[str] = mapped_column(
         sa.Text, nullable=False, default="pending"
     )  # pending / approved / rejected

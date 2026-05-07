@@ -1,9 +1,16 @@
 // 1:1 还原 ui/login.html — 双面板 + 记住设备 + 忘记密码
 // 登录入口不区分平台/对外（v1.6 决策）：所有角色统一同一入口；如需区分平台后台，
 // 走独立 URL（例：/platform-login）即可，无需在 UI 上切换。
+//
+// v1.4 S17.4 — 新增 信用代码 / 短信验证码 两种登录模式（mode 切换）。
 import { Eye, EyeOff, ShieldCheck, XCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLogin } from "@refinedev/core";
+import type { LoginInput } from "../../providers/auth-provider";
+
+type LoginMode = "phone-password" | "credit-code" | "phone-otp";
+
+const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:18000";
 
 interface FeatureItem {
   emoji: string;
@@ -35,12 +42,23 @@ const FEATURES: FeatureItem[] = [
 ];
 
 export function LoginPage() {
+  const [mode, setMode] = useState<LoginMode>("phone-password");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [creditCode, setCreditCode] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpHint, setOtpHint] = useState<string | null>(null);
+  const [otpCountdown, setOtpCountdown] = useState(0);
   const [showPwd, setShowPwd] = useState(false);
   const [remember, setRemember] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [showForgot, setShowForgot] = useState(false);
+
+  useEffect(() => {
+    if (otpCountdown <= 0) return;
+    const t = setTimeout(() => setOtpCountdown((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [otpCountdown]);
 
   const [loginReason] = useState<string | null>(() => {
     if (typeof sessionStorage === "undefined") return null;
@@ -49,32 +67,83 @@ export function LoginPage() {
     return r;
   });
 
-  const { mutate: login, isPending: isLoading } = useLogin<{
-    phone: string;
-    password: string;
-  }>();
+  const { mutate: login, isPending: isLoading } = useLogin<LoginInput>();
+
+  const sendOtp = async () => {
+    setErrorMsg("");
+    setOtpHint(null);
+    if (!/^1[3-9]\d{9}$/.test(phone)) {
+      setErrorMsg("请填写有效的 11 位手机号");
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/auth/otp/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, purpose: "login" }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        sent?: boolean;
+        dev_code?: string;
+        detail?: { message?: string };
+      };
+      if (!res.ok || !data.sent) {
+        setErrorMsg(data.detail?.message ?? "发送验证码失败，请稍后再试");
+        return;
+      }
+      setOtpCountdown(60);
+      setOtpHint(
+        data.dev_code
+          ? `开发模式：验证码 ${data.dev_code}（5 分钟内有效）`
+          : "验证码已发送，请查收短信（5 分钟内有效）",
+      );
+    } catch {
+      setErrorMsg("网络错误，请稍后重试");
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorMsg("");
-    if (!phone || !password) {
-      setErrorMsg("请填写手机号和密码");
-      return;
+    let payload: LoginInput;
+    if (mode === "credit-code") {
+      if (!creditCode || !password) {
+        setErrorMsg("请填写社会信用代码和密码");
+        return;
+      }
+      if (!/^[0-9A-Z]{18}$/.test(creditCode)) {
+        setErrorMsg("社会信用代码应为 18 位大写字母数字");
+        return;
+      }
+      payload = {
+        mode: "credit-code",
+        credit_code: creditCode,
+        password,
+      };
+    } else if (mode === "phone-otp") {
+      if (!phone || !otpCode) {
+        setErrorMsg("请填写手机号和验证码");
+        return;
+      }
+      payload = { mode: "phone-otp", phone, code: otpCode };
+    } else {
+      if (!phone || !password) {
+        setErrorMsg("请填写手机号和密码");
+        return;
+      }
+      payload = { phone, password };
     }
-    login(
-      { phone, password },
-      {
-        onSuccess: (data) => {
-          const result = data as { success?: boolean; error?: { message?: string } };
-          if (result.success === false) {
-            setErrorMsg(result.error?.message ?? "登录失败，请重试");
-          }
-        },
-        onError: (err) => {
-          setErrorMsg((err as { message?: string }).message ?? "登录失败，请重试");
-        },
+    login(payload, {
+      onSuccess: (data) => {
+        const result = data as { success?: boolean; error?: { message?: string } };
+        if (result.success === false) {
+          setErrorMsg(result.error?.message ?? "登录失败，请重试");
+        }
       },
-    );
+      onError: (err) => {
+        setErrorMsg((err as { message?: string }).message ?? "登录失败，请重试");
+      },
+    });
   };
 
   return (
@@ -263,6 +332,46 @@ export function LoginPage() {
           {/* ──── 主登录表单 ──── */}
           {!showForgot && (
             <form onSubmit={handleSubmit}>
+              {/* v1.4 S17.4 — 登录方式切换 */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: 0,
+                  marginBottom: 18,
+                  borderBottom: "1px solid #e5e7eb",
+                }}
+              >
+                {([
+                  ["phone-password", "手机号密码"],
+                  ["credit-code", "信用代码"],
+                  ["phone-otp", "短信验证码"],
+                ] as Array<[LoginMode, string]>).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => {
+                      setMode(key);
+                      setErrorMsg("");
+                      setOtpHint(null);
+                    }}
+                    style={{
+                      padding: "10px 14px",
+                      fontSize: 13,
+                      fontWeight: mode === key ? 600 : 400,
+                      color: mode === key ? "#1A56DB" : "#6b7280",
+                      borderBottom:
+                        mode === key ? "2px solid #1A56DB" : "2px solid transparent",
+                      background: "none",
+                      border: "none",
+                      borderBottomWidth: 2,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
               {/* Error */}
               {errorMsg && (
                 <div
@@ -284,69 +393,69 @@ export function LoginPage() {
                 </div>
               )}
 
-              {/* Phone */}
-              <div style={{ marginBottom: 18 }}>
-                <label
-                  htmlFor="phone"
-                  style={{
-                    display: "block",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    color: "#374151",
-                    marginBottom: 6,
-                  }}
-                >
-                  手机号 / 账号
-                  <span style={{ color: "#e02424", marginLeft: 2 }}>*</span>
-                </label>
-                <input
-                  id="phone"
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="请输入手机号"
-                  maxLength={11}
-                  autoComplete="username"
-                  style={{
-                    width: "100%",
-                    padding: "10px 14px",
-                    border: errorMsg ? "1px solid #e02424" : "1px solid #d1d5db",
-                    borderRadius: 8,
-                    fontSize: 14,
-                    fontFamily: "inherit",
-                    color: "#111827",
-                    background: "white",
-                    outline: "none",
-                    transition: "border-color .15s",
-                  }}
-                />
-              </div>
-
-              {/* Password */}
-              <div style={{ marginBottom: 18 }}>
-                <label
-                  htmlFor="password"
-                  style={{
-                    display: "block",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    color: "#374151",
-                    marginBottom: 6,
-                  }}
-                >
-                  密码<span style={{ color: "#e02424", marginLeft: 2 }}>*</span>
-                </label>
-                <div style={{ position: "relative" }}>
+              {mode === "credit-code" ? (
+                <div style={{ marginBottom: 18 }}>
+                  <label
+                    htmlFor="credit-code"
+                    style={{
+                      display: "block",
+                      fontSize: 13,
+                      fontWeight: 500,
+                      color: "#374151",
+                      marginBottom: 6,
+                    }}
+                  >
+                    统一社会信用代码
+                    <span style={{ color: "#e02424", marginLeft: 2 }}>*</span>
+                  </label>
                   <input
-                    id="password"
-                    type={showPwd ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="请输入密码"
-                    autoComplete="current-password"
+                    id="credit-code"
+                    type="text"
+                    value={creditCode}
+                    onChange={(e) => setCreditCode(e.target.value.toUpperCase())}
+                    placeholder="18 位大写字母数字"
+                    maxLength={18}
+                    autoComplete="off"
                     style={{
                       width: "100%",
-                      padding: "10px 44px 10px 14px",
+                      padding: "10px 14px",
+                      border: errorMsg ? "1px solid #e02424" : "1px solid #d1d5db",
+                      borderRadius: 8,
+                      fontSize: 14,
+                      fontFamily: "monospace",
+                      letterSpacing: 1,
+                      color: "#111827",
+                      background: "white",
+                      outline: "none",
+                    }}
+                  />
+                </div>
+              ) : (
+                <div style={{ marginBottom: 18 }}>
+                  <label
+                    htmlFor="phone"
+                    style={{
+                      display: "block",
+                      fontSize: 13,
+                      fontWeight: 500,
+                      color: "#374151",
+                      marginBottom: 6,
+                    }}
+                  >
+                    手机号 / 账号
+                    <span style={{ color: "#e02424", marginLeft: 2 }}>*</span>
+                  </label>
+                  <input
+                    id="phone"
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="请输入手机号"
+                    maxLength={11}
+                    autoComplete="username"
+                    style={{
+                      width: "100%",
+                      padding: "10px 14px",
                       border: errorMsg ? "1px solid #e02424" : "1px solid #d1d5db",
                       borderRadius: 8,
                       fontSize: 14,
@@ -357,26 +466,133 @@ export function LoginPage() {
                       transition: "border-color .15s",
                     }}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPwd((v) => !v)}
-                    aria-label={showPwd ? "隐藏密码" : "显示密码"}
+                </div>
+              )}
+
+              {mode === "phone-otp" ? (
+                <div style={{ marginBottom: 18 }}>
+                  <label
+                    htmlFor="otp"
                     style={{
-                      position: "absolute",
-                      right: 12,
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      cursor: "pointer",
-                      color: "#9ca3af",
-                      border: "none",
-                      background: "none",
-                      padding: 2,
+                      display: "block",
+                      fontSize: 13,
+                      fontWeight: 500,
+                      color: "#374151",
+                      marginBottom: 6,
                     }}
                   >
-                    {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
+                    短信验证码<span style={{ color: "#e02424", marginLeft: 2 }}>*</span>
+                  </label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input
+                      id="otp"
+                      type="text"
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                      placeholder="6 位验证码"
+                      maxLength={8}
+                      autoComplete="one-time-code"
+                      style={{
+                        flex: 1,
+                        padding: "10px 14px",
+                        border: errorMsg ? "1px solid #e02424" : "1px solid #d1d5db",
+                        borderRadius: 8,
+                        fontSize: 14,
+                        fontFamily: "monospace",
+                        letterSpacing: 4,
+                        textAlign: "center",
+                        color: "#111827",
+                        background: "white",
+                        outline: "none",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={sendOtp}
+                      disabled={otpCountdown > 0}
+                      style={{
+                        padding: "0 14px",
+                        background: otpCountdown > 0 ? "#e5e7eb" : "#1A56DB",
+                        color: otpCountdown > 0 ? "#6b7280" : "white",
+                        border: "none",
+                        borderRadius: 8,
+                        fontSize: 13,
+                        fontWeight: 500,
+                        cursor: otpCountdown > 0 ? "not-allowed" : "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {otpCountdown > 0 ? `${otpCountdown}s 后重发` : "获取验证码"}
+                    </button>
+                  </div>
+                  {otpHint && (
+                    <p
+                      style={{
+                        marginTop: 6,
+                        fontSize: 12,
+                        color: "#6b7280",
+                      }}
+                    >
+                      {otpHint}
+                    </p>
+                  )}
                 </div>
-              </div>
+              ) : (
+                <div style={{ marginBottom: 18 }}>
+                  <label
+                    htmlFor="password"
+                    style={{
+                      display: "block",
+                      fontSize: 13,
+                      fontWeight: 500,
+                      color: "#374151",
+                      marginBottom: 6,
+                    }}
+                  >
+                    密码<span style={{ color: "#e02424", marginLeft: 2 }}>*</span>
+                  </label>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      id="password"
+                      type={showPwd ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="请输入密码"
+                      autoComplete="current-password"
+                      style={{
+                        width: "100%",
+                        padding: "10px 44px 10px 14px",
+                        border: errorMsg ? "1px solid #e02424" : "1px solid #d1d5db",
+                        borderRadius: 8,
+                        fontSize: 14,
+                        fontFamily: "inherit",
+                        color: "#111827",
+                        background: "white",
+                        outline: "none",
+                        transition: "border-color .15s",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPwd((v) => !v)}
+                      aria-label={showPwd ? "隐藏密码" : "显示密码"}
+                      style={{
+                        position: "absolute",
+                        right: 12,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        cursor: "pointer",
+                        color: "#9ca3af",
+                        border: "none",
+                        background: "none",
+                        padding: 2,
+                      }}
+                    >
+                      {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Remember + Forgot */}
               <div

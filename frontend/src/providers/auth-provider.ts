@@ -17,26 +17,64 @@ export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 
+interface LoginByPhonePassword {
+  mode?: "phone-password";
+  phone: string;
+  password: string;
+}
+
+interface LoginByCreditCode {
+  mode: "credit-code";
+  credit_code: string;
+  password: string;
+}
+
+interface LoginByOtp {
+  mode: "phone-otp";
+  phone: string;
+  code: string;
+}
+
+export type LoginInput = LoginByPhonePassword | LoginByCreditCode | LoginByOtp;
+
 export const authProvider: AuthProvider = {
-  login: async ({ phone, password }: { phone: string; password: string }) => {
+  login: async (input: LoginInput) => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
+      let url = `${API_BASE}/api/v1/auth/login`;
+      let body: Record<string, unknown>;
+      if (input.mode === "credit-code") {
+        url = `${API_BASE}/api/v1/auth/login-by-credit-code`;
+        body = {
+          credit_code: input.credit_code,
+          password: input.password,
+          device_type: "pc",
+        };
+      } else if (input.mode === "phone-otp") {
+        url = `${API_BASE}/api/v1/auth/otp/verify`;
+        body = { phone: input.phone, code: input.code, device_type: "pc" };
+      } else {
+        body = {
+          phone: input.phone,
+          password: input.password,
+          device_type: "pc",
+        };
+      }
+
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Sprint 15.1 — 多设备踢出：PC 端固定 device_type='pc'
-        body: JSON.stringify({ phone, password, device_type: "pc" }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as {
           message?: string;
+          detail?: { message?: string };
         };
+        const msg = err.detail?.message ?? err.message ?? "登录失败，请检查输入";
         return {
           success: false,
-          error: {
-            name: "LoginError",
-            message: err.message ?? "登录失败，请检查手机号和密码",
-          },
+          error: { name: "LoginError", message: msg },
         };
       }
 
