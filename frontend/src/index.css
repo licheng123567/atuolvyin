@@ -1,6 +1,9 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* tailwind v4: single import replaces @tailwind base/components/utilities.
+   `@config` keeps the existing tailwind.config.ts (extend.colors / spacing /
+   borderRadius / fontFamily) live in compat mode; future migration can move
+   those into `@theme {}` blocks below for a fully CSS-first config. */
+@import "tailwindcss";
+@config "../tailwind.config.ts";
 
 @layer base {
   :root {
