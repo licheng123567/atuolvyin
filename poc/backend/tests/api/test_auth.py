@@ -1,13 +1,11 @@
 import pytest
 from httpx import AsyncClient
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from app.core.crypto import encrypt_phone
+from app.core.security import get_password_hash
 from app.models.user import UserAccount
 from app.models.tenant import Tenant, UserTenantMembership
-
-_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 @pytest.fixture
@@ -19,7 +17,7 @@ def seeded_auth_user(db_session: Session):
     user = UserAccount(
         phone_enc=encrypt_phone("13800138000"),
         name="测试管理员",
-        password_hash=_pwd.hash("Password123"),
+        password_hash=get_password_hash("Password123"),
     )
     db_session.add(user)
     db_session.flush()
@@ -88,7 +86,7 @@ async def test_login_inactive_user(client: AsyncClient, db_session: Session):
     user = UserAccount(
         phone_enc=encrypt_phone("13500135000"),
         name="已停用账号",
-        password_hash=_pwd.hash("Password123"),
+        password_hash=get_password_hash("Password123"),
         is_active=False,
     )
     db_session.add(user)

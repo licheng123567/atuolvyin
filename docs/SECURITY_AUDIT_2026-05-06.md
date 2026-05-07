@@ -68,13 +68,17 @@
 
 ## v1.7 候选清单（基于本审计）
 
-1. **lucide-react 0.511 → 1.14**（低风险）
-2. **vitest 3 → 4**（中风险，benchmark + 测试一遍）
-3. **patch-level 升级一批**（pydantic/psycopg/vite — 5 分钟全部升）
-4. **redis-py 5 → 7**（高风险，专项）
-5. **bcrypt 5 + passlib 替换**（架构层面，专项）
-6. **tailwind v4**（专项 sprint，影响 design-system.css 整套 token）
-7. **react 19**（专项 sprint，concurrent / strict effects 全面 review）
+> 截至 2026-05-07 处理进度：v1.6.2/.3/.5 已批量落地 patch + 中风险 minor 升级；v1.7.0 已替换 passlib。
+
+1. ~~lucide-react 0.511 → 1.14~~ — ✅ v1.6.3
+2. ~~vitest 3 → 4~~ — ✅ v1.6.3
+3. ~~patch-level 升级一批~~ — ✅ v1.6.2/.3
+4. **redis-py 5 → 7**（高风险，专项）— pending
+5. ~~bcrypt 5 + passlib 替换~~ — ✅ v1.7.0（passlib archived，重写为 bcrypt 直接调用）
+6. **tailwind v4**（专项 sprint，影响 design-system.css 整套 token）— pending
+7. **react 19**（专项 sprint，concurrent / strict effects 全面 review）— pending
+8. ~~@types/node 24→25~~ — ✅ v1.6.5
+9. ~~pyahocorasick 1.4→2.3~~ — ✅ v1.6.5
 
 ## 复测命令
 

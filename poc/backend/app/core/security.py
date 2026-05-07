@@ -1,10 +1,10 @@
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Annotated
 
+import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from .config import settings
@@ -13,16 +13,30 @@ from .db import get_db
 if TYPE_CHECKING:
     from app.models.user import UserAccount
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    """Hash a password with bcrypt (cost factor 12 default).
+
+    v1.7.0 — replaces passlib.CryptContext (passlib 1.7.4 is archived and
+    incompatible with bcrypt >= 5.x). bcrypt's 72-byte input limit is
+    enforced upstream by Pydantic schemas (`max_length=72`).
+    """
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    """Verify a plain password against a bcrypt hash. Pre-existing hashes
+    written by passlib are standard bcrypt strings and verify identically."""
+    try:
+        return bcrypt.checkpw(
+            plain_password.encode("utf-8"),
+            hashed_password.encode("utf-8"),
+        )
+    except ValueError:
+        # Malformed hash → treat as mismatch (no info leak)
+        return False
 
 
 def create_access_token(
