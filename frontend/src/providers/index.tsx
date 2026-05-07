@@ -1,3 +1,4 @@
+import type { DataProvider } from "@refinedev/core";
 import simpleRestDataProvider from "@refinedev/simple-rest";
 import axios from "axios";
 import { getToken } from "./auth-provider";
@@ -22,7 +23,7 @@ const baseProvider = simpleRestDataProvider(API_BASE_V1, httpClient);
 
 // Bug fix: simple-rest 的 custom() 不自动前缀 apiUrl，导致 useCustom 用相对 URL
 // 时被浏览器解析成 `${currentPage}/${url}`。这里包一层自动补上 apiUrl。
-export const dataProvider = {
+export const dataProvider: DataProvider = {
   ...baseProvider,
   custom: async (params: Parameters<typeof baseProvider.custom>[0]) => {
     const url = params.url.startsWith("http")

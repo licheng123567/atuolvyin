@@ -52,20 +52,43 @@ function priorityBadge(score: number): { className: string; label: string } {
   return { className: "ds-badge ds-badge-gray", label: `${score}分` };
 }
 
+interface ProjectOption {
+  id: number;
+  name: string;
+}
+
 export function AdminPoolPage() {
   const [assignFor, setAssignFor] = useState<number | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
   const [keyword, setKeyword] = useState("");
   const [overdueFilter, setOverdueFilter] = useState("");
+  const [projectFilter, setProjectFilter] = useState<number | "">("");
   const [sortBy, setSortBy] = useState<"priority" | "amount" | "joined">("priority");
   const invalidate = useInvalidate();
   const go = useGo();
 
+  const filters: Array<{ field: string; operator: "eq"; value: string | number }> = [
+    { field: "pool_type", operator: "eq", value: "public" },
+  ];
+  if (projectFilter !== "") {
+    filters.push({ field: "project_id", operator: "eq", value: projectFilter });
+  }
+
   const { query: casesQuery } = useList<CaseItem>({
     resource: "admin/cases",
-    filters: [{ field: "pool_type", operator: "eq", value: "public" }],
+    filters,
     pagination: { currentPage: 1, pageSize: 100 },
   });
+
+  const { query: projectsQuery } = useList<ProjectOption>({
+    resource: "admin/projects",
+    pagination: { currentPage: 1, pageSize: 100 },
+  });
+  const projectsRaw = projectsQuery.data?.data;
+  const projects: ProjectOption[] =
+    (projectsRaw as unknown as PaginatedResponse<ProjectOption>)?.items ??
+    (projectsRaw as ProjectOption[] | undefined) ??
+    [];
 
   const rawCases = casesQuery.data?.data;
   const allCases: CaseItem[] =
@@ -174,6 +197,23 @@ export function AdminPoolPage() {
                 onChange={(e) => setKeyword(e.target.value)}
               />
             </div>
+            <select
+              className="form-control"
+              style={{ width: 160 }}
+              value={projectFilter}
+              onChange={(e) =>
+                setProjectFilter(
+                  e.target.value === "" ? "" : Number(e.target.value),
+                )
+              }
+            >
+              <option value="">全部项目</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
             <select
               className="form-control"
               style={{ width: 140 }}

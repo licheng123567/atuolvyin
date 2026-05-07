@@ -1,6 +1,6 @@
 // 物业项目管理 — v1.4 Project 一等公民
 import { useGo, useList } from "@refinedev/core";
-import { Plus } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import { useState } from "react";
 import type { PaginatedResponse } from "../../../types";
 
@@ -134,6 +134,15 @@ export function AdminProjectListPage() {
                     onClick={() => go({ to: `/admin/cases?project_id=${p.id}` })}
                   >
                     查看案件
+                  </button>
+                  <button
+                    type="button"
+                    className="ds-btn ds-btn-ghost ds-btn-sm"
+                    onClick={() => go({ to: `/admin/projects/${p.id}/edit` })}
+                    style={{ marginLeft: 4 }}
+                  >
+                    <Pencil className="w-3 h-3" />
+                    编辑
                   </button>
                 </td>
               </tr>

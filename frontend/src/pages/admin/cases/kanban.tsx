@@ -1,7 +1,16 @@
 // 1:1 还原 ui/admin.html#a-kanban 案件看板
-import { useCustomMutation, useInvalidate, useList, useGo } from "@refinedev/core";
+import type { CrudFilter } from "@refinedev/core";
+import {
+  useCustomMutation,
+  useGetIdentity,
+  useGo,
+  useInvalidate,
+  useList,
+} from "@refinedev/core";
 import { KanbanSquare, List } from "lucide-react";
 import { useRef } from "react";
+import { useSearchParams } from "react-router-dom";
+import type { AuthUser } from "../../../providers/auth-provider";
 import type { PaginatedResponse } from "../../../types";
 import {
   groupByStage,
@@ -22,6 +31,7 @@ interface OwnerInfo {
 
 interface CaseItem {
   id: number;
+  project_id: number | null;
   owner: OwnerInfo;
   assigned_to: number | null;
   pool_type: string;
@@ -30,6 +40,11 @@ interface CaseItem {
   months_overdue: number | null;
   priority_score: number;
   status: string;
+}
+
+interface ProjectOption {
+  id: number;
+  name: string;
 }
 
 const COL_CLASS: Record<Stage, string> = {
@@ -54,12 +69,26 @@ export function CaseKanbanPage() {
   const go = useGo();
   const invalidate = useInvalidate();
   const { mutate: patchStage } = useCustomMutation();
+  const { data: identity } = useGetIdentity<AuthUser>();
+  const isPM =
+    identity?.role === "project_manager_property" ||
+    identity?.role === "project_manager_provider";
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const projectIdParam = searchParams.get("project_id");
+  const projectIdFilter = projectIdParam ? Number(projectIdParam) : null;
 
   const draggingId = useRef<number | null>(null);
+
+  const filters: CrudFilter[] = [];
+  if (projectIdFilter !== null) {
+    filters.push({ field: "project_id", operator: "eq", value: projectIdFilter });
+  }
 
   const { query, result } = useList<CaseItem>({
     resource: "admin/cases",
     pagination: { currentPage: 1, pageSize: 200 },
+    filters,
   });
   const isLoading = query.isLoading;
 
@@ -69,10 +98,23 @@ export function CaseKanbanPage() {
     (result.data as CaseItem[] | undefined) ??
     [];
 
+  // 项目下拉（用于筛选）
+  const { query: projectQuery } = useList<ProjectOption>({
+    resource: "admin/projects",
+    pagination: { currentPage: 1, pageSize: 100 },
+  });
+  const projectsRaw = projectQuery.data?.data;
+  const allProjects: ProjectOption[] =
+    (projectsRaw as unknown as PaginatedResponse<ProjectOption>)?.items ??
+    (projectsRaw as ProjectOption[] | undefined) ??
+    [];
+  const currentProject = allProjects.find((p) => p.id === projectIdFilter);
+
   const groups = groupByStage(items);
 
   function handleDrop(newStage: Stage, e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
+    if (isPM) return;
     const idStr = e.dataTransfer.getData("text/plain");
     const id = Number(idStr);
     if (!id) return;
@@ -98,13 +140,55 @@ export function CaseKanbanPage() {
       {/* Page header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">案件看板</h1>
-          <div className="page-subtitle">共 {items.length} 件案件 · 拖拽卡片切换阶段</div>
+          <h1 className="page-title">
+            {currentProject ? `${currentProject.name} · 案件看板` : "案件看板"}
+          </h1>
+          <div className="page-subtitle">
+            共 {items.length} 件案件
+            {isPM ? " · 只读视图" : " · 拖拽卡片切换阶段"}
+            {projectIdFilter !== null && (
+              <button
+                type="button"
+                onClick={() => {
+                  searchParams.delete("project_id");
+                  setSearchParams(searchParams);
+                }}
+                style={{
+                  marginLeft: 12,
+                  fontSize: 12,
+                  color: "var(--color-primary)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                ← 返回全部项目
+              </button>
+            )}
+          </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" className="ds-btn ds-btn-secondary ds-btn-sm" disabled>
-            按员工筛选
-          </button>
+          <select
+            className="form-control"
+            style={{ width: 180 }}
+            value={projectIdParam ?? ""}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === "") {
+                searchParams.delete("project_id");
+              } else {
+                searchParams.set("project_id", val);
+              }
+              setSearchParams(searchParams);
+            }}
+          >
+            <option value="">全部项目</option>
+            {allProjects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
           {/* List / Kanban toggle */}
           <div
             style={{
@@ -163,8 +247,12 @@ export function CaseKanbanPage() {
                     <div
                       key={c.id}
                       className="kanban-card"
-                      draggable
+                      draggable={!isPM}
                       onDragStart={(e) => {
+                        if (isPM) {
+                          e.preventDefault();
+                          return;
+                        }
                         draggingId.current = c.id;
                         e.dataTransfer.setData("text/plain", String(c.id));
                         e.dataTransfer.effectAllowed = "move";
@@ -176,6 +264,7 @@ export function CaseKanbanPage() {
                       style={{
                         borderLeftColor: STAGE_BORDER_COLORS[stage],
                         opacity: stage === "closed" ? 0.7 : 1,
+                        cursor: isPM ? "pointer" : "grab",
                       }}
                     >
                       <div className="owner">{c.owner.name}</div>
@@ -215,7 +304,7 @@ export function CaseKanbanPage() {
                         minHeight: 80,
                       }}
                     >
-                      拖拽到此处
+                      {isPM ? "暂无案件" : "拖拽到此处"}
                     </div>
                   )}
                 </div>

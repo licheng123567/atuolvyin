@@ -44,4 +44,6 @@ export interface CaseDetailResponse {
   updated_at: string;
   calls: CaseCallItem[];
   timeline_events: TimelineEvent[];
+  project_name?: string | null;
+  assigned_role?: string | null;
 }

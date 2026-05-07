@@ -145,9 +145,14 @@ export function AgentWorkstationPage() {
               {detail.owner.name[0]}
             </div>
             <div className="text-sm font-semibold mb-1">{detail.owner.name}</div>
-            <div className="text-xs text-[var(--color-neutral-500)] mb-3">
+            <div className="text-xs text-[var(--color-neutral-500)] mb-1">
               {[detail.owner.building, detail.owner.room].filter(Boolean).join(" ")}
             </div>
+            {detail.project_name && (
+              <div className="text-xs text-[var(--color-neutral-400)] mb-3">
+                项目：{detail.project_name}
+              </div>
+            )}
             {/* T2: agent_external guard — never render full phone for external agents */}
             <div className="text-sm font-mono text-[var(--color-primary)] mb-1">
               {isExternal

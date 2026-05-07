@@ -124,8 +124,10 @@ class CaseDetailResponse(BaseModel):
     id: int
     tenant_id: int
     project_id: int | None
+    project_name: str | None = None
     owner: OwnerInfo
     assigned_to: int | None
+    assigned_role: str | None = None  # v1.4 — 协作来源 badge：agent_internal / agent_external / null
     pool_type: str
     stage: str
     amount_owed: Decimal | None

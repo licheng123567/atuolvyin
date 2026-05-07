@@ -37,6 +37,11 @@ from app.schemas.common import PaginatedResponse
 router = APIRouter()
 
 ADMIN_ROLES = ("admin",)
+# v1.4 — 项目经理可读 admin/cases（看自己管的项目案件）但不可写
+READ_ROLES = ADMIN_ROLES + (
+    "project_manager_property",
+    "project_manager_provider",
+)
 
 
 def _require_tenant(payload: dict) -> int:
@@ -153,7 +158,7 @@ async def import_cases(
 @router.get("/cases", response_model=PaginatedResponse[CaseWithOwnerResponse])
 async def list_cases(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_roles(*READ_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     stage: str | None = Query(None),
     pool_type: str | None = Query(None),
@@ -204,7 +209,7 @@ async def list_cases(
 @router.get("/cases/buildings")
 async def list_distinct_buildings(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_roles(*READ_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     project_id: int | None = Query(None),
 ) -> list[str]:
@@ -264,7 +269,7 @@ async def assign_cases(
 async def get_case(
     case_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_roles(*READ_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseDetailResponse:
     tenant_id = _require_tenant(payload)
@@ -325,10 +330,29 @@ async def get_case(
             agent_name=agent_name,
         ))
 
+    # v1.4 — 拼项目名 + 协作来源 role
+    project_name: str | None = None
+    if case.project_id is not None:
+        from app.models.case import Project
+        project_name = db.execute(
+            select(Project.name).where(Project.id == case.project_id)
+        ).scalar_one_or_none()
+
+    assigned_role: str | None = None
+    if case.assigned_to is not None:
+        m = db.execute(
+            select(UserTenantMembership.role).where(
+                UserTenantMembership.user_id == case.assigned_to,
+                UserTenantMembership.tenant_id == tenant_id,
+            )
+        ).scalar_one_or_none()
+        assigned_role = m
+
     return CaseDetailResponse(
         id=case.id,
         tenant_id=case.tenant_id,
         project_id=case.project_id,
+        project_name=project_name,
         owner=OwnerInfo(
             id=owner.id,
             name=owner.name,
@@ -338,6 +362,7 @@ async def get_case(
             do_not_call=owner.do_not_call,
         ),
         assigned_to=case.assigned_to,
+        assigned_role=assigned_role,
         pool_type=case.pool_type,
         stage=case.stage,
         amount_owed=case.amount_owed,

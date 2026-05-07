@@ -27,6 +27,7 @@ import { UserListPage } from "./pages/admin/users/index";
 import { UserNewPage } from "./pages/admin/users/new";
 import { AdminProjectListPage } from "./pages/admin/projects/index";
 import { AdminProjectNewPage } from "./pages/admin/projects/new";
+import { AdminProjectEditPage } from "./pages/admin/projects/edit";
 import { CaseListPage } from "./pages/admin/cases/index";
 import { CaseImportPage } from "./pages/admin/cases/import";
 import { CaseKanbanPage } from "./pages/admin/cases/kanban";
@@ -332,6 +333,7 @@ function App() {
             {/* Admin - Project Management (v1.4) */}
             <Route path="/admin/projects" element={<AdminProjectListPage />} />
             <Route path="/admin/projects/new" element={<AdminProjectNewPage />} />
+            <Route path="/admin/projects/:id/edit" element={<AdminProjectEditPage />} />
             {/* Admin - Case Management */}
             <Route path="/admin/cases" element={<CaseListPage />} />
             <Route path="/admin/cases/kanban" element={<CaseKanbanPage />} />

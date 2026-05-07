@@ -220,10 +220,18 @@ async def get_case_detail(
             agent_name=agent_name,
         ))
 
+    # v1.4 — 拼项目名（agent 端也要看，方便外勤识别归属）
+    project_name: str | None = None
+    if case.project_id is not None:
+        project_name = db.execute(
+            sa.select(Project.name).where(Project.id == case.project_id)
+        ).scalar_one_or_none()
+
     return CaseDetailResponse(
         id=case.id,
         tenant_id=case.tenant_id,
         project_id=case.project_id,
+        project_name=project_name,
         owner=OwnerInfo(
             id=owner.id,
             name=owner.name,

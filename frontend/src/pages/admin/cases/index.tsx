@@ -1,9 +1,10 @@
 // 1:1 还原 ui/admin.html#a-cases CRM 案件列表
-import { useCreate, useCustom, useGo, useList } from "@refinedev/core";
+import { useCreate, useCustom, useGetIdentity, useGo, useList } from "@refinedev/core";
 import type { CrudFilter } from "@refinedev/core";
 import { CheckSquare, KanbanSquare, List, Plus, Search, UserCheck } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import type { AuthUser } from "../../../providers/auth-provider";
 import type { PaginatedResponse } from "../../../types";
 
 interface OwnerInfo {
@@ -82,6 +83,10 @@ export function CaseListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const projectIdParam = searchParams.get("project_id");
   const projectIdFilter = projectIdParam ? Number(projectIdParam) : null;
+  const { data: identity } = useGetIdentity<AuthUser>();
+  const isPM =
+    identity?.role === "project_manager_property" ||
+    identity?.role === "project_manager_provider";
 
   const [keyword, setKeyword] = useState("");
   const [stage, setStage] = useState("");
@@ -250,7 +255,7 @@ export function CaseListPage() {
               看板
             </button>
           </div>
-          {selectedIds.length > 0 && (
+          {!isPM && selectedIds.length > 0 && (
             <button
               type="button"
               onClick={() => setAssignModalOpen(true)}
@@ -260,14 +265,16 @@ export function CaseListPage() {
               批量分配（{selectedIds.length}）
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => go({ to: "/admin/cases/import" })}
-            className="ds-btn ds-btn-primary"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            导入案件
-          </button>
+          {!isPM && (
+            <button
+              type="button"
+              onClick={() => go({ to: "/admin/cases/import" })}
+              className="ds-btn ds-btn-primary"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              导入案件
+            </button>
+          )}
         </div>
       </div>
 
@@ -342,15 +349,17 @@ export function CaseListPage() {
         <table>
           <thead>
             <tr>
-              <th style={{ width: 36 }}>
-                <input
-                  type="checkbox"
-                  checked={selectedIds.length === items.length && items.length > 0}
-                  onChange={(e) =>
-                    setSelectedIds(e.target.checked ? items.map((c) => c.id) : [])
-                  }
-                />
-              </th>
+              {!isPM && (
+                <th style={{ width: 36 }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.length === items.length && items.length > 0}
+                    onChange={(e) =>
+                      setSelectedIds(e.target.checked ? items.map((c) => c.id) : [])
+                    }
+                  />
+                </th>
+              )}
               <th>案件编号</th>
               <th>业主</th>
               <th>房号</th>
@@ -366,14 +375,14 @@ export function CaseListPage() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={11} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                <td colSpan={isPM ? 10 : 11} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
                   加载中…
                 </td>
               </tr>
             )}
             {!isLoading && items.length === 0 && (
               <tr>
-                <td colSpan={11} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                <td colSpan={isPM ? 10 : 11} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
                   暂无案件数据
                 </td>
               </tr>
@@ -393,13 +402,15 @@ export function CaseListPage() {
                       : undefined
                   }
                 >
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(c.id)}
-                      onChange={() => handleToggleSelect(c.id)}
-                    />
-                  </td>
+                  {!isPM && (
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(c.id)}
+                        onChange={() => handleToggleSelect(c.id)}
+                      />
+                    </td>
+                  )}
                   <td style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 12 }}>
                     {c.case_no ?? `CC-${String(c.id).padStart(4, "0")}`}
                   </td>
@@ -459,7 +470,7 @@ export function CaseListPage() {
                     >
                       详情
                     </button>
-                    {!c.assigned_to && (
+                    {!isPM && !c.assigned_to && (
                       <button
                         type="button"
                         className="ds-btn ds-btn-ghost ds-btn-sm"
