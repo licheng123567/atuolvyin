@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>风控关键词 — 有证慧催</title>
+  <link rel="stylesheet" href="assets/design-system.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    body { background: var(--color-neutral-50); min-height: 100vh; }
+    .page { max-width: 520px; margin: 0 auto; padding: 24px 20px; }
+
+    .top-row { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+    .back-btn { background: none; border: none; cursor: pointer; padding: 0; color: var(--color-neutral-500); }
+    .back-btn:hover { color: var(--color-neutral-900); }
+    .back-btn svg { width: 20px; height: 20px; }
+    h1 { font-size: 20px; font-weight: 600; color: var(--color-neutral-900); }
+
+    .mode-tip {
+      font-size: 12.5px;
+      color: var(--color-neutral-500);
+      background: var(--color-neutral-100);
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 16px;
+    }
+
+    form {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--color-neutral-700);
+      margin-bottom: 6px;
+    }
+    input,
+    select {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 13.5px;
+      border: 1px solid var(--color-neutral-300);
+      border-radius: var(--radius-sm);
+      outline: none;
+      font-family: inherit;
+    }
+    input:focus,
+    select:focus {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(26, 86, 219, 0.1);
+    }
+
+    .actions { display: flex; gap: 10px; padding-top: 8px; }
+    .btn {
+      padding: 9px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13.5px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .btn-danger {
+      flex: 1;
+      background: var(--color-danger);
+      color: white;
+      border: none;
+    }
+    .btn-secondary {
+      background: white;
+      border: 1px solid var(--color-neutral-300);
+      color: var(--color-neutral-700);
+    }
+
+    .meta-bar {
+      font-size: 11.5px;
+      color: var(--color-neutral-400);
+      margin-top: 8px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--color-neutral-200);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page">
+
+    <div class="top-row">
+      <button type="button" class="back-btn" aria-label="返回">
+        <i data-lucide="arrow-left"></i>
+      </button>
+      <h1>编辑风控关键词</h1>
+    </div>
+
+    <div class="mode-tip">
+      ※ 同一原型同时演示「新增」和「编辑」两种模式 —
+      新增态：标题改为「新增风控关键词」，下方 meta-bar 隐藏，输入框为空。
+    </div>
+
+    <form>
+      <div>
+        <label>关键词 *</label>
+        <input type="text" maxlength="64" value="信访办" placeholder="如：投诉、威胁...">
+      </div>
+
+      <div>
+        <label>场景分类 *</label>
+        <select>
+          <option value="owner_abuse">业主辱骂（L1）</option>
+          <option value="owner_threat" selected>业主威胁（L2）</option>
+          <option value="agent_violation">催收员违规（L2）</option>
+          <option value="agent_minor_misconduct">催收员轻微不当（L1）</option>
+        </select>
+      </div>
+
+      <div>
+        <label>检测说话人 *</label>
+        <select>
+          <option value="customer" selected>业主端</option>
+          <option value="agent">催收员端</option>
+        </select>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="btn btn-danger">保存</button>
+        <button type="button" class="btn btn-secondary">取消</button>
+      </div>
+
+      <div class="meta-bar">
+        ID #67 · 创建于 2026-03-12 · 最近编辑 2026-04-25 14:32 · 累计命中 14 次
+      </div>
+    </form>
+
+  </div>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>

@@ -149,11 +149,11 @@
 | ~~admin/compliance/detail~~ | ✅ Sprint 16.4 反向出原型 → ui/admin-compliance-detail.html |
 | ~~admin/settlements/detail~~ | ✅ Sprint 16.4 反向出原型 → ui/admin-settlement-detail.html |
 | ~~admin/providers/detail~~ | ✅ Sprint 16.4 反向出原型 → ui/admin-provider-detail.html |
-| admin/users/new | 新建用户 |
+| ~~admin/users/new~~ | ✅ Sprint 16.4 反向出原型 → ui/admin-user-new.html |
 | ~~help/app~~ | ✅ Sprint 16.2 反向出原型 → ui/help-app.html |
 | ~~verify (/:tx_hash)~~ | ✅ Sprint 16.2 反向出原型 → ui/verify.html |
-| workorder/orders/new | 新建工单 |
-| risk-keywords/create + edit | 风控关键词管理 |
+| ~~workorder/orders/new~~ | ✅ Sprint 16.4 反向出原型 → ui/workorder-new.html |
+| ~~risk-keywords/create + edit~~ | ✅ Sprint 16.4 反向出原型 → ui/admin-risk-keyword-form.html（一份原型双模式注释） |
 
 ### P2（次要 / 服务商内部 / 平台超管细节）
 
@@ -179,6 +179,20 @@
 5. ~~admin/workstation/live~~ ✅ 已落（ui/admin-workstation-live.html, Sprint 16.2）
 
 **第一批 P0 全部落地。** 后续 P1 / P2 批次的原型可继续按 sprint 节奏交付。
+
+**第二批 P1（Sprint 16.4 完成 8/8）：**
+- ~~supervisor/reviews/detail~~ ✅ ui/supervisor-review-detail.html
+- ~~supervisor/risk-events~~ ✅ ui/supervisor-risk-events.html
+- ~~admin/scripts/effectiveness~~ ✅ ui/admin-scripts-effectiveness.html
+- ~~admin/scripts/versions~~ ✅ ui/admin-scripts-versions.html
+- ~~admin/compliance/detail~~ ✅ ui/admin-compliance-detail.html
+- ~~admin/settlements/detail~~ ✅ ui/admin-settlement-detail.html
+- ~~admin/providers/detail~~ ✅ ui/admin-provider-detail.html
+- ~~admin/users/new~~ ✅ ui/admin-user-new.html
+- ~~workorder/orders/new~~ ✅ ui/workorder-new.html
+- ~~risk-keywords/create + edit~~ ✅ ui/admin-risk-keyword-form.html
+
+**P1 全部落地。** 仅剩 P2（次要 / 服务商内部 / 平台超管细节）批次。
 
 **第二批（缺失功能页 3 个 — 待 v1.4 实施时同步出原型）**：
 6. p-ops-accounts（v1.4 多设备踢出沿带）

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>新建用户 — 有证慧催</title>
+  <link rel="stylesheet" href="assets/design-system.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    body { background: var(--color-neutral-50); min-height: 100vh; }
+    .page { max-width: 520px; margin: 0 auto; padding: 24px 20px; }
+
+    .top-row { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+    .back-btn { background: none; border: none; cursor: pointer; padding: 0; color: var(--color-neutral-500); }
+    .back-btn:hover { color: var(--color-neutral-900); }
+    .back-btn svg { width: 20px; height: 20px; }
+    h1 { font-size: 20px; font-weight: 600; color: var(--color-neutral-900); }
+
+    form {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--color-neutral-700);
+      margin-bottom: 6px;
+    }
+    .field input,
+    .field select {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 13.5px;
+      border: 1px solid var(--color-neutral-300);
+      border-radius: var(--radius-sm);
+      outline: none;
+      font-family: inherit;
+    }
+    .field input:focus,
+    .field select:focus {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(26, 86, 219, 0.1);
+    }
+
+    .actions { display: flex; gap: 10px; padding-top: 8px; }
+    .btn {
+      padding: 9px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13.5px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .btn-primary {
+      flex: 1;
+      background: var(--color-primary);
+      color: white;
+      border: none;
+    }
+    .btn-secondary {
+      background: white;
+      border: 1px solid var(--color-neutral-300);
+      color: var(--color-neutral-700);
+    }
+
+    .err {
+      font-size: 13px;
+      color: var(--color-danger);
+      padding: 6px 0;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page">
+
+    <div class="top-row">
+      <button type="button" class="back-btn" aria-label="返回">
+        <i data-lucide="arrow-left"></i>
+      </button>
+      <h1>新建用户</h1>
+    </div>
+
+    <form>
+      <div class="field">
+        <label>姓名 *</label>
+        <input type="text" placeholder="例：张三" value="">
+      </div>
+      <div class="field">
+        <label>手机 *</label>
+        <input type="tel" placeholder="138xxxxxxxx" value="">
+      </div>
+      <div class="field">
+        <label>密码 *</label>
+        <input type="password" placeholder="至少 8 位" value="">
+      </div>
+      <div class="field">
+        <label>角色 *</label>
+        <select>
+          <option value="supervisor" selected>主管/督导</option>
+          <option value="agent_internal">催收员（内部）</option>
+          <option value="legal">法务专员</option>
+          <option value="workorder">工单处理员</option>
+          <option value="project_manager_property">项目负责人（物业）</option>
+        </select>
+      </div>
+
+      <!-- Error state demo (commented out) -->
+      <!-- <p class="err">手机号已被占用</p> -->
+
+      <div class="actions">
+        <button type="submit" class="btn btn-primary">创建用户</button>
+        <button type="button" class="btn btn-secondary">取消</button>
+      </div>
+    </form>
+
+  </div>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>

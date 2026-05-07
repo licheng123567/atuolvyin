@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>新建工单 — 有证慧催</title>
+  <link rel="stylesheet" href="assets/design-system.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    body { background: var(--color-neutral-50); min-height: 100vh; }
+    .page { max-width: 520px; margin: 0 auto; padding: 24px 20px; }
+
+    .top-row { display: flex; align-items: center; gap: 8px; margin-bottom: 24px; }
+    .back-btn { background: none; border: none; cursor: pointer; padding: 0; color: var(--color-neutral-500); }
+    .back-btn:hover { color: var(--color-neutral-900); }
+    .back-btn svg { width: 20px; height: 20px; }
+    .title-icon svg { width: 20px; height: 20px; color: var(--color-primary); }
+    h1 { font-size: 20px; font-weight: 600; color: var(--color-neutral-900); }
+
+    form {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--color-neutral-700);
+      margin-bottom: 6px;
+    }
+    select,
+    input,
+    textarea {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 13.5px;
+      border: 1px solid var(--color-neutral-300);
+      border-radius: var(--radius-sm);
+      outline: none;
+      font-family: inherit;
+    }
+    textarea { resize: vertical; min-height: 88px; }
+    select:focus,
+    input:focus,
+    textarea:focus {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(26, 86, 219, 0.1);
+    }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .actions { display: flex; gap: 10px; padding-top: 8px; }
+    .btn {
+      padding: 9px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13.5px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .btn-primary { flex: 1; background: var(--color-primary); color: white; border: none; }
+    .btn-secondary { background: white; border: 1px solid var(--color-neutral-300); color: var(--color-neutral-700); }
+  </style>
+</head>
+<body>
+
+  <div class="page">
+
+    <div class="top-row">
+      <button type="button" class="back-btn" aria-label="返回">
+        <i data-lucide="arrow-left"></i>
+      </button>
+      <span class="title-icon"><i data-lucide="clipboard-list"></i></span>
+      <h1>新建工单</h1>
+    </div>
+
+    <form>
+      <div>
+        <label>工单类型 *</label>
+        <select>
+          <option value="quality" selected>质量异议</option>
+          <option value="reduction">减免申请</option>
+          <option value="dispute">争议处理</option>
+          <option value="other">其他</option>
+        </select>
+      </div>
+
+      <div>
+        <label>描述 *</label>
+        <textarea rows="4" placeholder="详细描述问题">业主张大伟反映 3 号楼电梯近一个月停运 5 次以上，要求物业公司核实并出具维修报告，否则拒缴本月物业费。</textarea>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label>关联案件 ID（选填）</label>
+          <input type="number" min="1" value="42">
+        </div>
+        <div>
+          <label>关联通话 ID（选填）</label>
+          <input type="number" min="1" value="208341">
+        </div>
+      </div>
+
+      <div>
+        <label>指派给（用户 ID，选填）</label>
+        <input type="number" min="1" value="">
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="btn btn-primary">创建工单</button>
+        <button type="button" class="btn btn-secondary">取消</button>
+      </div>
+    </form>
+
+  </div>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>
