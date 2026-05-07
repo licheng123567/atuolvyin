@@ -25,6 +25,10 @@ from app.core.security import get_token_payload, require_roles
 from app.models.case import CollectionCase
 from app.models.law_firm import LawFirm, LawFirmLawyer
 from app.models.legal_conversion import LegalConversionOrder, LegalServicePackage
+from app.models.legal_document_template import (
+    LegalDocumentRender,
+    LegalDocumentTemplate,
+)
 from app.models.user import UserAccount
 from app.schemas.common import PaginatedResponse
 from app.schemas.legal_conversion import (
@@ -35,6 +39,11 @@ from app.schemas.legal_conversion import (
     LegalConversionOrderOut,
     LegalServicePackageOut,
 )
+from app.schemas.legal_doc_render import (
+    LegalDocumentRenderOut,
+    LegalDocumentTemplateOut,
+)
+from app.services.legal_document_render import render_for_order
 from app.services.legal_conversion import (
     build_timeline_summary,
     estimate_cost,
@@ -438,3 +447,118 @@ async def cancel_order(
 
     pkg = db.get(LegalServicePackage, order.package_id)
     return _order_to_out(order, pkg.name if pkg else None)
+
+
+# ── Sprint 16.4 — 法律文书渲染 ───────────────────────────────────
+
+
+@router.get(
+    "/legal-document-templates",
+    response_model=list[LegalDocumentTemplateOut],
+)
+async def list_doc_templates(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[LegalDocumentTemplateOut]:
+    """列出本租户可见模板（平台默认 + 本租户覆盖），按 package_type 排序。"""
+    tenant_id = _require_tenant(payload)
+    rows = db.execute(
+        select(LegalDocumentTemplate)
+        .where(
+            LegalDocumentTemplate.enabled.is_(True),
+            or_(
+                LegalDocumentTemplate.tenant_id.is_(None),
+                LegalDocumentTemplate.tenant_id == tenant_id,
+            ),
+        )
+        .order_by(LegalDocumentTemplate.package_type, LegalDocumentTemplate.id)
+    ).scalars().all()
+    return [LegalDocumentTemplateOut.model_validate(r) for r in rows]
+
+
+def _get_order_for_tenant(
+    db: Session, *, order_id: int, tenant_id: int
+) -> LegalConversionOrder:
+    order = db.get(LegalConversionOrder, order_id)
+    if order is None or order.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "订单不存在"},
+        )
+    return order
+
+
+@router.get(
+    "/legal-conversion-orders/{order_id}/document",
+    response_model=LegalDocumentRenderOut,
+)
+async def get_latest_doc(
+    order_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> LegalDocumentRenderOut:
+    tenant_id = _require_tenant(payload)
+    _get_order_for_tenant(db, order_id=order_id, tenant_id=tenant_id)
+    render = db.execute(
+        select(LegalDocumentRender)
+        .where(LegalDocumentRender.order_id == order_id)
+        .order_by(LegalDocumentRender.version.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if render is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NO_RENDER", "message": "尚未生成文书；请先 POST 生成"},
+        )
+    return LegalDocumentRenderOut.model_validate(render)
+
+
+@router.post(
+    "/legal-conversion-orders/{order_id}/document",
+    response_model=LegalDocumentRenderOut,
+    status_code=http_status.HTTP_201_CREATED,
+)
+async def render_doc(
+    order_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> LegalDocumentRenderOut:
+    """生成 / 重新生成文书，每次创建新版本（version 递增）。"""
+    tenant_id = _require_tenant(payload)
+    order = _get_order_for_tenant(db, order_id=order_id, tenant_id=tenant_id)
+    try:
+        render = render_for_order(
+            db, order=order,
+            rendered_by=int(payload.get("user_id") or 0) or None,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail={"code": "ERR_NO_TEMPLATE", "message": str(exc)},
+        )
+    db.commit()
+    db.refresh(render)
+    return LegalDocumentRenderOut.model_validate(render)
+
+
+@router.get(
+    "/legal-conversion-orders/{order_id}/document/versions",
+    response_model=list[LegalDocumentRenderOut],
+)
+async def list_doc_versions(
+    order_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[LegalDocumentRenderOut]:
+    tenant_id = _require_tenant(payload)
+    _get_order_for_tenant(db, order_id=order_id, tenant_id=tenant_id)
+    rows = db.execute(
+        select(LegalDocumentRender)
+        .where(LegalDocumentRender.order_id == order_id)
+        .order_by(LegalDocumentRender.version.desc())
+    ).scalars().all()
+    return [LegalDocumentRenderOut.model_validate(r) for r in rows]

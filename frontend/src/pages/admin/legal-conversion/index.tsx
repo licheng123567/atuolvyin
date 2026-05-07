@@ -1,7 +1,8 @@
 // Sprint 16.1 — 法务转化订单列表 (PRD §20.4)
 import { useCustom, useGo } from "@refinedev/core";
-import { Briefcase, Filter } from "lucide-react";
+import { Briefcase, FileText, Filter } from "lucide-react";
 import { useState } from "react";
+import { LegalDocumentModal } from "../../../components/legal-conversion/LegalDocumentModal";
 
 interface OrderItem {
   id: number;
@@ -42,6 +43,7 @@ const STATUS_COLOR: Record<OrderItem["status"], string> = {
 export function AdminLegalConversionListPage() {
   const go = useGo();
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [docOrderId, setDocOrderId] = useState<number | null>(null);
 
   const { query } = useCustom<ListResp>({
     url: "admin/legal-conversion-orders",
@@ -115,6 +117,7 @@ export function AdminLegalConversionListPage() {
                 <th className="px-4 py-3 text-left">律所</th>
                 <th className="px-4 py-3 text-left">状态</th>
                 <th className="px-4 py-3 text-left">创建时间</th>
+                <th className="px-4 py-3 text-left">文书</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-neutral-100)]">
@@ -160,12 +163,28 @@ export function AdminLegalConversionListPage() {
                   <td className="px-4 py-3 text-xs text-[var(--color-neutral-500)]">
                     {new Date(o.created_at).toLocaleString("zh-CN")}
                   </td>
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => setDocOrderId(o.id)}
+                      className="flex items-center gap-1 text-xs px-2 py-1 border border-[var(--color-neutral-300)] text-[var(--color-neutral-700)] rounded hover:bg-[var(--color-neutral-50)]"
+                    >
+                      <FileText className="w-3 h-3" /> 查看
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
+
+      {docOrderId !== null && (
+        <LegalDocumentModal
+          orderId={docOrderId}
+          onClose={() => setDocOrderId(null)}
+        />
+      )}
     </div>
   );
 }
