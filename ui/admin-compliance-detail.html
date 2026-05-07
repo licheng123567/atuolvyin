@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>合规月报详情 — 有证慧催</title>
+  <link rel="stylesheet" href="assets/design-system.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    body { background: var(--color-neutral-50); min-height: 100vh; }
+    .compliance-page { max-width: 800px; margin: 0 auto; padding: 24px 20px; }
+
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--color-neutral-500);
+      font-size: 13.5px;
+      text-decoration: none;
+    }
+    .back-link:hover { color: var(--color-primary); }
+    .back-link svg { width: 14px; height: 14px; }
+
+    .print-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      background: var(--color-primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 13.5px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .print-btn svg { width: 14px; height: 14px; }
+
+    /* Report card */
+    .report-card {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      box-shadow: var(--shadow-sm);
+    }
+    .report-header {
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--color-neutral-200);
+      margin-bottom: 24px;
+    }
+    .report-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--color-neutral-900);
+    }
+    .report-meta {
+      font-size: 13px;
+      color: var(--color-neutral-500);
+      margin-top: 6px;
+    }
+
+    section.report-section { margin-bottom: 24px; }
+    section.report-section:last-child { margin-bottom: 0; }
+    .section-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--color-neutral-900);
+      margin-bottom: 10px;
+    }
+
+    /* Stat grid */
+    .stat-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .stat-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .stat-cell {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--color-neutral-50);
+      padding: 9px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13.5px;
+    }
+    .stat-cell-label { color: var(--color-neutral-500); }
+    .stat-cell-value { font-weight: 700; color: var(--color-neutral-900); font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+    .stat-cell-value.warn { color: var(--color-danger); }
+
+    .section-foot {
+      font-size: 12px;
+      color: var(--color-neutral-500);
+      margin-top: 8px;
+    }
+
+    .violation-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 13.5px;
+    }
+    .violation-list p { margin: 0; }
+    .violation-list .label { color: var(--color-neutral-500); }
+    .violation-list .value { font-weight: 600; color: var(--color-neutral-700); }
+    .violation-list .value.warn { color: var(--color-danger); }
+    .violation-list .hint {
+      font-size: 11.5px;
+      color: var(--color-neutral-400);
+      margin-left: 6px;
+    }
+
+    /* Detail table */
+    .detail-table {
+      width: 100%;
+      font-size: 13px;
+      border-collapse: collapse;
+    }
+    .detail-table thead {
+      border-bottom: 1px solid var(--color-neutral-200);
+    }
+    .detail-table th {
+      padding: 8px 0;
+      font-weight: 500;
+      text-align: left;
+      color: var(--color-neutral-500);
+      font-size: 12.5px;
+    }
+    .detail-table th.right { text-align: right; }
+    .detail-table td {
+      padding: 8px 0;
+      border-bottom: 1px solid var(--color-neutral-100);
+      color: var(--color-neutral-700);
+    }
+    .detail-table td.right { text-align: right; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+    .detail-table tr:last-child td { border-bottom: none; }
+
+    /* Print preview hint */
+    @media print {
+      body { background: white; }
+      .top-bar { display: none; }
+      .report-card { border: none; box-shadow: none; padding: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="compliance-page">
+
+    <div class="top-bar">
+      <a href="admin.html" class="back-link">
+        <i data-lucide="arrow-left"></i> 返回月报列表
+      </a>
+      <button type="button" class="print-btn">
+        <i data-lucide="printer"></i> 打印 / 导出 PDF
+      </button>
+    </div>
+
+    <div class="report-card">
+
+      <header class="report-header">
+        <div class="report-title">绿城锦绣物业 合规催收行为月报</div>
+        <div class="report-meta">
+          统计周期 2026-04-01 ～ 2026-04-30 · 生成于 2026-05-01 09:08:32
+        </div>
+      </header>
+
+      <section class="report-section">
+        <div class="section-title">外呼概览</div>
+        <div class="stat-grid-2">
+          <div class="stat-cell">
+            <span class="stat-cell-label">通话总数</span>
+            <span class="stat-cell-value">2,341</span>
+          </div>
+          <div class="stat-cell">
+            <span class="stat-cell-label">累计计费分钟</span>
+            <span class="stat-cell-value">8,162</span>
+          </div>
+          <div class="stat-cell">
+            <span class="stat-cell-label">时段外通话</span>
+            <span class="stat-cell-value warn">3</span>
+          </div>
+          <div class="stat-cell">
+            <span class="stat-cell-label">超频联系案件</span>
+            <span class="stat-cell-value warn">7</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="report-section">
+        <div class="section-title">风控干预统计</div>
+        <div class="stat-grid-3">
+          <div class="stat-cell">
+            <span class="stat-cell-label">L1 提示</span>
+            <span class="stat-cell-value">182</span>
+          </div>
+          <div class="stat-cell">
+            <span class="stat-cell-label">L2 督导接管</span>
+            <span class="stat-cell-value warn">14</span>
+          </div>
+          <div class="stat-cell">
+            <span class="stat-cell-label">L3 强制中止</span>
+            <span class="stat-cell-value warn">2</span>
+          </div>
+        </div>
+        <p class="section-foot">其中 16 通通话被 AI 中止或终止。</p>
+      </section>
+
+      <section class="report-section">
+        <div class="section-title">合规违规明细</div>
+        <div class="violation-list">
+          <p>
+            <span class="label">DNC（请勿来电）违规：</span>
+            <strong class="value">0 次</strong>
+          </p>
+          <p>
+            <span class="label">联系频次超限案件：</span>
+            <strong class="value warn">7 户</strong>
+          </p>
+          <p>
+            <span class="label">非工作时段外呼：</span>
+            <strong class="value warn">3 通</strong>
+            <span class="hint">（工作时段：北京时间 09:00-21:00）</span>
+          </p>
+        </div>
+      </section>
+
+      <section class="report-section">
+        <div class="section-title">风控分类明细</div>
+        <table class="detail-table">
+          <thead>
+            <tr>
+              <th>级别</th>
+              <th>类别</th>
+              <th class="right">次数</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>L1</td><td>语速过快</td><td class="right">87</td></tr>
+            <tr><td>L1</td><td>合规话术缺失（开场录音告知）</td><td class="right">63</td></tr>
+            <tr><td>L1</td><td>情绪强度偏高</td><td class="right">32</td></tr>
+            <tr><td>L2</td><td>业主威胁/抵触</td><td class="right">8</td></tr>
+            <tr><td>L2</td><td>坐席言辞不当</td><td class="right">6</td></tr>
+            <tr><td>L3</td><td>坐席违规催收</td><td class="right">2</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+    </div>
+  </div>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>

@@ -146,7 +146,7 @@
 | ~~supervisor/risk-events~~ | ✅ Sprint 16.4 反向出原型 → ui/supervisor-risk-events.html |
 | ~~admin/scripts/effectiveness~~ | ✅ Sprint 16.4 反向出原型 → ui/admin-scripts-effectiveness.html |
 | ~~admin/scripts/versions~~ | ✅ Sprint 16.4 反向出原型 → ui/admin-scripts-versions.html |
-| admin/compliance/detail | Sprint 8.4 合规月报详情 |
+| ~~admin/compliance/detail~~ | ✅ Sprint 16.4 反向出原型 → ui/admin-compliance-detail.html |
 | admin/settlements/detail | 结算详情 |
 | admin/providers/detail | Sprint 8.1 服务商合作详情 |
 | admin/users/new | 新建用户 |
