@@ -27,4 +27,5 @@ class TokenResponse(BaseModel):
     name: str
     role: str
     tenant_id: int | None
+    tenant_name: str | None = None
     scope: str  # "platform" | "tenant:{id}" | "provider:{id}"

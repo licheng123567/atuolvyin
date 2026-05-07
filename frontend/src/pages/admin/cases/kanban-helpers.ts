@@ -30,6 +30,49 @@ export const STAGE_BORDER_COLORS: Record<Stage, string> = {
   closed: "#9ca3af",
 };
 
+/** Column header background + text + count-badge colors (admin.html col-* classes) */
+export const STAGE_HEADER_COLORS: Record<
+  Stage,
+  { headerBg: string; headerText: string; badgeBg: string; badgeText: string }
+> = {
+  new: {
+    headerBg: "#f3f4f6",
+    headerText: "#374151",
+    badgeBg: "#e5e7eb",
+    badgeText: "#374151",
+  },
+  in_progress: {
+    headerBg: "#eff6ff",
+    headerText: "#1d4ed8",
+    badgeBg: "#dbeafe",
+    badgeText: "#1d4ed8",
+  },
+  promised: {
+    headerBg: "#fffbeb",
+    headerText: "#b45309",
+    badgeBg: "#fde68a",
+    badgeText: "#b45309",
+  },
+  paid: {
+    headerBg: "#f0fdf4",
+    headerText: "#065f46",
+    badgeBg: "#bbf7d0",
+    badgeText: "#065f46",
+  },
+  escalated: {
+    headerBg: "#f5f3ff",
+    headerText: "#6d28d9",
+    badgeBg: "#ddd6fe",
+    badgeText: "#6d28d9",
+  },
+  closed: {
+    headerBg: "#f3f4f6",
+    headerText: "#6b7280",
+    badgeBg: "#e5e7eb",
+    badgeText: "#6b7280",
+  },
+};
+
 export function groupByStage<T extends { stage: string }>(
   cases: T[],
 ): Record<Stage, T[]> {

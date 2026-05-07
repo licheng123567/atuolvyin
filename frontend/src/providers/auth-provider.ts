@@ -9,6 +9,7 @@ export interface AuthUser {
   name: string;
   role: string;
   tenant_id: number | null;
+  tenant_name: string | null;
   scope: string;
 }
 
@@ -45,6 +46,7 @@ export const authProvider: AuthProvider = {
         name: string;
         role: string;
         tenant_id: number | null;
+        tenant_name: string | null;
         scope: string;
       };
 
@@ -56,6 +58,7 @@ export const authProvider: AuthProvider = {
           name: data.name,
           role: data.role,
           tenant_id: data.tenant_id,
+          tenant_name: data.tenant_name ?? null,
           scope: data.scope,
         } satisfies AuthUser),
       );

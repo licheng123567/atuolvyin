@@ -12,7 +12,7 @@ from app.core.crypto import encrypt_phone
 from app.core.db import get_db
 from app.core.security import create_access_token, verify_password
 from app.models.active_session import ActiveSession
-from app.models.tenant import UserTenantMembership
+from app.models.tenant import Tenant, UserTenantMembership
 from app.models.user import UserAccount
 from app.schemas.auth import LoginRequest, TokenResponse
 
@@ -48,6 +48,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     ).scalar_one_or_none()
 
     tenant_id: int | None = None
+    tenant_name: str | None = None
     role = "platform_superadmin"
     scope = "platform"
 
@@ -55,6 +56,9 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
         tenant_id = membership.tenant_id
         role = membership.role
         scope = f"tenant:{membership.tenant_id}"
+        tenant_name = db.execute(
+            select(Tenant.name).where(Tenant.id == membership.tenant_id)
+        ).scalar_one_or_none()
 
     user.last_login_at = datetime.now(UTC)
 
@@ -89,5 +93,6 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
         name=user.name,
         role=role,
         tenant_id=tenant_id,
+        tenant_name=tenant_name,
         scope=scope,
     )

@@ -6,6 +6,7 @@ import type { PaginatedResponse } from "../../../types";
 import {
   groupByStage,
   STAGE_BORDER_COLORS,
+  STAGE_HEADER_COLORS,
   STAGE_LABELS,
   STAGES,
   type Stage,
@@ -120,76 +121,127 @@ export function CaseKanbanPage() {
       )}
 
       {!isLoading && (
-        <div className="grid grid-cols-6 gap-3 overflow-x-auto">
-          {STAGES.map((stage) => (
-            <div
-              key={stage}
-              className="bg-[var(--color-neutral-50)] rounded-lg p-3 min-h-[400px] flex flex-col"
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => handleDrop(stage, e)}
-            >
-              {/* Column header */}
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="font-semibold text-sm text-[var(--color-neutral-700)]">
-                  {STAGE_LABELS[stage]}
-                </h4>
-                <span className="text-xs font-medium text-[var(--color-neutral-400)] bg-[var(--color-neutral-100)] px-1.5 py-0.5 rounded-full">
-                  {groups[stage].length}
-                </span>
-              </div>
-
-              {/* Cards */}
-              <div className="flex flex-col gap-2 flex-1">
-                {groups[stage].map((c) => (
-                  <div
-                    key={c.id}
-                    draggable
-                    onDragStart={(e) => {
-                      draggingId.current = c.id;
-                      e.dataTransfer.setData("text/plain", String(c.id));
-                      e.dataTransfer.effectAllowed = "move";
-                    }}
-                    onDragEnd={() => {
-                      draggingId.current = null;
-                    }}
-                    onClick={() => go({ to: `/admin/cases/${c.id}` })}
-                    className="bg-white rounded-md p-3 shadow-sm cursor-move text-sm border-l-4 hover:shadow-md transition-shadow select-none"
+        <div className="grid grid-cols-6 gap-4 overflow-x-auto">
+          {STAGES.map((stage) => {
+            const headerColor = STAGE_HEADER_COLORS[stage];
+            const isPaid = stage === "paid";
+            return (
+              <div
+                key={stage}
+                className="flex flex-col min-w-[230px]"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => handleDrop(stage, e)}
+              >
+                {/* Column header — semantic background per stage */}
+                <div
+                  className="flex items-center justify-between font-semibold text-[13px] rounded-t-lg"
+                  style={{
+                    padding: "10px 14px",
+                    background: headerColor.headerBg,
+                    color: headerColor.headerText,
+                  }}
+                >
+                  <span>{STAGE_LABELS[stage]}</span>
+                  <span
+                    className="text-[11px] font-bold rounded-full"
                     style={{
-                      borderLeftColor: STAGE_BORDER_COLORS[stage],
+                      background: headerColor.badgeBg,
+                      color: headerColor.badgeText,
+                      padding: "2px 8px",
+                      minWidth: 22,
+                      textAlign: "center",
                     }}
                   >
-                    <div className="font-medium text-[var(--color-neutral-900)] truncate">
-                      {c.owner.name}
-                    </div>
-                    {(c.owner.building || c.owner.room) && (
-                      <div className="text-xs text-[var(--color-neutral-500)] mt-0.5 truncate">
-                        {[c.owner.building, c.owner.room].filter(Boolean).join(" ")}
+                    {groups[stage].length}
+                  </span>
+                </div>
+
+                {/* Column body — light gray background */}
+                <div
+                  className="rounded-b-lg p-2.5 flex flex-col gap-2 flex-1 min-h-[400px]"
+                  style={{ background: "#f3f4f6" }}
+                >
+                  {groups[stage].map((c) => (
+                    <div
+                      key={c.id}
+                      draggable
+                      onDragStart={(e) => {
+                        draggingId.current = c.id;
+                        e.dataTransfer.setData("text/plain", String(c.id));
+                        e.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragEnd={() => {
+                        draggingId.current = null;
+                      }}
+                      onClick={() => go({ to: `/admin/cases/${c.id}` })}
+                      className="bg-white cursor-move hover:shadow-md transition-shadow select-none"
+                      style={{
+                        padding: 12,
+                        borderRadius: 6,
+                        boxShadow: "0 1px 3px rgba(0,0,0,.08)",
+                        borderLeft: `3px solid ${STAGE_BORDER_COLORS[stage]}`,
+                      }}
+                    >
+                      <div
+                        className="truncate"
+                        style={{
+                          fontWeight: 600,
+                          fontSize: 13.5,
+                          color: "#111827",
+                        }}
+                      >
+                        {c.owner.name}
                       </div>
-                    )}
-                    <div className="text-xs text-[var(--color-neutral-500)] mt-1 flex items-center gap-1">
-                      {c.amount_owed != null && (
-                        <span className="font-medium text-[var(--color-neutral-700)]">
-                          ¥{c.amount_owed}
-                        </span>
+                      {(c.owner.building || c.owner.room) && (
+                        <div
+                          className="truncate"
+                          style={{
+                            fontSize: 12,
+                            color: "#6b7280",
+                            marginTop: 2,
+                          }}
+                        >
+                          {[c.owner.building, c.owner.room]
+                            .filter(Boolean)
+                            .join("")}
+                        </div>
                       )}
-                      {c.amount_owed != null && c.months_overdue != null && (
-                        <span className="text-[var(--color-neutral-300)]">·</span>
+                      {c.amount_owed != null && (
+                        <div
+                          style={{
+                            fontWeight: 700,
+                            fontSize: 14,
+                            marginTop: 6,
+                            color: isPaid ? "#057a55" : "#e02424",
+                          }}
+                        >
+                          ¥{c.amount_owed}
+                          {isPaid ? " ✓" : ""}
+                        </div>
                       )}
                       {c.months_overdue != null && (
-                        <span>{c.months_overdue}个月</span>
+                        <div
+                          style={{
+                            fontSize: 11.5,
+                            color: "#9ca3af",
+                            marginTop: 4,
+                          }}
+                        >
+                          {c.months_overdue}个月欠费
+                        </div>
                       )}
                     </div>
-                  </div>
-                ))}
+                  ))}
 
-                {groups[stage].length === 0 && (
-                  <div className="flex-1 flex items-center justify-center text-xs text-[var(--color-neutral-300)] border-2 border-dashed border-[var(--color-neutral-200)] rounded-md min-h-[80px]">
-                    拖拽卡片到此处
-                  </div>
-                )}
+                  {groups[stage].length === 0 && (
+                    <div className="flex-1 flex items-center justify-center text-xs text-[var(--color-neutral-300)] border-2 border-dashed border-[var(--color-neutral-200)] rounded-md min-h-[80px]">
+                      拖拽卡片到此处
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
