@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>督导复核详情 — 有证慧催</title>
+  <link rel="stylesheet" href="assets/design-system.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    body { background: var(--color-neutral-50); min-height: 100vh; }
+    .review-page {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 24px 20px;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--color-neutral-500);
+      font-size: 13.5px;
+      text-decoration: none;
+      margin-bottom: 16px;
+      transition: color 0.15s ease;
+    }
+    .back-link:hover { color: var(--color-primary); }
+    .back-link svg { width: 14px; height: 14px; }
+
+    .review-title {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 18px;
+    }
+    .review-title svg {
+      width: 22px; height: 22px;
+      color: var(--color-primary);
+    }
+    .review-title h1 {
+      font-size: 20px; font-weight: 600;
+      color: var(--color-neutral-900);
+    }
+    .review-title-meta {
+      font-size: 13px;
+      color: var(--color-neutral-500);
+    }
+
+    .review-card {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+    .review-card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--color-neutral-800);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .review-card-title svg {
+      width: 16px; height: 16px;
+      color: var(--color-danger);
+    }
+    .review-card-title.normal svg {
+      color: var(--color-primary);
+    }
+
+    /* Audio player */
+    .audio-bar {
+      width: 100%;
+      height: 48px;
+      background: var(--color-neutral-50);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 0 14px;
+    }
+    .audio-play-btn {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: var(--color-primary);
+      color: white;
+      border: none;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+    }
+    .audio-play-btn svg { width: 14px; height: 14px; }
+    .audio-progress {
+      flex: 1;
+      height: 4px;
+      background: var(--color-neutral-200);
+      border-radius: 2px;
+      position: relative;
+    }
+    .audio-progress-fill {
+      height: 100%;
+      width: 35%;
+      background: var(--color-primary);
+      border-radius: 2px;
+    }
+    .audio-progress-thumb {
+      position: absolute;
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: var(--color-primary);
+      top: 50%;
+      left: 35%;
+      transform: translate(-50%, -50%);
+    }
+    .audio-time {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 12.5px;
+      color: var(--color-neutral-700);
+      min-width: 80px;
+      text-align: right;
+    }
+
+    /* Risk events list */
+    .risk-list { display: flex; flex-direction: column; gap: 4px; }
+    .risk-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 6px 8px;
+      font-size: 13px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .risk-row:hover { background: var(--color-neutral-50); }
+    .risk-badge {
+      padding: 1px 8px;
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+    .risk-badge-l1 { background: var(--color-warning-light); color: var(--color-warning); }
+    .risk-badge-l2 { background: var(--color-warning-light); color: #a16207; }
+    .risk-badge-l3 { background: var(--color-danger-light); color: var(--color-danger); }
+    .risk-row .cat { color: var(--color-neutral-600); }
+    .risk-row .ts { color: var(--color-neutral-400); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+    .risk-row .text { flex: 1; color: var(--color-neutral-700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .risk-row .iv { font-size: 11.5px; color: var(--color-neutral-400); }
+
+    /* Transcript */
+    .transcript-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    .transcript-row {
+      display: flex;
+      gap: 12px;
+      padding: 4px 8px;
+      font-size: 13px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .transcript-row:hover { background: var(--color-neutral-50); }
+    .transcript-row .ts {
+      width: 48px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 11.5px;
+      color: var(--color-neutral-400);
+      flex-shrink: 0;
+    }
+    .transcript-row .speaker {
+      width: 56px;
+      font-size: 11.5px;
+      flex-shrink: 0;
+    }
+    .transcript-row .speaker.agent { color: var(--color-primary); }
+    .transcript-row .speaker.owner { color: var(--color-neutral-700); }
+    .transcript-row .text { flex: 1; color: var(--color-neutral-700); }
+    .transcript-row.highlight { background: var(--color-danger-light); }
+    .transcript-row.highlight .text strong { color: var(--color-danger); }
+
+    /* Form */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      max-width: 720px;
+    }
+    .form-field { display: flex; flex-direction: column; gap: 6px; }
+    .form-field label {
+      font-size: 13px;
+      color: var(--color-neutral-600);
+    }
+    .form-field select,
+    .form-field input,
+    .form-field textarea {
+      padding: 8px 12px;
+      font-size: 13.5px;
+      border: 1px solid var(--color-neutral-300);
+      border-radius: var(--radius-sm);
+      outline: none;
+      font-family: inherit;
+    }
+    .form-field select:focus,
+    .form-field input:focus,
+    .form-field textarea:focus {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(26, 86, 219, 0.1);
+    }
+    .form-field-full {
+      grid-column: span 2;
+    }
+    .form-actions {
+      margin-top: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      max-width: 720px;
+    }
+    .save-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      background: var(--color-primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 13.5px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .save-btn svg { width: 14px; height: 14px; }
+    .save-hint {
+      font-size: 12px;
+      color: var(--color-success);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="review-page">
+
+    <!-- Back link -->
+    <a href="supervisor.html" class="back-link">
+      <i data-lucide="arrow-left"></i> 返回质检复核列表
+    </a>
+
+    <!-- Title -->
+    <div class="review-title">
+      <i data-lucide="clipboard-check"></i>
+      <h1>复核 #208341</h1>
+      <span class="review-title-meta">· 138****6677 · 214s</span>
+    </div>
+
+    <!-- Audio player -->
+    <section class="review-card">
+      <div class="review-card-title normal">
+        <i data-lucide="play-circle"></i>录音播放
+      </div>
+      <div class="audio-bar">
+        <button type="button" class="audio-play-btn" aria-label="播放">
+          <i data-lucide="pause"></i>
+        </button>
+        <div class="audio-progress">
+          <div class="audio-progress-fill"></div>
+          <div class="audio-progress-thumb"></div>
+        </div>
+        <div class="audio-time">01:14 / 03:34</div>
+      </div>
+    </section>
+
+    <!-- Risk events -->
+    <section class="review-card">
+      <div class="review-card-title">
+        <i data-lucide="alert-triangle"></i>风控时间点（点击跳转播放）
+      </div>
+      <ul class="risk-list">
+        <li class="risk-row">
+          <span class="risk-badge risk-badge-l2">L2</span>
+          <span class="cat">业主威胁</span>
+          <span class="ts">@94.5s</span>
+          <span class="text">我说了不交，你们再打就投诉到信访办！</span>
+          <span class="iv">已自动提示</span>
+        </li>
+        <li class="risk-row">
+          <span class="risk-badge risk-badge-l1">L1</span>
+          <span class="cat">语速过快</span>
+          <span class="ts">@52.0s</span>
+          <span class="text">语速 320 字/分（建议 ≤ 240）</span>
+          <span class="iv">语速提示</span>
+        </li>
+        <li class="risk-row">
+          <span class="risk-badge risk-badge-l1">L1</span>
+          <span class="cat">合规话术缺失</span>
+          <span class="ts">@8.5s</span>
+          <span class="text">未在开场播报《通话录音告知》</span>
+          <span class="iv">合规提示</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- Transcript -->
+    <section class="review-card">
+      <div class="review-card-title normal">
+        <i data-lucide="captions"></i>对话转写
+      </div>
+      <ul class="transcript-list">
+        <li class="transcript-row">
+          <span class="ts">2.0s</span>
+          <span class="speaker owner">业主</span>
+          <span class="text">喂，你好。</span>
+        </li>
+        <li class="transcript-row">
+          <span class="ts">5.0s</span>
+          <span class="speaker agent">坐席</span>
+          <span class="text">您好，请问是 3-1201 的张先生吗？我是绿城锦绣物业的客服。</span>
+        </li>
+        <li class="transcript-row">
+          <span class="ts">11.0s</span>
+          <span class="speaker owner">业主</span>
+          <span class="text">是的，什么事？</span>
+        </li>
+        <li class="transcript-row">
+          <span class="ts">18.0s</span>
+          <span class="speaker agent">坐席</span>
+          <span class="text">是这样的，您 1 月到 4 月的物业费一共 3240 元还没缴。</span>
+        </li>
+        <li class="transcript-row">
+          <span class="ts">30.0s</span>
+          <span class="speaker owner">业主</span>
+          <span class="text">不想交，电梯老坏，物业服务质量太差。</span>
+        </li>
+        <li class="transcript-row highlight">
+          <span class="ts">94.5s</span>
+          <span class="speaker owner">业主</span>
+          <span class="text">我说了<strong>不交</strong>，你们再打就<strong>投诉到信访办</strong>！</span>
+        </li>
+        <li class="transcript-row">
+          <span class="ts">120.0s</span>
+          <span class="speaker agent">坐席</span>
+          <span class="text">您先消消气，电梯问题我会反馈给项目经理今天处理。但物业费和服务投诉是两回事，欠费久了会影响您的征信和未来房产交易。</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- Quality form -->
+    <section class="review-card">
+      <div class="review-card-title normal">
+        <i data-lucide="clipboard-check"></i>质检打标
+      </div>
+      <div class="form-grid">
+        <div class="form-field">
+          <label>质量评级</label>
+          <select>
+            <option value="">— 请选择 —</option>
+            <option value="good">优质</option>
+            <option value="needs_improvement" selected>需改进</option>
+            <option value="bad">差</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>修正 AI 意图（可选）</label>
+          <input type="text" placeholder="原 AI 意图：质量异议" value="拒缴 + 投诉威胁">
+        </div>
+        <div class="form-field form-field-full">
+          <label>改进建议</label>
+          <textarea rows="3" placeholder="请描述本通话的具体问题或改进点">未在开场播报录音告知；遇到「投诉信访办」时未及时降速、未提供共情话术；建议下次该类客户主动转接督导。</textarea>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="save-btn">
+          <i data-lucide="save"></i> 保存复核
+        </button>
+        <span class="save-hint">已保存 (15:24:08)</span>
+      </div>
+    </section>
+
+  </div>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>
