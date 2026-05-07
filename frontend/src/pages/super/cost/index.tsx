@@ -33,7 +33,14 @@ export function SuperCostPage() {
   if (query.isError || !query.data?.data)
     return <div className="p-6 text-red-600">加载失败，请刷新重试</div>;
 
-  const stats = query.data.data;
+  const raw = query.data.data as Partial<typeof query.data.data>;
+  // 防御 server response 字段缺失
+  const stats = {
+    total_quota_pool: raw.total_quota_pool ?? 0,
+    total_used_this_month: raw.total_used_this_month ?? 0,
+    monthly_trend: raw.monthly_trend ?? [],
+    tenant_ranking: raw.tenant_ranking ?? [],
+  };
   const usagePct =
     stats.total_quota_pool > 0
       ? (stats.total_used_this_month / stats.total_quota_pool) * 100

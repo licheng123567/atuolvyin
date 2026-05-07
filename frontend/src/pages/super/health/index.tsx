@@ -95,32 +95,32 @@ export function SuperHealthPage() {
           <ServiceCard
             icon={<Database className="w-4 h-4" />}
             label="数据库 (DB)"
-            status={services.db.status}
-            sub={`延迟 ${formatLatency(services.db.latency_ms)}`}
+            status={services.db?.status ?? "unknown"}
+            sub={`延迟 ${formatLatency(services.db?.latency_ms ?? null)}`}
           />
           <ServiceCard
             icon={<Cpu className="w-4 h-4" />}
             label="ASR 服务"
-            status={services.asr.status}
-            sub={`后端: ${services.asr.backend}`}
+            status={services.asr?.status ?? "unknown"}
+            sub={`后端: ${services.asr?.backend ?? "—"}`}
           />
           <ServiceCard
             icon={<Cpu className="w-4 h-4" />}
             label="LLM 服务"
-            status={services.llm.status}
-            sub={`后端: ${services.llm.backend}`}
+            status={services.llm?.status ?? "unknown"}
+            sub={`后端: ${services.llm?.backend ?? "—"}`}
           />
           <ServiceCard
             icon={<MessageSquare className="w-4 h-4" />}
             label="MiPush"
-            status={services.mipush.status}
-            sub={`后端: ${services.mipush.backend}`}
+            status={services.mipush?.status ?? "unknown"}
+            sub={`后端: ${services.mipush?.backend ?? "—"}`}
           />
           <ServiceCard
             icon={<Wifi className="w-4 h-4" />}
             label="WebSocket"
-            status={services.websocket.status}
-            sub={`在线: ${services.websocket.connected_clients}`}
+            status={services.websocket?.status ?? "unknown"}
+            sub={`在线: ${services.websocket?.connected_clients ?? 0}`}
           />
         </div>
       )}
@@ -142,15 +142,15 @@ export function SuperHealthPage() {
           >
             <MetricCard
               label="ASR P90 时长"
-              value={`${metrics.asr_p90_sec.toFixed(1)} 秒`}
+              value={`${(metrics.asr_p90_sec ?? 0).toFixed(1)} 秒`}
             />
             <MetricCard
               label="ASR 错误率"
-              value={formatPercent(metrics.asr_error_rate_24h * 100)}
+              value={formatPercent((metrics.asr_error_rate_24h ?? 0) * 100)}
             />
             <MetricCard
               label="LLM 平均延迟"
-              value={`${metrics.llm_avg_latency_ms.toFixed(0)} ms`}
+              value={`${(metrics.llm_avg_latency_ms ?? 0).toFixed(0)} ms`}
             />
           </div>
         )}

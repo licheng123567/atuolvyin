@@ -50,7 +50,11 @@ export function SuperPlansPage() {
   const [error, setError] = useState<string | null>(null);
 
   const isLoading = query.isLoading;
-  const plans: PlanConfig[] = (query.data?.data as unknown as PlanConfig[]) ?? [];
+  // useList 在 simple-rest+FastAPI 下，data 可能是 array 或 {items,total} wrapper
+  const rawData = query.data?.data as unknown;
+  const plans: PlanConfig[] = Array.isArray(rawData)
+    ? (rawData as PlanConfig[])
+    : ((rawData as { items?: PlanConfig[] } | undefined)?.items ?? []);
 
   const openCreate = () => {
     setEditing(null);

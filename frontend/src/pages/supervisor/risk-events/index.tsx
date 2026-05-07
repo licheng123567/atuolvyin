@@ -41,7 +41,11 @@ export function SupervisorRiskEventsPage() {
       },
     },
   });
-  const items = query.data?.data ?? [];
+  // useCustom 在 FastAPI paginated wrapper 下可能返回 array 或 {items,total}
+  const raw = query.data?.data as unknown;
+  const items: RiskEventItem[] = Array.isArray(raw)
+    ? (raw as RiskEventItem[])
+    : ((raw as { items?: RiskEventItem[] } | undefined)?.items ?? []);
 
   const refetch = query.refetch;
   const { mutate: annotate } = useCustomMutation();

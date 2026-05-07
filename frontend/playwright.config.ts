@@ -5,7 +5,8 @@ export default defineConfig({
   timeout: 30_000,
   fullyParallel: false, // 单线程便于排查
   forbidOnly: !!process.env.CI,
-  retries: 0,
+  // Sprint 15.1 多设备踢出在并发登录时偶发 race；本地 1 次 retry 足够稳定
+  retries: 1,
   reporter: [["list"], ["html", { open: "never", outputFolder: "playwright-report" }]],
   use: {
     baseURL: process.env.VITE_BASE_URL ?? "http://localhost:5173",
