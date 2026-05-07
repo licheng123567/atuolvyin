@@ -19,9 +19,6 @@ interface ProviderItem {
 export function AdminProjectNewPage() {
   const go = useGo();
   const [name, setName] = useState("");
-  const [projectType, setProjectType] = useState<"collection" | "vote">(
-    "collection",
-  );
   const [propertyPmId, setPropertyPmId] = useState<number | "">("");
   const [providerId, setProviderId] = useState<number | "">("");
   const [providerPmId, setProviderPmId] = useState<number | "">("");
@@ -74,7 +71,6 @@ export function AdminProjectNewPage() {
         resource: "admin/projects",
         values: {
           name: name.trim(),
-          project_type: projectType,
           property_pm_user_id: propertyPmId,
           provider_id: providerId === "" ? null : providerId,
           provider_pm_user_id: providerPmId === "" ? null : providerPmId,
@@ -125,48 +121,31 @@ export function AdminProjectNewPage() {
             />
           </div>
 
-          <div className="two-col">
-            <div className="form-group">
-              <label className="form-label">
-                项目类型<span className="req">*</span>
-              </label>
-              <select
-                className="form-control"
-                value={projectType}
-                onChange={(e) =>
-                  setProjectType(e.target.value as "collection" | "vote")
-                }
-              >
-                <option value="collection">物业费催收</option>
-                <option value="vote">业委会投票邀请</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">
-                项目负责人(物业)<span className="req">*</span>
-              </label>
-              <select
-                className="form-control"
-                value={propertyPmId}
-                onChange={(e) =>
-                  setPropertyPmId(
-                    e.target.value === "" ? "" : Number(e.target.value),
-                  )
-                }
-              >
-                <option value="">— 请选择 —</option>
-                {propertyPMs.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
-                ))}
-              </select>
-              {propertyPMs.length === 0 && (
-                <div className="form-hint" style={{ color: "#d97706" }}>
-                  ⚠ 还没有项目经理(物业) 角色用户，请先去「用户管理」创建
-                </div>
-              )}
-            </div>
+          <div className="form-group">
+            <label className="form-label">
+              项目负责人(物业)<span className="req">*</span>
+            </label>
+            <select
+              className="form-control"
+              value={propertyPmId}
+              onChange={(e) =>
+                setPropertyPmId(
+                  e.target.value === "" ? "" : Number(e.target.value),
+                )
+              }
+            >
+              <option value="">— 请选择 —</option>
+              {propertyPMs.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+            {propertyPMs.length === 0 && (
+              <div className="form-hint" style={{ color: "#d97706" }}>
+                ⚠ 还没有项目经理(物业) 角色用户，请先去「用户管理」创建
+              </div>
+            )}
           </div>
 
           <div className="two-col">

@@ -32,7 +32,6 @@ class Project(Base, TimestampMixin):
         sa.BigInteger, sa.ForeignKey("tenant.id"), nullable=False
     )
     name: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    project_type: Mapped[str] = mapped_column(sa.Text, nullable=False)  # collection / vote
     provider_id: Mapped[int | None] = mapped_column(
         sa.BigInteger, sa.ForeignKey("service_provider.id")
     )

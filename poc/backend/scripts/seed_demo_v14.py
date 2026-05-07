@@ -51,23 +51,20 @@ def _phone_already_seen(phones: set[str], phone: str) -> bool:
 NEW_PROJECTS = [
     {
         "name": "金桂园 2026 第二季度催收",
-        "project_type": "collection",
         "status": "active",
         "description": "Q2 重点项目，覆盖 1-3 栋，目标回款率 60%。",
         "with_provider": True,
         "allow_internal_assist": True,
     },
     {
-        "name": "翠湖湾业委会换届投票邀请",
-        "project_type": "vote",
+        "name": "翠湖湾电梯维护基金催收",
         "status": "active",
-        "description": "5月15日截止，需联系 350 户业主征集投票。",
+        "description": "电梯维护基金筹集，覆盖 350 户业主。",
         "with_provider": False,
         "allow_internal_assist": False,
     },
     {
         "name": "金桂园 2025 年欠费清理 (已结案)",
-        "project_type": "collection",
         "status": "closed",
         "description": "2025 年遗留案件清理，已于 2026-03 结项。",
         "with_provider": True,
@@ -195,7 +192,6 @@ def upsert_project(
     p = Project(
         tenant_id=tenant.id,
         name=body["name"],
-        project_type=body["project_type"],
         provider_id=provider.id if (provider and body["with_provider"]) else None,
         property_pm_user_id=pm_property.id if pm_property else None,
         provider_pm_user_id=pm_provider.id

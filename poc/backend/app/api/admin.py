@@ -115,10 +115,22 @@ async def create_user(
             detail={"code": "ERR_NO_TENANT", "message": "此端点需要租户上下文"},
         )
 
+    # v1.4 方案 A — 未指定密码时占位 hash（不可登录）；员工首次登录走 OTP
+    import secrets
+
+    if body.password:
+        pw_hash = get_password_hash(body.password)
+        login_method = "phone"
+    else:
+        # 64 字节随机 token + bcrypt → 实际不可命中；员工只能用 OTP 登录
+        pw_hash = get_password_hash(secrets.token_urlsafe(48))
+        login_method = "otp"
+
     new_user = UserAccount(
         phone_enc=encrypt_phone(body.phone),
         name=body.name,
-        password_hash=get_password_hash(body.password),
+        password_hash=pw_hash,
+        login_method=login_method,
         is_active=True,
     )
     db.add(new_user)

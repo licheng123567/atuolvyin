@@ -1,11 +1,10 @@
 import { useCreate, useGo } from "@refinedev/core";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Info } from "lucide-react";
 import { useState } from "react";
 
 interface FormData {
   name: string;
   phone: string;
-  password: string;
   role: string;
 }
 
@@ -24,7 +23,6 @@ export function UserNewPage() {
   const [form, setForm] = useState<FormData>({
     name: "",
     phone: "",
-    password: "",
     role: "supervisor",
   });
   const [errorMsg, setErrorMsg] = useState("");
@@ -37,13 +35,13 @@ export function UserNewPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
+    // v1.4 方案 A — 创建时不传 password；员工首次登录走「手机+验证码」
     create(
       {
         resource: "admin/users",
         values: {
           name: form.name,
           phone: form.phone,
-          password: form.password,
           role: form.role,
         },
       },
@@ -92,13 +90,6 @@ export function UserNewPage() {
               placeholder: "138xxxxxxxx",
               required: true,
             },
-            {
-              label: "密码 *",
-              field: "password" as const,
-              type: "password",
-              placeholder: "至少 8 位",
-              required: true,
-            },
           ] as const
         ).map(({ label, field, type, placeholder, required }) => (
           <div key={field}>
@@ -111,7 +102,6 @@ export function UserNewPage() {
               onChange={handleChange(field)}
               placeholder={placeholder}
               required={required}
-              minLength={field === "password" ? 8 : undefined}
               className="w-full px-3 py-2 border border-[var(--color-neutral-200)] rounded text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
               style={{ borderRadius: "var(--radius-md)" }}
             />
@@ -135,6 +125,23 @@ export function UserNewPage() {
               </option>
             ))}
           </select>
+        </div>
+
+        <div
+          className="flex items-start gap-2 p-3"
+          style={{
+            background: "var(--color-primary-light, #eff6ff)",
+            border: "1px solid var(--color-primary, #3b82f6)",
+            borderRadius: "var(--radius-md)",
+            fontSize: 12,
+            color: "var(--color-neutral-700, #374151)",
+          }}
+        >
+          <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-[var(--color-primary)]" />
+          <div>
+            <strong>无需设置初始密码。</strong>
+            员工创建后，首次登录请走「手机验证码」标签 — 输入手机号点「获取验证码」即可登录。登录后可在「我的账号」自愿设置密码。
+          </div>
         </div>
 
         {errorMsg && (

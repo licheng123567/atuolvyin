@@ -50,7 +50,6 @@ def _to_out(
         id=p.id,
         tenant_id=p.tenant_id,
         name=p.name,
-        project_type=p.project_type,
         provider_id=p.provider_id,
         provider_name=provider_name,
         property_pm_user_id=p.property_pm_user_id,
@@ -163,7 +162,6 @@ def create_project(
     p = Project(
         tenant_id=tenant_id,
         name=body.name,
-        project_type=body.project_type,
         provider_id=body.provider_id,
         property_pm_user_id=body.property_pm_user_id,
         provider_pm_user_id=body.provider_pm_user_id,

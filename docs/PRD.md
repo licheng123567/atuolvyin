@@ -19,7 +19,7 @@
 | 维度 | 说明 |
 |------|------|
 | 目标客户 | 中大型物业管理公司（管理 500 户以上） |
-| 核心场景 | 物业费催收（兼容业委会催票等通知场景） |
+| 核心场景 | 物业费催收 |
 | 平台 | PC 端（管理/督导）+ Android App（外呼员） |
 | 核心卖点 | **实时 AI 话术辅助**（通话中即时显示建议，延迟 ≤ 3 秒） |
 | 差异化 | 录音上传分析 + 实时辅助双模式，多租户 CRM 公海/私海自动流转 |
@@ -162,7 +162,7 @@ v1.0–v1.3 完成基础多租户结构后，v1.4 落地以下治理与协作要
 
 物业租户内的「项目」是案件归属与数据可见性的最小单元，原模型已存在但未启用，v1.4 全链路接通：
 
-- **Project 模型**：`tenant_id` + `project_type`（collection / vote）+ `provider_id`（指定承接服务商）+ `property_pm_user_id` / `provider_pm_user_id`（双方项目经理）+ `allow_internal_assist`（项目级开关：服务商承接的项目下，是否允许物业内勤协助）
+- **Project 模型**：`tenant_id` + `provider_id`（指定承接服务商）+ `property_pm_user_id` / `provider_pm_user_id`（双方项目经理）+ `allow_internal_assist`（项目级开关：服务商承接的项目下，是否允许物业内勤协助）。系统纯粹催收，不区分项目子类型。
 - **服务商分配 = 项目级**：物业建项目时选定 `provider_id`，整个项目下的案件默认对该服务商外勤可见
 - **法务分配 = 案件级**：保持原有 `LegalConversionOrder` 不变（按金额阈值 + 付费法律服务包）
 - **项目经理只读**：`project_manager_property` / `project_manager_provider` 角色登录后，所有 admin 端写操作（导入/分配/释放/转法务/添加备注）均隐藏，看板拖拽禁用，列表 checkbox 隐藏
@@ -270,19 +270,28 @@ v1.0–v1.3 完成基础多租户结构后，v1.4 落地以下治理与协作要
 
 ## 5. 用户创建与账号管理流程
 
-### 5.1 内部用户创建
+### 5.1 内部用户创建（v1.4 方案 A — 无初始密码 + OTP 首登）
 
 ```
 管理员 → 用户管理 → 新建用户
     ↓
-填写：姓名 / 手机号 / 角色 / 所属主管（可选）
+填写：姓名 / 手机号 / 角色（不填密码）
     ↓
-系统发送初始密码短信给员工
+系统创建 UserAccount，password_hash 写入随机占位（不可命中）
     ↓
-员工首次登录强制修改密码
+员工首次登录：登录页选「手机验证码」tab，输入手机号
     ↓
-账号激活，可正常使用
+获取验证码 → 输入 6 位 OTP → 登录成功
+    ↓
+（可选）登录后在「我的账号」自愿设置密码以后用密码登录
 ```
+
+**为什么不强制初始密码**：admin 给基层员工设密码 → 通知 → 员工记 = 三重摩擦；
+我们已落地 OTP 通道（`/auth/otp/send|verify`），员工手机号天然就是 App 拨号绑定号，零摩擦。
+
+**后端实现**：`UserCreateByAdminRequest.password` 改为 Optional；未传时
+`UserAccount.password_hash` 写入 `bcrypt(secrets.token_urlsafe(48))`（实际不可登录），
+`login_method='otp'` 标记偏好。如需 admin 仍想给一个初始密码（特殊场景），传 `password` 字段也支持。
 
 ### 5.2 外部兼职邀请注册
 

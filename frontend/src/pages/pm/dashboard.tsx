@@ -15,7 +15,6 @@ import type { AuthUser } from "../../providers/auth-provider";
 interface PmProjectCard {
   project_id: number;
   project_name: string;
-  project_type: string;
   role_in_project: string;
   case_count: number;
   receivable: number;

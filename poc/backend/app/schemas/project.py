@@ -8,7 +8,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class ProjectCreateIn(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
-    project_type: str = Field(..., pattern=r"^(collection|vote)$")
     property_pm_user_id: int | None = None
     provider_pm_user_id: int | None = None
     provider_id: int | None = None
@@ -36,7 +35,6 @@ class ProjectOut(BaseModel):
     id: int
     tenant_id: int
     name: str
-    project_type: str
     provider_id: int | None
     provider_name: str | None = None
     property_pm_user_id: int | None

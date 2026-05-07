@@ -7,7 +7,6 @@ import type { PaginatedResponse } from "../../../types";
 interface ProjectItem {
   id: number;
   name: string;
-  project_type: string;
   provider_id: number | null;
   provider_name: string | null;
   property_pm_user_id: number | null;
@@ -19,11 +18,6 @@ interface ProjectItem {
   case_count: number;
   created_at: string;
 }
-
-const TYPE_LABELS: Record<string, string> = {
-  collection: "物业费催收",
-  vote: "业委会投票",
-};
 
 const STATUS_BADGE: Record<string, string> = {
   active: "ds-badge ds-badge-green",
@@ -77,7 +71,6 @@ export function AdminProjectListPage() {
           <thead>
             <tr>
               <th>项目名称</th>
-              <th>类型</th>
               <th>项目负责人(物业)</th>
               <th>合作服务商</th>
               <th>项目负责人(服务商)</th>
@@ -89,14 +82,14 @@ export function AdminProjectListPage() {
           <tbody>
             {query.isLoading && (
               <tr>
-                <td colSpan={8} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                <td colSpan={7} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
                   加载中…
                 </td>
               </tr>
             )}
             {!query.isLoading && items.length === 0 && (
               <tr>
-                <td colSpan={8} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                <td colSpan={7} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
                   还没有项目，点击右上角「新建项目」开始
                 </td>
               </tr>
@@ -106,7 +99,6 @@ export function AdminProjectListPage() {
                 <td>
                   <strong>{p.name}</strong>
                 </td>
-                <td>{TYPE_LABELS[p.project_type] ?? p.project_type}</td>
                 <td>{p.property_pm_name ?? "—"}</td>
                 <td>
                   {p.provider_name ?? <span style={{ color: "#9ca3af" }}>未指派</span>}

@@ -21,7 +21,6 @@ interface ProjectDetail {
   id: number;
   tenant_id: number;
   name: string;
-  project_type: string;
   provider_id: number | null;
   property_pm_user_id: number | null;
   provider_pm_user_id: number | null;
@@ -163,30 +162,14 @@ export function AdminProjectEditPage() {
 
       <div className="ds-card">
         <div className="card-body" style={{ maxWidth: 640 }}>
-          <div className="two-col">
-            <div className="form-group">
-              <label className="form-label">项目名称</label>
-              <input
-                className="form-control"
-                value={project.name}
-                disabled
-              />
-              <div className="form-hint">名称创建后不可改</div>
-            </div>
-            <div className="form-group">
-              <label className="form-label">项目类型</label>
-              <input
-                className="form-control"
-                value={
-                  project.project_type === "collection"
-                    ? "物业费催收"
-                    : project.project_type === "vote"
-                      ? "业委会投票邀请"
-                      : project.project_type
-                }
-                disabled
-              />
-            </div>
+          <div className="form-group">
+            <label className="form-label">项目名称</label>
+            <input
+              className="form-control"
+              value={project.name}
+              disabled
+            />
+            <div className="form-hint">名称创建后不可改</div>
           </div>
 
           <div className="two-col">

@@ -285,7 +285,6 @@ from pydantic import BaseModel  # noqa: E402
 class PmProjectCard(BaseModel):
     project_id: int
     project_name: str
-    project_type: str
     role_in_project: str  # "property_pm" / "provider_pm"
     case_count: int
     receivable: float
@@ -361,7 +360,6 @@ async def list_my_projects(
         cards.append(PmProjectCard(
             project_id=p.id,
             project_name=p.name,
-            project_type=p.project_type,
             role_in_project=(
                 "property_pm"
                 if role == "project_manager_property"

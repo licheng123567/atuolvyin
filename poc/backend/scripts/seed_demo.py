@@ -211,7 +211,6 @@ def _upsert_project(
     db,
     tenant: Tenant,
     name: str,
-    project_type: str,
     property_pm_user_id: int | None = None,
     provider_id: int | None = None,
     provider_pm_user_id: int | None = None,
@@ -237,7 +236,6 @@ def _upsert_project(
     p = ProjectModel(
         tenant_id=tenant.id,
         name=name,
-        project_type=project_type,
         property_pm_user_id=property_pm_user_id,
         provider_id=provider_id,
         provider_pm_user_id=provider_pm_user_id,
@@ -395,7 +393,6 @@ def main() -> None:
         project_main = _upsert_project(
             db, tenant,
             name="金桂园 2026 年欠费催收",
-            project_type="collection",
             property_pm_user_id=pm_property_user.id,
             provider_id=provider.id,
             provider_pm_user_id=pm_provider_user.id,
@@ -404,7 +401,6 @@ def main() -> None:
         project_elevator = _upsert_project(
             db, tenant,
             name="翠湖湾电梯专项整改",
-            project_type="collection",
             property_pm_user_id=pm_property_user.id,
             description="电梯维护基金筹集（业委会自营，无服务商）",
         )

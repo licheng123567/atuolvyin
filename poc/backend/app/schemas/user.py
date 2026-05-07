@@ -36,7 +36,9 @@ class UserMeResponse(BaseModel):
 class UserCreateByAdminRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=50)
     phone: str = Field(..., pattern=r"^1[3-9]\d{9}$")
-    password: str = Field(..., min_length=8, max_length=72)
+    # v1.4 方案 A — 不强制设置初始密码，员工首次登录走手机+OTP；
+    # 若 admin 想给一个初始密码也允许（≥ 8 位）。
+    password: str | None = Field(None, min_length=8, max_length=72)
     role: str = Field(
         ...,
         pattern=r"^(supervisor|agent_internal|legal|workorder|project_manager_property)$",
