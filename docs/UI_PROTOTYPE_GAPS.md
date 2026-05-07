@@ -148,7 +148,7 @@
 | ~~admin/scripts/versions~~ | ✅ Sprint 16.4 反向出原型 → ui/admin-scripts-versions.html |
 | ~~admin/compliance/detail~~ | ✅ Sprint 16.4 反向出原型 → ui/admin-compliance-detail.html |
 | ~~admin/settlements/detail~~ | ✅ Sprint 16.4 反向出原型 → ui/admin-settlement-detail.html |
-| admin/providers/detail | Sprint 8.1 服务商合作详情 |
+| ~~admin/providers/detail~~ | ✅ Sprint 16.4 反向出原型 → ui/admin-provider-detail.html |
 | admin/users/new | 新建用户 |
 | ~~help/app~~ | ✅ Sprint 16.2 反向出原型 → ui/help-app.html |
 | ~~verify (/:tx_hash)~~ | ✅ Sprint 16.2 反向出原型 → ui/verify.html |

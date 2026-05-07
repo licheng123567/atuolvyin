@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>服务商详情 — 有证慧催</title>
+  <link rel="stylesheet" href="assets/design-system.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    body { background: var(--color-neutral-50); min-height: 100vh; }
+    .provider-page { max-width: 1080px; margin: 0 auto; padding: 24px 20px; display: flex; flex-direction: column; gap: 20px; }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--color-neutral-500);
+      font-size: 13.5px;
+      text-decoration: none;
+      align-self: flex-start;
+    }
+    .back-link:hover { color: var(--color-primary); }
+    .back-link svg { width: 14px; height: 14px; }
+
+    .header h1 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--color-neutral-900);
+    }
+    .header-meta {
+      font-size: 13px;
+      color: var(--color-neutral-500);
+      margin-top: 4px;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      box-shadow: var(--shadow-sm);
+    }
+    .card-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--color-neutral-900);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .card-title svg { width: 16px; height: 16px; color: var(--color-primary); }
+    .card-title-meta {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--color-neutral-400);
+      font-weight: normal;
+    }
+
+    /* form */
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      max-width: 600px;
+    }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label {
+      font-size: 13px;
+      color: var(--color-neutral-600);
+    }
+    .field select,
+    .field input[type="date"] {
+      padding: 8px 12px;
+      font-size: 13.5px;
+      border: 1px solid var(--color-neutral-300);
+      border-radius: var(--radius-sm);
+      outline: none;
+    }
+    .field select:focus,
+    .field input:focus {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(26, 86, 219, 0.1);
+    }
+
+    .save-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 16px;
+      padding: 8px 16px;
+      background: var(--color-primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 13.5px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .save-btn svg { width: 14px; height: 14px; }
+
+    /* members table */
+    table {
+      width: 100%;
+      font-size: 13px;
+      border-collapse: collapse;
+    }
+    thead {
+      border-bottom: 1px solid var(--color-neutral-200);
+    }
+    th {
+      padding: 10px 0;
+      font-weight: 500;
+      color: var(--color-neutral-500);
+      text-align: left;
+      font-size: 12.5px;
+    }
+    td {
+      padding: 10px 0;
+      border-bottom: 1px solid var(--color-neutral-100);
+      color: var(--color-neutral-700);
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+    .num-input {
+      width: 88px;
+      padding: 4px 8px;
+      font-size: 13px;
+      border: 1px solid var(--color-neutral-300);
+      border-radius: var(--radius-sm);
+      outline: none;
+    }
+    .num-input:focus { border-color: var(--color-primary); }
+    .text-input {
+      width: 130px;
+      padding: 4px 8px;
+      font-size: 13px;
+      border: 1px solid var(--color-neutral-300);
+      border-radius: var(--radius-sm);
+      outline: none;
+    }
+    .text-input:focus { border-color: var(--color-primary); }
+
+    .toggle {
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+    }
+    .toggle svg { width: 24px; height: 24px; }
+    .toggle.on svg { color: var(--color-success); }
+    .toggle.off svg { color: var(--color-neutral-400); }
+
+    .row-action {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .save-row-btn {
+      font-size: 11.5px;
+      padding: 3px 10px;
+      background: var(--color-primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="provider-page">
+
+    <a href="admin.html" class="back-link">
+      <i data-lucide="arrow-left"></i> 返回服务商列表
+    </a>
+
+    <div class="header">
+      <h1>远程客服外包有限公司</h1>
+      <div class="header-meta">
+        签约于 2025-11-12 · 服务范围：催收外包 / 法律咨询
+      </div>
+    </div>
+
+    <!-- Contract -->
+    <div class="card">
+      <div class="card-title">
+        <i data-lucide="file-text"></i>
+        合同设置
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label>合同状态</label>
+          <select>
+            <option value="active" selected>合作中</option>
+            <option value="paused">暂停</option>
+            <option value="terminated">终止</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>到期日期</label>
+          <input type="date" value="2026-12-31">
+        </div>
+      </div>
+      <button type="button" class="save-btn">
+        <i data-lucide="save"></i> 保存合同变更
+      </button>
+    </div>
+
+    <!-- Members -->
+    <div class="card">
+      <div class="card-title">
+        <i data-lucide="users"></i>
+        服务商成员（在本公司）
+        <span class="card-title-meta">共 4 人</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>姓名</th>
+            <th>手机</th>
+            <th>角色</th>
+            <th>配额（分钟/月）</th>
+            <th>访问时段</th>
+            <th>状态</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="font-weight:500;color:var(--color-neutral-900);">陈志强</td>
+            <td style="color:var(--color-neutral-500);">138****8801</td>
+            <td>外部催收员</td>
+            <td><input type="number" class="num-input" value="3000" min="0"></td>
+            <td><input type="text" class="text-input" value="09:00-18:00" placeholder="09:00-18:00"></td>
+            <td>
+              <div class="row-action">
+                <button type="button" class="toggle on" aria-label="停用">
+                  <i data-lucide="toggle-right"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="font-weight:500;color:var(--color-neutral-900);">林晓静</td>
+            <td style="color:var(--color-neutral-500);">137****1234</td>
+            <td>外部催收员</td>
+            <td><input type="number" class="num-input" value="2500" min="0"></td>
+            <td><input type="text" class="text-input" value="10:00-19:00"></td>
+            <td>
+              <div class="row-action">
+                <button type="button" class="toggle on" aria-label="停用">
+                  <i data-lucide="toggle-right"></i>
+                </button>
+                <!-- dirty state shows save row btn -->
+                <button type="button" class="save-row-btn">保存</button>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="font-weight:500;color:var(--color-neutral-900);">郑伟</td>
+            <td style="color:var(--color-neutral-500);">136****5566</td>
+            <td>法务专员</td>
+            <td><input type="number" class="num-input" value="0" min="0"></td>
+            <td><input type="text" class="text-input" value=""></td>
+            <td>
+              <div class="row-action">
+                <button type="button" class="toggle on" aria-label="停用">
+                  <i data-lucide="toggle-right"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="font-weight:500;color:var(--color-neutral-900);">吴雅婷</td>
+            <td style="color:var(--color-neutral-500);">135****7788</td>
+            <td>外部催收员</td>
+            <td><input type="number" class="num-input" value="1500" min="0"></td>
+            <td><input type="text" class="text-input" value="13:00-21:00"></td>
+            <td>
+              <div class="row-action">
+                <button type="button" class="toggle off" aria-label="启用">
+                  <i data-lucide="toggle-left"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>
