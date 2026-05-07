@@ -143,7 +143,7 @@
 | React 页 | 来源 sprint |
 |---|---|
 | ~~supervisor/reviews/detail~~ | ✅ Sprint 16.4 反向出原型 → ui/supervisor-review-detail.html |
-| supervisor/risk-events | Sprint 9.4 风控事件记录 |
+| ~~supervisor/risk-events~~ | ✅ Sprint 16.4 反向出原型 → ui/supervisor-risk-events.html |
 | admin/scripts/effectiveness | Sprint 8.2 话术效果看板 |
 | admin/scripts/versions | 话术版本管理 |
 | admin/compliance/detail | Sprint 8.4 合规月报详情 |

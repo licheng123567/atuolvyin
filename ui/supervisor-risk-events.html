@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>风控事件时间线 — 有证慧催</title>
+  <link rel="stylesheet" href="assets/design-system.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    body { background: var(--color-neutral-50); min-height: 100vh; }
+    .risk-page { max-width: 1080px; margin: 0 auto; padding: 24px 20px; }
+
+    .risk-header {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 18px;
+    }
+    .risk-header svg {
+      width: 22px; height: 22px;
+      color: var(--color-danger);
+    }
+    .risk-header h1 {
+      font-size: 20px; font-weight: 600;
+      color: var(--color-neutral-900);
+    }
+    .risk-header-meta {
+      font-size: 13px;
+      color: var(--color-neutral-500);
+    }
+    .risk-header-actions {
+      margin-left: auto;
+      display: flex;
+      gap: 8px;
+    }
+    .filter-select {
+      padding: 6px 12px;
+      font-size: 13px;
+      border: 1px solid var(--color-neutral-300);
+      border-radius: var(--radius-sm);
+      background: white;
+      outline: none;
+      cursor: pointer;
+    }
+
+    /* Event card list */
+    .event-list {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .event-row {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--color-neutral-100);
+    }
+    .event-row:last-child { border-bottom: none; }
+
+    .event-head {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .level-badge {
+      padding: 2px 8px;
+      font-size: 11.5px;
+      font-weight: 500;
+      border-radius: 999px;
+      flex-shrink: 0;
+    }
+    .level-l1 { background: var(--color-warning-light); color: var(--color-warning); }
+    .level-l2 { background: var(--color-warning-light); color: #a16207; }
+    .level-l3 { background: var(--color-danger-light); color: var(--color-danger); }
+    .event-cat { font-size: 13.5px; font-weight: 500; color: var(--color-neutral-700); }
+    .event-iv { font-size: 12px; color: var(--color-neutral-400); }
+    .event-jump {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--color-primary);
+      text-decoration: none;
+    }
+    .event-jump:hover { text-decoration: underline; }
+
+    .event-text {
+      margin-top: 8px;
+      font-size: 13.5px;
+      color: var(--color-neutral-700);
+      line-height: 1.55;
+    }
+    .event-meta {
+      margin-top: 8px;
+      display: flex;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--color-neutral-500);
+    }
+
+    .disposition {
+      margin-top: 12px;
+      padding-left: 12px;
+      border-left: 2px solid var(--color-neutral-200);
+    }
+    .disp-existing {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 13px;
+    }
+    .disp-existing svg {
+      width: 14px; height: 14px;
+      color: var(--color-primary);
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+    .disp-text { color: var(--color-neutral-700); }
+    .disp-foot {
+      font-size: 11.5px;
+      color: var(--color-neutral-400);
+      margin-top: 4px;
+    }
+    .disp-edit-link {
+      color: var(--color-primary);
+      text-decoration: none;
+      margin-left: 6px;
+    }
+    .disp-edit-link:hover { text-decoration: underline; }
+
+    .disp-empty {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--color-primary);
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+    }
+    .disp-empty svg { width: 12px; height: 12px; }
+
+    /* Inline edit form */
+    .disp-edit { display: flex; flex-direction: column; gap: 8px; }
+    .disp-edit textarea {
+      padding: 8px 10px;
+      font-size: 13px;
+      border: 1px solid var(--color-neutral-300);
+      border-radius: var(--radius-sm);
+      outline: none;
+      font-family: inherit;
+      resize: vertical;
+    }
+    .disp-edit textarea:focus {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(26, 86, 219, 0.1);
+    }
+    .disp-edit-actions { display: flex; gap: 6px; }
+    .btn-save {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      font-size: 12px;
+      background: var(--color-primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+    .btn-save svg { width: 12px; height: 12px; }
+    .btn-cancel {
+      padding: 4px 10px;
+      font-size: 12px;
+      color: var(--color-neutral-500);
+      background: none;
+      border: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="risk-page">
+
+    <!-- Header -->
+    <div class="risk-header">
+      <i data-lucide="alert-triangle"></i>
+      <h1>风控事件时间线</h1>
+      <span class="risk-header-meta">共 12 条</span>
+      <div class="risk-header-actions">
+        <select class="filter-select">
+          <option>全部等级</option>
+          <option>L1 提示</option>
+          <option selected>L2 督导接管</option>
+          <option>L3 强制中止</option>
+        </select>
+        <select class="filter-select">
+          <option>近 1 天</option>
+          <option selected>近 7 天</option>
+          <option>近 30 天</option>
+          <option>近 90 天</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Event list -->
+    <div class="event-list">
+
+      <!-- Event 1: L2 with disposition note (existing) -->
+      <div class="event-row">
+        <div class="event-head">
+          <span class="level-badge level-l2">L2</span>
+          <span class="event-cat">业主威胁</span>
+          <span class="event-iv">已自动提示</span>
+          <a href="supervisor-review-detail.html" class="event-jump">跳转复核 →</a>
+        </div>
+        <p class="event-text">「我说了不交，你们再打就投诉到信访办！」</p>
+        <div class="event-meta">
+          <span>坐席：李小红</span>
+          <span>·</span>
+          <span>2026-04-25 14:32:18</span>
+          <span>·</span>
+          <span>音频 94.5s</span>
+        </div>
+        <div class="disposition">
+          <div class="disp-existing">
+            <i data-lucide="message-square"></i>
+            <div style="flex:1;">
+              <p class="disp-text">已与坐席沟通：遇到「投诉信访办」时主动降速、表达共情，必要时申请督导接管。已加入 4 月话术更新计划。</p>
+              <p class="disp-foot">
+                处置于 2026-04-25 16:08:42
+                <a href="#" class="disp-edit-link">编辑</a>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Event 2: L1 inline editing -->
+      <div class="event-row">
+        <div class="event-head">
+          <span class="level-badge level-l1">L1</span>
+          <span class="event-cat">语速过快</span>
+          <span class="event-iv">语速提示</span>
+          <a href="supervisor-review-detail.html" class="event-jump">跳转复核 →</a>
+        </div>
+        <p class="event-text">语速 320 字/分（建议 ≤ 240）</p>
+        <div class="event-meta">
+          <span>坐席：李小红</span>
+          <span>·</span>
+          <span>2026-04-25 14:31:35</span>
+          <span>·</span>
+          <span>音频 52.0s</span>
+        </div>
+        <div class="disposition">
+          <div class="disp-edit">
+            <textarea rows="2" placeholder="处置备注：与坐席沟通要点、改进措施等">语速训练已加入下周一对一辅导。</textarea>
+            <div class="disp-edit-actions">
+              <button type="button" class="btn-save">
+                <i data-lucide="save"></i> 保存
+              </button>
+              <button type="button" class="btn-cancel">取消</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Event 3: L1 unprocessed (empty disposition) -->
+      <div class="event-row">
+        <div class="event-head">
+          <span class="level-badge level-l1">L1</span>
+          <span class="event-cat">合规话术缺失</span>
+          <span class="event-iv">合规提示</span>
+          <a href="supervisor-review-detail.html" class="event-jump">跳转复核 →</a>
+        </div>
+        <p class="event-text">未在开场播报《通话录音告知》</p>
+        <div class="event-meta">
+          <span>坐席：李小红</span>
+          <span>·</span>
+          <span>2026-04-25 14:31:08</span>
+          <span>·</span>
+          <span>音频 8.5s</span>
+        </div>
+        <div class="disposition">
+          <button type="button" class="disp-empty">
+            <i data-lucide="message-square"></i> 添加处置备注
+          </button>
+        </div>
+      </div>
+
+      <!-- Event 4: L3 high-risk -->
+      <div class="event-row">
+        <div class="event-head">
+          <span class="level-badge level-l3">L3</span>
+          <span class="event-cat">坐席违规</span>
+          <span class="event-iv">已自动挂断</span>
+          <a href="supervisor-review-detail.html" class="event-jump">跳转复核 →</a>
+        </div>
+        <p class="event-text">「再不交我就把你这种老赖告到法院去！」</p>
+        <div class="event-meta">
+          <span>坐席：王芳芳</span>
+          <span>·</span>
+          <span>2026-04-23 11:02:14</span>
+          <span>·</span>
+          <span>音频 187.2s</span>
+        </div>
+        <div class="disposition">
+          <div class="disp-existing">
+            <i data-lucide="message-square"></i>
+            <div style="flex:1;">
+              <p class="disp-text">已通报合规组立案。当事坐席停薪 3 天 + 重新考证；已书面向业主致歉。事件入合规月报。</p>
+              <p class="disp-foot">
+                处置于 2026-04-23 17:45:01
+                <a href="#" class="disp-edit-link">编辑</a>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>
