@@ -41,12 +41,7 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
       title: "人员管理",
       items: [
         { label: "用户管理", path: "/admin/users", icon: "Users" },
-        {
-          label: "服务商合作",
-          path: "/admin/providers",
-          icon: "Briefcase",
-          badge: "P1",
-        },
+        { label: "服务商合作", path: "/admin/providers", icon: "Briefcase" },
       ],
     },
     {
