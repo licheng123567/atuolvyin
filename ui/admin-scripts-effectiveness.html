@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>话术效果看板 — 有证慧催</title>
+  <link rel="stylesheet" href="assets/design-system.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    body { background: var(--color-neutral-50); min-height: 100vh; }
+    .effect-page { max-width: 1280px; margin: 0 auto; padding: 24px 20px; }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--color-neutral-500);
+      font-size: 13.5px;
+      text-decoration: none;
+      margin-bottom: 12px;
+    }
+    .back-link:hover { color: var(--color-primary); }
+    .back-link svg { width: 14px; height: 14px; }
+
+    .page-title {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 18px;
+    }
+    .page-title svg {
+      width: 22px; height: 22px;
+      color: var(--color-primary);
+    }
+    .page-title h1 {
+      font-size: 20px; font-weight: 600;
+      color: var(--color-neutral-900);
+    }
+    .page-title-meta {
+      font-size: 13px;
+      color: var(--color-neutral-500);
+    }
+
+    .filters {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .filter-select {
+      padding: 7px 12px;
+      font-size: 13px;
+      border: 1px solid var(--color-neutral-300);
+      border-radius: var(--radius-sm);
+      background: white;
+      outline: none;
+      cursor: pointer;
+    }
+
+    /* Stats summary band */
+    .stats-band {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .stats-card {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: 14px 16px;
+    }
+    .stats-card-label {
+      font-size: 12px;
+      color: var(--color-neutral-500);
+    }
+    .stats-card-value {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--color-neutral-900);
+      margin-top: 4px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    }
+    .stats-card-value .pct { font-size: 14px; color: var(--color-neutral-500); margin-left: 4px; }
+
+    /* Table */
+    .table-wrap {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    table {
+      width: 100%;
+      font-size: 13px;
+      border-collapse: collapse;
+    }
+    thead {
+      background: var(--color-neutral-50);
+      border-bottom: 1px solid var(--color-neutral-200);
+    }
+    th {
+      padding: 12px 14px;
+      font-weight: 500;
+      color: var(--color-neutral-600);
+      text-align: left;
+      font-size: 12.5px;
+    }
+    th.right { text-align: right; }
+    th.center { text-align: center; }
+    td {
+      padding: 12px 14px;
+      color: var(--color-neutral-700);
+      vertical-align: middle;
+    }
+    td.right { text-align: right; }
+    td.center { text-align: center; }
+    tbody tr {
+      border-bottom: 1px solid var(--color-neutral-100);
+      transition: background 0.15s ease;
+    }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--color-neutral-50); }
+
+    .title-cell {
+      font-weight: 500;
+      color: var(--color-neutral-900);
+      max-width: 320px;
+    }
+    .ratio-detail {
+      font-size: 11.5px;
+      color: var(--color-neutral-400);
+      margin-left: 4px;
+    }
+
+    .grade {
+      display: inline-flex;
+      width: 26px; height: 26px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .grade-a { background: var(--color-success-light); color: var(--color-success); }
+    .grade-b { background: var(--color-primary-light); color: var(--color-primary); }
+    .grade-c { background: var(--color-warning-light); color: var(--color-warning); }
+    .grade-d { background: var(--color-danger-light); color: var(--color-danger); }
+
+    .status-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      font-size: 11.5px;
+      font-weight: 500;
+      border-radius: 999px;
+    }
+    .status-active { background: var(--color-success-light); color: var(--color-success); }
+    .status-inactive { background: var(--color-neutral-100); color: var(--color-neutral-500); }
+  </style>
+</head>
+<body>
+
+  <div class="effect-page">
+
+    <a href="admin.html" class="back-link">
+      <i data-lucide="arrow-left"></i> 返回话术库
+    </a>
+
+    <div class="page-title">
+      <i data-lucide="bar-chart-3"></i>
+      <h1>话术效果看板</h1>
+      <span class="page-title-meta">共 7 条话术</span>
+    </div>
+
+    <div class="filters">
+      <select class="filter-select">
+        <option>近 7 天</option>
+        <option selected>近 30 天</option>
+        <option>近 90 天</option>
+      </select>
+      <select class="filter-select">
+        <option selected>全部异议类型</option>
+        <option>质量异议</option>
+        <option>经济困难</option>
+        <option>信任问题</option>
+        <option>服务投诉</option>
+      </select>
+    </div>
+
+    <!-- Stats summary -->
+    <div class="stats-band">
+      <div class="stats-card">
+        <div class="stats-card-label">推送总次数</div>
+        <div class="stats-card-value">2,341</div>
+      </div>
+      <div class="stats-card">
+        <div class="stats-card-label">整体采用率</div>
+        <div class="stats-card-value">52.3%<span class="pct">/ 1,225 次</span></div>
+      </div>
+      <div class="stats-card">
+        <div class="stats-card-label">督导好评率</div>
+        <div class="stats-card-value">71.4%<span class="pct">/ 487 次</span></div>
+      </div>
+      <div class="stats-card">
+        <div class="stats-card-label">A 级话术</div>
+        <div class="stats-card-value">2<span class="pct">/ 7</span></div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>话术</th>
+            <th>异议类型</th>
+            <th class="right">推送次数</th>
+            <th class="right">采用率</th>
+            <th class="right">督导好评率</th>
+            <th class="center">综合评分</th>
+            <th class="center">评级</th>
+            <th class="center">状态</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="title-cell">质量异议·共情转换 · 强威慑型</td>
+            <td>质量异议</td>
+            <td class="right">512<span class="ratio-detail"></span></td>
+            <td class="right">68.2%<span class="ratio-detail">(349/512)</span></td>
+            <td class="right">82.1%<span class="ratio-detail">(105/128)</span></td>
+            <td class="center">0.74</td>
+            <td class="center"><span class="grade grade-a">A</span></td>
+            <td class="center"><span class="status-pill status-active">启用</span></td>
+          </tr>
+          <tr>
+            <td class="title-cell">经济困难·分期方案话术</td>
+            <td>经济困难</td>
+            <td class="right">388</td>
+            <td class="right">61.3%<span class="ratio-detail">(238/388)</span></td>
+            <td class="right">76.5%<span class="ratio-detail">(72/94)</span></td>
+            <td class="center">0.68</td>
+            <td class="center"><span class="grade grade-a">A</span></td>
+            <td class="center"><span class="status-pill status-active">启用</span></td>
+          </tr>
+          <tr>
+            <td class="title-cell">破冰·标准开场</td>
+            <td>破冰</td>
+            <td class="right">621</td>
+            <td class="right">55.4%<span class="ratio-detail">(344/621)</span></td>
+            <td class="right">68.8%<span class="ratio-detail">(110/160)</span></td>
+            <td class="center">0.62</td>
+            <td class="center"><span class="grade grade-b">B</span></td>
+            <td class="center"><span class="status-pill status-active">启用</span></td>
+          </tr>
+          <tr>
+            <td class="title-cell">服务投诉·快速响应承诺</td>
+            <td>服务投诉</td>
+            <td class="right">295</td>
+            <td class="right">48.1%<span class="ratio-detail">(142/295)</span></td>
+            <td class="right">65.2%<span class="ratio-detail">(43/66)</span></td>
+            <td class="center">0.55</td>
+            <td class="center"><span class="grade grade-b">B</span></td>
+            <td class="center"><span class="status-pill status-active">启用</span></td>
+          </tr>
+          <tr>
+            <td class="title-cell">信任问题·律所合作背书</td>
+            <td>信任问题</td>
+            <td class="right">214</td>
+            <td class="right">40.2%<span class="ratio-detail">(86/214)</span></td>
+            <td class="right">61.5%<span class="ratio-detail">(48/78)</span></td>
+            <td class="center">0.49</td>
+            <td class="center"><span class="grade grade-c">C</span></td>
+            <td class="center"><span class="status-pill status-active">启用</span></td>
+          </tr>
+          <tr>
+            <td class="title-cell">质量异议·法律威慑（强力版）</td>
+            <td>质量异议</td>
+            <td class="right">187</td>
+            <td class="right">28.3%<span class="ratio-detail">(53/187)</span></td>
+            <td class="right">42.1%<span class="ratio-detail">(16/38)</span></td>
+            <td class="center">0.34</td>
+            <td class="center"><span class="grade grade-d">D</span></td>
+            <td class="center"><span class="status-pill status-inactive">禁用</span></td>
+          </tr>
+          <tr>
+            <td class="title-cell">承诺还款·确认 SOP</td>
+            <td>承诺还款</td>
+            <td class="right">124</td>
+            <td class="right">—<span class="ratio-detail"></span></td>
+            <td class="right">—</td>
+            <td class="center">—</td>
+            <td class="center"><span style="color:var(--color-neutral-400);">—</span></td>
+            <td class="center"><span class="status-pill status-active">启用</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>
