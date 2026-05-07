@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { useLogin } from "@refinedev/core";
 import type { LoginInput } from "../../providers/auth-provider";
 
-type LoginMode = "phone-password" | "credit-code" | "phone-otp";
+type LoginMode = "account-password" | "phone-otp";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:18000";
 
@@ -42,10 +42,12 @@ const FEATURES: FeatureItem[] = [
 ];
 
 export function LoginPage() {
-  const [mode, setMode] = useState<LoginMode>("phone-password");
+  const [mode, setMode] = useState<LoginMode>("account-password");
+  // 「账号密码」标签下的 account 接受手机号 / 18 位社会信用代码 / 邮箱
+  const [account, setAccount] = useState("");
+  // 「手机验证码」标签下用 phone
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [creditCode, setCreditCode] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpHint, setOtpHint] = useState<string | null>(null);
   const [otpCountdown, setOtpCountdown] = useState(0);
@@ -106,32 +108,18 @@ export function LoginPage() {
     e.preventDefault();
     setErrorMsg("");
     let payload: LoginInput;
-    if (mode === "credit-code") {
-      if (!creditCode || !password) {
-        setErrorMsg("请填写社会信用代码和密码");
-        return;
-      }
-      if (!/^[0-9A-Z]{18}$/.test(creditCode)) {
-        setErrorMsg("社会信用代码应为 18 位大写字母数字");
-        return;
-      }
-      payload = {
-        mode: "credit-code",
-        credit_code: creditCode,
-        password,
-      };
-    } else if (mode === "phone-otp") {
+    if (mode === "phone-otp") {
       if (!phone || !otpCode) {
         setErrorMsg("请填写手机号和验证码");
         return;
       }
       payload = { mode: "phone-otp", phone, code: otpCode };
     } else {
-      if (!phone || !password) {
-        setErrorMsg("请填写手机号和密码");
+      if (!account || !password) {
+        setErrorMsg("请填写账号和密码");
         return;
       }
-      payload = { phone, password };
+      payload = { mode: "account-password", account: account.trim(), password };
     }
     login(payload, {
       onSuccess: (data) => {
@@ -332,7 +320,7 @@ export function LoginPage() {
           {/* ──── 主登录表单 ──── */}
           {!showForgot && (
             <form onSubmit={handleSubmit}>
-              {/* v1.4 S17.4 — 登录方式切换 */}
+              {/* v1.4 — 登录方式：账号密码（手机/信用代码/邮箱）/ 手机验证码 */}
               <div
                 style={{
                   display: "flex",
@@ -342,9 +330,8 @@ export function LoginPage() {
                 }}
               >
                 {([
-                  ["phone-password", "手机号密码"],
-                  ["credit-code", "信用代码"],
-                  ["phone-otp", "短信验证码"],
+                  ["account-password", "账号密码"],
+                  ["phone-otp", "手机验证码"],
                 ] as Array<[LoginMode, string]>).map(([key, label]) => (
                   <button
                     key={key}
@@ -393,10 +380,10 @@ export function LoginPage() {
                 </div>
               )}
 
-              {mode === "credit-code" ? (
+              {mode === "account-password" ? (
                 <div style={{ marginBottom: 18 }}>
                   <label
-                    htmlFor="credit-code"
+                    htmlFor="account"
                     style={{
                       display: "block",
                       fontSize: 13,
@@ -405,28 +392,28 @@ export function LoginPage() {
                       marginBottom: 6,
                     }}
                   >
-                    统一社会信用代码
+                    账号
                     <span style={{ color: "#e02424", marginLeft: 2 }}>*</span>
                   </label>
                   <input
-                    id="credit-code"
+                    id="account"
                     type="text"
-                    value={creditCode}
-                    onChange={(e) => setCreditCode(e.target.value.toUpperCase())}
-                    placeholder="18 位大写字母数字"
-                    maxLength={18}
-                    autoComplete="off"
+                    value={account}
+                    onChange={(e) => setAccount(e.target.value)}
+                    placeholder="手机号 / 18 位社会信用代码 / 邮箱"
+                    maxLength={120}
+                    autoComplete="username"
                     style={{
                       width: "100%",
                       padding: "10px 14px",
                       border: errorMsg ? "1px solid #e02424" : "1px solid #d1d5db",
                       borderRadius: 8,
                       fontSize: 14,
-                      fontFamily: "monospace",
-                      letterSpacing: 1,
+                      fontFamily: "inherit",
                       color: "#111827",
                       background: "white",
                       outline: "none",
+                      transition: "border-color .15s",
                     }}
                   />
                 </div>
@@ -442,7 +429,7 @@ export function LoginPage() {
                       marginBottom: 6,
                     }}
                   >
-                    手机号 / 账号
+                    手机号
                     <span style={{ color: "#e02424", marginLeft: 2 }}>*</span>
                   </label>
                   <input
@@ -450,7 +437,7 @@ export function LoginPage() {
                     type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    placeholder="请输入手机号"
+                    placeholder="请输入 11 位手机号"
                     maxLength={11}
                     autoComplete="username"
                     style={{

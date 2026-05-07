@@ -72,6 +72,18 @@ class CreditCodeLoginIn(BaseModel):
         return _credit_code_validator(v)
 
 
+class UniversalLoginIn(BaseModel):
+    """v1.4 — 用户名 + 密码统一入口。account 自动识别为：
+    - 11 位数字 → 手机号
+    - 18 位大写字母数字 → 统一社会信用代码
+    - 含 @ → 邮箱
+    """
+
+    account: str = Field(..., min_length=1, max_length=120)
+    password: str
+    device_type: str = "pc"
+
+
 class OtpSendIn(BaseModel):
     phone: str
     purpose: str = "login"  # login / password_reset
@@ -243,6 +255,66 @@ def _consume_otp(db: Session, phone: str, code: str, purpose: str) -> bool:
 
 
 # ─── Endpoints ────────────────────────────────────────────────
+
+
+@router.post("/login-universal", response_model=TokenResponse)
+def login_universal(
+    body: UniversalLoginIn, db: Session = Depends(get_db)
+) -> TokenResponse:
+    """统一账号登录入口（v1.4）。account 自动识别为手机号/信用代码/邮箱。"""
+    import re
+
+    account = body.account.strip()
+    user: UserAccount | None = None
+
+    if re.match(r"^1[3-9]\d{9}$", account):
+        # 手机号登录
+        user = db.execute(
+            select(UserAccount).where(
+                UserAccount.phone_enc == encrypt_phone(account),
+                UserAccount.is_active.is_(True),
+            )
+        ).scalar_one_or_none()
+    elif re.match(r"^[0-9A-Z]{18}$", account.upper()):
+        # 统一社会信用代码 → 找该 tenant 的 admin
+        cc = account.upper()
+        tenant = db.execute(
+            select(Tenant).where(
+                Tenant.credit_code == cc, Tenant.is_active.is_(True)
+            )
+        ).scalar_one_or_none()
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "code": "ERR_INVALID_ACCOUNT",
+                    "message": "账号或密码错误",
+                },
+            )
+        membership = db.execute(
+            select(UserTenantMembership).where(
+                UserTenantMembership.tenant_id == tenant.id,
+                UserTenantMembership.role.in_(ADMIN_LIKE_ROLES),
+                UserTenantMembership.is_active.is_(True),
+            )
+        ).scalars().first()
+        if membership:
+            user = db.get(UserAccount, membership.user_id)
+    elif "@" in account:
+        # 邮箱登录
+        user = db.execute(
+            select(UserAccount).where(
+                UserAccount.email == account.lower(),
+                UserAccount.is_active.is_(True),
+            )
+        ).scalar_one_or_none()
+
+    if not user or not verify_password(body.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "ERR_INVALID_CREDENTIALS", "message": "账号或密码错误"},
+        )
+    return _issue_token(db, user, body.device_type)
 
 
 @router.post("/login-by-credit-code", response_model=TokenResponse)

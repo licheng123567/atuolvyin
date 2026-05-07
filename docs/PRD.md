@@ -154,6 +154,56 @@ UserTenantMembership  -- 用户↔租户多对多
 - 所有 API 强制携带 `tenant_id`，中间件层校验，禁止跨租户访问
 - MVP 阶段服务单一租户，v1.1 启用完整多租户 + 服务商体系
 
+### 3.6 v1.4 治理增量（已交付）
+
+v1.0–v1.3 完成基础多租户结构后，v1.4 落地以下治理与协作要素：
+
+#### 3.6.1 项目（Project）成为一等公民
+
+物业租户内的「项目」是案件归属与数据可见性的最小单元，原模型已存在但未启用，v1.4 全链路接通：
+
+- **Project 模型**：`tenant_id` + `project_type`（collection / vote）+ `provider_id`（指定承接服务商）+ `property_pm_user_id` / `provider_pm_user_id`（双方项目经理）+ `allow_internal_assist`（项目级开关：服务商承接的项目下，是否允许物业内勤协助）
+- **服务商分配 = 项目级**：物业建项目时选定 `provider_id`，整个项目下的案件默认对该服务商外勤可见
+- **法务分配 = 案件级**：保持原有 `LegalConversionOrder` 不变（按金额阈值 + 付费法律服务包）
+- **项目经理只读**：`project_manager_property` / `project_manager_provider` 角色登录后，所有 admin 端写操作（导入/分配/释放/转法务/添加备注）均隐藏，看板拖拽禁用，列表 checkbox 隐藏
+
+#### 3.6.2 服务商按项目分配 + 推荐入驻
+
+- **服务商创建**：以平台 ops 创建为主；物业 admin 可推荐入驻（`POST /admin/providers/recommend`），写 `ServiceProvider(audit_status='pending', recommended_by_tenant_id=<本租户>)`，ops 端审核通过后该租户即可在项目上选用
+- **agent 可见性**：服务商外勤只看到「自己负责的项目」案件 + 已分配给自己的私海；物业内勤看「无项目案件 + 无服务商项目 + 开了协助开关的项目」公海
+- **跨租户隔离**：服务商 admin 可见自己签约的所有租户，但租户 A 的私有数据（如业主姓名/手机号）严格不暴露给租户 B 的视图
+
+#### 3.6.3 双向解约握手 + 30/60 天数据窗口
+
+- **解约流程**：物业或服务商任一方发起 `POST /providers/{id}/terminate-request` → 对方 7 天内确认 `POST /terminate-confirm` → `status='terminated'` + `terminated_at=now`
+- **超时兜底**：daily worker `app.workers.scheduled.terminate_timeout` 扫 7 天未确认请求自动转 terminated（写审计 `provider.contract.auto_terminated`）
+- **解约后数据窗口**（D3）：
+  - `[0, 30) 天`：服务商对历史通话 / 案件**只读**；业主姓名 / 手机号**立即脱敏**
+  - `[30, 60) 天`：服务商不可读
+  - `≥ 60 天`：daily worker 软删（设 `is_visible=False`）相关通话转写 / AI 分析；案件归物业，不动
+- **UI 状态机**：物业 `/admin/providers/:id` 下方「解约管理」面板（申请/等待对方确认/已终止 + 倒计时）；服务商 dashboard 顶部 banner（收到请求 / 自己请求中 / 已终止）
+
+#### 3.6.4 话术库三层归属（D4）
+
+`script_template` 加 `provider_id BIGINT NULL FK service_provider(id)`，三层语义：
+
+| layer | tenant_id | provider_id | 写权限 | 谁能读 |
+|-------|-----------|-------------|--------|--------|
+| 平台预置 | NULL | NULL | 仅 platform_superadmin | 所有人 |
+| 物业私有 | NOT NULL | NULL | 该租户 admin | 该租户内勤 + 该租户分配项目的服务商外勤 |
+| 服务商私有 | NULL | NOT NULL | 该服务商 admin | 该服务商外勤（含跨租户作业时） |
+
+- 物业 admin **不可改平台预置**（403），可 `POST /admin/scripts/{id}/fork` 复制为本租户私有再编辑
+- 物业 admin **不可读服务商私有**（其数字资产）
+- 服务商 admin **不可读物业私有**（同上）
+- 通话实时建议引擎（`realtime_llm._load_scripts`）按 caller 角色合并加载：
+  - 内勤 → 平台 + 案件归属物业私有
+  - 外勤 → 平台 + 案件归属物业私有 + 本服务商私有
+
+#### 3.6.5 P1 标签语义调整
+
+原 P1 = "未上线"；现 P1 = **"已上线但 demo 数据 / UX 待打磨"**。物业 admin sidebar 上「服务商合作」从 P1 摘除（v1.4 已含完整推荐入驻链路）；「数据报表」「合规月报」保留 P1（v1.5 补 demo 数据）。
+
 ---
 
 ## 4. 角色体系
@@ -290,6 +340,47 @@ UserTenantMembership  -- 用户↔租户多对多
 - 签名：`有证慧催`
 - 模板：账号激活、密码重置、邀请链接、支付确认（每类独立审批）
 - 发送频率限制：同一手机号每分钟最多 1 条、每天最多 10 条
+
+### 5.5 登录方式（v1.4 已实施）
+
+> 完整账号体系演进设计见 `docs/account-architecture.md`（v1.5 推进中）。
+> 本节为已上线状态。
+
+登录页提供 **2 种登录方式**（tab 切换），所有角色统一同一入口：
+
+#### 方式 A：账号 + 密码
+
+「账号」字段后端自动识别为以下 3 种之一：
+
+| 输入格式 | 识别为 | 说明 |
+|----------|--------|------|
+| 11 位数字 `^1[3-9]\d{9}$` | 手机号 | 全角色通用，存储用 AES-256 加密 |
+| 18 位大写字母数字 `^[0-9A-Z]{18}$` | 统一社会信用代码 | 物业租户专用，登录后自动定位到该租户的第一个 admin 用户 |
+| 含 `@` | 邮箱 | 组织管理员可绑定（v1.5 转为主登录入口） |
+
+后端端点：`POST /api/v1/auth/login-universal`（body: `{account, password}`）
+
+#### 方式 B：手机号 + 短信验证码
+
+- 输入 11 位手机号 → 点「获取验证码」→ `POST /auth/otp/send`
+- 后端生成 6 位 OTP，5 分钟有效，60 秒频率限制
+- dev 模式直接在响应里回传 OTP（生产环境通过阿里云 SMS 发送）
+- 输入验证码 → `POST /auth/otp/verify` → 返回 token
+
+#### 忘记密码
+
+`POST /auth/password-reset/request`（手机号）→ 发送 OTP（用户不存在不报错防探测）→
+`POST /auth/password-reset/confirm`（手机号 + OTP + 新密码）→ 改密成功
+
+#### 各角色推荐登录方式
+
+| 角色 | 推荐 | 备选 |
+|------|------|------|
+| 平台超管 / 平台运营员 | 账号 + 密码（手机号或邮箱）+ TOTP MFA | — |
+| 物业公司管理员 | 账号 + 密码（**社会信用代码** 或手机号或邮箱） | — |
+| 服务商管理员 | 账号 + 密码（手机号或邮箱） | — |
+| 主管 / 内部催收员 / 法务 / 工单 / PM | 手机 + OTP | 手机 + 密码 |
+| 外部兼职催收员（仅 App） | 手机 + OTP | 手机 + 密码 |
 
 ---
 

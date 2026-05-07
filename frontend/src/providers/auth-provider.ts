@@ -17,15 +17,10 @@ export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 
-interface LoginByPhonePassword {
-  mode?: "phone-password";
-  phone: string;
-  password: string;
-}
-
-interface LoginByCreditCode {
-  mode: "credit-code";
-  credit_code: string;
+interface LoginByAccount {
+  mode?: "account-password";
+  // 账号 = 手机号 / 18 位社会信用代码 / 邮箱（后端自动识别）
+  account: string;
   password: string;
 }
 
@@ -35,24 +30,37 @@ interface LoginByOtp {
   code: string;
 }
 
-export type LoginInput = LoginByPhonePassword | LoginByCreditCode | LoginByOtp;
+// v1.5 兼容字段保留：旧 phone-password / credit-code 入口已合并到 account-password
+interface LoginByPhonePasswordLegacy {
+  mode?: "phone-password";
+  phone: string;
+  password: string;
+}
+
+export type LoginInput =
+  | LoginByAccount
+  | LoginByOtp
+  | LoginByPhonePasswordLegacy;
 
 export const authProvider: AuthProvider = {
   login: async (input: LoginInput) => {
     try {
-      let url = `${API_BASE}/api/v1/auth/login`;
+      let url: string;
       let body: Record<string, unknown>;
-      if (input.mode === "credit-code") {
-        url = `${API_BASE}/api/v1/auth/login-by-credit-code`;
+      if (input.mode === "phone-otp") {
+        url = `${API_BASE}/api/v1/auth/otp/verify`;
+        body = { phone: input.phone, code: input.code, device_type: "pc" };
+      } else if ("account" in input) {
+        // 统一账号入口：账号自动识别（手机号 / 信用代码 / 邮箱）
+        url = `${API_BASE}/api/v1/auth/login-universal`;
         body = {
-          credit_code: input.credit_code,
+          account: input.account,
           password: input.password,
           device_type: "pc",
         };
-      } else if (input.mode === "phone-otp") {
-        url = `${API_BASE}/api/v1/auth/otp/verify`;
-        body = { phone: input.phone, code: input.code, device_type: "pc" };
       } else {
+        // 兼容历史 phone-password 入口
+        url = `${API_BASE}/api/v1/auth/login`;
         body = {
           phone: input.phone,
           password: input.password,
