@@ -73,7 +73,8 @@
 1. ~~lucide-react 0.511 → 1.14~~ — ✅ v1.6.3
 2. ~~vitest 3 → 4~~ — ✅ v1.6.3
 3. ~~patch-level 升级一批~~ — ✅ v1.6.2/.3
-4. **redis-py 5 → 7**（高风险，专项）— pending
+4. ~~redis-py 5 → 7~~ — ⚠️ **被上游锁死**（kombu 5.6.2 仍要求 `redis<6.5`），
+   v1.7.1 妥协升到 6.4.0（celery 同步 5.3.6→5.6.3）；redis 7 等 kombu 释放兼容
 5. ~~bcrypt 5 + passlib 替换~~ — ✅ v1.7.0（passlib archived，重写为 bcrypt 直接调用）
 6. **tailwind v4**（专项 sprint，影响 design-system.css 整套 token）— pending
 7. **react 19**（专项 sprint，concurrent / strict effects 全面 review）— pending
