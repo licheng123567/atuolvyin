@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>新增服务商 — 有证慧催</title>
+  <link rel="stylesheet" href="assets/design-system.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    body { background: var(--color-neutral-50); min-height: 100vh; }
+    .page { max-width: 640px; margin: 0 auto; padding: 24px 20px; }
+
+    .top-row { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+    .back-btn { background: none; border: none; cursor: pointer; padding: 0; color: var(--color-neutral-500); }
+    .back-btn:hover { color: var(--color-neutral-900); }
+    .back-btn svg { width: 20px; height: 20px; }
+    h1 { font-size: 20px; font-weight: 600; color: var(--color-neutral-900); }
+
+    form {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--color-neutral-700);
+      margin-bottom: 6px;
+    }
+    input,
+    select,
+    textarea {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 13.5px;
+      border: 1px solid var(--color-neutral-300);
+      border-radius: var(--radius-sm);
+      outline: none;
+      font-family: inherit;
+    }
+    textarea { resize: vertical; min-height: 72px; }
+    input:focus,
+    select:focus,
+    textarea:focus {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(26, 86, 219, 0.1);
+    }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .field-hint {
+      margin-top: 4px;
+      font-size: 11.5px;
+      color: var(--color-neutral-400);
+    }
+
+    .actions { display: flex; gap: 10px; padding-top: 8px; }
+    .btn {
+      padding: 9px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13.5px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .btn-primary { flex: 1; background: var(--color-primary); color: white; border: none; }
+    .btn-secondary { background: white; border: 1px solid var(--color-neutral-300); color: var(--color-neutral-700); }
+  </style>
+</head>
+<body>
+
+  <div class="page">
+
+    <div class="top-row">
+      <button type="button" class="back-btn" aria-label="返回">
+        <i data-lucide="arrow-left"></i>
+      </button>
+      <h1>新增服务商</h1>
+    </div>
+
+    <form>
+      <div>
+        <label>服务商名称 *</label>
+        <input type="text" placeholder="例：远程客服外包有限公司" value="">
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label>类型 *</label>
+          <select>
+            <option value="collection" selected>催收外包</option>
+            <option value="legal">法律咨询</option>
+            <option value="both">两者均提供</option>
+          </select>
+        </div>
+        <div>
+          <label>月度分钟配额（选填）</label>
+          <input type="number" min="0" placeholder="如：5000">
+          <p class="field-hint">服务商在所有租户合计可用分钟数</p>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label>管理员手机 *</label>
+          <input type="tel" placeholder="138xxxxxxxx" value="">
+          <p class="field-hint">将自动建一名 provider_admin 账号</p>
+        </div>
+        <div>
+          <label>联系邮箱（选填）</label>
+          <input type="email" placeholder="contact@example.com">
+        </div>
+      </div>
+
+      <div>
+        <label>简介 / 备注（选填）</label>
+        <textarea rows="3" placeholder="服务商背景、服务范围补充说明等"></textarea>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="btn btn-primary">创建服务商</button>
+        <button type="button" class="btn btn-secondary">取消</button>
+      </div>
+    </form>
+
+  </div>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>

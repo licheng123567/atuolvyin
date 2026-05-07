@@ -157,17 +157,19 @@
 
 ### P2（次要 / 服务商内部 / 平台超管细节）
 
-| React 页 |
-|---|
-| provider/settlements + provider/settlements/[id] |
-| provider/tenants |
-| ops/providers/new |
-| ops/tenants/new |
-| ops/tenants/[id] |
-| ops/tenants/trial |
-| super/audit |
-| super/cost |
-| super/plans |
+| React 页 | 覆盖 |
+|---|---|
+| ~~provider/settlements + provider/settlements/[id]~~ | ✅ 已在 provider-admin.html#pa-receivables |
+| ~~provider/tenants~~ | ✅ 已在 provider-admin.html#pa-contracts |
+| ~~ops/providers/new~~ | ✅ Sprint 16.4 → ui/ops-provider-new.html |
+| ~~ops/tenants/new~~ | ✅ 已在 platform-ops.html#ops-new-tenant |
+| ~~ops/tenants/[id]~~ | ✅ 已在 platform-ops.html#ops-tenant-detail |
+| ~~ops/tenants/trial~~ | ✅ 已在 platform-ops.html#ops-trial |
+| ~~super/audit~~ | ✅ 已在 platform-superadmin.html#p-audit |
+| ~~super/cost~~ | ✅ 已在 platform-superadmin.html#p-cost-dashboard |
+| ~~super/plans~~ | ✅ 已在 platform-superadmin.html#p-packages |
+
+**P2 全部覆盖。** UI_PROTOTYPE_GAPS.md 全部缺口闭合。
 
 ## C. 优先级总结（执行顺序）
 
