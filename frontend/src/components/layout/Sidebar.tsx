@@ -60,6 +60,8 @@ const ICON_MAP: Record<string, React.ElementType> = {
   "/supervisor/team-performance": TrendingUp,
   "/supervisor/script-labels": Tag,
   "/ops/settlements": Receipt,
+  "/ops/law-firms": Building2,
+  "/ops/legal-workstation": Scale,
   "/ops/announcements": Megaphone,
   "/ops/audit-logs": History,
   "/super/llm-prompts": Brain,

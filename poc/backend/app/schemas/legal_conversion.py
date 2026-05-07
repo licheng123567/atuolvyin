@@ -59,7 +59,10 @@ class ConvertCasePreviewOut(BaseModel):
 
 
 class DispatchOrderRequest(BaseModel):
-    assigned_law_firm: str = Field(..., min_length=2, max_length=200)
+    """优先用 law_firm_id（律所池）；缺省时回落到 free-text。"""
+    law_firm_id: int | None = Field(None, gt=0)
+    lawyer_id: int | None = Field(None, gt=0)
+    assigned_law_firm: str | None = Field(None, max_length=200)
     assigned_lawyer_name: str | None = Field(None, max_length=120)
 
 

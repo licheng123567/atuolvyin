@@ -27,9 +27,11 @@ from app.api import (
     devices_v1,
     legal_cases,
     legal_documents,
+    legal_workstation,
     notifications as notifications_api,
     ops,
     ops_extras,
+    ops_law_firms,
     ops_providers,
     pm_dashboard,
     provider_admin,
@@ -132,6 +134,8 @@ app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 app.include_router(ops.router, prefix="/api/v1/ops", tags=["ops"])
 app.include_router(ops_providers.router, prefix="/api/v1/ops", tags=["ops-providers"])
 app.include_router(ops_extras.router, prefix="/api/v1/ops", tags=["ops-extras"])
+app.include_router(ops_law_firms.router, prefix="/api/v1/ops", tags=["ops-law-firms"])
+app.include_router(legal_workstation.router, prefix="/api/v1/legal-workstation", tags=["legal-workstation"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 app.include_router(admin_cases.router, prefix="/api/v1/admin", tags=["admin-cases"])
 app.include_router(admin_legal_conversion.router, prefix="/api/v1/admin", tags=["admin-legal-conversion"])

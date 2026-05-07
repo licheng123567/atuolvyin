@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
 from app.models.case import CollectionCase
+from app.models.law_firm import LawFirm, LawFirmLawyer
 from app.models.legal_conversion import LegalConversionOrder, LegalServicePackage
 from app.models.user import UserAccount
 from app.schemas.common import PaginatedResponse
@@ -318,9 +319,46 @@ async def dispatch_order(
                 "message": f"订单当前状态 {order.status}，无法 dispatch",
             },
         )
+
+    # 律所池模式（优先）：解析 law_firm_id + lawyer_id，denormalize 名字快照
+    firm_name: str | None = None
+    lawyer_name: str | None = None
+    if body.law_firm_id is not None:
+        firm = db.get(LawFirm, body.law_firm_id)
+        if firm is None or not firm.enabled or not firm.accepting_orders:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail={"code": "ERR_FIRM_INVALID", "message": "律所不可用或未开启接单"},
+            )
+        firm_name = firm.name
+        order.law_firm_id = firm.id
+
+        if body.lawyer_id is not None:
+            lawyer = db.get(LawFirmLawyer, body.lawyer_id)
+            if (
+                lawyer is None
+                or lawyer.law_firm_id != firm.id
+                or not lawyer.is_active
+            ):
+                raise HTTPException(
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
+                    detail={"code": "ERR_LAWYER_INVALID", "message": "律师不属于该律所或已停用"},
+                )
+            lawyer_name = lawyer.name
+            order.lawyer_id = lawyer.id
+    else:
+        # 回落 free-text（要求至少 assigned_law_firm 非空）
+        if not body.assigned_law_firm or len(body.assigned_law_firm.strip()) < 2:
+            raise HTTPException(
+                status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"code": "ERR_VALIDATION", "message": "需提供 law_firm_id 或 assigned_law_firm"},
+            )
+        firm_name = body.assigned_law_firm.strip()
+        lawyer_name = (body.assigned_lawyer_name or "").strip() or None
+
     order.status = "dispatched"
-    order.assigned_law_firm = body.assigned_law_firm
-    order.assigned_lawyer_name = body.assigned_lawyer_name
+    order.assigned_law_firm = firm_name
+    order.assigned_lawyer_name = lawyer_name
     order.dispatched_at = datetime.now(UTC)
     db.commit()
     db.refresh(order)
@@ -357,6 +395,11 @@ async def complete_order(
     order.completed_at = datetime.now(UTC)
     if body.notes:
         order.notes = (order.notes + "\n" if order.notes else "") + body.notes
+    # 律所完成单数 +1（撮合质量后续可基于此排名）
+    if order.law_firm_id is not None:
+        firm = db.get(LawFirm, order.law_firm_id)
+        if firm is not None:
+            firm.completed_orders = (firm.completed_orders or 0) + 1
     db.commit()
     db.refresh(order)
 

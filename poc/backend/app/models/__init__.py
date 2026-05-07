@@ -26,6 +26,7 @@ from .platform import (  # noqa: F401
 from .blockchain_attestation import BlockchainAttestation  # noqa: F401
 from .active_session import ActiveSession  # noqa: F401
 from .notification import Notification  # noqa: F401
+from .law_firm import LawFirm, LawFirmLawyer  # noqa: F401
 from .legal_conversion import (  # noqa: F401
     LegalConversionOrder,
     LegalServicePackage,

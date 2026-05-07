@@ -54,6 +54,8 @@ import { SupervisorReviewDetailPage } from "./pages/supervisor/reviews/detail";
 import { SupervisorRiskEventsPage } from "./pages/supervisor/risk-events";
 import { SupervisorTeamPerformancePage } from "./pages/supervisor/team-performance";
 import { OpsSettlementsOverviewPage } from "./pages/ops/settlements";
+import { OpsLawFirmsPage } from "./pages/ops/law-firms/index";
+import { OpsLegalWorkstationPage } from "./pages/ops/legal-workstation/index";
 import { OpsAnnouncementsPage } from "./pages/ops/announcements";
 import { OpsMyAuditLogsPage } from "./pages/ops/audit-logs";
 import { SuperLlmPromptsPage } from "./pages/super/llm-prompts";
@@ -379,6 +381,9 @@ function App() {
             <Route path="/supervisor/team-performance" element={<SupervisorTeamPerformancePage />} />
             {/* Sprint 10 ops + super */}
             <Route path="/ops/settlements" element={<OpsSettlementsOverviewPage />} />
+            {/* Sprint 16.2 — Law firm pool + legal workstation (PRD §20.4) */}
+            <Route path="/ops/law-firms" element={<OpsLawFirmsPage />} />
+            <Route path="/ops/legal-workstation" element={<OpsLegalWorkstationPage />} />
             <Route path="/ops/announcements" element={<OpsAnnouncementsPage />} />
             <Route path="/ops/audit-logs" element={<OpsMyAuditLogsPage />} />
             <Route path="/super/llm-prompts" element={<SuperLlmPromptsPage />} />

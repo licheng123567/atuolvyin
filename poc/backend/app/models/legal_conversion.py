@@ -81,6 +81,12 @@ class LegalConversionOrder(Base, TimestampMixin):
     platform_fee_amount: Mapped[Decimal] = mapped_column(
         sa.Numeric(10, 2), nullable=False
     )
+    law_firm_id: Mapped[int | None] = mapped_column(
+        sa.BigInteger, sa.ForeignKey("law_firm.id", ondelete="SET NULL")
+    )
+    lawyer_id: Mapped[int | None] = mapped_column(
+        sa.BigInteger, sa.ForeignKey("law_firm_lawyer.id", ondelete="SET NULL")
+    )
     assigned_law_firm: Mapped[str | None] = mapped_column(sa.String(200))
     assigned_lawyer_name: Mapped[str | None] = mapped_column(sa.String(120))
     timeline_summary: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
