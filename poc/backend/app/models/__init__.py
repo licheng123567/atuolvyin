@@ -31,6 +31,7 @@ from .legal_conversion import (  # noqa: F401
     LegalConversionOrder,
     LegalServicePackage,
 )
+from .legal_platform_invoice import LegalPlatformInvoice  # noqa: F401
 
 __all__ = [
     "Base",

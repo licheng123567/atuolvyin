@@ -1,6 +1,6 @@
 // Sprint 16.2 — 法务工作台（PRD §20.4）— ops 视角，按律所筛选转化订单 + 推动状态
 import { useCustom, useCustomMutation } from "@refinedev/core";
-import { Briefcase, PlayCircle, Scale } from "lucide-react";
+import { Briefcase, FileText, PlayCircle, Receipt, Scale } from "lucide-react";
 import { useState } from "react";
 
 interface LawFirm {
@@ -33,7 +33,32 @@ interface FirmStats {
   completed_orders: number;
   by_status: Record<string, number>;
   platform_fee_total_completed: number;
+  platform_fee_unpaid: number;
 }
+
+interface Invoice {
+  id: number;
+  period_start: string;
+  period_end: string;
+  total_amount: string;
+  order_count: number;
+  status: "DRAFT" | "CONFIRMED" | "PAID" | "CANCELLED";
+  confirmed_at: string | null;
+  paid_at: string | null;
+}
+
+const INVOICE_STATUS_COLOR: Record<Invoice["status"], string> = {
+  DRAFT: "bg-gray-100 text-gray-700",
+  CONFIRMED: "bg-amber-100 text-amber-700",
+  PAID: "bg-green-100 text-green-700",
+  CANCELLED: "bg-red-50 text-red-600",
+};
+const INVOICE_STATUS_LABEL: Record<Invoice["status"], string> = {
+  DRAFT: "草稿",
+  CONFIRMED: "已确认",
+  PAID: "已付",
+  CANCELLED: "已取消",
+};
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "待撮合",
@@ -74,7 +99,18 @@ export function OpsLegalWorkstationPage() {
     queryOptions: { enabled: !!selectedFirmId },
   });
 
+  const invoicesQuery = useCustom<{ items: Invoice[]; total: number }>({
+    url: selectedFirmId
+      ? `legal-workstation/firms/${selectedFirmId}/invoices`
+      : "legal-workstation/firms/0/invoices",
+    method: "get",
+    config: { query: { page: 1, page_size: 20 } },
+    queryOptions: { enabled: !!selectedFirmId },
+  });
+
   const { mutate: doStart } = useCustomMutation();
+  const { mutate: doInvoiceAction } = useCustomMutation();
+  const { mutate: doGenerate } = useCustomMutation();
 
   const onStart = (id: number) => {
     if (!confirm("启动该订单（dispatched → in_service）？")) return;
@@ -90,6 +126,50 @@ export function OpsLegalWorkstationPage() {
   const firms = firmsQuery.query.data?.data?.items ?? [];
   const orders = ordersQuery.query.data?.data?.items ?? [];
   const stats = statsQuery.query.data?.data;
+  const invoices = invoicesQuery.query.data?.data?.items ?? [];
+
+  const onGenerateInvoice = () => {
+    if (!selectedFirmId) return;
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 1);
+    doGenerate(
+      {
+        url: `legal-workstation/firms/${selectedFirmId}/invoices`,
+        method: "post",
+        values: {
+          period_start: start.toISOString(),
+          period_end: end.toISOString(),
+        },
+      },
+      {
+        onSuccess: () => {
+          invoicesQuery.refetch();
+          statsQuery.refetch();
+        },
+        onError: (err) => alert(`生成失败：${(err as { message?: string }).message ?? "请重试"}`),
+      },
+    );
+  };
+
+  const onInvoiceTransition = (id: number, action: "confirm" | "paid" | "cancel") => {
+    const labels = { confirm: "确认账单", paid: "标记已付", cancel: "取消账单" };
+    if (!confirm(`${labels[action]}（账单 #${id}）？`)) return;
+    doInvoiceAction(
+      {
+        url: `legal-workstation/invoices/${id}/${action}`,
+        method: "post",
+        values: {},
+      },
+      {
+        onSuccess: () => {
+          invoicesQuery.refetch();
+          statsQuery.refetch();
+        },
+        onError: (err) => alert(`操作失败：${(err as { message?: string }).message ?? "请重试"}`),
+      },
+    );
+  };
 
   return (
     <div className="p-6 space-y-4">
@@ -142,7 +222,7 @@ export function OpsLegalWorkstationPage() {
         {/* 右侧主区 */}
         <div className="col-span-9 space-y-4">
           {selectedFirmId && stats && (
-            <div className="bg-white border border-[var(--color-neutral-200)] rounded-lg p-4 grid grid-cols-4 gap-4 text-sm">
+            <div className="bg-white border border-[var(--color-neutral-200)] rounded-lg p-4 grid grid-cols-5 gap-4 text-sm">
               <div>
                 <div className="text-xs text-[var(--color-neutral-500)]">律所</div>
                 <div className="font-semibold mt-0.5">{stats.firm_name}</div>
@@ -161,6 +241,96 @@ export function OpsLegalWorkstationPage() {
                   ¥{stats.platform_fee_total_completed.toFixed(2)}
                 </div>
               </div>
+              <div>
+                <div className="text-xs text-[var(--color-neutral-500)]">应收账款</div>
+                <div
+                  className={`font-semibold mt-0.5 ${
+                    stats.platform_fee_unpaid > 0 ? "text-amber-600" : "text-[var(--color-neutral-700)]"
+                  }`}
+                >
+                  ¥{stats.platform_fee_unpaid.toFixed(2)}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Sprint 16.3 — Invoice panel (visible only when a firm is selected) */}
+          {selectedFirmId && (
+            <div className="bg-white border border-[var(--color-neutral-200)] rounded-lg overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-neutral-100)]">
+                <div className="flex items-center gap-2">
+                  <Receipt className="w-4 h-4 text-[var(--color-primary)]" />
+                  <span className="text-sm font-semibold">介绍费账单</span>
+                  <span className="text-xs text-[var(--color-neutral-500)]">
+                    ({invoices.length})
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={onGenerateInvoice}
+                  className="flex items-center gap-1 text-xs px-3 py-1 border border-[var(--color-primary)] text-[var(--color-primary)] rounded hover:bg-[var(--color-primary-light)]"
+                >
+                  <FileText className="w-3.5 h-3.5" /> 生成上月账单
+                </button>
+              </div>
+              {invoices.length === 0 && (
+                <div className="p-6 text-center text-xs text-[var(--color-neutral-500)]">
+                  暂无账单
+                </div>
+              )}
+              {invoices.map((inv) => (
+                <div
+                  key={inv.id}
+                  className="px-4 py-3 border-b border-[var(--color-neutral-100)] last:border-0 flex items-center gap-3 text-sm"
+                >
+                  <span className="font-mono text-xs text-[var(--color-neutral-500)]">
+                    #{inv.id}
+                  </span>
+                  <span className="text-xs text-[var(--color-neutral-700)]">
+                    {inv.period_start.slice(0, 10)} ~ {inv.period_end.slice(0, 10)}
+                  </span>
+                  <span className="font-mono text-[var(--color-primary)]">
+                    ¥{inv.total_amount}
+                  </span>
+                  <span className="text-xs text-[var(--color-neutral-500)]">
+                    {inv.order_count} 单
+                  </span>
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded ${INVOICE_STATUS_COLOR[inv.status]}`}
+                  >
+                    {INVOICE_STATUS_LABEL[inv.status]}
+                  </span>
+                  <div className="ml-auto flex gap-1">
+                    {inv.status === "DRAFT" && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => onInvoiceTransition(inv.id, "confirm")}
+                          className="text-xs px-2 py-1 border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded"
+                        >
+                          确认
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onInvoiceTransition(inv.id, "cancel")}
+                          className="text-xs px-2 py-1 border border-[var(--color-neutral-300)] text-[var(--color-neutral-600)] hover:bg-[var(--color-neutral-50)] rounded"
+                        >
+                          取消
+                        </button>
+                      </>
+                    )}
+                    {inv.status === "CONFIRMED" && (
+                      <button
+                        type="button"
+                        onClick={() => onInvoiceTransition(inv.id, "paid")}
+                        className="text-xs px-2 py-1 border border-green-300 text-green-700 bg-green-50 hover:bg-green-100 rounded"
+                      >
+                        标记已付
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
