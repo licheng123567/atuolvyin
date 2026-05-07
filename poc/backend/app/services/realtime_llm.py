@@ -251,18 +251,37 @@ async def _call_final_analysis(messages: list[dict]) -> dict:
     raise RuntimeError(f"unknown LLM_BACKEND: {settings.llm_backend}")
 
 
-def _load_scripts(db: Session, tenant_id: Optional[int]) -> dict[str, list[str]]:
-    from sqlalchemy import select, or_
+def _load_scripts(
+    db: Session,
+    tenant_id: Optional[int],
+    *,
+    agent_provider_id: Optional[int] = None,
+) -> dict[str, list[str]]:
+    """v1.4 S16.5 — 三层话术合并加载（D4）。
+
+    内勤（agent_provider_id=None）：平台预置 + 本租户物业私有
+    外勤（agent_provider_id=X）：平台预置 + 案件归属物业私有 + 本服务商私有
+    """
+    from sqlalchemy import or_, select
+
     from app.models.script import ScriptTemplate
+
+    # 三层并集：
+    # 1) 平台预置：tenant_id NULL & provider_id NULL
+    # 2) 案件归属物业的物业私有：tenant_id == call.tenant_id & provider_id NULL
+    # 3) 服务商私有（仅外勤）：provider_id == agent_provider_id
+    visibility = or_(
+        ScriptTemplate.tenant_id.is_(None) & ScriptTemplate.provider_id.is_(None),
+        (ScriptTemplate.tenant_id == tenant_id) & ScriptTemplate.provider_id.is_(None),
+    )
+    if agent_provider_id is not None:
+        visibility = or_(
+            visibility, ScriptTemplate.provider_id == agent_provider_id
+        )
+
     rows = db.execute(
         select(ScriptTemplate)
-        .where(
-            ScriptTemplate.is_active.is_(True),
-            or_(
-                ScriptTemplate.tenant_id == tenant_id,
-                ScriptTemplate.tenant_id.is_(None),
-            ),
-        )
+        .where(ScriptTemplate.is_active.is_(True), visibility)
         .order_by(ScriptTemplate.trigger_intent)
     ).scalars().all()
     result: dict[str, list[str]] = {}

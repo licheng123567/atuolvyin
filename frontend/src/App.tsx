@@ -81,6 +81,7 @@ import { WorkOrderNewPage } from "./pages/workorder/orders/new";
 import { WorkOrderDetailPage } from "./pages/workorder/orders/[id]";
 import { PMDashboardPage } from "./pages/pm/dashboard";
 import { ProviderDashboardPage } from "./pages/provider/dashboard";
+import { ProviderScriptListPage } from "./pages/provider/scripts";
 import { ProviderTenantsPage } from "./pages/provider/tenants";
 import { ProviderTeamPage } from "./pages/provider/team";
 import { ProviderSettlementListPage } from "./pages/provider/settlements";
@@ -411,6 +412,7 @@ function App() {
             <Route path="/provider/dashboard" element={<ProviderDashboardPage />} />
             <Route path="/provider/tenants" element={<ProviderTenantsPage />} />
             <Route path="/provider/team" element={<ProviderTeamPage />} />
+            <Route path="/provider/scripts" element={<ProviderScriptListPage />} />
             <Route path="/provider/settlements" element={<ProviderSettlementListPage />} />
             <Route path="/provider/settlements/:id" element={<ProviderSettlementDetailPage />} />
             {/* Sprint 15 — platform_super system management */}

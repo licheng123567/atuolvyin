@@ -40,18 +40,59 @@ def _write_snapshot(db: Session, script: ScriptTemplate, editor_id: int) -> None
     db.add(v)
 
 
-def _get_script_or_404(db: Session, script_id: int, role: str, tenant_id: int) -> ScriptTemplate:
+def _script_source(script: ScriptTemplate) -> str:
+    """Compute three-layer source label for ScriptTemplate."""
+    if script.provider_id is not None:
+        return "provider"
+    if script.tenant_id is not None:
+        return "tenant"
+    return "platform"
+
+
+def _to_out(script: ScriptTemplate) -> ScriptTemplateOut:
+    return ScriptTemplateOut.model_validate(
+        {
+            **{c.name: getattr(script, c.name) for c in script.__table__.columns},
+            "source": _script_source(script),
+        }
+    )
+
+
+def _get_script_or_404(
+    db: Session,
+    script_id: int,
+    role: str,
+    tenant_id: int,
+    *,
+    for_write: bool = False,
+) -> ScriptTemplate:
+    """Load script. Read 可见平台 + 本租户私有；写仅限本租户私有（admin）。
+
+    v1.4 S16.5：屏蔽 admin 改/删平台预置（之前是 bug）。
+    platform_superadmin 仍可改平台预置。
+    """
     stmt = select(ScriptTemplate).where(ScriptTemplate.id == script_id)
     if role != "platform_superadmin":
         stmt = stmt.where(
             or_(ScriptTemplate.tenant_id == tenant_id, ScriptTemplate.tenant_id.is_(None))
         )
+        # admin 永远不可见服务商私有话术
+        stmt = stmt.where(ScriptTemplate.provider_id.is_(None))
     script = db.execute(stmt).scalar_one_or_none()
     if not script:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail={"code": "ERR_NOT_FOUND", "message": "话术不存在"},
         )
+    if for_write and role != "platform_superadmin":
+        if script.tenant_id is None:
+            raise HTTPException(
+                status_code=http_status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "ERR_PLATFORM_READONLY",
+                    "message": "平台预置话术不可直接修改，请先 Fork 为本物业版",
+                },
+            )
     return script
 
 
@@ -74,6 +115,8 @@ def list_scripts(
         stmt = stmt.where(
             or_(ScriptTemplate.tenant_id == tenant_id, ScriptTemplate.tenant_id.is_(None))
         )
+        # v1.4 S16.5 — admin 列表永远不可见服务商私有话术
+        stmt = stmt.where(ScriptTemplate.provider_id.is_(None))
     if q:
         stmt = stmt.where(
             or_(ScriptTemplate.title.ilike(f"%{q}%"), ScriptTemplate.content.ilike(f"%{q}%"))
@@ -90,7 +133,12 @@ def list_scripts(
         stmt.order_by(ScriptTemplate.updated_at.desc())
         .offset((page - 1) * page_size).limit(page_size)
     ).scalars().all()
-    return PaginatedResponse(items=list(items), total=len(total_ids), page=page, page_size=page_size)
+    return PaginatedResponse(
+        items=[_to_out(s) for s in items],
+        total=len(total_ids),
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.post("/scripts", response_model=ScriptTemplateOut, status_code=201)
@@ -118,7 +166,7 @@ def create_script(
     _write_snapshot(db, script, user_id)
     db.commit()
     db.refresh(script)
-    return script
+    return _to_out(script)
 
 
 @router.post("/scripts/import", response_model=ImportResultOut)
@@ -210,7 +258,7 @@ def update_script(
     tenant_id = int(payload.get("tenant_id") or 0)
     user_id = int(payload.get("user_id") or 0)
 
-    script = _get_script_or_404(db, script_id, role, tenant_id)
+    script = _get_script_or_404(db, script_id, role, tenant_id, for_write=True)
 
     if body.title is not None:
         script.title = body.title
@@ -225,7 +273,50 @@ def update_script(
 
     db.commit()
     db.refresh(script)
-    return script
+    return _to_out(script)
+
+
+@router.post("/scripts/{script_id}/fork", response_model=ScriptTemplateOut, status_code=201)
+def fork_script(
+    script_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> ScriptTemplateOut:
+    """v1.4 S16.5 — admin 把平台预置话术 fork 成本租户私有副本。"""
+    role = payload.get("role", "")
+    tenant_id = int(payload.get("tenant_id") or 0)
+    user_id = int(payload.get("user_id") or 0)
+
+    if role == "platform_superadmin":
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail={"code": "ERR_NOT_APPLICABLE", "message": "超管直接编辑平台预置即可"},
+        )
+
+    src = _get_script_or_404(db, script_id, role, tenant_id, for_write=False)
+    if src.tenant_id is not None or src.provider_id is not None:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail={"code": "ERR_NOT_PLATFORM", "message": "仅平台预置话术可 Fork"},
+        )
+
+    clone = ScriptTemplate(
+        tenant_id=tenant_id,
+        provider_id=None,
+        title=src.title,
+        trigger_intent=src.trigger_intent,
+        content=src.content,
+        notes=src.notes,
+        version=1,
+        created_by=user_id,
+    )
+    db.add(clone)
+    db.flush()
+    _write_snapshot(db, clone, user_id)
+    db.commit()
+    db.refresh(clone)
+    return _to_out(clone)
 
 
 @router.post("/scripts/{script_id}/toggle", response_model=ScriptTemplateOut)
@@ -237,7 +328,7 @@ def toggle_script(
 ) -> ScriptTemplateOut:
     role = payload.get("role", "")
     tenant_id = int(payload.get("tenant_id") or 0)
-    script = _get_script_or_404(db, script_id, role, tenant_id)
+    script = _get_script_or_404(db, script_id, role, tenant_id, for_write=True)
     was_active = script.is_active
     script.is_active = not script.is_active
     db.commit()
@@ -253,7 +344,7 @@ def toggle_script(
             operator_user_id=int(payload.get("user_id") or 0) or None,
         )
         db.commit()
-    return script
+    return _to_out(script)
 
 
 @router.delete("/scripts/{script_id}", status_code=204, response_class=Response, response_model=None)
@@ -265,7 +356,7 @@ def delete_script(
 ) -> None:
     role = payload.get("role", "")
     tenant_id = int(payload.get("tenant_id") or 0)
-    script = _get_script_or_404(db, script_id, role, tenant_id)
+    script = _get_script_or_404(db, script_id, role, tenant_id, for_write=True)
     if script.is_active:
         raise HTTPException(
             status_code=http_status.HTTP_400_BAD_REQUEST,
@@ -422,7 +513,7 @@ def rollback_script(
     tenant_id = int(payload.get("tenant_id") or 0)
     user_id = int(payload.get("user_id") or 0)
 
-    script = _get_script_or_404(db, script_id, role, tenant_id)
+    script = _get_script_or_404(db, script_id, role, tenant_id, for_write=True)
     target = db.execute(
         select(ScriptTemplateVersion).where(
             ScriptTemplateVersion.script_template_id == script_id,
@@ -444,4 +535,4 @@ def rollback_script(
 
     db.commit()
     db.refresh(script)
-    return script
+    return _to_out(script)

@@ -37,6 +37,7 @@ from app.api import (
     ops_providers,
     pm_dashboard,
     provider_admin,
+    provider_scripts,
     public_app_info,
     public_verify,
     recordings,
@@ -181,6 +182,9 @@ app.include_router(legal_documents.router, prefix="/api/v1/legal", tags=["legal-
 app.include_router(work_orders.router, prefix="/api/v1/workorders", tags=["workorders"])
 app.include_router(pm_dashboard.router, prefix="/api/v1/pm", tags=["pm"])
 app.include_router(provider_admin.router, prefix="/api/v1/provider", tags=["provider"])
+app.include_router(
+    provider_scripts.router, prefix="/api/v1/provider", tags=["provider-scripts"]
+)
 app.include_router(super_audit.router, prefix="/api/v1/super", tags=["super-audit"])
 app.include_router(super_health.router, prefix="/api/v1/super", tags=["super-health"])
 app.include_router(super_cost.router, prefix="/api/v1/super", tags=["super-cost"])

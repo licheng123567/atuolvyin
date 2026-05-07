@@ -55,9 +55,24 @@ class CallSession:
         owner = db.get(OwnerProfile, case.owner_id) if case and case.owner_id else None
         from app.services.realtime_llm import _load_scripts, SENSITIVITY_THRESHOLD
         from app.models.script import TenantSuggestionConfig
+        from app.models.tenant import UserTenantMembership
         from sqlalchemy import select
 
-        scripts = _load_scripts(db, call.tenant_id)
+        # v1.4 S16.5 — 取 caller 的 provider_id（外勤 → 服务商话术合并）
+        caller_membership = db.execute(
+            select(UserTenantMembership).where(
+                UserTenantMembership.user_id == call.caller_user_id,
+                UserTenantMembership.tenant_id == call.tenant_id,
+            )
+        ).scalars().first()
+        agent_provider_id = (
+            int(caller_membership.provider_id)
+            if caller_membership and caller_membership.provider_id
+            else None
+        )
+        scripts = _load_scripts(
+            db, call.tenant_id, agent_provider_id=agent_provider_id
+        )
         cfg = db.execute(
             select(TenantSuggestionConfig).where(
                 TenantSuggestionConfig.tenant_id == call.tenant_id

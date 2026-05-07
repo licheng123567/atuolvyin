@@ -1,7 +1,7 @@
 // 1:1 还原 ui/admin.html#a-scripts 话术库管理
-import { useCreate, useDelete, useGo, useList } from "@refinedev/core";
+import { useCreate, useCustomMutation, useDelete, useGo, useInvalidate, useList } from "@refinedev/core";
 import type { CrudFilter } from "@refinedev/core";
-import { AlertTriangle, Plus, Search, Upload } from "lucide-react";
+import { AlertTriangle, GitFork, Plus, Search, Upload } from "lucide-react";
 import { useState } from "react";
 import type { PaginatedResponse } from "../../../types";
 import { TRIGGER_INTENTS, formatAdoptionRate } from "./helpers";
@@ -10,6 +10,8 @@ import { ScriptSheet } from "./ScriptSheet";
 interface ScriptItem {
   id: number;
   tenant_id: number | null;
+  provider_id: number | null;
+  source: "platform" | "tenant" | "provider";
   title: string;
   trigger_intent: string;
   version: number;
@@ -21,6 +23,12 @@ interface ScriptItem {
   content: string;
   notes: string | null;
 }
+
+const SOURCE_BADGE: Record<ScriptItem["source"], { label: string; cls: string }> = {
+  platform: { label: "平台预置", cls: "ds-badge ds-badge-gray" },
+  tenant: { label: "本物业", cls: "ds-badge ds-badge-blue" },
+  provider: { label: "服务商", cls: "ds-badge ds-badge-purple" },
+};
 
 const SCORE_CLASS: Record<string, string> = {
   A: "score-a",
@@ -59,6 +67,8 @@ export function ScriptListPage() {
 
   const { mutate: toggle } = useCreate();
   const { mutate: del } = useDelete();
+  const { mutate: forkScript } = useCustomMutation();
+  const invalidate = useInvalidate();
 
   const autoDisabledCount = items.filter(
     (s) => s.score_grade === "D" && !s.is_active,
@@ -166,6 +176,7 @@ export function ScriptListPage() {
           <thead>
             <tr>
               <th>话术标题</th>
+              <th>来源</th>
               <th>异议类型</th>
               <th>级别</th>
               <th>使用次数</th>
@@ -179,14 +190,14 @@ export function ScriptListPage() {
           <tbody>
             {query.isLoading && (
               <tr>
-                <td colSpan={9} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                <td colSpan={10} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
                   加载中…
                 </td>
               </tr>
             )}
             {!query.isLoading && items.length === 0 && (
               <tr>
-                <td colSpan={9} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                <td colSpan={10} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
                   暂无话术
                 </td>
               </tr>
@@ -195,16 +206,12 @@ export function ScriptListPage() {
               const isAutoDisabled = !s.is_active && s.score_grade === "D";
               return (
                 <tr key={s.id} style={isAutoDisabled ? { opacity: 0.6 } : undefined}>
-                  <td style={{ fontWeight: 500 }}>
-                    {s.title}
-                    {s.tenant_id === null && (
-                      <span
-                        className="ds-badge ds-badge-gray"
-                        style={{ marginLeft: 6, fontSize: 10 }}
-                      >
-                        平台预置
-                      </span>
-                    )}
+                  <td style={{ fontWeight: 500 }}>{s.title}</td>
+                  <td>
+                    {(() => {
+                      const meta = SOURCE_BADGE[s.source] ?? SOURCE_BADGE.platform;
+                      return <span className={meta.cls}>{meta.label}</span>;
+                    })()}
                   </td>
                   <td>{s.trigger_intent}</td>
                   <td>
@@ -232,16 +239,44 @@ export function ScriptListPage() {
                     )}
                   </td>
                   <td>
-                    <button
-                      type="button"
-                      className="ds-btn ds-btn-ghost ds-btn-sm"
-                      onClick={() => {
-                        setEditScript(s);
-                        setSheetOpen(true);
-                      }}
-                    >
-                      编辑
-                    </button>
+                    {s.source === "platform" ? (
+                      <button
+                        type="button"
+                        className="ds-btn ds-btn-ghost ds-btn-sm"
+                        title="复制为本物业版后再编辑"
+                        onClick={() =>
+                          forkScript(
+                            {
+                              url: `admin/scripts/${s.id}/fork`,
+                              method: "post",
+                              values: {},
+                            },
+                            {
+                              onSuccess: () => {
+                                void invalidate({
+                                  resource: "admin/scripts",
+                                  invalidates: ["list"],
+                                });
+                              },
+                            },
+                          )
+                        }
+                      >
+                        <GitFork className="w-3 h-3" />
+                        Fork 为本物业版
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="ds-btn ds-btn-ghost ds-btn-sm"
+                        onClick={() => {
+                          setEditScript(s);
+                          setSheetOpen(true);
+                        }}
+                      >
+                        编辑
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="ds-btn ds-btn-ghost ds-btn-sm"
@@ -249,7 +284,7 @@ export function ScriptListPage() {
                     >
                       版本历史
                     </button>
-                    {s.is_active ? (
+                    {s.source !== "platform" && s.is_active && (
                       <button
                         type="button"
                         className="ds-btn ds-btn-ghost ds-btn-sm"
@@ -263,7 +298,8 @@ export function ScriptListPage() {
                       >
                         禁用
                       </button>
-                    ) : (
+                    )}
+                    {s.source !== "platform" && !s.is_active && (
                       <button
                         type="button"
                         className="ds-btn ds-btn-ghost ds-btn-sm"
@@ -278,7 +314,7 @@ export function ScriptListPage() {
                         启用
                       </button>
                     )}
-                    {!s.is_active && s.tenant_id !== null && (
+                    {s.source !== "platform" && !s.is_active && (
                       <button
                         type="button"
                         className="ds-btn ds-btn-ghost ds-btn-sm"

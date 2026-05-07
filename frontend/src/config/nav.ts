@@ -163,6 +163,7 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
         { label: "合作租户", path: "/provider/tenants", icon: "Building2" },
         { label: "团队管理", path: "/provider/team", icon: "Users" },
         { label: "团队绩效", path: "/provider/team-performance", icon: "TrendingUp" },
+        { label: "话术库", path: "/provider/scripts", icon: "MessageSquare" },
         { label: "收入结算", path: "/provider/settlements", icon: "Receipt" },
       ],
     },

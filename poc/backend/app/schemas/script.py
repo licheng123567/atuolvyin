@@ -23,6 +23,7 @@ class ScriptTemplateUpdate(BaseModel):
 class ScriptTemplateOut(BaseModel):
     id: int
     tenant_id: Optional[int] = None
+    provider_id: Optional[int] = None
     title: str
     trigger_intent: str
     content: str
@@ -35,6 +36,8 @@ class ScriptTemplateOut(BaseModel):
     score_grade: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    # v1.4 S16.5 — 派生字段（前端展示来源）
+    source: Literal["platform", "tenant", "provider"] = "platform"
     model_config = ConfigDict(from_attributes=True)
 
 

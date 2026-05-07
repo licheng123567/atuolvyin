@@ -16,6 +16,15 @@ class ScriptTemplate(Base):
     tenant_id: Mapped[Optional[int]] = mapped_column(
         sa.BigInteger, sa.ForeignKey("tenant.id", ondelete="CASCADE"), nullable=True
     )  # None = platform-level shared template
+    # v1.4 S16.5 — 三层归属：
+    #   tenant_id NULL & provider_id NULL → 平台预置
+    #   tenant_id NOT NULL & provider_id NULL → 物业私有
+    #   provider_id NOT NULL → 服务商私有
+    provider_id: Mapped[Optional[int]] = mapped_column(
+        sa.BigInteger,
+        sa.ForeignKey("service_provider.id", ondelete="CASCADE"),
+        nullable=True,
+    )
     title: Mapped[str] = mapped_column(sa.String(128), nullable=False)
     trigger_intent: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     content: Mapped[str] = mapped_column(sa.Text, nullable=False)
@@ -40,6 +49,7 @@ class ScriptTemplate(Base):
     __table_args__ = (
         sa.Index("idx_script_template_tenant", "tenant_id"),
         sa.Index("idx_script_template_active", "tenant_id", "is_active"),
+        sa.Index("idx_script_template_provider", "provider_id"),
         sa.CheckConstraint("score_grade IN ('A','B','C','D')", name="ck_st_score_grade"),
     )
 
