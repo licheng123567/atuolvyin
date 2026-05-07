@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>结算单详情 — 有证慧催</title>
+  <link rel="stylesheet" href="assets/design-system.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    body { background: var(--color-neutral-50); min-height: 100vh; }
+    .settle-page { max-width: 1080px; margin: 0 auto; padding: 24px 20px; }
+
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .title-row { display: flex; align-items: center; gap: 12px; }
+    .back-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--color-neutral-400);
+      padding: 0;
+    }
+    .back-btn:hover { color: var(--color-neutral-700); }
+    .back-btn svg { width: 20px; height: 20px; }
+    .page-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--color-neutral-900);
+    }
+    .status-pill {
+      padding: 2px 10px;
+      font-size: 11.5px;
+      font-weight: 500;
+      border-radius: 999px;
+    }
+    .status-DRAFT { background: var(--color-neutral-100); color: var(--color-neutral-600); }
+    .status-CONFIRMED { background: var(--color-warning-light); color: var(--color-warning); }
+    .status-PAID { background: var(--color-success-light); color: var(--color-success); }
+    .status-DISPUTED { background: var(--color-danger-light); color: var(--color-danger); }
+
+    .top-actions { display: flex; gap: 8px; }
+    .btn {
+      padding: 6px 14px;
+      font-size: 13px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: opacity 0.15s ease;
+    }
+    .btn:hover { opacity: 0.92; }
+    .btn-primary { background: var(--color-primary); color: white; border: none; }
+    .btn-secondary {
+      background: white;
+      border: 1px solid var(--color-neutral-300);
+      color: var(--color-neutral-700);
+    }
+    .btn-danger {
+      background: white;
+      border: 1px solid #fca5a5;
+      color: #b91c1c;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      box-shadow: var(--shadow-sm);
+    }
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--color-neutral-900);
+      margin-bottom: 14px;
+    }
+
+    /* dl rows */
+    .info-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      font-size: 13.5px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+    }
+    .info-row .label {
+      font-size: 12px;
+      color: var(--color-neutral-500);
+      padding-top: 4px;
+    }
+    .info-row .value {
+      color: var(--color-neutral-900);
+      text-align: right;
+    }
+    .amount-big {
+      font-size: 26px;
+      font-weight: 600;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      color: var(--color-neutral-900);
+    }
+
+    /* Payment proof */
+    .proof-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--color-primary);
+      text-decoration: none;
+      word-break: break-all;
+    }
+    .proof-link:hover { text-decoration: underline; }
+    .proof-link svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+    /* Disputes */
+    .dispute-list { display: flex; flex-direction: column; gap: 12px; }
+    .dispute-item {
+      border: 1px solid var(--color-neutral-100);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+    }
+    .dispute-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .dispute-status {
+      font-size: 11.5px;
+      font-weight: 500;
+      padding: 1px 8px;
+      border-radius: 999px;
+    }
+    .ds-open { background: var(--color-warning-light); color: var(--color-warning); }
+    .ds-resolved { background: var(--color-success-light); color: var(--color-success); }
+    .ds-rejected { background: var(--color-neutral-100); color: var(--color-neutral-500); }
+    .dispute-time {
+      font-size: 11px;
+      color: var(--color-neutral-400);
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    }
+    .dispute-reason {
+      font-size: 13.5px;
+      color: var(--color-neutral-900);
+      line-height: 1.55;
+    }
+    .dispute-resolution {
+      font-size: 12px;
+      color: var(--color-neutral-600);
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px dashed var(--color-neutral-200);
+    }
+    .dispute-empty {
+      font-size: 13px;
+      color: var(--color-neutral-400);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="settle-page">
+
+    <div class="top-bar">
+      <div class="title-row">
+        <button type="button" class="back-btn" aria-label="返回">
+          <i data-lucide="arrow-left"></i>
+        </button>
+        <div class="page-title">结算单详情</div>
+        <span class="status-pill status-CONFIRMED">已确认</span>
+      </div>
+      <div class="top-actions">
+        <button type="button" class="btn btn-primary">标记已支付</button>
+        <button type="button" class="btn btn-danger">发起争议</button>
+      </div>
+    </div>
+
+    <div class="grid">
+
+      <!-- Left: detail + proof -->
+      <div style="display:flex;flex-direction:column;gap:20px;">
+        <div class="card">
+          <div class="card-title">结算明细</div>
+          <div class="info-list">
+            <div class="info-row">
+              <span class="label">服务商</span>
+              <span class="value">远程客服外包有限公司</span>
+            </div>
+            <div class="info-row">
+              <span class="label">结算期间</span>
+              <span class="value">2026-04-01 ～ 2026-04-30</span>
+            </div>
+            <div class="info-row">
+              <span class="label">金额</span>
+              <span class="value amount-big">¥18,432.00</span>
+            </div>
+            <div class="info-row">
+              <span class="label">确认时间</span>
+              <span class="value">2026-05-02 10:18:14</span>
+            </div>
+            <div class="info-row">
+              <span class="label">支付时间</span>
+              <span class="value" style="color:var(--color-neutral-400);">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">付款凭证</div>
+          <a href="#" class="proof-link">
+            <i data-lucide="external-link"></i>
+            https://oss.your-domain.com/proofs/2026-04/settlement-1238.png
+          </a>
+          <div style="font-size:11.5px;color:var(--color-neutral-400);margin-top:6px;">
+            ※ 演示样本：实际页面会在「标记已支付」时上传
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: dispute history -->
+      <div class="card">
+        <div class="card-title">争议历史</div>
+        <div class="dispute-list">
+
+          <div class="dispute-item">
+            <div class="dispute-head">
+              <span class="dispute-status ds-resolved">已解决</span>
+              <span class="dispute-time">2026-05-03 11:24</span>
+            </div>
+            <div class="dispute-reason">
+              本期结算金额与对账单不符，对账单为 ¥18,200，结算单为 ¥18,432，请核实差异 ¥232 来源。
+            </div>
+            <div class="dispute-resolution">
+              处理意见：经核对，差异为 4 月 28 日补单 6 通通话产生（已附录音清单）。已确认无误，争议关闭。
+            </div>
+          </div>
+
+          <div class="dispute-item">
+            <div class="dispute-head">
+              <span class="dispute-status ds-open">未解决</span>
+              <span class="dispute-time">2026-05-04 09:12</span>
+            </div>
+            <div class="dispute-reason">
+              4 月 15 日有 3 通通话被 AI L3 强制中止，按合同约定应剔除计费。请核减 ¥56。
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>
