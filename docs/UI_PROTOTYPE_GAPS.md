@@ -150,7 +150,7 @@
 | admin/settlements/detail | 结算详情 |
 | admin/providers/detail | Sprint 8.1 服务商合作详情 |
 | admin/users/new | 新建用户 |
-| **help/app** | v1.3 公开 App 下载页 |
+| ~~help/app~~ | ✅ Sprint 16.2 反向出原型 → ui/help-app.html |
 | **verify (/:tx_hash)** | v1.2 公开核验入口 |
 | workorder/orders/new | 新建工单 |
 | risk-keywords/create + edit | 风控关键词管理 |
@@ -173,7 +173,7 @@
 
 **第一批（v1.3 hero + 公开页 5 个）**：
 1. ~~supervisor/live-wall~~ ✅ 已落（supervisor.html#sv-livewall, Sprint 15.4）
-2. help/app
+2. ~~help/app~~ ✅ 已落（ui/help-app.html, Sprint 16.2）
 3. verify
 4. agent/workstation/live
 5. admin/workstation/live

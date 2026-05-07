@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>App 安装与使用 — 有证慧催</title>
+  <link rel="stylesheet" href="assets/design-system.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    body {
+      background: var(--color-neutral-50);
+      min-height: 100vh;
+    }
+    .help-container {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 40px 16px 60px;
+    }
+    .help-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .help-header-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--color-neutral-900);
+      margin-bottom: 6px;
+    }
+    .help-header-title svg {
+      width: 26px;
+      height: 26px;
+      color: var(--color-primary);
+    }
+    .help-header-sub {
+      font-size: 13.5px;
+      color: var(--color-neutral-600);
+    }
+
+    .help-card {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      padding: 22px 24px;
+      margin-bottom: 18px;
+    }
+    .help-card-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--color-neutral-900);
+    }
+    .help-card-title svg {
+      width: 18px;
+      height: 18px;
+      color: var(--color-primary);
+    }
+
+    /* QR row */
+    .qr-row {
+      display: flex;
+      gap: 28px;
+      flex-wrap: wrap;
+    }
+    .qr-block {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .qr-img {
+      width: 200px;
+      height: 200px;
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-md);
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    /* Stylized QR placeholder (since this is static prototype) */
+    .qr-placeholder {
+      width: 100%;
+      height: 100%;
+      background:
+        repeating-linear-gradient(0deg, #111 0 6px, transparent 6px 14px),
+        repeating-linear-gradient(90deg, #111 0 6px, transparent 6px 14px);
+      background-blend-mode: multiply;
+      position: relative;
+      border-radius: 4px;
+    }
+    .qr-placeholder::before,
+    .qr-placeholder::after,
+    .qr-corner {
+      content: '';
+      position: absolute;
+      width: 38px;
+      height: 38px;
+      border: 6px solid #111;
+      background: white;
+    }
+    .qr-placeholder::before { top: 6px; left: 6px; }
+    .qr-placeholder::after  { top: 6px; right: 6px; }
+    .qr-corner              { bottom: 6px; left: 6px; }
+    .qr-download-link {
+      margin-top: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 13px;
+      color: var(--color-primary);
+      text-decoration: none;
+    }
+    .qr-download-link:hover { text-decoration: underline; }
+    .qr-download-link svg { width: 14px; height: 14px; }
+
+    .qr-meta {
+      flex: 1;
+      min-width: 220px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      font-size: 13.5px;
+      color: var(--color-neutral-700);
+    }
+    .qr-meta-item-label {
+      font-size: 12px;
+      color: var(--color-neutral-500);
+      margin-bottom: 2px;
+    }
+    .qr-meta-item-value {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      color: var(--color-neutral-900);
+    }
+    .qr-tip {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--color-neutral-500);
+      line-height: 1.55;
+    }
+
+    /* List in section */
+    .section-list {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 13.5px;
+      color: var(--color-neutral-700);
+      line-height: 1.7;
+    }
+    .section-list li { margin-bottom: 4px; }
+    .section-list strong { color: var(--color-warning); }
+    .section-list code {
+      background: var(--color-neutral-100);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 12.5px;
+    }
+    .section-list ol-style { list-style: decimal; }
+  </style>
+</head>
+<body>
+
+  <div class="help-container">
+
+    <!-- Header -->
+    <header class="help-header">
+      <div class="help-header-title">
+        <i data-lucide="smartphone"></i>
+        手机 App 安装与使用
+      </div>
+      <div class="help-header-sub">
+        外呼必须使用 Android App。本页面公开访问，可分享给坐席。
+      </div>
+    </header>
+
+    <!-- QR + Download -->
+    <section class="help-card">
+      <div class="qr-row">
+        <div class="qr-block">
+          <div class="qr-img">
+            <div class="qr-placeholder">
+              <span class="qr-corner"></span>
+            </div>
+          </div>
+          <a href="#" class="qr-download-link">
+            <i data-lucide="download"></i> 直接下载 APK
+          </a>
+        </div>
+
+        <div class="qr-meta">
+          <div>
+            <div class="qr-meta-item-label">当前版本</div>
+            <div class="qr-meta-item-value">v1.5.0-rc</div>
+          </div>
+          <div>
+            <div class="qr-meta-item-label">最低系统要求</div>
+            <div>Android 7.0+（API 24）</div>
+          </div>
+          <div>
+            <div class="qr-meta-item-label">安装包大小</div>
+            <div>32 MB</div>
+          </div>
+          <p class="qr-tip">
+            用 Android 手机自带浏览器扫码即可下载 APK。
+            如系统提示「未知来源」，请到设置中允许此次安装。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 为什么需要 App -->
+    <section class="help-card">
+      <div class="help-card-title">
+        <i data-lucide="headphones"></i>
+        为什么需要 App
+      </div>
+      <ul class="section-list">
+        <li>外呼电话必须通过手机系统拨号器发起，PC 无法直接打电话</li>
+        <li>App 自动采集系统通话录音、上传后端做 ASR + AI 分析</li>
+        <li>App 内拨号会同步推送给 PC 主管/管理员的「实时通话墙」</li>
+        <li>支持扫码拨号备份方案（PC 生成二维码 → App 扫码即可拨号）</li>
+      </ul>
+    </section>
+
+    <!-- 安装步骤 -->
+    <section class="help-card">
+      <div class="help-card-title">
+        <i data-lucide="download"></i>
+        安装步骤
+      </div>
+      <ol class="section-list" style="list-style:decimal;">
+        <li>用手机浏览器扫描上方二维码</li>
+        <li>点「下载」→ 完成后在通知栏点击 APK</li>
+        <li>系统弹「未知来源」→ 设置中开启「允许此次安装」</li>
+        <li>安装完成 → 桌面打开「autoluyin 测试」</li>
+      </ol>
+    </section>
+
+    <!-- 权限授予 -->
+    <section class="help-card">
+      <div class="help-card-title">
+        <i data-lucide="key-round"></i>
+        权限授予（一次性）
+      </div>
+      <ul class="section-list">
+        <li>电话 / 通话状态 / 通话记录 — 监听拨号事件</li>
+        <li>通知 — 显示后台采集状态</li>
+        <li>相机 — 扫码拨号功能</li>
+        <li>读取媒体音频 — 上传系统通话录音</li>
+        <li>
+          <strong>MIUI 设备额外</strong>：「所有文件访问权限」必须开启，
+          否则 App 无法读取
+          <code>/storage/emulated/0/MIUI/sound_recorder/call_rec/</code>
+          下的录音文件
+        </li>
+      </ul>
+    </section>
+
+    <!-- 服务器配置 -->
+    <section class="help-card">
+      <div class="help-card-title">
+        <i data-lucide="settings"></i>
+        服务器地址配置
+      </div>
+      <p style="font-size:13.5px;color:var(--color-neutral-700);margin-bottom:8px;">
+        首次打开 App 会要求输入后端服务器地址：
+      </p>
+      <ul class="section-list">
+        <li>
+          手动输入：管理员告知的形如
+          <code>https://api.your-domain.com</code>
+          的地址
+        </li>
+        <li>
+          扫码注入：管理员可生成包含服务器地址的二维码，App 扫描后自动填入（避免手输出错）
+        </li>
+      </ul>
+    </section>
+
+  </div>
+
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>
