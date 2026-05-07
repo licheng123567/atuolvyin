@@ -80,6 +80,7 @@ import { WorkOrderListPage } from "./pages/workorder/orders/index";
 import { WorkOrderNewPage } from "./pages/workorder/orders/new";
 import { WorkOrderDetailPage } from "./pages/workorder/orders/[id]";
 import { PMDashboardPage } from "./pages/pm/dashboard";
+import { MePage } from "./pages/me";
 import { ProviderDashboardPage } from "./pages/provider/dashboard";
 import { ProviderScriptListPage } from "./pages/provider/scripts";
 import { ProviderTenantsPage } from "./pages/provider/tenants";
@@ -327,6 +328,8 @@ function App() {
             <Route path="/ops/providers/new" element={<ProviderNewPage />} />
             <Route path="/ops/providers/:id" element={<ProviderDetailPage />} />
             {/* Admin - Dashboard */}
+            {/* v1.5 — 全角色个人中心 */}
+            <Route path="/me" element={<MePage />} />
             <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
             {/* Admin - User Management */}
             <Route path="/admin/users" element={<UserListPage />} />

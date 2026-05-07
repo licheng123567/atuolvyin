@@ -24,6 +24,7 @@ from app.api import (
     agent_me,
     auth,
     auth_extras,
+    me as me_api,
     calls,
     calls_v1,
     devices,
@@ -136,6 +137,7 @@ async def validation_exception_handler(
 # ── Routers ───────────────────────────────────────────────────
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(auth_extras.router, prefix="/api/v1/auth", tags=["auth-extras"])
+app.include_router(me_api.router, prefix="/api/v1", tags=["me"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 app.include_router(ops.router, prefix="/api/v1/ops", tags=["ops"])
 app.include_router(ops_providers.router, prefix="/api/v1/ops", tags=["ops-providers"])

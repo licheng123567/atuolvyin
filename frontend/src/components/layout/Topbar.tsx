@@ -1,4 +1,7 @@
-import { useGetIdentity } from "@refinedev/core";
+import { useGetIdentity, useLogout } from "@refinedev/core";
+import { ChevronDown, LogOut, User } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { AuthUser } from "../../providers/auth-provider";
 import { NotificationBell } from "../notifications/NotificationBell";
 import { AlertNotificationCenter } from "../supervisor/AlertNotificationCenter";
@@ -37,11 +40,27 @@ const ROLE_BADGE_BG: Record<string, { bg: string; color: string }> = {
 
 export function Topbar() {
   const { data: user } = useGetIdentity<AuthUser>();
+  const navigate = useNavigate();
+  const { mutate: logout } = useLogout();
   const isSupervisor = SUPERVISOR_ROLES.has(user?.role ?? "");
   const roleLabel = user ? (ROLE_LABELS[user.role] ?? user.role) : null;
   const roleBadge = user
     ? (ROLE_BADGE_BG[user.role] ?? { bg: "#f3f4f6", color: "#374151" })
     : null;
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [menuOpen]);
 
   return (
     <header
@@ -83,9 +102,97 @@ export function Topbar() {
       {isSupervisor && <AlertNotificationCenter />}
 
       {user && (
-        <span className="text-sm text-[var(--color-neutral-600)] ml-3">
-          {user.name}
-        </span>
+        <div ref={menuRef} style={{ position: "relative", marginLeft: 12 }}>
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              fontSize: 13,
+              color: "var(--color-neutral-600)",
+              border: "none",
+              background: "transparent",
+              cursor: "pointer",
+              padding: "4px 8px",
+              borderRadius: 6,
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          >
+            <span>{user.name}</span>
+            <ChevronDown className="w-3.5 h-3.5" />
+          </button>
+          {menuOpen && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 4px)",
+                right: 0,
+                background: "white",
+                border: "1px solid var(--color-neutral-200)",
+                borderRadius: 8,
+                boxShadow: "var(--shadow-md, 0 4px 12px rgba(0,0,0,.1))",
+                minWidth: 160,
+                zIndex: 100,
+                overflow: "hidden",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  navigate("/me");
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "10px 14px",
+                  fontSize: 13,
+                  color: "var(--color-neutral-700)",
+                  background: "transparent",
+                  border: "none",
+                  width: "100%",
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#f9fafb")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
+                <User className="w-4 h-4" />
+                我的账号
+              </button>
+              <div style={{ borderTop: "1px solid #e5e7eb" }} />
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  logout();
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "10px 14px",
+                  fontSize: 13,
+                  color: "var(--color-neutral-700)",
+                  background: "transparent",
+                  border: "none",
+                  width: "100%",
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#fef2f2")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
+                <LogOut className="w-4 h-4" />
+                退出登录
+              </button>
+            </div>
+          )}
+        </div>
       )}
     </header>
   );
