@@ -28,6 +28,13 @@ class FakeWebSocket {
   }
 }
 
+function getFakeInstance(): FakeWebSocket {
+  if (!FakeWebSocket.instance) {
+    throw new Error("FakeWebSocket not yet constructed");
+  }
+  return FakeWebSocket.instance;
+}
+
 describe("ws-client risk.event routing", () => {
   beforeEach(() => {
     vi.stubGlobal("WebSocket", FakeWebSocket);
@@ -66,7 +73,7 @@ describe("ws-client risk.event routing", () => {
       ts: "2026-05-01T10:00:00Z",
     };
 
-    FakeWebSocket.instance!.receive(riskPayload);
+    getFakeInstance().receive(riskPayload);
 
     expect(onRisk).toHaveBeenCalledOnce();
     const received = onRisk.mock.calls[0][0];
@@ -89,7 +96,7 @@ describe("ws-client risk.event routing", () => {
 
     await new Promise((r) => setTimeout(r, 10));
 
-    FakeWebSocket.instance!.receive({
+    getFakeInstance().receive({
       type: "transcript.chunk",
       text: "hello",
       speaker: "agent",

@@ -2,21 +2,7 @@ import { useGo, useDelete, useList, useGetIdentity } from "@refinedev/core";
 import { Shield, Plus, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { PaginatedResponse } from "../../../types";
-
-export interface RiskKeywordItem {
-  id: number;
-  tenant_id: number | null;
-  category: string;
-  speaker: string;
-  level: string;
-  keyword: string;
-  is_active: boolean;
-  created_at: string;
-}
-
-export function isPlatformPreset(item: Pick<RiskKeywordItem, "tenant_id">): boolean {
-  return item.tenant_id === null;
-}
+import { isPlatformPreset, type RiskKeywordItem } from "./helpers";
 
 const CAT_LABELS: Record<string, string> = {
   owner_abuse: "业主辱骂 (L1)",

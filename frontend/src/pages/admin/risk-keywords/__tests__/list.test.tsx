@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isPlatformPreset } from "../list";
+import { isPlatformPreset } from "../helpers";
 
 describe("isPlatformPreset", () => {
   it("returns true when tenant_id is null", () => {

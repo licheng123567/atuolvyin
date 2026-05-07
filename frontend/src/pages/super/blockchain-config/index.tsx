@@ -1,7 +1,7 @@
 // Sprint 10.6 — 平台超管区块链存证配置（PRD §L1972）
 import { useCustom, useCustomMutation } from "@refinedev/core";
 import { Link2, Save, AlertTriangle, CheckCircle2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface BlockchainConfig {
   id: number;
@@ -34,8 +34,10 @@ export function SuperBlockchainConfigPage() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState("");
 
+  const initRef = useRef(false);
   useEffect(() => {
-    if (config) {
+    if (config && !initRef.current) {
+      initRef.current = true;
       setProvider(config.provider);
       setEndpoint(config.api_endpoint);
       setIsActive(config.is_active);

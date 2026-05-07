@@ -1,8 +1,8 @@
 import { useOne, useUpdate, useGo } from "@refinedev/core";
 import { useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
-import { useState, useEffect } from "react";
-import type { RiskKeywordItem } from "./list";
+import { useEffect, useRef, useState } from "react";
+import type { RiskKeywordItem } from "./helpers";
 
 interface FormData {
   keyword: string;
@@ -27,7 +27,8 @@ export function RiskKeywordEditPage() {
 
   const { query } = useOne<RiskKeywordItem>({
     resource: "admin/risk-keywords",
-    id: id!,
+    id: id ?? "",
+    queryOptions: { enabled: !!id },
   });
   const item = query.data?.data;
   const isLoading = query.isLoading;
@@ -39,8 +40,12 @@ export function RiskKeywordEditPage() {
     is_active: true,
   });
 
+  // 使用 ref 跟踪 init 标志，避免 set-state-in-effect cascading
+  const formInitRef = useRef(false);
+
   useEffect(() => {
-    if (item) {
+    if (item && !formInitRef.current) {
+      formInitRef.current = true;
       setForm({
         keyword: item.keyword,
         category: item.category,
@@ -57,8 +62,9 @@ export function RiskKeywordEditPage() {
       setErrorMsg("请输入关键词");
       return;
     }
+    if (!id) return;
     updateKw(
-      { resource: "admin/risk-keywords", id: id!, values: form },
+      { resource: "admin/risk-keywords", id, values: form },
       {
         onSuccess: () => go({ to: "/admin/risk-keywords" }),
         onError: (err) => {

@@ -40,7 +40,8 @@ export function AdminCaseDetailPage() {
 
   const { query } = useOne<CaseDetailResponse>({
     resource: "admin/cases",
-    id: id!,
+    id: id ?? "",
+    queryOptions: { enabled: !!id },
   });
 
   const { result: agentsResult } = useList<AdminUser>({

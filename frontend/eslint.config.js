@@ -20,6 +20,11 @@ export default defineConfig([
     },
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
+      // 匹配 .eslintrc.json：以 _ 开头的参数/变量视为「有意未用」
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
       'no-console': 'warn',
     },
   },

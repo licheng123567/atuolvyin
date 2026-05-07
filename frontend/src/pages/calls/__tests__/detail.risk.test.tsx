@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getRiskAnnotationForSegment } from "../detail";
+import { getRiskAnnotationForSegment } from "../risk-annotations";
 
 describe("getRiskAnnotationForSegment", () => {
   const risks = [

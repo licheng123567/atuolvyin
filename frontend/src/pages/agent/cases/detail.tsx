@@ -42,7 +42,8 @@ export function AgentWorkstationPage() {
 
   const { query: detailQuery } = useOne<CaseDetailResponse>({
     resource: "agent/cases",
-    id: id!,
+    id: id ?? "",
+    queryOptions: { enabled: !!id },
   });
 
   const detail = detailQuery.data?.data;

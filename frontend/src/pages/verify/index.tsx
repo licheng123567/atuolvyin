@@ -1,7 +1,7 @@
 // Sprint 13.1 — 区块链存证公开核验入口（PRD §20.3 v1.1）
 // 无需登录；接受 URL 参数 :tx_hash 直接查询，或在页面输入框查询。
 import { CheckCircle2, FileCheck2, Search, ShieldAlert } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:18000";
@@ -32,14 +32,7 @@ export function VerifyPage() {
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (params.tx_hash) {
-      void doVerify(params.tx_hash);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.tx_hash]);
-
-  const doVerify = async (txHash: string) => {
+  const doVerify = useCallback(async (txHash: string) => {
     const trimmed = txHash.trim().toLowerCase();
     if (!TX_HASH_RE.test(trimmed)) {
       setError("tx_hash 格式不合法（应为 64 位 16 进制字符）");
@@ -66,7 +59,14 @@ export function VerifyPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // setState happens inside async fetch resolution, not synchronously in
+    // render — disable rule with rationale.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (params.tx_hash) void doVerify(params.tx_hash);
+  }, [params.tx_hash, doVerify]);
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();

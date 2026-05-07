@@ -18,44 +18,10 @@ interface TranscriptData {
   asr_model: string | null;
 }
 
-export interface RiskEntry {
-  risk_id: string;
-  level: string;
-  category: string;
-  trigger: string;
-  text_snippet: string;
-  matched_keywords: string[];
-  llm_confidence: number;
-  speaker: string;
-}
-
-export interface RiskAnnotation {
-  risk_id: string;
-  level: string;
-  category: string;
-  trigger: string;
-  matched_keywords: string[];
-  llm_confidence: number;
-}
-
-export function getRiskAnnotationForSegment(
-  segmentText: string,
-  risks: RiskEntry[]
-): RiskAnnotation | null {
-  for (const risk of risks) {
-    if (risk.text_snippet && segmentText.includes(risk.text_snippet)) {
-      return {
-        risk_id: risk.risk_id,
-        level: risk.level,
-        category: risk.category,
-        trigger: risk.trigger,
-        matched_keywords: risk.matched_keywords,
-        llm_confidence: risk.llm_confidence,
-      };
-    }
-  }
-  return null;
-}
+import {
+  getRiskAnnotationForSegment,
+  type RiskEntry,
+} from "./risk-annotations";
 
 const CAT_LABELS: Record<string, string> = {
   owner_abuse: "业主辱骂",
@@ -198,7 +164,8 @@ export function CallDetailPage() {
 
   const { query } = useOne<CallDetailData>({
     resource: "calls",
-    id: id!,
+    id: id ?? "",
+    queryOptions: { enabled: !!id },
   });
 
   const detail = query.data?.data;
@@ -238,7 +205,7 @@ export function CallDetailPage() {
       {detail.recording_url && (
         <div className="bg-white border border-[var(--color-neutral-200)] rounded-lg p-4 mb-4">
           <div className="text-xs font-medium text-[var(--color-neutral-600)] mb-2">录音播放</div>
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          {/* 通话录音无字幕轨；该规则在当前 lint 配置中未启用 */}
           <audio controls src={detail.recording_url} className="w-full" />
         </div>
       )}

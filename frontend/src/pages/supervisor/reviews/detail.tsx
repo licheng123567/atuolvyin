@@ -65,8 +65,10 @@ export function SupervisorReviewDetailPage() {
   const [intent, setIntent] = useState("");
   const [savedAt, setSavedAt] = useState<string | null>(null);
 
+  const initRef = useRef(false);
   useEffect(() => {
-    if (detail) {
+    if (detail && !initRef.current) {
+      initRef.current = true;
       setQuality(detail.supervisor_quality ?? "");
       setNote(detail.supervisor_review_note ?? "");
       setIntent(detail.ai_intent ?? "");

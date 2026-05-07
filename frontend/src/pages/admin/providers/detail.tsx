@@ -1,7 +1,7 @@
 // 物业管理员 - 服务商详情：成员配置 / 配额调整 / 合同状态（PRD §3.9）
 import { useCustom, useCustomMutation, useGo, useInvalidate } from "@refinedev/core";
 import { ArrowLeft, Save, ToggleLeft, ToggleRight, Users } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
 interface ProviderMember {
@@ -56,8 +56,13 @@ export function AdminProviderDetailPage() {
     provider?.expires_at?.slice(0, 10) ?? "",
   );
 
+  // Sync server-provided values into form once on first load only
+  // (subsequent edits live in local state until "保存"); ref-based init flag
+  // avoids set-state-in-effect cascading.
+  const initRef = useRef(false);
   useEffect(() => {
-    if (provider) {
+    if (provider && !initRef.current) {
+      initRef.current = true;
       setContractStatus(provider.status);
       setContractExpires(provider.expires_at?.slice(0, 10) ?? "");
     }
