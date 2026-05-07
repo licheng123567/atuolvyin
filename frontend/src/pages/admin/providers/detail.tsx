@@ -1,6 +1,6 @@
 // 物业管理员 - 服务商详情：成员配置 / 配额调整 / 合同状态（PRD §3.9）
 import { useCustom, useCustomMutation, useGo, useInvalidate } from "@refinedev/core";
-import { ArrowLeft, Save, ToggleLeft, ToggleRight, Users } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Save, ToggleLeft, ToggleRight, Users, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
@@ -25,6 +25,17 @@ interface SignedProvider {
   service_types: string[];
   status: "active" | "paused" | "terminated";
   member_count: number;
+}
+
+interface TerminationStatus {
+  contract_id: number;
+  status: string;
+  termination_requested_by: number | null;
+  termination_requested_at: string | null;
+  termination_reason: string | null;
+  termination_confirmed_at: string | null;
+  terminated_at: string | null;
+  timeout_days_remaining: number | null;
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -70,6 +81,51 @@ export function AdminProviderDetailPage() {
 
   const { mutate: patchContract, mutation: contractMutation } = useCustomMutation();
   const { mutate: patchMember } = useCustomMutation();
+
+  // v1.4 S16.4 — 双向解约握手
+  const { query: termQuery } = useCustom<TerminationStatus>({
+    url: `admin/providers/${providerId}/termination-status`,
+    method: "get",
+  });
+  const term = termQuery.data?.data;
+  const { mutate: termAction, mutation: termMutation } = useCustomMutation();
+  const [showTermDialog, setShowTermDialog] = useState(false);
+  const [termReason, setTermReason] = useState("");
+
+  function refreshTerm() {
+    void termQuery.refetch();
+    void invalidate({ resource: "admin/providers", invalidates: ["all"] });
+  }
+
+  const requestTerminate = () => {
+    termAction(
+      {
+        url: `admin/providers/${providerId}/terminate-request`,
+        method: "post",
+        values: { reason: termReason.trim() || null },
+      },
+      {
+        onSuccess: () => {
+          setShowTermDialog(false);
+          setTermReason("");
+          refreshTerm();
+        },
+      },
+    );
+  };
+
+  const confirmTerminate = () => {
+    termAction(
+      {
+        url: `admin/providers/${providerId}/terminate-confirm`,
+        method: "post",
+        values: {},
+      },
+      {
+        onSuccess: refreshTerm,
+      },
+    );
+  };
 
   const saveContract = () => {
     patchContract(
@@ -160,11 +216,17 @@ export function AdminProviderDetailPage() {
               onChange={(e) => setContractStatus(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-200)]"
               style={{ borderRadius: "var(--radius-md)" }}
+              disabled={provider.status === "terminated"}
             >
               <option value="active">合作中</option>
               <option value="paused">暂停</option>
-              <option value="terminated">终止</option>
+              {provider.status === "terminated" && (
+                <option value="terminated">已终止</option>
+              )}
             </select>
+            <p style={{ fontSize: 11, color: "var(--color-neutral-400)", marginTop: 4 }}>
+              终止合作请使用下方「申请解约」流程（双向握手 + 7 天超时）
+            </p>
           </div>
           <div>
             <label className="block text-sm text-[var(--color-neutral-600)] mb-1">
@@ -183,7 +245,7 @@ export function AdminProviderDetailPage() {
           <button
             type="button"
             onClick={saveContract}
-            disabled={contractMutation.isPending}
+            disabled={contractMutation.isPending || provider.status === "terminated"}
             className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
             style={{
               background: "var(--color-primary)",
@@ -195,6 +257,162 @@ export function AdminProviderDetailPage() {
           </button>
         </div>
       </section>
+
+      {/* v1.4 S16.4 — 解约状态机 */}
+      <section
+        className="bg-white p-5 border border-[var(--color-neutral-200)]"
+        style={{ borderRadius: "var(--radius-lg)" }}
+      >
+        <div className="flex items-center gap-2 mb-3">
+          <AlertTriangle className="w-4 h-4 text-[var(--color-warning, #f59e0b)]" />
+          <h2 className="text-base font-semibold">解约管理</h2>
+        </div>
+
+        {!term && termQuery.isLoading && (
+          <p className="text-sm text-[var(--color-neutral-400)]">加载中…</p>
+        )}
+
+        {term && term.status === "terminated" && (
+          <div
+            style={{
+              background: "var(--color-danger-light, #fee2e2)",
+              border: "1px solid var(--color-danger, #ef4444)",
+              borderRadius: "var(--radius-md)",
+              padding: "10px 14px",
+              fontSize: 13,
+            }}
+          >
+            合作已于 {term.terminated_at?.slice(0, 10)} 终止。服务商在 30
+            天内对历史数据只读，60 天后自动软删；业主姓名/手机号已对服务商不可见。
+          </div>
+        )}
+
+        {term && term.status !== "terminated" && term.termination_requested_at === null && (
+          <div className="space-y-3">
+            <p className="text-sm text-[var(--color-neutral-600)]">
+              服务商可见业主信息，可拨打、查阅本租户案件。如需结束合作，
+              请发起解约 — 服务商需在 7 天内确认，逾期自动终止。
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowTermDialog(true)}
+              className="px-3 py-2 text-sm font-medium border"
+              style={{
+                borderColor: "var(--color-danger, #ef4444)",
+                color: "var(--color-danger, #ef4444)",
+                background: "white",
+                borderRadius: "var(--radius-md)",
+              }}
+            >
+              申请解约
+            </button>
+          </div>
+        )}
+
+        {term &&
+          term.status !== "terminated" &&
+          term.termination_requested_at &&
+          !term.termination_confirmed_at && (
+            <div
+              style={{
+                background: "var(--color-warning-light, #fef3c7)",
+                border: "1px solid var(--color-warning, #f59e0b)",
+                borderRadius: "var(--radius-md)",
+                padding: "12px 14px",
+                fontSize: 13,
+              }}
+            >
+              <p style={{ marginBottom: 8 }}>
+                {term.termination_requested_by === 1 ? (
+                  <>
+                    <strong>解约请求已发出</strong>，等待服务商确认（剩余{" "}
+                    {term.timeout_days_remaining ?? 0} 天，超时自动终止）。
+                  </>
+                ) : (
+                  <>
+                    <strong>服务商已申请解约</strong>，请在 7 天内确认（剩余{" "}
+                    {term.timeout_days_remaining ?? 0} 天）。
+                  </>
+                )}
+              </p>
+              {term.termination_reason && (
+                <p style={{ fontSize: 12, color: "var(--color-neutral-600)" }}>
+                  理由：{term.termination_reason}
+                </p>
+              )}
+              {term.termination_requested_by === 2 && (
+                <button
+                  type="button"
+                  disabled={termMutation.isPending}
+                  onClick={confirmTerminate}
+                  className="mt-2 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                  style={{
+                    background: "var(--color-danger, #ef4444)",
+                    borderRadius: "var(--radius-md)",
+                  }}
+                >
+                  {termMutation.isPending ? "处理中…" : "确认解约"}
+                </button>
+              )}
+            </div>
+          )}
+      </section>
+
+      {showTermDialog && (
+        <div className="modal-overlay" onClick={() => setShowTermDialog(false)}>
+          <div
+            className="bg-white p-6 w-[480px]"
+            style={{ borderRadius: "var(--radius-lg)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">申请解约</h3>
+              <button
+                type="button"
+                onClick={() => setShowTermDialog(false)}
+                className="text-[var(--color-neutral-400)]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p style={{ fontSize: 12, color: "var(--color-neutral-500)", marginBottom: 12 }}>
+              发出后服务商需在 7 天内确认；逾期自动转「已终止」。终止后服务商
+              30 天内可查看历史，60 天后数据软删。
+            </p>
+            <textarea
+              value={termReason}
+              onChange={(e) => setTermReason(e.target.value)}
+              rows={4}
+              maxLength={2000}
+              placeholder="解约理由（可选，对方可见）"
+              className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-200)]"
+              style={{ borderRadius: "var(--radius-md)" }}
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => setShowTermDialog(false)}
+                className="px-3 py-2 text-sm border border-[var(--color-neutral-200)]"
+                style={{ borderRadius: "var(--radius-md)" }}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={requestTerminate}
+                disabled={termMutation.isPending}
+                className="px-3 py-2 text-sm text-white disabled:opacity-50"
+                style={{
+                  background: "var(--color-danger, #ef4444)",
+                  borderRadius: "var(--radius-md)",
+                }}
+              >
+                {termMutation.isPending ? "提交中…" : "确认申请解约"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <section
         className="bg-white p-5 border border-[var(--color-neutral-200)]"

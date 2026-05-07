@@ -38,6 +38,7 @@ from app.api import (
     pm_dashboard,
     provider_admin,
     provider_scripts,
+    provider_termination,
     public_app_info,
     public_verify,
     recordings,
@@ -184,6 +185,16 @@ app.include_router(pm_dashboard.router, prefix="/api/v1/pm", tags=["pm"])
 app.include_router(provider_admin.router, prefix="/api/v1/provider", tags=["provider"])
 app.include_router(
     provider_scripts.router, prefix="/api/v1/provider", tags=["provider-scripts"]
+)
+app.include_router(
+    provider_termination.admin_router,
+    prefix="/api/v1/admin",
+    tags=["provider-termination"],
+)
+app.include_router(
+    provider_termination.provider_router,
+    prefix="/api/v1/provider",
+    tags=["provider-termination"],
 )
 app.include_router(super_audit.router, prefix="/api/v1/super", tags=["super-audit"])
 app.include_router(super_health.router, prefix="/api/v1/super", tags=["super-health"])

@@ -274,6 +274,16 @@ async def patch_contract(
     contract, provider = row
 
     data = body.model_dump(exclude_unset=True)
+    # v1.4 S16.4 — 直接 PATCH 到 terminated 已被 schema 屏蔽（Literal 不含 terminated），
+    # 但作为后端二次防线，仍校验，防止绕过 schema 调用。
+    if data.get("status") == "terminated":
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "ERR_USE_TERMINATE_REQUEST",
+                "message": "请走 /providers/{id}/terminate-request 双向握手流程",
+            },
+        )
     for field, value in data.items():
         setattr(contract, field, value)
 
