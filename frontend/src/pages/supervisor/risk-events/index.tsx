@@ -31,7 +31,7 @@ export function SupervisorRiskEventsPage() {
   const [level, setLevel] = useState("");
   const [period, setPeriod] = useState(7);
 
-  const { query, queryResult } = useCustom<RiskEventItem[]>({
+  const { query } = useCustom<RiskEventItem[]>({
     url: "supervisor/risk-events",
     method: "get",
     config: {
@@ -43,7 +43,7 @@ export function SupervisorRiskEventsPage() {
   });
   const items = query.data?.data ?? [];
 
-  const refetch = (queryResult ?? query)?.refetch;
+  const refetch = query.refetch;
   const { mutate: annotate } = useCustomMutation();
   const [editingId, setEditingId] = useState<number | null>(null);
   const [noteDraft, setNoteDraft] = useState("");

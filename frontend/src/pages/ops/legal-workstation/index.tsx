@@ -117,7 +117,7 @@ export function OpsLegalWorkstationPage() {
     doStart(
       { url: `legal-workstation/orders/${id}/start`, method: "post", values: {} },
       {
-        onSuccess: () => ordersQuery.refetch(),
+        onSuccess: () => ordersQuery.query.refetch(),
         onError: (err) => alert(`启动失败：${(err as { message?: string }).message ?? "请重试"}`),
       },
     );
@@ -136,7 +136,7 @@ export function OpsLegalWorkstationPage() {
         values: { law_firm_id: selectedFirmId },
       },
       {
-        onSuccess: () => ordersQuery.refetch(),
+        onSuccess: () => ordersQuery.query.refetch(),
         onError: (err) => alert(`派单失败：${(err as { message?: string }).message ?? "请重试"}`),
       },
     );
@@ -153,8 +153,8 @@ export function OpsLegalWorkstationPage() {
       },
       {
         onSuccess: () => {
-          ordersQuery.refetch();
-          statsQuery.refetch();
+          ordersQuery.query.refetch();
+          statsQuery.query.refetch();
         },
         onError: (err) => alert(`完成失败：${(err as { message?: string }).message ?? "请重试"}`),
       },
@@ -170,7 +170,7 @@ export function OpsLegalWorkstationPage() {
         values: {},
       },
       {
-        onSuccess: () => ordersQuery.refetch(),
+        onSuccess: () => ordersQuery.query.refetch(),
         onError: (err) => alert(`取消失败：${(err as { message?: string }).message ?? "请重试"}`),
       },
     );
@@ -197,8 +197,8 @@ export function OpsLegalWorkstationPage() {
       },
       {
         onSuccess: () => {
-          invoicesQuery.refetch();
-          statsQuery.refetch();
+          invoicesQuery.query.refetch();
+          statsQuery.query.refetch();
         },
         onError: (err) => alert(`生成失败：${(err as { message?: string }).message ?? "请重试"}`),
       },
@@ -216,8 +216,8 @@ export function OpsLegalWorkstationPage() {
       },
       {
         onSuccess: () => {
-          invoicesQuery.refetch();
-          statsQuery.refetch();
+          invoicesQuery.query.refetch();
+          statsQuery.query.refetch();
         },
         onError: (err) => alert(`操作失败：${(err as { message?: string }).message ?? "请重试"}`),
       },

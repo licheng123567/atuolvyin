@@ -36,11 +36,12 @@ export function OpsLawFirmsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  const { query, refetch } = useCustom<ListResp>({
+  const { query } = useCustom<ListResp>({
     url: "ops/law-firms",
     method: "get",
     config: { query: { q: q || undefined, page: 1, page_size: 50 } },
   });
+  const refetch = query.refetch;
 
   const { mutate: deleteFirm } = useCustomMutation();
 

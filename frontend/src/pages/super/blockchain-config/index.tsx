@@ -21,7 +21,9 @@ const PROVIDER_OPTIONS = [
 ];
 
 export function SuperBlockchainConfigPage() {
-  const { query } = useCustom<BlockchainConfig | null>({
+  // Refine v5: useCustom 泛型要求 BaseRecord，用 BlockchainConfig 单独传，
+  // 然后在消费时把 undefined 当 "未配置" 处理
+  const { query } = useCustom<BlockchainConfig>({
     url: "super/blockchain-config",
     method: "get",
   });

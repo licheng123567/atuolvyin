@@ -35,12 +35,13 @@ export function NotificationBell() {
   });
   const unread = countQuery.data?.data?.unread ?? 0;
 
-  const { query: listQuery, refetch: refetchList } = useCustom<ListResp>({
+  const { query: listQuery } = useCustom<ListResp>({
     url: "users/me/notifications",
     method: "get",
     config: { query: { limit: 20 } },
     queryOptions: { enabled: open },
   });
+  const refetchList = listQuery.refetch;
 
   const { mutate: mutateAction } = useCustomMutation();
 
