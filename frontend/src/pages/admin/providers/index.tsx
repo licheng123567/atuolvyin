@@ -1,6 +1,6 @@
 // 物业管理员 - 服务商合作管理（PRD §3.9 / L2044）
 import { useCustom, useCustomMutation, useGo, useInvalidate } from "@refinedev/core";
-import { Building2, Plus, Search, UserPlus, X } from "lucide-react";
+import { Building2, MailPlus, Plus, Search, UserPlus, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 interface SignedProvider {
@@ -45,6 +45,7 @@ export function AdminProvidersPage() {
   const go = useGo();
   const [q, setQ] = useState("");
   const [showInvite, setShowInvite] = useState(false);
+  const [showRecommend, setShowRecommend] = useState(false);
 
   const { query: signedQuery } = useCustom<SignedProvider[]>({
     url: "admin/providers",
@@ -66,18 +67,35 @@ export function AdminProvidersPage() {
             共 {items.length} 家
           </span>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowInvite(true)}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white"
-          style={{
-            background: "var(--color-primary)",
-            borderRadius: "var(--radius-md)",
-          }}
-        >
-          <UserPlus className="w-4 h-4" />
-          邀请新服务商
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowRecommend(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border"
+            style={{
+              borderColor: "var(--color-neutral-200)",
+              color: "var(--color-neutral-700)",
+              borderRadius: "var(--radius-md)",
+              background: "white",
+            }}
+            title="平台尚未收录的服务商，可推荐其入驻（需 ops 审批）"
+          >
+            <MailPlus className="w-4 h-4" />
+            推荐入驻
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowInvite(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white"
+            style={{
+              background: "var(--color-primary)",
+              borderRadius: "var(--radius-md)",
+            }}
+          >
+            <UserPlus className="w-4 h-4" />
+            邀请新服务商
+          </button>
+        </div>
       </div>
 
       <div className="relative mb-4 max-w-xs">
@@ -160,6 +178,197 @@ export function AdminProvidersPage() {
       </div>
 
       {showInvite && <InviteDialog onClose={() => setShowInvite(false)} />}
+      {showRecommend && <RecommendDialog onClose={() => setShowRecommend(false)} />}
+    </div>
+  );
+}
+
+function RecommendDialog({ onClose }: { onClose: () => void }) {
+  const [name, setName] = useState("");
+  const [providerType, setProviderType] = useState<"collection" | "legal" | "both">(
+    "collection",
+  );
+  const [adminPhone, setAdminPhone] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [description, setDescription] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+  const { mutate: recommend, mutation } = useCustomMutation();
+
+  const submit = () => {
+    setError(null);
+    if (!name.trim()) {
+      setError("请填写服务商名称");
+      return;
+    }
+    if (!/^1[3-9]\d{9}$/.test(adminPhone)) {
+      setError("请填写有效的 11 位手机号");
+      return;
+    }
+    recommend(
+      {
+        url: "admin/providers/recommend",
+        method: "post",
+        values: {
+          name: name.trim(),
+          provider_type: providerType,
+          admin_phone: adminPhone,
+          contact_email: contactEmail.trim() || null,
+          description: description.trim() || null,
+        },
+      },
+      {
+        onSuccess: () => {
+          setSubmitted(true);
+        },
+        onError: () => {
+          setError("提交失败，请稍后重试");
+        },
+      },
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div
+        className="bg-white p-6 w-[480px] max-h-[80vh] overflow-auto"
+        style={{ borderRadius: "var(--radius-lg)" }}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">推荐服务商入驻</h2>
+          <button type="button" onClick={onClose} className="text-[var(--color-neutral-400)]">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {submitted ? (
+          <div className="space-y-3">
+            <p className="text-sm text-[var(--color-neutral-700)]">
+              ✅ 推荐已提交，平台 ops 审批通过后您可在「邀请新服务商」中选中并签约。
+            </p>
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-2 text-sm text-white"
+                style={{
+                  background: "var(--color-primary)",
+                  borderRadius: "var(--radius-md)",
+                }}
+              >
+                好
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <p className="text-xs text-[var(--color-neutral-500)]">
+              如果意向合作的服务商尚未在平台收录，可在此处推荐。提交后平台 ops
+              将审核其资质（一般 1-3 工作日）。
+            </p>
+
+            <div>
+              <label className="block text-sm text-[var(--color-neutral-600)] mb-1">
+                服务商名称 <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="例如：聚英催收团队"
+                className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-200)]"
+                style={{ borderRadius: "var(--radius-md)" }}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-[var(--color-neutral-600)] mb-1">
+                业务类型 <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={providerType}
+                onChange={(e) =>
+                  setProviderType(e.target.value as "collection" | "legal" | "both")
+                }
+                className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-200)]"
+                style={{ borderRadius: "var(--radius-md)" }}
+              >
+                <option value="collection">催收</option>
+                <option value="legal">法务</option>
+                <option value="both">法务+催收</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm text-[var(--color-neutral-600)] mb-1">
+                联系人手机号 <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="tel"
+                value={adminPhone}
+                onChange={(e) => setAdminPhone(e.target.value)}
+                placeholder="11 位手机号"
+                maxLength={11}
+                className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-200)]"
+                style={{ borderRadius: "var(--radius-md)" }}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-[var(--color-neutral-600)] mb-1">
+                联系邮箱（选填）
+              </label>
+              <input
+                type="email"
+                value={contactEmail}
+                onChange={(e) => setContactEmail(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-200)]"
+                style={{ borderRadius: "var(--radius-md)" }}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-[var(--color-neutral-600)] mb-1">
+                简介 / 资质（选填）
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+                placeholder="经营年限、主要案例、营业执照编号等"
+                className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-200)]"
+                style={{ borderRadius: "var(--radius-md)" }}
+              />
+            </div>
+
+            {error && <p className="text-sm text-red-600">{error}</p>}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-2 text-sm border border-[var(--color-neutral-200)]"
+                style={{ borderRadius: "var(--radius-md)" }}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={mutation.isPending}
+                onClick={submit}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm text-white disabled:opacity-50"
+                style={{
+                  background: "var(--color-primary)",
+                  borderRadius: "var(--radius-md)",
+                }}
+              >
+                <MailPlus className="w-4 h-4" />
+                {mutation.isPending ? "提交中…" : "提交推荐"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

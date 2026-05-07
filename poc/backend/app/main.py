@@ -12,6 +12,7 @@ from app.api import (
     admin_dashboard,
     admin_legal_conversion,
     admin_projects,
+    admin_provider_recommendation,
     admin_providers,
     admin_reports,
     admin_risk_keywords,
@@ -167,6 +168,11 @@ app.include_router(supervisor_extras.router, prefix="/api/v1/supervisor", tags=[
 app.include_router(admin_suggestion_config.router, prefix="/api/v1/admin", tags=["suggestion-config"])
 app.include_router(admin_settlements.router, prefix="/api/v1/admin", tags=["admin-settlements"])
 app.include_router(admin_providers.router, prefix="/api/v1/admin", tags=["admin-providers"])
+app.include_router(
+    admin_provider_recommendation.router,
+    prefix="/api/v1/admin",
+    tags=["admin-provider-recommendation"],
+)
 app.include_router(admin_reports.router, prefix="/api/v1/admin", tags=["admin-reports"])
 app.include_router(admin_compliance.router, prefix="/api/v1/admin", tags=["admin-compliance"])
 app.include_router(admin_settings.router, prefix="/api/v1/admin", tags=["admin-settings"])

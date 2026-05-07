@@ -22,6 +22,8 @@ interface ProviderItem {
   audit_status: string;
   audit_at: string | null;
   created_at: string;
+  recommended_by_tenant_id: number | null;
+  recommended_by_tenant_name: string | null;
 }
 
 const STATUS_OPTIONS: { value: "" | AuditStatus; label: string }[] = [
@@ -141,6 +143,9 @@ export function ProviderListPage() {
                 运营状态
               </th>
               <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
+                推荐人
+              </th>
+              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
                 操作
               </th>
             </tr>
@@ -149,7 +154,7 @@ export function ProviderListPage() {
             {isLoading && (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="px-4 py-8 text-center text-[var(--color-neutral-400)]"
                 >
                   加载中…
@@ -159,7 +164,7 @@ export function ProviderListPage() {
             {!isLoading && items.length === 0 && (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="px-4 py-8 text-center text-[var(--color-neutral-400)]"
                 >
                   暂无服务商数据
@@ -204,6 +209,22 @@ export function ProviderListPage() {
                   >
                     {p.is_active ? "正常" : "停用"}
                   </span>
+                </td>
+                <td className="px-4 py-3 text-[var(--color-neutral-600)]">
+                  {p.recommended_by_tenant_name ? (
+                    <span
+                      className="inline-flex px-2 py-0.5 text-xs rounded-full font-medium"
+                      style={{
+                        background: "var(--color-primary-light)",
+                        color: "var(--color-primary)",
+                      }}
+                      title={`由租户 ${p.recommended_by_tenant_name} 推荐`}
+                    >
+                      {p.recommended_by_tenant_name}
+                    </span>
+                  ) : (
+                    <span className="text-[var(--color-neutral-400)]">—</span>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <button

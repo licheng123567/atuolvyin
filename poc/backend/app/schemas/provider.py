@@ -59,6 +59,23 @@ class ProviderOut(BaseModel):
     audit_reason: str | None
     audit_at: datetime | None
     created_at: datetime
+    # v1.4 — 推荐入驻溯源（仅 ops 视图）
+    recommended_by_tenant_id: int | None = None
+    recommended_by_tenant_name: str | None = None
+
+
+class ProviderRecommendIn(BaseModel):
+    """物业 admin 推荐服务商入驻（D1）。"""
+
+    name: str = Field(..., min_length=1, max_length=100)
+    provider_type: Literal["legal", "collection", "both"]
+    admin_phone: str = Field(..., pattern=r"^1[3-9]\d{9}$")
+    contact_email: str | None = Field(
+        None, max_length=200, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$|^$"
+    )
+    description: str | None = Field(None, max_length=2000)
+
+    model_config = ConfigDict(str_strip_whitespace=True)
 
 
 class ProviderContractItem(BaseModel):

@@ -45,6 +45,10 @@ class ServiceProvider(Base, TimestampMixin):
     audit_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     description: Mapped[str | None] = mapped_column(sa.Text)
     contact_email: Mapped[str | None] = mapped_column(sa.Text)
+    # v1.4 — 物业推荐入驻：记录推荐人（D1）。NULL = 平台 ops 直接创建。
+    recommended_by_tenant_id: Mapped[int | None] = mapped_column(
+        sa.BigInteger, sa.ForeignKey("tenant.id"), nullable=True
+    )
 
     __table_args__ = (
         sa.CheckConstraint(

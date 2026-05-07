@@ -43,7 +43,9 @@ router = APIRouter()
 OPS_ROLES = ("platform_ops", "platform_superadmin", "platform_super")
 
 
-def _provider_to_out(p: ServiceProvider) -> ProviderOut:
+def _provider_to_out(
+    p: ServiceProvider, recommended_by_tenant_name: str | None = None
+) -> ProviderOut:
     return ProviderOut(
         id=p.id,
         name=p.name,
@@ -57,6 +59,8 @@ def _provider_to_out(p: ServiceProvider) -> ProviderOut:
         audit_reason=p.audit_reason,
         audit_at=p.audit_at,
         created_at=p.created_at,
+        recommended_by_tenant_id=p.recommended_by_tenant_id,
+        recommended_by_tenant_name=recommended_by_tenant_name,
     )
 
 
@@ -108,8 +112,26 @@ async def list_providers(
         .scalars()
         .all()
     )
+
+    # 推荐人 tenant_name 一次性查（v1.4 — D1 溯源）
+    recommender_ids = [
+        p.recommended_by_tenant_id for p in rows if p.recommended_by_tenant_id
+    ]
+    tenant_name_by_id: dict[int, str] = {}
+    if recommender_ids:
+        tenant_name_by_id = dict(
+            db.execute(
+                select(Tenant.id, Tenant.name).where(Tenant.id.in_(recommender_ids))
+            ).all()
+        )
+
     return PaginatedResponse(
-        items=[_provider_to_out(p) for p in rows],
+        items=[
+            _provider_to_out(
+                p, tenant_name_by_id.get(p.recommended_by_tenant_id or 0)
+            )
+            for p in rows
+        ],
         total=total,
         page=page,
         page_size=page_size,
@@ -150,6 +172,12 @@ async def get_provider(
 ) -> ProviderDetailOut:
     p = _load_provider(db, provider_id)
 
+    recommender_name: str | None = None
+    if p.recommended_by_tenant_id:
+        recommender_name = db.execute(
+            select(Tenant.name).where(Tenant.id == p.recommended_by_tenant_id)
+        ).scalar_one_or_none()
+
     rows = db.execute(
         select(ProviderTenantContract, Tenant.name)
         .join(Tenant, Tenant.id == ProviderTenantContract.tenant_id)
@@ -170,7 +198,7 @@ async def get_provider(
         for c, tname in rows
     ]
 
-    base = _provider_to_out(p)
+    base = _provider_to_out(p, recommender_name)
     return ProviderDetailOut(**base.model_dump(), contracts=contracts)
 
 
