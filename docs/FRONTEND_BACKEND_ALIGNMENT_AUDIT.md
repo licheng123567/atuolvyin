@@ -40,14 +40,19 @@
 
 ## 真正"几乎用不上"的（候选清理）
 
-- `/api/v1/admin/users/invite` — 当前 admin/users/new 是直创建用户带密码；如保留 invite 流（发短信邀请），需要新建 UI；否则可考虑删除
-- `/api/v1/admin/suggestion-config` — 早期话术建议配置；suggestion-config 子模块整体替代逻辑可在 v1.6 评估
+- ~~`/api/v1/admin/users/invite`~~ — **v1.6 已删除**：用户决策保留"直接创建用户带密码"路线；原 stub
+  实际未存储 token（注释承认 Sprint 2 deferred）+ `/register` 页不存在 = 死代码
+- `/api/v1/admin/suggestion-config` — **v1.6 评估结论：保留**。表面无 UI 入口，但
+  `ws/call_session.py` 在实时通话场景**活跃读取**该表（控制 AI 话术推送灵敏度 + 单次最多
+  推送数）。功能仍生效，缺的是 admin/settings 的 UI 入口（v1.7 候选）。
 
 ## 总结
 
 - 真实 gap：**3 个动作按钮**（已修）
 - 误报：**3 类**（路由尾斜杠/模板字面量/${apiUrl} 拼接）
 - 未在 FE 直调但有合法消费方：**8 类**（Android / 公开 fetch / 浏览器直链）
-- 候选清理：**2 个端点**（建议 v1.6 评估）
+- 候选清理：**1 删 1 留**
+  - `users/invite` v1.6 删除（死端点）
+  - `suggestion-config` v1.6 保留（ws/call_session.py 活跃读取）
 
-**结论**：经本次修复后 FE↔BE 对齐良好。下一阶段重点放在 UI 视觉还原（Task #51）。
+**结论**：经本次修复 + v1.6 死端点清理后，FE↔BE 对齐 100%。

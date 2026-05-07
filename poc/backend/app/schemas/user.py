@@ -23,19 +23,6 @@ class UserResponse(BaseModel):
     created_at: datetime
 
 
-class InviteLinkRequest(BaseModel):
-    role: str = "agent_external"
-    quota: int = Field(20, ge=1, le=200)
-    expire_days: int = Field(30, ge=1, le=90)
-    access_hours: str | None = "09:00-18:00"
-
-
-class InviteLinkResponse(BaseModel):
-    token: str
-    url: str
-    expires_at: datetime
-
-
 class UserMeResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

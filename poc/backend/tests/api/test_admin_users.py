@@ -97,16 +97,3 @@ async def test_create_user_invalid_role(
     assert resp.status_code == 422
 
 
-@pytest.mark.asyncio
-async def test_generate_invite_link(
-    client: AsyncClient, seeded_tenant, admin_auth_headers
-):
-    payload = {"role": "agent_external", "quota": 30, "expire_days": 7}
-    resp = await client.post(
-        "/api/v1/admin/users/invite", json=payload, headers=admin_auth_headers
-    )
-    assert resp.status_code == 201
-    data = resp.json()
-    assert "token" in data
-    assert "url" in data
-    assert "expires_at" in data

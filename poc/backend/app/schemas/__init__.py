@@ -1,7 +1,7 @@
 from .call import CallListQuery, CallMinuteQuotaStatus, CallResponse
 from .case import CaseAssignRequest, CaseImportRow, CaseListQuery, CaseResponse
 from .common import ErrorDetail, PaginatedResponse, PaginationQuery
-from .user import InviteLinkRequest, InviteLinkResponse, UserCreateRequest, UserResponse
+from .user import UserCreateRequest, UserResponse
 
 __all__ = [
     "PaginatedResponse",
@@ -16,6 +16,4 @@ __all__ = [
     "CallMinuteQuotaStatus",
     "UserCreateRequest",
     "UserResponse",
-    "InviteLinkRequest",
-    "InviteLinkResponse",
 ]

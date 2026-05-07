@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import secrets
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -25,8 +24,6 @@ from app.models.tenant import UserTenantMembership
 from app.models.user import UserAccount
 from app.schemas.common import PaginatedResponse
 from app.schemas.user import (
-    InviteLinkRequest,
-    InviteLinkResponse,
     UserCreateByAdminRequest,
     UserListResponse,
 )
@@ -145,29 +142,6 @@ async def create_user(
     db.commit()
     db.refresh(new_user)
     return _user_to_response(new_user, body.role)
-
-
-@router.post("/users/invite", response_model=InviteLinkResponse, status_code=201)
-async def generate_invite_link(
-    body: InviteLinkRequest,
-    payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
-) -> InviteLinkResponse:
-    tenant_id: int | None = payload.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(
-            status_code=http_status.HTTP_403_FORBIDDEN,
-            detail={"code": "ERR_NO_TENANT", "message": "此端点需要租户上下文"},
-        )
-
-    token = secrets.token_urlsafe(32)
-    expires_at = datetime.now(UTC) + timedelta(days=body.expire_days)
-    # Invite token storage deferred to Sprint 2 (need invite_token table)
-    return InviteLinkResponse(
-        token=token,
-        url=f"/register?token={token}",
-        expires_at=expires_at,
-    )
 
 
 @router.get("/devices", response_model=list[AdminDeviceItem])
