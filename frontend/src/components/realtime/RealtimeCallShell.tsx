@@ -145,7 +145,8 @@ export function RealtimeCallShell({ callId, role, token, owner }: Props) {
         )}
       </header>
 
-      <div className="grid flex-1 gap-4" style={{ gridTemplateColumns: "280px 1fr 320px" }}>
+      {/* 列宽对齐 ui/agent-pc.html 4 栏 grid（240 1fr 340 — AppLayout sidebar 充当第 1 栏 280px） */}
+      <div className="grid flex-1 gap-4" style={{ gridTemplateColumns: "240px 1fr 340px" }}>
         <aside className="rounded-lg bg-white p-4 shadow-sm">
           {owner ? (
             <>

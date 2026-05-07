@@ -47,9 +47,10 @@ export function getStageColor(stage: string): React.CSSProperties {
         color: "var(--color-primary)",
       };
     case "enforcing":
+      // ui/legal.html: 强制执行申请中 用 badge-purple
       return {
-        background: "var(--color-warning-light)",
-        color: "var(--color-warning)",
+        background: "var(--color-purple-light)",
+        color: "var(--color-purple)",
       };
     case "closed_won":
     case "closed_settled":
