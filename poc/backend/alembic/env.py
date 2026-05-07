@@ -12,7 +12,13 @@ import app.models  # noqa: F401, E402 — register all models with metadata
 from app.core.config import settings  # noqa: E402
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.database_url)
+
+# Honor any URL already set on the alembic Config (e.g. test injecting a
+# fresh container URL); only fall back to app settings when alembic.ini
+# still holds the placeholder.
+_existing_url = config.get_main_option("sqlalchemy.url") or ""
+if not _existing_url or _existing_url.startswith("driver://"):
+    config.set_main_option("sqlalchemy.url", settings.database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
