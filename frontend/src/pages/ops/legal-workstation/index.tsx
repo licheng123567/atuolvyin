@@ -1,6 +1,6 @@
 // Sprint 16.2 — 法务工作台（PRD §20.4）— ops 视角，按律所筛选转化订单 + 推动状态
 import { useCustom, useCustomMutation } from "@refinedev/core";
-import { Briefcase, FileText, PlayCircle, Receipt, Scale } from "lucide-react";
+import { Briefcase, CheckCircle, FileText, PlayCircle, Receipt, Scale, ShieldQuestion, XCircle } from "lucide-react";
 import { useState } from "react";
 
 interface LawFirm {
@@ -119,6 +119,59 @@ export function OpsLegalWorkstationPage() {
       {
         onSuccess: () => ordersQuery.refetch(),
         onError: (err) => alert(`启动失败：${(err as { message?: string }).message ?? "请重试"}`),
+      },
+    );
+  };
+
+  const onDispatch = (id: number) => {
+    if (!selectedFirmId) {
+      alert("请先在左侧选中一家律所，再 dispatch 此订单");
+      return;
+    }
+    if (!confirm(`将订单 #${id} 派发给当前律所？`)) return;
+    doStart(
+      {
+        url: `admin/legal-conversion-orders/${id}/dispatch`,
+        method: "post",
+        values: { law_firm_id: selectedFirmId },
+      },
+      {
+        onSuccess: () => ordersQuery.refetch(),
+        onError: (err) => alert(`派单失败：${(err as { message?: string }).message ?? "请重试"}`),
+      },
+    );
+  };
+
+  const onComplete = (id: number) => {
+    const notes = window.prompt("标记完成。可填备注（选填）：", "");
+    if (notes === null) return;
+    doStart(
+      {
+        url: `admin/legal-conversion-orders/${id}/complete`,
+        method: "post",
+        values: { notes: notes.trim() || undefined },
+      },
+      {
+        onSuccess: () => {
+          ordersQuery.refetch();
+          statsQuery.refetch();
+        },
+        onError: (err) => alert(`完成失败：${(err as { message?: string }).message ?? "请重试"}`),
+      },
+    );
+  };
+
+  const onCancelOrder = (id: number) => {
+    if (!confirm(`取消订单 #${id}（仅 pending/dispatched 可取消）？`)) return;
+    doStart(
+      {
+        url: `admin/legal-conversion-orders/${id}/cancel`,
+        method: "post",
+        values: {},
+      },
+      {
+        onSuccess: () => ordersQuery.refetch(),
+        onError: (err) => alert(`取消失败：${(err as { message?: string }).message ?? "请重试"}`),
       },
     );
   };
@@ -396,15 +449,57 @@ export function OpsLegalWorkstationPage() {
                     ¥{o.platform_fee_amount}
                   </div>
                 </div>
-                <div>
+                <div className="flex gap-1.5">
+                  {o.status === "pending" && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onDispatch(o.id)}
+                        disabled={!selectedFirmId}
+                        title={selectedFirmId ? "派发给当前选中律所" : "先选中律所"}
+                        className="flex items-center gap-1 text-xs px-3 py-1.5 border border-amber-400 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <ShieldQuestion className="w-3.5 h-3.5" />
+                        派单
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onCancelOrder(o.id)}
+                        className="flex items-center gap-1 text-xs px-3 py-1.5 border border-[var(--color-neutral-300)] text-[var(--color-neutral-600)] hover:bg-[var(--color-neutral-50)] rounded"
+                      >
+                        <XCircle className="w-3.5 h-3.5" />
+                        取消
+                      </button>
+                    </>
+                  )}
                   {o.status === "dispatched" && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onStart(o.id)}
+                        className="flex items-center gap-1 text-xs px-3 py-1.5 border border-[var(--color-primary)] text-[var(--color-primary)] rounded hover:bg-[var(--color-primary-light)]"
+                      >
+                        <PlayCircle className="w-3.5 h-3.5" />
+                        启动服务
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onCancelOrder(o.id)}
+                        className="flex items-center gap-1 text-xs px-3 py-1.5 border border-[var(--color-neutral-300)] text-[var(--color-neutral-600)] hover:bg-[var(--color-neutral-50)] rounded"
+                      >
+                        <XCircle className="w-3.5 h-3.5" />
+                        取消
+                      </button>
+                    </>
+                  )}
+                  {o.status === "in_service" && (
                     <button
                       type="button"
-                      onClick={() => onStart(o.id)}
-                      className="flex items-center gap-1 text-xs px-3 py-1.5 border border-[var(--color-primary)] text-[var(--color-primary)] rounded hover:bg-[var(--color-primary-light)]"
+                      onClick={() => onComplete(o.id)}
+                      className="flex items-center gap-1 text-xs px-3 py-1.5 border border-green-500 text-green-700 bg-green-50 hover:bg-green-100 rounded"
                     >
-                      <PlayCircle className="w-3.5 h-3.5" />
-                      启动服务
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      标记完成
                     </button>
                   )}
                 </div>
