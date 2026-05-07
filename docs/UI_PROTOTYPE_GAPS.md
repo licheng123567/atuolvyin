@@ -135,7 +135,7 @@
 |---|---|
 | ~~supervisor/live-wall~~ | ✅ Sprint 15.4 反向出原型，作为 supervisor.html 子 section（sv-livewall） |
 | ~~agent/workstation/live~~ | ✅ Sprint 16.2 反向出原型 → ui/agent-workstation-live.html |
-| **admin/workstation/live** | 实时通话 PC 管理员视图，无原型 |
+| ~~admin/workstation/live~~ | ✅ Sprint 16.2 反向出原型 → ui/admin-workstation-live.html（含督导介入） |
 | **calls/detail** | 通话详情页（录音回放/转写/AI/风控时间线）|
 
 ### P1（v1.1 / v1.2 / v1.3 新增页面）
@@ -176,7 +176,9 @@
 2. ~~help/app~~ ✅ 已落（ui/help-app.html, Sprint 16.2）
 3. ~~verify~~ ✅ 已落（ui/verify.html, Sprint 16.2）
 4. ~~agent/workstation/live~~ ✅ 已落（ui/agent-workstation-live.html, Sprint 16.2）
-5. admin/workstation/live
+5. ~~admin/workstation/live~~ ✅ 已落（ui/admin-workstation-live.html, Sprint 16.2）
+
+**第一批 P0 全部落地。** 后续 P1 / P2 批次的原型可继续按 sprint 节奏交付。
 
 **第二批（缺失功能页 3 个 — 待 v1.4 实施时同步出原型）**：
 6. p-ops-accounts（v1.4 多设备踢出沿带）
