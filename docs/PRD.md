@@ -1942,6 +1942,62 @@ CRM 案件 → 多次催收无果 → 一键"转法务追诉"
 
 ---
 
+#### 20.4.1 v1.5 实施落地
+
+**数据模型（共 6 张表）**
+
+| 表 | 用途 |
+|---|---|
+| `legal_service_package` | 服务包目录（4 个平台默认 + 租户级覆盖）；含 `package_type` ∈ {lawyer_letter, mediation, small_claims, full_agency}、`price`、`platform_fee_rate` |
+| `legal_conversion_order` | 案件转化订单。状态机 `pending → dispatched → in_service → completed`（或 `cancelled`）；订单创建时冻结 `timeline_summary`/`recommendation`/`cost_estimate` 三块 JSONB |
+| `law_firm` | 律所池（平台 ops 维护）；含 `accepting_orders`、`rating_avg`、`completed_orders` 自增计数 |
+| `law_firm_lawyer` | 律师从属于律所；订单 dispatch 时可选指定律师，名字快照入订单审计字段 |
+| `legal_platform_invoice` | 律所→平台介绍费按月账单。`unique(law_firm_id, period_start, period_end)` 防重复生成；`DRAFT → CONFIRMED → PAID` 三态 |
+| `legal_document_template` + `legal_document_render` | 文书模板目录 + 多版本渲染产物。模板 mustache `{{var}}` 占位，按 `(tenant_id, package_type)` 查找时优先租户级 override |
+
+**平台分成默认率**（订单创建时按服务包 `platform_fee_rate` 冻结到订单）
+
+| 服务包 | 默认费率 | 单笔分成（基础价 × 费率） |
+|---|---|---|
+| 律师函发送 | 30% | ¥59.70 |
+| 诉前调解 | 25% | ¥99.75 |
+| 小额诉讼协助 | 25% | ¥149.75 |
+| 完整代理 | 20% | 按成功回款分成（订单基础价 0） |
+
+**API 端点**
+
+- 物业 admin（`/api/v1/admin/`）：
+  - `GET legal-packages` — 服务包目录（租户视角，含平台默认 + 本租户覆盖）
+  - `GET cases/{id}/legal-conversion-preview` — Dry-run 预览（时间线 + 推荐方案 + 4 包成本预估）
+  - `POST cases/{id}/convert-to-legal` — 创建订单；同案件 active 订单去重 409
+  - `GET legal-conversion-orders` / `GET {id}` / `POST {id}/cancel`
+  - `GET legal-document-templates` / `GET {id}/document` / `POST {id}/document` / `GET {id}/document/versions`
+- 平台 ops（`/api/v1/ops/`）：
+  - `*` law-firms CRUD + 嵌套 lawyers add/patch/remove；执业证号 unique 冲突 409
+- 平台 ops（`/api/v1/legal-workstation/`）：
+  - `GET orders?law_firm_id=&status=` — 法务工作台筛选订单
+  - `POST orders/{id}/start` — `dispatched → in_service`
+  - `POST {admin}/{id}/dispatch` 在 admin 路径下接受 `law_firm_id` 优先 / `assigned_law_firm` free-text 回落；律师必须属该律所且 active
+  - `POST {admin}/{id}/complete` — 完成时自增 `law_firm.completed_orders`
+  - `GET firms/{id}/stats` — 含 `platform_fee_total_completed` + `platform_fee_unpaid`
+  - 账单：`POST/GET firms/{id}/invoices` + `POST invoices/{id}/{confirm,paid,cancel}`
+
+**关键不变量**
+
+- `legal_conversion_order.platform_fee_amount` 在订单创建时按 `package.price × package.platform_fee_rate` 冻结；后续律所池或服务包配置变更不影响进行中的订单
+- `dispatch` 时 denormalize 律所/律师姓名快照到订单 `assigned_law_firm` / `assigned_lawyer_name` 字段，便于审计追溯（即使律所/律师后续被停用或改名，订单历史不丢失）
+- 订单 `complete` 时律所 `completed_orders` 计数 +1；账单按 `completed_at` 落入对应账期，与状态机一致
+- 文书模板按 `(tenant_id, package_type)` 二级查找：租户级模板优先 → 平台默认兜底；缺失占位填 `[未填]` 而非崩溃
+- 业务事务与通知发送解耦：通知发送失败做 log，不回滚业务（dispatcher 内 try/except）
+
+**单元 / 集成测试覆盖**
+
+- service：推荐分级（金额阶梯）、时间线聚合（通话历史 group_by）、成本预估（含小额诉讼受理费）、模板渲染（占位替换 + 缺省回落 + 租户覆盖）
+- API 状态机：dispatch 拒绝停用律所 / 跨律所律师；同案件去重 409；admin 不能 dispatch（403）；订单完成更新律所计数；账单 confirm/paid/cancel 状态机；账单生成幂等
+- 数据安全：跨租户 404；ops vs admin 角色边界
+
+---
+
 ### 20.5 数据洞察产品（v2.0）
 
 平台积累足够用户量（≥ 50 家物业公司 / ≥ 10 万通话记录）后，脱敏数据具备商业价值：
