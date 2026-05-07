@@ -1,9 +1,22 @@
 // 物业管理员 - 系统配置（PRD §3.14 / L2049）
 import { useCustom, useCustomMutation, useInvalidate } from "@refinedev/core";
-import { Save, Settings as SettingsIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Save, Settings as SettingsIcon, Sparkles } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 type NotifyChannel = "system" | "sms" | "wechat" | "dingtalk";
+
+interface SuggestionConfig {
+  sensitivity: number;  // 1-5
+  max_per_push: number; // 1-10
+}
+
+const SENSITIVITY_LABELS: Record<number, string> = {
+  1: "1 - 极保守",
+  2: "2 - 保守",
+  3: "3 - 平衡（推荐）",
+  4: "4 - 积极",
+  5: "5 - 激进",
+};
 
 interface TenantSettings {
   recording_mode: "live" | "post" | "auto";
@@ -67,18 +80,45 @@ export function AdminSettingsPage() {
   });
   const settings = query.data?.data;
 
+  // suggestion-config（AI 推送灵敏度 + 单次推送上限）
+  const { query: suggestQuery } = useCustom<SuggestionConfig>({
+    url: "admin/suggestion-config",
+    method: "get",
+  });
+  const suggestion = suggestQuery.data?.data;
+
   const [form, setForm] = useState<TenantSettings | null>(null);
+  const [suggestForm, setSuggestForm] = useState<SuggestionConfig | null>(null);
+  // Track whether each form has been initialized from server data.
+  // Refs avoid set-state-in-effect cascades while preserving "lazy init" semantics.
+  const formInitRef = useRef(false);
+  const suggestInitRef = useRef(false);
 
   useEffect(() => {
-    if (settings && !form) setForm({ ...settings });
-  }, [settings, form]);
+    if (settings && !formInitRef.current) {
+      formInitRef.current = true;
+      setForm({ ...settings });
+    }
+  }, [settings]);
+  useEffect(() => {
+    if (suggestion && !suggestInitRef.current) {
+      suggestInitRef.current = true;
+      setSuggestForm({ ...suggestion });
+    }
+  }, [suggestion]);
 
   const { mutate: patch, mutation } = useCustomMutation();
+  const { mutate: putSuggest, mutation: suggestMutation } = useCustomMutation();
 
   const dirty =
     !!form &&
     !!settings &&
     JSON.stringify(form) !== JSON.stringify(settings);
+
+  const suggestDirty =
+    !!suggestForm &&
+    !!suggestion &&
+    JSON.stringify(suggestForm) !== JSON.stringify(suggestion);
 
   if (!form) {
     return <div className="p-6 text-[var(--color-neutral-400)]">加载中…</div>;
@@ -94,6 +134,25 @@ export function AdminSettingsPage() {
       {
         onSuccess: () => {
           invalidate({ resource: "admin/settings", invalidates: ["all"] });
+        },
+      },
+    );
+  };
+
+  const saveSuggest = () => {
+    if (!suggestForm) return;
+    putSuggest(
+      {
+        url: "admin/suggestion-config",
+        method: "put",
+        values: suggestForm,
+      },
+      {
+        onSuccess: () => {
+          invalidate({
+            resource: "admin/suggestion-config",
+            invalidates: ["all"],
+          });
         },
       },
     );
@@ -267,9 +326,97 @@ export function AdminSettingsPage() {
             {mutation.isPending ? "保存中…" : dirty ? "保存变更" : "无变更"}
           </button>
           <p className="text-xs text-[var(--color-neutral-400)] mt-2">
-            其他配置入口：AI 推送灵敏度（在通话工作台内）、风控自定义词（风控关键词）
+            其他配置入口：风控自定义词（风控关键词）
           </p>
         </div>
+      </div>
+
+      {/* AI 推送灵敏度（独立卡片，独立保存按钮） */}
+      <div
+        className="bg-white p-5 border border-[var(--color-neutral-200)] mt-6 space-y-5"
+        style={{ borderRadius: "var(--radius-lg)" }}
+      >
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-[var(--color-primary)]" />
+          <h2 className="text-sm font-semibold text-[var(--color-neutral-900)]">
+            AI 话术推送
+          </h2>
+        </div>
+
+        {!suggestForm ? (
+          <div className="text-xs text-[var(--color-neutral-400)]">加载中…</div>
+        ) : (
+          <>
+            <Field
+              label="推送灵敏度"
+              hint="决定 AI 主动推送话术建议的频率。越保守越只在高置信场景推送；越激进则更频繁"
+            >
+              <select
+                value={suggestForm.sensitivity}
+                onChange={(e) =>
+                  setSuggestForm({
+                    ...suggestForm,
+                    sensitivity: Number(e.target.value),
+                  })
+                }
+                className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-200)]"
+                style={{ borderRadius: "var(--radius-md)" }}
+              >
+                {[1, 2, 3, 4, 5].map((v) => (
+                  <option key={v} value={v}>
+                    {SENSITIVITY_LABELS[v]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field
+              label="单次最多推送数量"
+              hint="同一时刻坐席屏幕最多展示几条话术建议（1 - 10）"
+            >
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={suggestForm.max_per_push}
+                onChange={(e) =>
+                  setSuggestForm({
+                    ...suggestForm,
+                    max_per_push: Math.max(
+                      1,
+                      Math.min(10, Number(e.target.value) || 1),
+                    ),
+                  })
+                }
+                className="w-32 px-3 py-2 text-sm border border-[var(--color-neutral-200)]"
+                style={{ borderRadius: "var(--radius-md)" }}
+              />
+              <span className="ml-2 text-sm text-[var(--color-neutral-500)]">
+                条
+              </span>
+            </Field>
+
+            <div className="pt-3 border-t border-[var(--color-neutral-100)]">
+              <button
+                type="button"
+                disabled={!suggestDirty || suggestMutation.isPending}
+                onClick={saveSuggest}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                style={{
+                  background: "var(--color-primary)",
+                  borderRadius: "var(--radius-md)",
+                }}
+              >
+                <Save className="w-4 h-4" />
+                {suggestMutation.isPending
+                  ? "保存中…"
+                  : suggestDirty
+                    ? "保存推送配置"
+                    : "无变更"}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
