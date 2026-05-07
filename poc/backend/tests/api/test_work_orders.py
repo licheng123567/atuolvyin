@@ -129,6 +129,66 @@ async def test_create_work_order(
     assert data["order_type"] == "reduction"
     assert data["status"] == "open"
     assert data["case_id"] == seeded_case.id
+    assert data["priority"] == "normal"  # v1.6 default
+
+
+@pytest.mark.asyncio
+async def test_create_work_order_with_priority(
+    client: AsyncClient, seeded_case, workorder_auth_headers
+):
+    resp = await client.post(
+        "/api/v1/workorders",
+        json={
+            "order_type": "dispute",
+            "description": "费用争议 — 立即处理",
+            "case_id": seeded_case.id,
+            "priority": "urgent_critical",
+        },
+        headers=workorder_auth_headers,
+    )
+    assert resp.status_code == 201
+    assert resp.json()["priority"] == "urgent_critical"
+
+
+@pytest.mark.asyncio
+async def test_patch_work_order_priority(
+    client: AsyncClient, seeded_work_order, workorder_auth_headers
+):
+    # default → urgent
+    resp = await client.patch(
+        f"/api/v1/workorders/{seeded_work_order.id}",
+        json={"priority": "urgent"},
+        headers=workorder_auth_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["priority"] == "urgent"
+
+
+@pytest.mark.asyncio
+async def test_list_work_orders_filter_by_priority(
+    client: AsyncClient, seeded_case, workorder_auth_headers
+):
+    # Create one with each priority level
+    for prio in ("urgent_critical", "urgent", "normal", "low"):
+        await client.post(
+            "/api/v1/workorders",
+            json={
+                "order_type": "other",
+                "description": f"prio-{prio}",
+                "case_id": seeded_case.id,
+                "priority": prio,
+            },
+            headers=workorder_auth_headers,
+        )
+
+    resp = await client.get(
+        "/api/v1/workorders?priority=urgent_critical",
+        headers=workorder_auth_headers,
+    )
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    assert len(items) >= 1
+    assert all(it["priority"] == "urgent_critical" for it in items)
 
 
 # ── Patch ────────────────────────────────────────────────────

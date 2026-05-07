@@ -9,9 +9,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 WORK_ORDER_STATUSES = ("open", "in_progress", "resolved", "closed")
 WORK_ORDER_TYPES = ("quality", "reduction", "dispute", "other")
+WORK_ORDER_PRIORITIES = ("urgent_critical", "urgent", "normal", "low")
 
 WorkOrderStatus = Literal["open", "in_progress", "resolved", "closed"]
 WorkOrderType = Literal["quality", "reduction", "dispute", "other"]
+WorkOrderPriority = Literal["urgent_critical", "urgent", "normal", "low"]
 
 
 class WorkOrderCreate(BaseModel):
@@ -20,6 +22,7 @@ class WorkOrderCreate(BaseModel):
     case_id: int | None = Field(None, gt=0)
     call_id: int | None = Field(None, gt=0)
     assigned_to: int | None = Field(None, gt=0)
+    priority: WorkOrderPriority = "normal"
 
     model_config = ConfigDict(str_strip_whitespace=True)
 
@@ -29,6 +32,7 @@ class WorkOrderPatch(BaseModel):
     assigned_to: int | None = Field(None, gt=0)
     resolution: str | None = Field(None, max_length=4000)
     description: str | None = Field(None, min_length=1, max_length=4000)
+    priority: WorkOrderPriority | None = None
 
     model_config = ConfigDict(str_strip_whitespace=True)
 
@@ -44,6 +48,7 @@ class WorkOrderOut(BaseModel):
     description: str
     assigned_to: int | None
     status: str
+    priority: str
     resolution: str | None
     created_at: datetime
     updated_at: datetime

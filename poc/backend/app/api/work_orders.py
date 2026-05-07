@@ -61,6 +61,7 @@ def _wo_to_out(wo: WorkOrder, assignee_name: str | None) -> WorkOrderOut:
         description=wo.description,
         assigned_to=wo.assigned_to,
         status=wo.status,
+        priority=wo.priority,
         resolution=wo.resolution,
         created_at=wo.created_at,
         updated_at=wo.updated_at,
@@ -83,6 +84,7 @@ async def list_work_orders(
     q: str | None = Query(None, max_length=100),
     status: str | None = Query(None, max_length=50),
     order_type: str | None = Query(None, max_length=50),
+    priority: str | None = Query(None, max_length=20),
     since: datetime | None = Query(None, description="filter created_at >= since"),
     until: datetime | None = Query(None, description="filter created_at < until"),
     room: str | None = Query(None, max_length=20, description="filter by owner.room"),
@@ -96,6 +98,8 @@ async def list_work_orders(
         stmt = stmt.where(WorkOrder.status == status)
     if order_type:
         stmt = stmt.where(WorkOrder.order_type == order_type)
+    if priority:
+        stmt = stmt.where(WorkOrder.priority == priority)
     if q:
         stmt = stmt.where(WorkOrder.description.ilike(f"%{q}%"))
     if since:
@@ -167,6 +171,7 @@ async def create_work_order(
         description=body.description,
         assigned_to=body.assigned_to,
         status="open",
+        priority=body.priority,
     )
     db.add(wo)
     db.commit()

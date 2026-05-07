@@ -2,8 +2,11 @@ import { useCreate, useGo } from "@refinedev/core";
 import { ArrowLeft, ClipboardList } from "lucide-react";
 import { useState } from "react";
 import {
+  WORK_ORDER_PRIORITIES,
   WORK_ORDER_TYPES,
+  formatPriority,
   formatType,
+  type WorkOrderPriority,
   type WorkOrderType,
 } from "./helpers";
 
@@ -13,6 +16,7 @@ interface FormData {
   case_id: string;
   call_id: string;
   assigned_to: string;
+  priority: WorkOrderPriority;
 }
 
 export function WorkOrderNewPage() {
@@ -25,6 +29,7 @@ export function WorkOrderNewPage() {
     case_id: "",
     call_id: "",
     assigned_to: "",
+    priority: "normal",
   });
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -42,6 +47,7 @@ export function WorkOrderNewPage() {
           assigned_to: form.assigned_to
             ? Number(form.assigned_to)
             : undefined,
+          priority: form.priority,
         },
       },
       {
@@ -74,27 +80,51 @@ export function WorkOrderNewPage() {
         onSubmit={handleSubmit}
         className="bg-white rounded-lg border border-[var(--color-neutral-200)] p-6 space-y-4"
       >
-        <div>
-          <label className="block text-sm font-medium text-[var(--color-neutral-700)] mb-1">
-            工单类型 *
-          </label>
-          <select
-            value={form.order_type}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                order_type: e.target.value as WorkOrderType,
-              })
-            }
-            className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-200)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-            style={{ borderRadius: "var(--radius-md)" }}
-          >
-            {WORK_ORDER_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {formatType(t)}
-              </option>
-            ))}
-          </select>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-neutral-700)] mb-1">
+              工单类型 *
+            </label>
+            <select
+              value={form.order_type}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  order_type: e.target.value as WorkOrderType,
+                })
+              }
+              className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-200)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+              style={{ borderRadius: "var(--radius-md)" }}
+            >
+              {WORK_ORDER_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {formatType(t)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-neutral-700)] mb-1">
+              优先级 *
+            </label>
+            <select
+              value={form.priority}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  priority: e.target.value as WorkOrderPriority,
+                })
+              }
+              className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-200)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+              style={{ borderRadius: "var(--radius-md)" }}
+            >
+              {WORK_ORDER_PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {formatPriority(p)}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div>

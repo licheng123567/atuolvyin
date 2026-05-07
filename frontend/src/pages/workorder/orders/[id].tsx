@@ -4,10 +4,14 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import type { PaginatedResponse, UserRole } from "../../../types";
 import {
+  WORK_ORDER_PRIORITIES,
   WORK_ORDER_STATUSES,
+  formatPriority,
   formatStatus,
   formatType,
+  getPriorityColor,
   getStatusColor,
+  type WorkOrderPriority,
 } from "./helpers";
 
 interface CaseRef {
@@ -32,6 +36,7 @@ interface WorkOrderDetail {
   description: string;
   assigned_to: number | null;
   status: string;
+  priority: string;
   resolution: string | null;
   assignee_name: string | null;
   created_at: string;
@@ -50,6 +55,7 @@ interface FormState {
   assigned_to: number | null;
   description: string;
   resolution: string;
+  priority: WorkOrderPriority;
 }
 
 function detailToForm(detail: WorkOrderDetail): FormState {
@@ -58,6 +64,7 @@ function detailToForm(detail: WorkOrderDetail): FormState {
     assigned_to: detail.assigned_to,
     description: detail.description,
     resolution: detail.resolution ?? "",
+    priority: (detail.priority as WorkOrderPriority) ?? "normal",
   };
 }
 
@@ -89,7 +96,13 @@ export function WorkOrderDetailPage() {
 
   const form: FormState = overrideForm ?? (detail
     ? detailToForm(detail)
-    : { status: "open", assigned_to: null, description: "", resolution: "" });
+    : {
+        status: "open",
+        assigned_to: null,
+        description: "",
+        resolution: "",
+        priority: "normal",
+      });
 
   const setForm = (next: FormState) => setOverrideForm(next);
 
@@ -108,6 +121,7 @@ export function WorkOrderDetailPage() {
           assigned_to: form.assigned_to,
           description: form.description,
           resolution: form.resolution || null,
+          priority: form.priority,
         },
       },
       {
@@ -150,6 +164,12 @@ export function WorkOrderDetailPage() {
           style={getStatusColor(detail.status)}
         >
           {formatStatus(detail.status)}
+        </span>
+        <span
+          className="inline-flex px-2 py-0.5 text-xs rounded-full font-medium"
+          style={getPriorityColor(detail.priority)}
+        >
+          {formatPriority(detail.priority)}
         </span>
         <span className="text-xs text-[var(--color-neutral-400)] ml-2">
           类型: {formatType(detail.order_type)}
@@ -239,6 +259,29 @@ export function WorkOrderDetailPage() {
               className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-200)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
               style={{ borderRadius: "var(--radius-md)" }}
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-neutral-700)] mb-1">
+              优先级
+            </label>
+            <select
+              value={form.priority}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  priority: e.target.value as WorkOrderPriority,
+                })
+              }
+              className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-200)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+              style={{ borderRadius: "var(--radius-md)" }}
+            >
+              {WORK_ORDER_PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {formatPriority(p)}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

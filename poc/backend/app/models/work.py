@@ -27,6 +27,10 @@ class WorkOrder(Base, TimestampMixin):
         sa.BigInteger, sa.ForeignKey("user_account.id")
     )
     status: Mapped[str] = mapped_column(sa.Text, nullable=False, default="open")
+    # v1.6 — 4 档优先级（urgent_critical/urgent/normal/low），CHECK 约束在 DB 层
+    priority: Mapped[str] = mapped_column(
+        sa.String(16), nullable=False, default="normal"
+    )
     resolution: Mapped[str | None] = mapped_column(sa.Text)
 
 

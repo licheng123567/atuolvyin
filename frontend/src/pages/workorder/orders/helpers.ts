@@ -73,3 +73,48 @@ export function getStatusColor(status: string): React.CSSProperties {
 export function isTerminalStatus(status: string): boolean {
   return status === "resolved" || status === "closed";
 }
+
+// v1.6 — 4 档优先级（对齐 ui/workorder.html badge 风格）
+export const WORK_ORDER_PRIORITIES = [
+  "urgent_critical",
+  "urgent",
+  "normal",
+  "low",
+] as const;
+
+export type WorkOrderPriority = (typeof WORK_ORDER_PRIORITIES)[number];
+
+export const WORK_ORDER_PRIORITY_LABELS: Record<WorkOrderPriority, string> = {
+  urgent_critical: "很紧急",
+  urgent: "紧急",
+  normal: "一般",
+  low: "低",
+};
+
+export function formatPriority(priority: string): string {
+  return (
+    WORK_ORDER_PRIORITY_LABELS[priority as WorkOrderPriority] ?? priority
+  );
+}
+
+export function getPriorityColor(priority: string): React.CSSProperties {
+  switch (priority) {
+    case "urgent_critical":
+      return {
+        background: "var(--color-danger-light)",
+        color: "var(--color-danger)",
+      };
+    case "urgent":
+      return {
+        background: "var(--color-warning-light)",
+        color: "var(--color-warning)",
+      };
+    case "normal":
+    case "low":
+    default:
+      return {
+        background: "var(--color-neutral-100)",
+        color: "var(--color-neutral-600)",
+      };
+  }
+}

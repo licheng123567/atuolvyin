@@ -4,10 +4,13 @@ import { ClipboardList, Plus, Search } from "lucide-react";
 import { useState } from "react";
 import type { PaginatedResponse } from "../../../types";
 import {
+  WORK_ORDER_PRIORITIES,
   WORK_ORDER_STATUSES,
   WORK_ORDER_TYPES,
+  formatPriority,
   formatStatus,
   formatType,
+  getPriorityColor,
   getStatusColor,
 } from "./helpers";
 
@@ -19,6 +22,7 @@ interface WorkOrderItem {
   description: string;
   assigned_to: number | null;
   status: string;
+  priority: string;
   resolution: string | null;
   assignee_name: string | null;
   created_at: string;
@@ -29,6 +33,7 @@ export function WorkOrderListPage() {
   const [keyword, setKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState("");
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
 
@@ -38,6 +43,8 @@ export function WorkOrderListPage() {
     filters.push({ field: "status", operator: "eq", value: statusFilter });
   if (typeFilter)
     filters.push({ field: "order_type", operator: "eq", value: typeFilter });
+  if (priorityFilter)
+    filters.push({ field: "priority", operator: "eq", value: priorityFilter });
 
   const { query } = useList<WorkOrderItem>({
     resource: "workorders",
@@ -128,6 +135,22 @@ export function WorkOrderListPage() {
             </option>
           ))}
         </select>
+        <select
+          value={priorityFilter}
+          onChange={(e) => {
+            setPriorityFilter(e.target.value);
+            setPage(1);
+          }}
+          className="px-3 py-2 text-sm border border-[var(--color-neutral-200)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+          style={{ borderRadius: "var(--radius-md)" }}
+        >
+          <option value="">全部优先级</option>
+          {WORK_ORDER_PRIORITIES.map((p) => (
+            <option key={p} value={p}>
+              {formatPriority(p)}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Table */}
@@ -137,6 +160,9 @@ export function WorkOrderListPage() {
             <tr>
               <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
                 工单号
+              </th>
+              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
+                优先级
               </th>
               <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
                 类型
@@ -162,7 +188,7 @@ export function WorkOrderListPage() {
             {isLoading && (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="px-4 py-8 text-center text-[var(--color-neutral-400)]"
                 >
                   加载中…
@@ -172,7 +198,7 @@ export function WorkOrderListPage() {
             {!isLoading && items.length === 0 && (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="px-4 py-8 text-center text-[var(--color-neutral-400)]"
                 >
                   暂无工单
@@ -186,6 +212,14 @@ export function WorkOrderListPage() {
               >
                 <td className="px-4 py-3 text-[var(--color-neutral-600)]">
                   #{wo.id}
+                </td>
+                <td className="px-4 py-3">
+                  <span
+                    className="inline-flex px-2 py-0.5 text-xs rounded-full font-medium"
+                    style={getPriorityColor(wo.priority)}
+                  >
+                    {formatPriority(wo.priority)}
+                  </span>
                 </td>
                 <td className="px-4 py-3 text-[var(--color-neutral-600)]">
                   {formatType(wo.order_type)}
