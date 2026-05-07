@@ -42,8 +42,8 @@ interface PMProviderStats {
   top_tenants_by_volume: TopTenantItem[];
 }
 
-function formatCurrency(n: number): string {
-  return `¥${n.toLocaleString()}`;
+function formatCurrency(n: number | null | undefined): string {
+  return `¥${(n ?? 0).toLocaleString()}`;
 }
 
 export function PMDashboardPage() {
@@ -76,11 +76,21 @@ function PropertyView() {
     url: "pm/dashboard/property",
     method: "get",
   });
-  const stats = query.data?.data;
+  const raw = query.data?.data;
 
   if (query.isLoading) return <div className="p-6 text-neutral-500">加载中…</div>;
-  if (query.isError || !stats)
+  if (query.isError || !raw)
     return <div className="p-6 text-red-600">加载失败，请刷新重试</div>;
+
+  // 防御 server response 部分字段缺失
+  const stats: PMPropertyStats = {
+    active_cases_count: raw.active_cases_count ?? 0,
+    recovered_amount_month: raw.recovered_amount_month ?? 0,
+    pending_workorders: raw.pending_workorders ?? 0,
+    escalated_legal_cases: raw.escalated_legal_cases ?? 0,
+    agent_count: raw.agent_count ?? 0,
+    top_overdue: raw.top_overdue ?? [],
+  };
 
   return (
     <div className="space-y-6 p-6">
@@ -184,11 +194,19 @@ function ProviderView() {
     url: "pm/dashboard/provider",
     method: "get",
   });
-  const stats = query.data?.data;
+  const raw = query.data?.data;
 
   if (query.isLoading) return <div className="p-6 text-neutral-500">加载中…</div>;
-  if (query.isError || !stats)
+  if (query.isError || !raw)
     return <div className="p-6 text-red-600">加载失败，请刷新重试</div>;
+
+  const stats: PMProviderStats = {
+    active_contracts_count: raw.active_contracts_count ?? 0,
+    total_revenue_month: raw.total_revenue_month ?? 0,
+    agent_count: raw.agent_count ?? 0,
+    pending_settlements: raw.pending_settlements ?? 0,
+    top_tenants_by_volume: raw.top_tenants_by_volume ?? [],
+  };
 
   return (
     <div className="space-y-6 p-6">

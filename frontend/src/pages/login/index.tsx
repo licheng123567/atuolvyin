@@ -56,6 +56,14 @@ export function LoginPage() {
     login(
       { phone, password },
       {
+        // Refine v5：auth-provider 返回 { success:false, error } 时
+        // 走 onSuccess（带 data）而非 onError；onError 只在 promise 真 reject 时触发
+        onSuccess: (data) => {
+          const result = data as { success?: boolean; error?: { message?: string } };
+          if (result.success === false) {
+            setErrorMsg(result.error?.message ?? "登录失败，请重试");
+          }
+        },
         onError: (err) => {
           setErrorMsg(
             (err as { message?: string }).message ?? "登录失败，请重试",

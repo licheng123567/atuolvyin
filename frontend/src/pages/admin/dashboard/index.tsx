@@ -44,10 +44,22 @@ export function AdminDashboardPage() {
   if (query.isLoading) return <div className="p-6 text-neutral-500">加载中…</div>;
   if (query.isError || !stats) return <div className="p-6 text-red-600">加载失败，请刷新重试</div>;
 
-  const quotaState = getQuotaWarning(
-    stats.minute_quota.used_min,
-    stats.minute_quota.total_min,
-  );
+  // 防御 server response 字段缺失（部分租户 / 新建租户 / 旧 schema 行）
+  const today = stats.today ?? {
+    outbound_count: 0,
+    connected_count: 0,
+    promised_count: 0,
+    recovered_amount: 0,
+  };
+  const minuteQuota = stats.minute_quota ?? {
+    used_min: 0,
+    total_min: 0,
+    remaining_min: null,
+    warning: false,
+  };
+  const topAgents = stats.top_agents ?? [];
+  const scriptTrend = stats.script_adoption_trend ?? [];
+  const quotaState = getQuotaWarning(minuteQuota.used_min, minuteQuota.total_min);
 
   return (
     <div style={{ padding: 24 }} className="space-y-6">
@@ -55,30 +67,30 @@ export function AdminDashboardPage() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16 }}>
         <KpiCard
           label="今日外呼"
-          value={stats.today.outbound_count}
+          value={today.outbound_count}
           icon={<Activity size={14} />}
         />
         <KpiCard
           label="今日接通"
-          value={stats.today.connected_count}
+          value={today.connected_count}
           icon={<PhoneCall size={14} />}
         />
         <KpiCard
           label="今日承诺"
-          value={stats.today.promised_count}
+          value={today.promised_count}
           icon={<BadgeCheck size={14} />}
         />
         <KpiCard
           label="今日回款"
-          value={formatCurrency(stats.today.recovered_amount)}
+          value={formatCurrency(today.recovered_amount)}
           icon={<DollarSign size={14} />}
         />
         <KpiCard
           label="本月分钟用量"
-          value={`${formatMinutes(stats.minute_quota.used_min)} / ${formatMinutes(stats.minute_quota.total_min)}`}
+          value={`${formatMinutes(minuteQuota.used_min)} / ${formatMinutes(minuteQuota.total_min)}`}
           warn={quotaState !== "ok"}
           subtext={
-            stats.minute_quota.remaining_min != null
+            stats.minute_quota?.remaining_min != null
               ? `剩余 ${formatMinutes(stats.minute_quota.remaining_min)} 分钟`
               : undefined
           }
@@ -113,7 +125,7 @@ export function AdminDashboardPage() {
             </tr>
           </thead>
           <tbody>
-            {stats.top_agents.map((a: AgentRanking, i: number) => (
+            {topAgents.map((a: AgentRanking, i: number) => (
               <tr key={a.user_id} style={{ borderTop: "1px solid #f3f4f6" }}>
                 <td style={{ padding: "8px 10px" }}>
                   <RankBadge rank={i + 1} />
@@ -123,7 +135,7 @@ export function AdminDashboardPage() {
                 <td style={{ padding: "8px 10px" }}>{a.month_promised}</td>
               </tr>
             ))}
-            {stats.top_agents.length === 0 && (
+            {topAgents.length === 0 && (
               <tr>
                 <td
                   colSpan={4}
@@ -151,7 +163,7 @@ export function AdminDashboardPage() {
         >
           <TrendingUp size={16} /> AI 话术采用率（近7日）
         </h3>
-        <SimpleLineChart values={stats.script_adoption_trend} />
+        <SimpleLineChart values={scriptTrend} />
       </div>
     </div>
   );

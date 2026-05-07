@@ -117,7 +117,7 @@ export function ProviderDashboardPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--color-neutral-100)]">
-            {stats.contracts.length === 0 && (
+            {(stats.contracts ?? []).length === 0 && (
               <tr>
                 <td
                   colSpan={4}
@@ -127,7 +127,7 @@ export function ProviderDashboardPage() {
                 </td>
               </tr>
             )}
-            {stats.contracts.map((c) => (
+            {(stats.contracts ?? []).map((c) => (
               <tr
                 key={`${c.tenant_id}-${c.signed_at}`}
                 className="hover:bg-[var(--color-neutral-50)]"

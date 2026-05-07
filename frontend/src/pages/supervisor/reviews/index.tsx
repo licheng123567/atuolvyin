@@ -44,7 +44,11 @@ export function SupervisorReviewsPage() {
     pagination: { currentPage: page, pageSize },
   });
 
-  const items: ReviewItemOut[] = (query.data?.data as unknown as ReviewItemOut[]) ?? [];
+  // 后端返回 {items, total}；某些场景可能是裸数组；防御兼容
+  const raw = query.data?.data as unknown;
+  const items: ReviewItemOut[] = Array.isArray(raw)
+    ? (raw as ReviewItemOut[])
+    : ((raw as { items?: ReviewItemOut[] } | undefined)?.items ?? []);
   const total = query.data?.total ?? 0;
   const totalPages = Math.ceil(total / pageSize);
 

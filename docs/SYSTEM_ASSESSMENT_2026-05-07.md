@@ -146,23 +146,21 @@ npm run dev
 
 ### C.3 11 角色 demo 账号
 
-`scripts/seed_demo.py` 落地账号（密码统一）：
+`scripts/seed_demo.py` 落地账号（密码统一 **`Demo@123!`**）：
 
-| 角色 | 手机号 | 密码 |
+| 角色 | 手机号 | 显示名 |
 |---|---|---|
-| platform_superadmin | 13000000001 | `Demo@1234` |
-| platform_ops | 13000000002 | `Demo@1234` |
-| supervisor | 13000000003 | `Demo@1234` |
-| agent_internal | 13000000004 | `Demo@1234` |
-| agent_external | 13000000005 | `Demo@1234` |
-| legal | 13000000006 | `Demo@1234` |
-| workorder | 13000000007 | `Demo@1234` |
-| project_manager_property | 13000000008 | `Demo@1234` |
-| project_manager_provider | 13000000009 | `Demo@1234` |
-| provider_admin | 13000000010 | `Demo@1234` |
-| admin（物业管理员） | 13000000011 | `Demo@1234` |
-
-> 注：实际密码 / 编号请以 `scripts/seed_demo.py` 为准；如不一致可直接读源。
+| platform_superadmin | 13000000000 | 平台超管 |
+| platform_ops | 13000000001 | 运营员 |
+| admin（物业管理员） | 13000000002 | 物业管理员 |
+| supervisor | 13000000003 | 督导小李 |
+| agent_internal | 13000000004 | 内勤小张 |
+| agent_external | 13000000005 | 外勤小王 |
+| legal | 13000000006 | 法务老周 |
+| workorder | 13000000007 | 工单小赵 |
+| project_manager_property | 13000000008 | 项目经理（物业） |
+| project_manager_provider | 13000000009 | 项目经理（服务商） |
+| provider_admin | 13000000010 | 服务商管理员 |
 
 ### C.4 端到端冒烟（无需浏览器）
 

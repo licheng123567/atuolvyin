@@ -97,7 +97,11 @@ export function AdminSettingsPage() {
   useEffect(() => {
     if (settings && !formInitRef.current) {
       formInitRef.current = true;
-      setForm({ ...settings });
+      // 防御 server response 缺字段（旧 DB 行 / partial schema），保证后续 .includes 等不崩
+      setForm({
+        ...settings,
+        notify_channels: settings.notify_channels ?? ["system"],
+      });
     }
   }, [settings]);
   useEffect(() => {
