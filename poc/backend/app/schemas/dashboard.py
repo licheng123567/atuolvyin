@@ -57,3 +57,17 @@ class ProjectKpi(BaseModel):
     closed_count: int                  # stage='paid' OR 'closed' 案件数
     connected_30d: int                 # 近 30 天本项目案件下接通数
     total_calls_30d: int               # 近 30 天本项目案件下总外呼数
+
+
+class ProviderKpi(BaseModel):
+    """单服务商 KPI（v1.5 — admin 看签约服务商相对表现）"""
+    provider_id: int
+    provider_name: str
+    active_project_count: int          # 该服务商承接的本租户活跃项目数
+    case_count: int                    # 这些项目下的案件总数
+    paid_count: int                    # 已付清的案件数
+    paid_rate: float                   # paid_count / case_count
+    receivable: float                  # 这些项目下的应收金额
+    recovered_30d: float               # 30 天内回款金额（stage='paid' 且 last_contact_at 在窗口内）
+    call_count_30d: int                # 30 天通话量
+    connected_rate_30d: float          # 接通率（duration > 10s）

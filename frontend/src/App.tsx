@@ -98,7 +98,7 @@ const ROLE_HOME: Record<string, string> = {
   platform_superadmin: "/ops/tenants",
   platform_super: "/ops/tenants",
   platform_ops: "/ops/tenants",
-  admin: "/admin/dashboard",
+  admin: "/admin/projects",
   supervisor: "/supervisor/reviews",
   agent_internal: "/agent/cases",
   agent_external: "/agent/cases",

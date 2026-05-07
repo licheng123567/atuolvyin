@@ -19,7 +19,8 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
     {
       title: "工作台",
       items: [
-        { label: "管理看板", path: "/admin/dashboard", icon: "LayoutDashboard" },
+        { label: "项目管理", path: "/admin/projects", icon: "FolderKanban" },
+        { label: "数据看板", path: "/admin/dashboard", icon: "LayoutDashboard" },
       ],
     },
     {
@@ -33,7 +34,6 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
     {
       title: "数据管理",
       items: [
-        { label: "项目管理", path: "/admin/projects", icon: "FolderKanban" },
         { label: "业主名单导入", path: "/admin/cases/import", icon: "Upload" },
       ],
     },

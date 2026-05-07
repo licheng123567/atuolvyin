@@ -55,6 +55,19 @@ interface ProjectKpi {
   total_calls_30d: number;
 }
 
+interface ProviderKpi {
+  provider_id: number;
+  provider_name: string;
+  active_project_count: number;
+  case_count: number;
+  paid_count: number;
+  paid_rate: number;
+  receivable: number;
+  recovered_30d: number;
+  call_count_30d: number;
+  connected_rate_30d: number;
+}
+
 export function AdminDashboardPage() {
   const navigate = useNavigate();
   const { query } = useCustom<DashboardStats>({
@@ -71,6 +84,16 @@ export function AdminDashboardPage() {
   const projectKpis: ProjectKpi[] = Array.isArray(projectKpiRaw)
     ? projectKpiRaw
     : ((projectKpiRaw as unknown as { items?: ProjectKpi[] })?.items ?? []);
+
+  // v1.5 — 服务商排名
+  const { query: providerKpiQuery } = useCustom<ProviderKpi[]>({
+    url: "admin/dashboard/by-provider",
+    method: "get",
+  });
+  const providerKpiRaw = providerKpiQuery.data?.data;
+  const providerKpis: ProviderKpi[] = Array.isArray(providerKpiRaw)
+    ? providerKpiRaw
+    : ((providerKpiRaw as unknown as { items?: ProviderKpi[] })?.items ?? []);
 
   if (query.isLoading) return <div className="p-6 text-neutral-500">加载中…</div>;
   if (query.isError || !stats)
@@ -479,6 +502,125 @@ export function AdminDashboardPage() {
                       </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* v1.5 — 服务商排名 */}
+      {providerKpis.length > 0 && (
+        <div className="ds-card" style={{ marginTop: 16 }}>
+          <div className="card-header">
+            <span className="card-title">服务商排名（按 30 天回款）</span>
+            <span className="text-sm text-muted">
+              共 {providerKpis.length} 家签约
+            </span>
+          </div>
+          <div className="card-body" style={{ padding: 0 }}>
+            <div className="table-wrap" style={{ borderRadius: 0, border: "none" }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ width: 50 }}>排名</th>
+                    <th>服务商</th>
+                    <th style={{ textAlign: "right" }}>承接项目</th>
+                    <th style={{ textAlign: "right" }}>案件数</th>
+                    <th style={{ textAlign: "right" }}>已结清</th>
+                    <th style={{ textAlign: "right" }}>结清率</th>
+                    <th style={{ textAlign: "right" }}>30 天回款</th>
+                    <th style={{ textAlign: "right" }}>30 天通话</th>
+                    <th style={{ textAlign: "right" }}>接通率</th>
+                    <th style={{ width: 80 }}>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {providerKpis.map((p, idx) => (
+                    <tr key={p.provider_id}>
+                      <td>
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: 24,
+                            height: 24,
+                            borderRadius: "50%",
+                            fontSize: 11,
+                            fontWeight: 700,
+                            background:
+                              idx === 0
+                                ? "#fef3c7"
+                                : idx === 1
+                                  ? "#e5e7eb"
+                                  : idx === 2
+                                    ? "#fed7aa"
+                                    : "transparent",
+                            color:
+                              idx === 0
+                                ? "#92400e"
+                                : idx === 1
+                                  ? "#374151"
+                                  : idx === 2
+                                    ? "#9a3412"
+                                    : "#9ca3af",
+                          }}
+                        >
+                          {idx + 1}
+                        </span>
+                      </td>
+                      <td>
+                        <strong>{p.provider_name}</strong>
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        {p.active_project_count}
+                      </td>
+                      <td style={{ textAlign: "right" }}>{p.case_count}</td>
+                      <td style={{ textAlign: "right" }}>{p.paid_count}</td>
+                      <td style={{ textAlign: "right" }}>
+                        <span
+                          style={{
+                            color:
+                              p.paid_rate > 0.4
+                                ? "#057a55"
+                                : p.paid_rate > 0.15
+                                  ? "#d97706"
+                                  : "#9ca3af",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {(p.paid_rate * 100).toFixed(1)}%
+                        </span>
+                      </td>
+                      <td
+                        style={{
+                          textAlign: "right",
+                          fontWeight: 600,
+                          color: "#057a55",
+                        }}
+                      >
+                        ¥{p.recovered_30d.toLocaleString()}
+                      </td>
+                      <td style={{ textAlign: "right" }}>{p.call_count_30d}</td>
+                      <td style={{ textAlign: "right" }}>
+                        <span style={{ fontSize: 12, color: "#6b7280" }}>
+                          {(p.connected_rate_30d * 100).toFixed(0)}%
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="ds-btn ds-btn-ghost ds-btn-sm"
+                          onClick={() =>
+                            navigate(`/admin/providers/${p.provider_id}`)
+                          }
+                        >
+                          详情
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

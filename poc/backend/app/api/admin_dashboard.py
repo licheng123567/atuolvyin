@@ -29,6 +29,7 @@ from app.schemas.dashboard import (
     AdminDashboardStats,
     AgentRanking,
     ProjectKpi,
+    ProviderKpi,
     QuotaStats,
     TodayStats,
 )
@@ -409,3 +410,99 @@ def get_dashboard_by_project(
         ))
 
     return items
+
+
+@router.get("/dashboard/by-provider", response_model=list[ProviderKpi])
+def get_dashboard_by_provider(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[ProviderKpi]:
+    """v1.5 — 按服务商分维度看 KPI（多服务商相对表现排名）。
+
+    数据源：本租户活跃项目（status='active'）的 provider_id 聚合。
+    """
+    tenant_id = payload.get("tenant_id")
+    if not tenant_id:
+        return []
+    tenant_id = int(tenant_id)
+
+    # 找本租户所有有 provider 的活跃项目
+    project_rows = db.execute(
+        select(Project.id, Project.provider_id).where(
+            Project.tenant_id == tenant_id,
+            Project.provider_id.is_not(None),
+            Project.status == "active",
+        )
+    ).all()
+    if not project_rows:
+        return []
+
+    # group projects by provider
+    by_provider: dict[int, list[int]] = {}
+    for pid, provider_id in project_rows:
+        by_provider.setdefault(int(provider_id), []).append(int(pid))
+
+    now = datetime.now(timezone.utc)
+    cutoff_30d = now - timedelta(days=30)
+    items: list[ProviderKpi] = []
+
+    for provider_id, project_ids in by_provider.items():
+        provider_name = db.execute(
+            select(ServiceProvider.name).where(ServiceProvider.id == provider_id)
+        ).scalar_one_or_none() or f"#{provider_id}"
+
+        case_rows = db.execute(
+            select(CollectionCase.stage, CollectionCase.amount_owed).where(
+                CollectionCase.tenant_id == tenant_id,
+                CollectionCase.project_id.in_(project_ids),
+            )
+        ).all()
+        case_count = len(case_rows)
+        paid_count = 0
+        receivable = 0.0
+        recovered = 0.0
+        for stage, amt in case_rows:
+            amt_f = float(amt or 0)
+            receivable += amt_f
+            if stage == "paid":
+                paid_count += 1
+                recovered += amt_f
+
+        total_calls = db.execute(
+            select(func.count(CallRecord.id))
+            .join(CollectionCase, CollectionCase.id == CallRecord.case_id)
+            .where(
+                CallRecord.tenant_id == tenant_id,
+                CollectionCase.project_id.in_(project_ids),
+                CallRecord.started_at >= cutoff_30d,
+            )
+        ).scalar_one() or 0
+        connected = db.execute(
+            select(func.count(CallRecord.id))
+            .join(CollectionCase, CollectionCase.id == CallRecord.case_id)
+            .where(
+                CallRecord.tenant_id == tenant_id,
+                CollectionCase.project_id.in_(project_ids),
+                CallRecord.started_at >= cutoff_30d,
+                CallRecord.duration_sec > 10,
+            )
+        ).scalar_one() or 0
+
+        items.append(ProviderKpi(
+            provider_id=provider_id,
+            provider_name=provider_name,
+            active_project_count=len(project_ids),
+            case_count=case_count,
+            paid_count=paid_count,
+            paid_rate=round(paid_count / case_count, 4) if case_count else 0.0,
+            receivable=round(receivable, 2),
+            recovered_30d=round(recovered, 2),
+            call_count_30d=int(total_calls),
+            connected_rate_30d=round(
+                connected / total_calls, 4
+            ) if total_calls else 0.0,
+        ))
+
+    items.sort(key=lambda x: x.recovered_30d, reverse=True)
+    return items[:10]

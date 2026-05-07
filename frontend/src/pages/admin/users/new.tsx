@@ -141,6 +141,9 @@ export function UserNewPage() {
           <div>
             <strong>无需设置初始密码。</strong>
             员工创建后，首次登录请走「手机验证码」标签 — 输入手机号点「获取验证码」即可登录。登录后可在「我的账号」自愿设置密码。
+            <div style={{ marginTop: 6, color: "var(--color-neutral-500, #6b7280)" }}>
+              💡 此处只能创建本物业的员工。<strong>外部催收员（外勤）</strong>由对应服务商管理员在自家系统创建；如需邀请新服务商合作，请前往「服务商合作」页推荐入驻。
+            </div>
           </div>
         </div>
 
