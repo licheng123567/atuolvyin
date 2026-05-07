@@ -26,6 +26,10 @@ class ScriptTemplate(Base):
         nullable=True,
     )
     title: Mapped[str] = mapped_column(sa.String(128), nullable=False)
+    # v1.5 S18.6 — 通话场景维度：opening/objection_handling/promise_confirm/closing
+    scene: Mapped[str] = mapped_column(
+        sa.String(32), nullable=False, default="objection_handling"
+    )
     trigger_intent: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     content: Mapped[str] = mapped_column(sa.Text, nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(sa.Text)
@@ -50,7 +54,12 @@ class ScriptTemplate(Base):
         sa.Index("idx_script_template_tenant", "tenant_id"),
         sa.Index("idx_script_template_active", "tenant_id", "is_active"),
         sa.Index("idx_script_template_provider", "provider_id"),
+        sa.Index("idx_script_template_scene", "scene"),
         sa.CheckConstraint("score_grade IN ('A','B','C','D')", name="ck_st_score_grade"),
+        sa.CheckConstraint(
+            "scene IN ('opening','objection_handling','promise_confirm','closing')",
+            name="ck_script_template_scene",
+        ),
     )
 
 

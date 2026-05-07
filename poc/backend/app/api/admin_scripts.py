@@ -155,6 +155,7 @@ def create_script(
     script = ScriptTemplate(
         tenant_id=None if role == "platform_superadmin" else tenant_id,
         title=body.title,
+        scene=body.scene,
         trigger_intent=body.trigger_intent,
         content=body.content,
         notes=body.notes,
@@ -262,6 +263,8 @@ def update_script(
 
     if body.title is not None:
         script.title = body.title
+    if body.scene is not None:
+        script.scene = body.scene
     if body.trigger_intent is not None:
         script.trigger_intent = body.trigger_intent
     if body.content is not None:

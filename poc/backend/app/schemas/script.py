@@ -6,8 +6,12 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
+_SCENE_PATTERN = r"^(opening|objection_handling|promise_confirm|closing)$"
+
+
 class ScriptTemplateCreate(BaseModel):
     title: str = Field(..., max_length=128)
+    scene: str = Field("objection_handling", pattern=_SCENE_PATTERN)
     trigger_intent: str = Field(..., max_length=64)
     content: str
     notes: Optional[str] = None
@@ -15,6 +19,7 @@ class ScriptTemplateCreate(BaseModel):
 
 class ScriptTemplateUpdate(BaseModel):
     title: Optional[str] = Field(None, max_length=128)
+    scene: Optional[str] = Field(None, pattern=_SCENE_PATTERN)
     trigger_intent: Optional[str] = Field(None, max_length=64)
     content: Optional[str] = None
     notes: Optional[str] = None
@@ -25,6 +30,7 @@ class ScriptTemplateOut(BaseModel):
     tenant_id: Optional[int] = None
     provider_id: Optional[int] = None
     title: str
+    scene: str = "objection_handling"
     trigger_intent: str
     content: str
     notes: Optional[str] = None

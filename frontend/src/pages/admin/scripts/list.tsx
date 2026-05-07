@@ -7,12 +7,15 @@ import type { PaginatedResponse } from "../../../types";
 import { TRIGGER_INTENTS, formatAdoptionRate } from "./helpers";
 import { ScriptSheet } from "./ScriptSheet";
 
+type SceneKey = "opening" | "objection_handling" | "promise_confirm" | "closing";
+
 interface ScriptItem {
   id: number;
   tenant_id: number | null;
   provider_id: number | null;
   source: "platform" | "tenant" | "provider";
   title: string;
+  scene: SceneKey;
   trigger_intent: string;
   version: number;
   usage_count: number;
@@ -30,6 +33,27 @@ const SOURCE_BADGE: Record<ScriptItem["source"], { label: string; cls: string }>
   provider: { label: "服务商", cls: "ds-badge ds-badge-purple" },
 };
 
+const SCENE_LABEL: Record<SceneKey, string> = {
+  opening: "开场白",
+  objection_handling: "异议处理",
+  promise_confirm: "承诺确认",
+  closing: "挂断收尾",
+};
+
+const SCENE_ICON: Record<SceneKey, string> = {
+  opening: "📞",
+  objection_handling: "❓",
+  promise_confirm: "✅",
+  closing: "👋",
+};
+
+const SCENE_ORDER: SceneKey[] = [
+  "opening",
+  "objection_handling",
+  "promise_confirm",
+  "closing",
+];
+
 const SCORE_CLASS: Record<string, string> = {
   A: "score-a",
   B: "score-b",
@@ -37,15 +61,18 @@ const SCORE_CLASS: Record<string, string> = {
   D: "score-d",
 };
 
+type ViewMode = "by-scene" | "all";
+
 export function ScriptListPage() {
   const go = useGo();
+  const [viewMode, setViewMode] = useState<ViewMode>("by-scene");
   const [keyword, setKeyword] = useState("");
   const [intent, setIntent] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editScript, setEditScript] = useState<ScriptItem | null>(null);
-  const PAGE_SIZE = 20;
+  const PAGE_SIZE = 100;  // 按场景视图下需要全量分组
 
   const filters: CrudFilter[] = [];
   if (keyword) filters.push({ field: "q", operator: "eq", value: keyword });
@@ -104,6 +131,45 @@ export function ScriptListPage() {
         </div>
       </div>
 
+      {/* v1.5 S18.6 — 视图切换 */}
+      <div
+        style={{
+          display: "flex",
+          gap: 0,
+          marginBottom: 16,
+          borderBottom: "1px solid var(--color-neutral-200)",
+        }}
+      >
+        {(
+          [
+            ["by-scene", "按场景"],
+            ["all", "全部列表"],
+          ] as Array<[ViewMode, string]>
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setViewMode(key)}
+            style={{
+              padding: "10px 16px",
+              fontSize: 13,
+              fontWeight: viewMode === key ? 600 : 400,
+              color: viewMode === key ? "var(--color-primary)" : "#6b7280",
+              borderBottom:
+                viewMode === key
+                  ? "2px solid var(--color-primary)"
+                  : "2px solid transparent",
+              background: "none",
+              border: "none",
+              borderBottomWidth: 2,
+              cursor: "pointer",
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {autoDisabledCount > 0 && (
         <div
           style={{
@@ -126,6 +192,140 @@ export function ScriptListPage() {
         </div>
       )}
 
+      {viewMode === "by-scene" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {SCENE_ORDER.map((sceneKey) => {
+            const sceneItems = items.filter((s) => s.scene === sceneKey);
+            return (
+              <div key={sceneKey} className="ds-card">
+                <div className="card-header" style={{ alignItems: "center" }}>
+                  <span className="card-title">
+                    {SCENE_ICON[sceneKey]} {SCENE_LABEL[sceneKey]}
+                  </span>
+                  <span className="text-sm text-muted">
+                    {sceneItems.length} 条
+                  </span>
+                </div>
+                <div className="card-body" style={{ padding: 0 }}>
+                  {sceneItems.length === 0 ? (
+                    <div
+                      style={{
+                        padding: 24,
+                        textAlign: "center",
+                        color: "#9ca3af",
+                        fontSize: 13,
+                      }}
+                    >
+                      暂无{SCENE_LABEL[sceneKey]}话术，
+                      <button
+                        type="button"
+                        style={{
+                          color: "var(--color-primary)",
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          padding: 0,
+                        }}
+                        onClick={() => {
+                          setEditScript({
+                            ...({} as ScriptItem),
+                            scene: sceneKey,
+                          } as ScriptItem);
+                          setSheetOpen(true);
+                        }}
+                      >
+                        点此创建
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="table-wrap" style={{ borderRadius: 0, border: "none" }}>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>话术标题</th>
+                            <th>来源</th>
+                            {sceneKey === "objection_handling" && <th>异议类型</th>}
+                            <th>评分</th>
+                            <th>采用率</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sceneItems.map((s) => {
+                            const meta = SOURCE_BADGE[s.source] ?? SOURCE_BADGE.platform;
+                            return (
+                              <tr key={s.id}>
+                                <td style={{ fontWeight: 500 }}>{s.title}</td>
+                                <td><span className={meta.cls}>{meta.label}</span></td>
+                                {sceneKey === "objection_handling" && <td>{s.trigger_intent}</td>}
+                                <td>
+                                  {s.score_grade ? (
+                                    <span className={SCORE_CLASS[s.score_grade] ?? ""}>
+                                      {s.score_grade}
+                                    </span>
+                                  ) : "—"}
+                                </td>
+                                <td>{formatAdoptionRate(s.adoption_rate)}</td>
+                                <td>
+                                  {s.is_active
+                                    ? <span className="ds-badge ds-badge-green">启用</span>
+                                    : <span className="ds-badge ds-badge-gray">禁用</span>}
+                                </td>
+                                <td>
+                                  {s.source === "platform" ? (
+                                    <button
+                                      type="button"
+                                      className="ds-btn ds-btn-ghost ds-btn-sm"
+                                      title="复制为本物业版后再编辑"
+                                      onClick={() =>
+                                        forkScript(
+                                          {
+                                            url: `admin/scripts/${s.id}/fork`,
+                                            method: "post",
+                                            values: {},
+                                          },
+                                          {
+                                            onSuccess: () => {
+                                              void invalidate({
+                                                resource: "admin/scripts",
+                                                invalidates: ["list"],
+                                              });
+                                            },
+                                          },
+                                        )
+                                      }
+                                    >
+                                      <GitFork className="w-3 h-3" /> Fork
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="ds-btn ds-btn-ghost ds-btn-sm"
+                                      onClick={() => {
+                                        setEditScript(s);
+                                        setSheetOpen(true);
+                                      }}
+                                    >
+                                      编辑
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {viewMode === "all" && (
       <div className="table-wrap">
         <div className="table-toolbar">
           <div className="search-box">
@@ -354,6 +554,7 @@ export function ScriptListPage() {
           </div>
         )}
       </div>
+      )}
 
       <ScriptSheet
         open={sheetOpen}

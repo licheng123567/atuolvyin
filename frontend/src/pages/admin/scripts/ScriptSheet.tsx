@@ -4,9 +4,19 @@ import { useReducer, useEffect } from "react";
 import { X } from "lucide-react";
 import { TRIGGER_INTENTS } from "./helpers";
 
+type SceneKey = "opening" | "objection_handling" | "promise_confirm" | "closing";
+
+const SCENE_OPTIONS: { value: SceneKey; label: string }[] = [
+  { value: "opening", label: "开场白" },
+  { value: "objection_handling", label: "异议处理" },
+  { value: "promise_confirm", label: "承诺确认" },
+  { value: "closing", label: "挂断收尾" },
+];
+
 interface ScriptItem {
   id: number;
   title: string;
+  scene?: SceneKey;
   trigger_intent: string;
   content: string;
   notes: string | null;
@@ -22,6 +32,7 @@ interface Props {
 
 interface FormState {
   title: string;
+  scene: SceneKey;
   intent: typeof TRIGGER_INTENTS[number];
   content: string;
   notes: string;
@@ -31,6 +42,7 @@ interface FormState {
 type FormAction =
   | { type: "RESET"; script: ScriptItem | null }
   | { type: "SET_TITLE"; value: string }
+  | { type: "SET_SCENE"; value: SceneKey }
   | { type: "SET_INTENT"; value: typeof TRIGGER_INTENTS[number] }
   | { type: "SET_CONTENT"; value: string }
   | { type: "SET_NOTES"; value: string }
@@ -39,16 +51,25 @@ type FormAction =
 function formReducer(state: FormState, action: FormAction): FormState {
   switch (action.type) {
     case "RESET":
-      return action.script
+      return action.script && action.script.title
         ? {
             title: action.script.title,
+            scene: (action.script.scene ?? "objection_handling") as SceneKey,
             intent: action.script.trigger_intent as typeof TRIGGER_INTENTS[number],
             content: action.script.content,
             notes: action.script.notes ?? "",
             error: "",
           }
-        : { title: "", intent: TRIGGER_INTENTS[0], content: "", notes: "", error: "" };
+        : {
+            title: "",
+            scene: (action.script?.scene ?? "objection_handling") as SceneKey,
+            intent: TRIGGER_INTENTS[0],
+            content: "",
+            notes: "",
+            error: "",
+          };
     case "SET_TITLE":   return { ...state, title: action.value };
+    case "SET_SCENE":   return { ...state, scene: action.value };
     case "SET_INTENT":  return { ...state, intent: action.value };
     case "SET_CONTENT": return { ...state, content: action.value };
     case "SET_NOTES":   return { ...state, notes: action.value };
@@ -58,7 +79,7 @@ function formReducer(state: FormState, action: FormAction): FormState {
 
 export function ScriptSheet({ open, onClose, script, onSuccess }: Props) {
   const [form, dispatch] = useReducer(formReducer, {
-    title: "", intent: TRIGGER_INTENTS[0], content: "", notes: "", error: "",
+    title: "", scene: "objection_handling" as SceneKey, intent: TRIGGER_INTENTS[0], content: "", notes: "", error: "",
   });
 
   const { mutate: create, mutation: createMut } = useCreate();
@@ -78,7 +99,13 @@ export function ScriptSheet({ open, onClose, script, onSuccess }: Props) {
       dispatch({ type: "SET_ERROR", value: "标题和话术内容为必填项" });
       return;
     }
-    const values = { title: form.title, trigger_intent: form.intent, content: form.content, notes: form.notes || null };
+    const values = {
+      title: form.title,
+      scene: form.scene,
+      trigger_intent: form.scene === "objection_handling" ? form.intent : "其他",
+      content: form.content,
+      notes: form.notes || null,
+    };
     if (script) {
       update(
         { resource: "admin/scripts", id: script.id, values },
@@ -119,12 +146,22 @@ export function ScriptSheet({ open, onClose, script, onSuccess }: Props) {
           </div>
 
           <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4 }}>异议类型 *</label>
-            <select value={form.intent} onChange={(e) => dispatch({ type: "SET_INTENT", value: e.target.value as typeof form.intent })}
+            <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4 }}>通话场景 *</label>
+            <select value={form.scene} onChange={(e) => dispatch({ type: "SET_SCENE", value: e.target.value as SceneKey })}
               style={{ width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14 }}>
-              {TRIGGER_INTENTS.map((t) => <option key={t} value={t}>{t}</option>)}
+              {SCENE_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
           </div>
+
+          {form.scene === "objection_handling" && (
+            <div>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4 }}>异议类型 *</label>
+              <select value={form.intent} onChange={(e) => dispatch({ type: "SET_INTENT", value: e.target.value as typeof form.intent })}
+                style={{ width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14 }}>
+                {TRIGGER_INTENTS.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+          )}
 
           <div>
             <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4 }}>话术内容 *</label>
