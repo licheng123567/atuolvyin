@@ -1,12 +1,11 @@
-// frontend/src/pages/admin/cases/kanban.tsx
+// 1:1 还原 ui/admin.html#a-kanban 案件看板
 import { useCustomMutation, useInvalidate, useList, useGo } from "@refinedev/core";
-import { Briefcase, KanbanSquare, List } from "lucide-react";
+import { KanbanSquare, List } from "lucide-react";
 import { useRef } from "react";
 import type { PaginatedResponse } from "../../../types";
 import {
   groupByStage,
   STAGE_BORDER_COLORS,
-  STAGE_HEADER_COLORS,
   STAGE_LABELS,
   STAGES,
   type Stage,
@@ -33,12 +32,29 @@ interface CaseItem {
   status: string;
 }
 
+const COL_CLASS: Record<Stage, string> = {
+  new: "kanban-col col-pending",
+  in_progress: "kanban-col col-follow",
+  promised: "kanban-col col-promise",
+  paid: "kanban-col col-paid",
+  escalated: "kanban-col col-escalate",
+  closed: "kanban-col col-closed",
+};
+
+const STAGE_BADGE_CLASS: Record<Stage, string> = {
+  new: "ds-badge ds-badge-gray",
+  in_progress: "ds-badge ds-badge-blue",
+  promised: "ds-badge ds-badge-orange",
+  paid: "ds-badge ds-badge-green",
+  escalated: "ds-badge ds-badge-purple",
+  closed: "ds-badge ds-badge-gray",
+};
+
 export function CaseKanbanPage() {
   const go = useGo();
   const invalidate = useInvalidate();
   const { mutate: patchStage } = useCustomMutation();
 
-  // Track which card is currently being dragged
   const draggingId = useRef<number | null>(null);
 
   const { query, result } = useList<CaseItem>({
@@ -60,8 +76,6 @@ export function CaseKanbanPage() {
     const idStr = e.dataTransfer.getData("text/plain");
     const id = Number(idStr);
     if (!id) return;
-
-    // Find current stage to skip no-op drops
     const currentCase = items.find((c) => c.id === id);
     if (!currentCase || currentCase.stage === newStage) return;
 
@@ -81,89 +95,74 @@ export function CaseKanbanPage() {
 
   return (
     <div>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <Briefcase className="w-5 h-5 text-[var(--color-primary)]" />
-          <h1 className="text-xl font-semibold text-[var(--color-neutral-900)]">
-            案件看板
-          </h1>
-          <span className="text-sm text-[var(--color-neutral-400)] ml-1">
-            共 {items.length} 件
-          </span>
+      {/* Page header */}
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">案件看板</h1>
+          <div className="page-subtitle">共 {items.length} 件案件 · 拖拽卡片切换阶段</div>
         </div>
-
-        {/* List / Kanban toggle */}
-        <div className="flex items-center gap-1 border border-[var(--color-neutral-200)] rounded-md overflow-hidden">
-          <button
-            type="button"
-            onClick={() => go({ to: "/admin/cases" })}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm text-[var(--color-neutral-600)] hover:bg-[var(--color-neutral-50)]"
-          >
-            <List className="w-4 h-4" />
-            列表
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" className="ds-btn ds-btn-secondary ds-btn-sm" disabled>
+            按员工筛选
           </button>
-          <button
-            type="button"
-            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white"
-            style={{ background: "var(--color-primary)" }}
+          {/* List / Kanban toggle */}
+          <div
+            style={{
+              display: "flex",
+              border: "1px solid var(--color-neutral-200)",
+              borderRadius: "var(--radius-md)",
+              overflow: "hidden",
+            }}
           >
-            <KanbanSquare className="w-4 h-4" />
-            看板
-          </button>
+            <button
+              type="button"
+              onClick={() => go({ to: "/admin/cases" })}
+              className="ds-btn ds-btn-secondary ds-btn-sm"
+              style={{ border: "none", borderRadius: 0 }}
+            >
+              <List className="w-3.5 h-3.5" />
+              列表
+            </button>
+            <button
+              type="button"
+              className="ds-btn ds-btn-primary ds-btn-sm"
+              style={{ borderRadius: 0 }}
+            >
+              <KanbanSquare className="w-3.5 h-3.5" />
+              看板
+            </button>
+          </div>
         </div>
       </div>
 
       {isLoading && (
-        <div className="text-center py-12 text-[var(--color-neutral-400)]">
+        <div style={{ textAlign: "center", padding: 48, color: "#9ca3af" }}>
           加载中…
         </div>
       )}
 
       {!isLoading && (
-        <div className="grid grid-cols-6 gap-4 overflow-x-auto">
+        <div className="kanban-board">
           {STAGES.map((stage) => {
-            const headerColor = STAGE_HEADER_COLORS[stage];
             const isPaid = stage === "paid";
             return (
               <div
                 key={stage}
-                className="flex flex-col min-w-[230px]"
+                className={COL_CLASS[stage]}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => handleDrop(stage, e)}
               >
-                {/* Column header — semantic background per stage */}
-                <div
-                  className="flex items-center justify-between font-semibold text-[13px] rounded-t-lg"
-                  style={{
-                    padding: "10px 14px",
-                    background: headerColor.headerBg,
-                    color: headerColor.headerText,
-                  }}
-                >
+                <div className="kanban-col-header">
                   <span>{STAGE_LABELS[stage]}</span>
-                  <span
-                    className="text-[11px] font-bold rounded-full"
-                    style={{
-                      background: headerColor.badgeBg,
-                      color: headerColor.badgeText,
-                      padding: "2px 8px",
-                      minWidth: 22,
-                      textAlign: "center",
-                    }}
-                  >
+                  <span className={STAGE_BADGE_CLASS[stage]}>
                     {groups[stage].length}
                   </span>
                 </div>
-
-                {/* Column body — light gray background */}
-                <div
-                  className="rounded-b-lg p-2.5 flex flex-col gap-2 flex-1 min-h-[400px]"
-                  style={{ background: "#f3f4f6" }}
-                >
+                <div className="kanban-col-body">
                   {groups[stage].map((c) => (
                     <div
                       key={c.id}
+                      className="kanban-card"
                       draggable
                       onDragStart={(e) => {
                         draggingId.current = c.id;
@@ -174,68 +173,49 @@ export function CaseKanbanPage() {
                         draggingId.current = null;
                       }}
                       onClick={() => go({ to: `/admin/cases/${c.id}` })}
-                      className="bg-white cursor-move hover:shadow-md transition-shadow select-none"
                       style={{
-                        padding: 12,
-                        borderRadius: 6,
-                        boxShadow: "0 1px 3px rgba(0,0,0,.08)",
-                        borderLeft: `3px solid ${STAGE_BORDER_COLORS[stage]}`,
+                        borderLeftColor: STAGE_BORDER_COLORS[stage],
+                        opacity: stage === "closed" ? 0.7 : 1,
                       }}
                     >
-                      <div
-                        className="truncate"
-                        style={{
-                          fontWeight: 600,
-                          fontSize: 13.5,
-                          color: "#111827",
-                        }}
-                      >
-                        {c.owner.name}
-                      </div>
+                      <div className="owner">{c.owner.name}</div>
                       {(c.owner.building || c.owner.room) && (
-                        <div
-                          className="truncate"
-                          style={{
-                            fontSize: 12,
-                            color: "#6b7280",
-                            marginTop: 2,
-                          }}
-                        >
-                          {[c.owner.building, c.owner.room]
-                            .filter(Boolean)
-                            .join("")}
+                        <div className="unit">
+                          {[c.owner.building, c.owner.room].filter(Boolean).join("")}
                         </div>
                       )}
                       {c.amount_owed != null && (
                         <div
-                          style={{
-                            fontWeight: 700,
-                            fontSize: 14,
-                            marginTop: 6,
-                            color: isPaid ? "#057a55" : "#e02424",
-                          }}
+                          className="amount"
+                          style={isPaid ? { color: "#057a55" } : undefined}
                         >
-                          ¥{c.amount_owed}
+                          ¥{Number(c.amount_owed).toLocaleString()}
                           {isPaid ? " ✓" : ""}
                         </div>
                       )}
-                      {c.months_overdue != null && (
-                        <div
-                          style={{
-                            fontSize: 11.5,
-                            color: "#9ca3af",
-                            marginTop: 4,
-                          }}
-                        >
-                          {c.months_overdue}个月欠费
-                        </div>
-                      )}
+                      <div className="meta">
+                        {c.months_overdue != null
+                          ? `${c.months_overdue}个月欠费`
+                          : "—"}
+                        {c.assigned_to ? " · 已分配" : " · 未分配"}
+                      </div>
                     </div>
                   ))}
-
                   {groups[stage].length === 0 && (
-                    <div className="flex-1 flex items-center justify-center text-xs text-[var(--color-neutral-300)] border-2 border-dashed border-[var(--color-neutral-200)] rounded-md min-h-[80px]">
-                      拖拽卡片到此处
+                    <div
+                      style={{
+                        flex: 1,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 12,
+                        color: "#cbd5e1",
+                        border: "2px dashed #e5e7eb",
+                        borderRadius: 6,
+                        minHeight: 80,
+                      }}
+                    >
+                      拖拽到此处
                     </div>
                   )}
                 </div>

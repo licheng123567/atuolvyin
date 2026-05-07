@@ -1,10 +1,11 @@
+// 1:1 还原 ui/admin.html#a-pool 公海管理
 import {
   useCustomMutation,
   useGo,
   useInvalidate,
   useList,
 } from "@refinedev/core";
-import { Users } from "lucide-react";
+import { Search } from "lucide-react";
 import { useState } from "react";
 import type { PaginatedResponse } from "../../../types";
 
@@ -23,6 +24,7 @@ interface CaseItem {
   months_overdue: number | null;
   priority_score: number;
   created_at: string;
+  release_reason?: string | null;
 }
 
 interface UserItem {
@@ -31,9 +33,31 @@ interface UserItem {
   role: string;
 }
 
+const AGENT_QUOTA = 20; // 单个坐席私海上限（演示值）
+
+function formatJoinedAgo(iso: string): string {
+  const d = new Date(iso);
+  const day = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
+  if (day === 0) return "今天";
+  if (day === 1) return "1天前";
+  if (day < 30) return `${day}天前`;
+  return d.toISOString().slice(0, 10);
+}
+
+function priorityBadge(score: number): { className: string; label: string } {
+  if (score >= 80) return { className: "ds-badge ds-badge-red", label: `${score}分` };
+  if (score >= 60)
+    return { className: "ds-badge ds-badge-orange", label: `${score}分` };
+  if (score >= 40) return { className: "ds-badge ds-badge-blue", label: `${score}分` };
+  return { className: "ds-badge ds-badge-gray", label: `${score}分` };
+}
+
 export function AdminPoolPage() {
   const [assignFor, setAssignFor] = useState<number | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
+  const [keyword, setKeyword] = useState("");
+  const [overdueFilter, setOverdueFilter] = useState("");
+  const [sortBy, setSortBy] = useState<"priority" | "amount" | "joined">("priority");
   const invalidate = useInvalidate();
   const go = useGo();
 
@@ -49,16 +73,37 @@ export function AdminPoolPage() {
     (rawCases as CaseItem[] | undefined) ??
     [];
 
-  // Sort by priority_score desc, then amount_owed desc (backend may not support ordering)
-  const cases = [...allCases].sort(
-    (a, b) =>
+  // 过滤
+  let cases = allCases.filter((c) => {
+    if (
+      keyword &&
+      !c.owner.name.includes(keyword) &&
+      !(c.owner.room ?? "").includes(keyword)
+    ) {
+      return false;
+    }
+    const m = c.months_overdue ?? 0;
+    if (overdueFilter === ">12" && m <= 12) return false;
+    if (overdueFilter === "6-12" && (m < 6 || m > 12)) return false;
+    if (overdueFilter === "3-6" && (m < 3 || m > 6)) return false;
+    return true;
+  });
+
+  // 排序
+  cases = [...cases].sort((a, b) => {
+    if (sortBy === "amount")
+      return parseFloat(b.amount_owed ?? "0") - parseFloat(a.amount_owed ?? "0");
+    if (sortBy === "joined")
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    return (
       b.priority_score - a.priority_score ||
-      parseFloat(b.amount_owed ?? "0") - parseFloat(a.amount_owed ?? "0"),
-  );
+      parseFloat(b.amount_owed ?? "0") - parseFloat(a.amount_owed ?? "0")
+    );
+  });
 
   const isLoading = casesQuery.isLoading;
 
-  // Load all agents for the assign modal and private-pool overview
+  // 员工列表（用于私海概览 + 分配 modal）
   const { query: agentsQuery, result: agentsResult } = useList<UserItem>({
     resource: "admin/users",
     pagination: { currentPage: 1, pageSize: 100 },
@@ -69,8 +114,6 @@ export function AdminPoolPage() {
     (rawAgents as unknown as PaginatedResponse<UserItem>)?.items ??
     (agentsResult.data as UserItem[] | undefined) ??
     [];
-
-  // Filter to agents only (agent_internal and agent_external)
   const agents = allUsers.filter((u) => u.role.startsWith("agent_"));
 
   const { mutate: assign } = useCustomMutation();
@@ -92,214 +135,267 @@ export function AdminPoolPage() {
             invalidates: ["list"],
           });
         },
-        onError: () => {
-          alert("分配失败，请重试");
-        },
+        onError: () => alert("分配失败，请重试"),
       },
     );
   };
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-semibold text-[var(--color-neutral-900)]">
-        公海案件管理
-      </h1>
-
-      {/* Public pool case table */}
-      <div className="bg-white border border-[var(--color-neutral-200)] rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-[var(--color-neutral-50)] border-b border-[var(--color-neutral-200)]">
-            <tr>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                业主
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                欠费(元)
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                逾期月数
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                优先级
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                创建时间
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                操作
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--color-neutral-100)]">
-            {isLoading && (
-              <tr>
-                <td
-                  colSpan={6}
-                  className="px-4 py-8 text-center text-[var(--color-neutral-400)]"
-                >
-                  加载中…
-                </td>
-              </tr>
-            )}
-            {!isLoading && cases.length === 0 && (
-              <tr>
-                <td
-                  colSpan={6}
-                  className="px-4 py-8 text-center text-[var(--color-neutral-400)]"
-                >
-                  公海无案件
-                </td>
-              </tr>
-            )}
-            {cases.map((c) => (
-              <tr
-                key={c.id}
-                className="hover:bg-[var(--color-neutral-50)]"
-              >
-                <td className="px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => go({ to: `/admin/cases/${c.id}` })}
-                    className="font-medium text-[var(--color-primary)] hover:underline text-left"
-                  >
-                    {c.owner.name}
-                  </button>
-                  {(c.owner.building ?? c.owner.room) && (
-                    <div className="text-xs text-[var(--color-neutral-400)]">
-                      {[c.owner.building, c.owner.room].filter(Boolean).join(" ")}
-                    </div>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-[var(--color-neutral-600)]">
-                  {c.amount_owed != null ? `¥${c.amount_owed}` : "—"}
-                </td>
-                <td className="px-4 py-3 text-[var(--color-neutral-600)]">
-                  {c.months_overdue ?? "—"}
-                </td>
-                <td className="px-4 py-3 text-[var(--color-neutral-600)]">
-                  {c.priority_score}
-                </td>
-                <td className="px-4 py-3 text-[var(--color-neutral-600)]">
-                  {new Date(c.created_at).toLocaleDateString("zh-CN")}
-                </td>
-                <td className="px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => setAssignFor(c.id)}
-                    className="text-[var(--color-primary)] hover:underline text-xs"
-                  >
-                    分配
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <div>
+      {/* Page Header */}
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">公海管理</h1>
+          <div className="page-subtitle">当前公海：{allCases.length} 个案件</div>
+        </div>
+        <button type="button" className="ds-btn ds-btn-primary" disabled>
+          批量分配
+        </button>
       </div>
 
-      {/* Private pool overview — one row per agent */}
-      <div className="bg-white border border-[var(--color-neutral-200)] rounded-lg p-4">
-        <h3 className="font-semibold mb-2 flex items-center gap-2 text-[var(--color-neutral-900)]">
-          <Users className="w-4 h-4 text-[var(--color-primary)]" />
-          各员工私海数量
-        </h3>
-        {/* TODO(v1.1): 拉 user.case_count 字段后展示真实数量 */}
-        {agents.length === 0 ? (
-          <p className="text-sm text-[var(--color-neutral-400)]">暂无催收员</p>
-        ) : (
-          <ul className="text-sm space-y-1">
-            {agents.map((a) => (
-              <li
-                key={a.id}
-                className="flex justify-between border-b border-[var(--color-neutral-100)] py-1 last:border-0"
-              >
-                <span className="text-[var(--color-neutral-700)]">{a.name}</span>
-                <span className="text-[var(--color-neutral-400)]">
-                  私海案件数：—
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {/* Release rules — static card */}
       <div
-        className="rounded-lg p-4 text-sm text-[var(--color-neutral-600)]"
-        style={{ background: "var(--color-neutral-50)" }}
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 280px",
+          gap: 20,
+          alignItems: "start",
+        }}
       >
-        {/* TODO(v1.1): 实现真规则可配置 */}
-        <strong className="text-[var(--color-neutral-700)]">释放规则：</strong>
-        <p className="mt-1">30 天未联系自动回公海（v1.1 可配置）。</p>
+        {/* Left: cases table */}
+        <div className="table-wrap">
+          <div className="table-toolbar">
+            <div className="search-box">
+              <Search className="w-3.5 h-3.5" />
+              <input
+                type="text"
+                className="form-control"
+                placeholder="搜索业主 / 房号"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+              />
+            </div>
+            <select
+              className="form-control"
+              style={{ width: 140 }}
+              value={overdueFilter}
+              onChange={(e) => setOverdueFilter(e.target.value)}
+            >
+              <option value="">全部欠费等级</option>
+              <option value=">12">&gt; 12 个月</option>
+              <option value="6-12">6-12 个月</option>
+              <option value="3-6">3-6 个月</option>
+            </select>
+            <select
+              className="form-control"
+              style={{ width: 130 }}
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            >
+              <option value="priority">优先级排序</option>
+              <option value="amount">欠费金额↓</option>
+              <option value="joined">入池时间↑</option>
+            </select>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: 36 }}>
+                  <input type="checkbox" disabled />
+                </th>
+                <th>业主</th>
+                <th>房号</th>
+                <th>欠费金额</th>
+                <th>欠费月数</th>
+                <th>进池原因</th>
+                <th>优先级</th>
+                <th>入池时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading && (
+                <tr>
+                  <td colSpan={9} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                    加载中…
+                  </td>
+                </tr>
+              )}
+              {!isLoading && cases.length === 0 && (
+                <tr>
+                  <td colSpan={9} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                    公海无案件
+                  </td>
+                </tr>
+              )}
+              {cases.map((c) => {
+                const priority = priorityBadge(c.priority_score);
+                const room =
+                  c.owner.building && c.owner.room
+                    ? `${c.owner.building}${c.owner.room}`
+                    : c.owner.building ?? c.owner.room ?? "—";
+                return (
+                  <tr key={c.id}>
+                    <td>
+                      <input type="checkbox" />
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="ds-btn ds-btn-ghost ds-btn-sm"
+                        style={{ padding: 0 }}
+                        onClick={() => go({ to: `/admin/cases/${c.id}` })}
+                      >
+                        {c.owner.name}
+                      </button>
+                    </td>
+                    <td>{room}</td>
+                    <td style={{ color: "#e02424", fontWeight: 600 }}>
+                      {c.amount_owed
+                        ? `¥${Number(c.amount_owed).toLocaleString()}`
+                        : "—"}
+                    </td>
+                    <td>
+                      {c.months_overdue != null ? `${c.months_overdue}个月` : "—"}
+                    </td>
+                    <td className="text-muted">{c.release_reason ?? "超时未跟进"}</td>
+                    <td>
+                      <span className={priority.className}>{priority.label}</span>
+                    </td>
+                    <td>{formatJoinedAgo(c.created_at)}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="ds-btn ds-btn-primary ds-btn-sm"
+                        onClick={() => setAssignFor(c.id)}
+                      >
+                        分配
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div className="ds-pagination">
+            <span className="pagination-info">共 {cases.length} 条</span>
+          </div>
+        </div>
+
+        {/* Right: 员工私海概览 */}
+        <div className="ds-card">
+          <div className="card-header">
+            <span className="card-title">员工私海概览</span>
+          </div>
+          <div
+            className="card-body"
+            style={{ display: "flex", flexDirection: "column", gap: 12 }}
+          >
+            {agents.length === 0 && (
+              <div style={{ fontSize: 13, color: "#9ca3af" }}>暂无催收员</div>
+            )}
+            {agents.map((a) => {
+              // TODO(v1.1) 真实 case_count 字段
+              const count = 0;
+              const pct = (count / AGENT_QUOTA) * 100;
+              const over = count > AGENT_QUOTA;
+              return (
+                <div key={a.id} className="agent-load">
+                  <div style={{ width: 60, fontSize: 13, fontWeight: 500 }}>
+                    {a.name}
+                  </div>
+                  <div className="load-bar-wrap">
+                    <div
+                      className={`load-bar${over ? " over" : ""}`}
+                      style={{ width: `${Math.min(pct, 110)}%` }}
+                    />
+                  </div>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      color: over ? "#e02424" : "#6b7280",
+                      width: 50,
+                      textAlign: "right",
+                    }}
+                  >
+                    {count}/{AGENT_QUOTA}
+                    {over ? " ⚠" : ""}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Assign modal */}
       {assignFor !== null && (
         <div
-          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
-          role="dialog"
-          aria-modal="true"
-          aria-label="分配案件"
+          className="modal-overlay"
+          onClick={() => {
+            setAssignFor(null);
+            setSelectedAgent(null);
+          }}
         >
-          <div
-            className="bg-white p-6 w-96 shadow-lg"
-            style={{ borderRadius: "var(--radius-lg)" }}
-          >
-            <h2 className="text-lg font-semibold text-[var(--color-neutral-900)] mb-4">
-              分配案件
-            </h2>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-[var(--color-neutral-700)] mb-1">
-                选择催收员
-              </label>
-              {agents.length === 0 ? (
-                <p className="text-sm text-[var(--color-neutral-400)]">
-                  暂无可用催收员
-                </p>
-              ) : (
-                <select
-                  className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-200)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                  style={{ borderRadius: "var(--radius-md)" }}
-                  value={selectedAgent ?? ""}
-                  onChange={(e) =>
-                    setSelectedAgent(Number(e.target.value) || null)
-                  }
-                >
-                  <option value="">— 选择员工 —</option>
-                  {agents.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                      {a.role === "agent_internal"
-                        ? "（内部）"
-                        : a.role === "agent_external"
-                          ? "（外部）"
-                          : ""}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-            <div className="flex justify-end gap-2">
+          <div className="ds-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <span className="modal-title">分配案件</span>
               <button
                 type="button"
+                className="modal-close"
                 onClick={() => {
                   setAssignFor(null);
                   setSelectedAgent(null);
                 }}
-                className="px-4 py-2 text-sm border border-[var(--color-neutral-200)]"
-                style={{ borderRadius: "var(--radius-md)" }}
+              >
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label className="form-label">
+                  选择催收员<span className="req">*</span>
+                </label>
+                {agents.length === 0 ? (
+                  <p style={{ fontSize: 13, color: "#9ca3af" }}>暂无可用催收员</p>
+                ) : (
+                  <select
+                    className="form-control"
+                    value={selectedAgent ?? ""}
+                    onChange={(e) =>
+                      setSelectedAgent(Number(e.target.value) || null)
+                    }
+                  >
+                    <option value="">— 选择员工 —</option>
+                    {agents.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                        {a.role === "agent_internal"
+                          ? "（内部）"
+                          : a.role === "agent_external"
+                            ? "（外部）"
+                            : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="ds-btn ds-btn-secondary"
+                onClick={() => {
+                  setAssignFor(null);
+                  setSelectedAgent(null);
+                }}
               >
                 取消
               </button>
               <button
                 type="button"
+                className="ds-btn ds-btn-primary"
                 onClick={handleAssign}
                 disabled={selectedAgent === null}
-                className="px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
-                style={{
-                  background: "var(--color-primary)",
-                  borderRadius: "var(--radius-md)",
-                }}
               >
                 确认分配
               </button>

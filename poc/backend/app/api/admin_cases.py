@@ -19,6 +19,7 @@ from app.models.call import AnalysisResult, CallRecord, Transcript
 from app.models.case import CollectionCase, OwnerProfile
 from app.models.tenant import UserTenantMembership
 from app.models.user import UserAccount
+from app.services.case_timeline import build_case_timeline
 from app.schemas.case import (
     CaseAssignRequest,
     CaseAssignResponse,
@@ -78,6 +79,7 @@ def _case_row_to_response(
         last_contact_at=case.last_contact_at,
         monthly_contact_count=case.monthly_contact_count,
         status=case.status,
+        notes=case.notes,
         created_at=case.created_at,
         updated_at=case.updated_at,
     )
@@ -91,8 +93,23 @@ async def import_cases(
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseImportResponse:
     tenant_id = _require_tenant(payload)
-    imported = 0
 
+    # 校验 project_id 属本租户
+    if body.project_id is not None:
+        from app.models.case import Project
+        project = db.execute(
+            select(Project).where(
+                Project.id == body.project_id,
+                Project.tenant_id == tenant_id,
+            )
+        ).scalar_one_or_none()
+        if project is None:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail={"code": "ERR_INVALID_PROJECT", "message": "项目不存在或不属本租户"},
+            )
+
+    imported = 0
     for row in body.rows:
         existing_owner = db.execute(
             select(OwnerProfile).where(
@@ -116,12 +133,14 @@ async def import_cases(
 
         case = CollectionCase(
             tenant_id=tenant_id,
+            project_id=body.project_id,
             owner_id=owner.id,
             pool_type="public",
             stage="new",
             amount_owed=row.amount_owed,
             months_overdue=row.months_overdue,
             priority_score=_calc_priority(row.amount_owed, row.months_overdue),
+            notes=row.notes,
         )
         db.add(case)
         imported += 1
@@ -139,6 +158,8 @@ async def list_cases(
     stage: str | None = Query(None),
     pool_type: str | None = Query(None),
     assigned_to: int | None = Query(None),
+    project_id: int | None = Query(None),
+    building: str | None = Query(None),
     keyword: str | None = Query(None, max_length=100),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -156,6 +177,10 @@ async def list_cases(
         stmt = stmt.where(CollectionCase.pool_type == pool_type)
     if assigned_to:
         stmt = stmt.where(CollectionCase.assigned_to == assigned_to)
+    if project_id is not None:
+        stmt = stmt.where(CollectionCase.project_id == project_id)
+    if building:
+        stmt = stmt.where(OwnerProfile.building == building)
     if keyword:
         stmt = stmt.where(OwnerProfile.name.ilike(f"%{keyword}%"))
 
@@ -174,6 +199,30 @@ async def list_cases(
         page=page,
         page_size=page_size,
     )
+
+
+@router.get("/cases/buildings")
+async def list_distinct_buildings(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+    project_id: int | None = Query(None),
+) -> list[str]:
+    """返回本租户去重后的楼栋列表，按 project_id 过滤。"""
+    tenant_id = _require_tenant(payload)
+    stmt = (
+        select(OwnerProfile.building)
+        .join(CollectionCase, CollectionCase.owner_id == OwnerProfile.id)
+        .where(
+            CollectionCase.tenant_id == tenant_id,
+            OwnerProfile.building.isnot(None),
+        )
+        .distinct()
+    )
+    if project_id is not None:
+        stmt = stmt.where(CollectionCase.project_id == project_id)
+    rows = db.execute(stmt.order_by(OwnerProfile.building)).scalars().all()
+    return [b for b in rows if b]
 
 
 @router.post("/cases/assign", response_model=CaseAssignResponse)
@@ -300,7 +349,7 @@ async def get_case(
         created_at=case.created_at,
         updated_at=case.updated_at,
         calls=call_items,
-        timeline_events=[],  # Sprint 4: add workorder/assignment events
+        timeline_events=build_case_timeline(db, case_id, tenant_id),
     )
 
 

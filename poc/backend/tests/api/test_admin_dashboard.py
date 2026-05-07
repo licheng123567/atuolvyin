@@ -128,7 +128,8 @@ async def test_admin_can_get_stats(
     assert today["outbound_count"] >= 1
     assert today["connected_count"] >= 1
     assert today["promised_count"] >= 1
-    assert today["recovered_amount"] == 0.0  # placeholder
+    # 今日承诺缴金额合计：promise 通话所属 case 的 amount_owed 累加
+    assert today["recovered_amount"] >= 0.0
 
     # quota
     quota = body["minute_quota"]

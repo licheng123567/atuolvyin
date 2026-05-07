@@ -25,6 +25,8 @@ import { ProviderNewPage } from "./pages/ops/providers/new";
 import { ProviderDetailPage } from "./pages/ops/providers/[id]";
 import { UserListPage } from "./pages/admin/users/index";
 import { UserNewPage } from "./pages/admin/users/new";
+import { AdminProjectListPage } from "./pages/admin/projects/index";
+import { AdminProjectNewPage } from "./pages/admin/projects/new";
 import { CaseListPage } from "./pages/admin/cases/index";
 import { CaseImportPage } from "./pages/admin/cases/import";
 import { CaseKanbanPage } from "./pages/admin/cases/kanban";
@@ -327,6 +329,9 @@ function App() {
             {/* Admin - User Management */}
             <Route path="/admin/users" element={<UserListPage />} />
             <Route path="/admin/users/new" element={<UserNewPage />} />
+            {/* Admin - Project Management (v1.4) */}
+            <Route path="/admin/projects" element={<AdminProjectListPage />} />
+            <Route path="/admin/projects/new" element={<AdminProjectNewPage />} />
             {/* Admin - Case Management */}
             <Route path="/admin/cases" element={<CaseListPage />} />
             <Route path="/admin/cases/kanban" element={<CaseKanbanPage />} />

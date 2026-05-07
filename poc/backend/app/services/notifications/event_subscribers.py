@@ -153,17 +153,10 @@ def scan_and_notify_promise_expiring(
 ) -> int:
     """扫描即将到期的承诺还款，给案件 assigned_to 发提醒。
 
-    依赖 CollectionCase.promise_due_at 字段（暂未建模）。当前作为 stub：
-    若字段缺失返回 0，等承诺还款数据模型落地后再放开扫描逻辑。
-
     Celery beat 调度：每小时跑一次（或 dev 环境用 mgmt 命令手动跑）。
+    依赖 v1.6 alembic 21001v16 添加的 collection_case.promise_due_at 字段。
     """
     from app.models.case import CollectionCase
-
-    if not hasattr(CollectionCase, "promise_due_at"):
-        logger.info("promise_due_at column not modeled — promise_expiring scan no-op")
-        return 0
-
     from datetime import UTC, datetime, timedelta
 
     now = datetime.now(UTC)

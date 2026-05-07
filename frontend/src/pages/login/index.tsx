@@ -1,32 +1,34 @@
-// Sprint 16.5 (UI 还原) — 登录页对齐 ui/login.html 双面板设计
-import { Eye, EyeOff, Headphones, Scale, Smartphone, TrendingUp, XCircle } from "lucide-react";
+// 1:1 还原 ui/login.html — 双面板 + 记住设备 + 忘记密码
+// 登录入口不区分平台/对外（v1.6 决策）：所有角色统一同一入口；如需区分平台后台，
+// 走独立 URL（例：/platform-login）即可，无需在 UI 上切换。
+import { Eye, EyeOff, ShieldCheck, XCircle } from "lucide-react";
 import { useState } from "react";
 import { useLogin } from "@refinedev/core";
 
 interface FeatureItem {
-  icon: React.ReactNode;
+  emoji: string;
   title: string;
   desc: string;
 }
 
 const FEATURES: FeatureItem[] = [
   {
-    icon: <Headphones className="w-5 h-5" />,
+    emoji: "🎙️",
     title: "实时 AI 话术辅助",
     desc: "通话中即时识别业主异议，推送应对话术，延迟 ≤ 3 秒",
   },
   {
-    icon: <TrendingUp className="w-5 h-5" />,
+    emoji: "📊",
     title: "智能 CRM 管理",
     desc: "公海/私海自动流转，优先级评分，联系频次合规管控",
   },
   {
-    icon: <Scale className="w-5 h-5" />,
+    emoji: "⚖️",
     title: "合规留证",
     desc: "通话录音区块链存证，催收行为合规月报，法务无缝转接",
   },
   {
-    icon: <Smartphone className="w-5 h-5" />,
+    emoji: "📱",
     title: "App-PC 联动",
     desc: "手机拨打 + PC 实时监控，督导远程辅助，团队效率最大化",
   },
@@ -36,8 +38,10 @@ export function LoginPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
+  const [remember, setRemember] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  // Sprint 15.1 — 多设备踢出场景下展示原因横幅；lazy initializer 避免 setState-in-effect
+  const [showForgot, setShowForgot] = useState(false);
+
   const [loginReason] = useState<string | null>(() => {
     if (typeof sessionStorage === "undefined") return null;
     const r = sessionStorage.getItem("login_reason");
@@ -53,11 +57,13 @@ export function LoginPage() {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorMsg("");
+    if (!phone || !password) {
+      setErrorMsg("请填写手机号和密码");
+      return;
+    }
     login(
       { phone, password },
       {
-        // Refine v5：auth-provider 返回 { success:false, error } 时
-        // 走 onSuccess（带 data）而非 onError；onError 只在 promise 真 reject 时触发
         onSuccess: (data) => {
           const result = data as { success?: boolean; error?: { message?: string } };
           if (result.success === false) {
@@ -65,30 +71,34 @@ export function LoginPage() {
           }
         },
         onError: (err) => {
-          setErrorMsg(
-            (err as { message?: string }).message ?? "登录失败，请重试",
-          );
+          setErrorMsg((err as { message?: string }).message ?? "登录失败，请重试");
         },
       },
     );
   };
 
   return (
-    <div className="min-h-screen flex" style={{ background: "#f0f4f8" }}>
-      {/* Left brand panel */}
+    <div style={{ display: "flex", minHeight: "100vh", background: "#f0f4f8" }}>
+      {/* ── Left Panel ─────────────────────────────────────── */}
       <div
-        className="hidden md:flex flex-col justify-between flex-shrink-0 relative overflow-hidden"
+        className="hidden md:flex"
         style={{
           width: 480,
-          padding: "48px 48px 40px",
+          flexShrink: 0,
           background:
-            "linear-gradient(160deg, #0f172a 0%, #1e3a6e 50%, #1A56DB 100%)",
+            "linear-gradient(160deg,#0f172a 0%,#1e3a6e 50%,#1A56DB 100%)",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          padding: "48px 48px 40px",
+          position: "relative",
+          overflow: "hidden",
         }}
       >
         {/* Decorative circles */}
         <div
-          className="absolute pointer-events-none"
           style={{
+            content: "''",
+            position: "absolute",
             top: -60,
             right: -60,
             width: 320,
@@ -98,8 +108,8 @@ export function LoginPage() {
           }}
         />
         <div
-          className="absolute pointer-events-none"
           style={{
+            position: "absolute",
             bottom: -80,
             left: -40,
             width: 280,
@@ -110,13 +120,14 @@ export function LoginPage() {
         />
 
         {/* Brand */}
-        <div className="relative z-10">
+        <div style={{ position: "relative", zIndex: 1 }}>
           <div
-            className="font-extrabold mb-2"
             style={{
               fontSize: 28,
+              fontWeight: 800,
               color: "white",
               letterSpacing: "-0.5px",
+              marginBottom: 8,
             }}
           >
             有证
@@ -130,28 +141,40 @@ export function LoginPage() {
               慧催
             </span>
           </div>
-          <div
-            style={{ fontSize: 13, color: "rgba(255,255,255,.6)" }}
-          >
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,.6)" }}>
             AI 辅助物业费催收系统
           </div>
         </div>
 
         {/* Features */}
-        <div className="relative z-10 flex flex-col gap-5">
+        <div
+          style={{
+            position: "relative",
+            zIndex: 1,
+            display: "flex",
+            flexDirection: "column",
+            gap: 20,
+          }}
+        >
           {FEATURES.map((f) => (
-            <div key={f.title} className="flex items-start gap-3.5">
+            <div
+              key={f.title}
+              style={{ display: "flex", alignItems: "flex-start", gap: 14 }}
+            >
               <div
-                className="flex-shrink-0 flex items-center justify-center"
                 style={{
                   width: 40,
                   height: 40,
                   borderRadius: 10,
                   background: "rgba(255,255,255,.1)",
-                  color: "white",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  fontSize: 18,
                 }}
               >
-                {f.icon}
+                {f.emoji}
               </div>
               <div>
                 <div
@@ -164,9 +187,7 @@ export function LoginPage() {
                 >
                   {f.title}
                 </div>
-                <div
-                  style={{ fontSize: 12.5, color: "rgba(255,255,255,.5)" }}
-                >
+                <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.5)" }}>
                   {f.desc}
                 </div>
               </div>
@@ -176,16 +197,28 @@ export function LoginPage() {
 
         {/* Footer */}
         <div
-          className="relative z-10"
-          style={{ fontSize: 12, color: "rgba(255,255,255,.3)" }}
+          style={{
+            position: "relative",
+            zIndex: 1,
+            fontSize: 12,
+            color: "rgba(255,255,255,.3)",
+          }}
         >
-          © 2026 有证慧催 · v1.5
+          © 2026 有证慧催 · v1.6
         </div>
       </div>
 
-      {/* Right form panel */}
-      <div className="flex-1 flex items-center justify-center" style={{ padding: "40px 20px" }}>
-        <div className="w-full" style={{ maxWidth: 440 }}>
+      {/* ── Right Panel ────────────────────────────────────── */}
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "40px 20px",
+        }}
+      >
+        <div style={{ width: "100%", maxWidth: 440 }}>
           <h1
             style={{
               fontSize: 26,
@@ -194,26 +227,32 @@ export function LoginPage() {
               marginBottom: 6,
             }}
           >
-            欢迎回来
+            {showForgot ? "重置密码" : "欢迎回来"}
           </h1>
           <p
             style={{
               fontSize: 14,
               color: "#6b7280",
-              marginBottom: 32,
+              marginBottom: showForgot ? 20 : 32,
             }}
           >
-            请登录您的账号
+            {showForgot ? "输入您注册的手机号，系统将发送验证码" : "请登录您的账号"}
           </p>
 
-          {loginReason && (
+          {/* Login reason banner (Sprint 15.1 多设备踢出) */}
+          {loginReason && !showForgot && (
             <div
-              className="flex items-start gap-2 mb-4 px-3 py-2 text-sm"
               style={{
                 color: "#92400e",
                 background: "#fffbeb",
                 border: "1px solid #fde68a",
-                borderRadius: "var(--radius-md)",
+                borderRadius: 8,
+                padding: "12px 16px",
+                fontSize: 13.5,
+                marginBottom: 18,
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
               }}
             >
               <XCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
@@ -221,115 +260,367 @@ export function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Phone */}
-            <div>
-              <label
-                htmlFor="phone"
-                className="block mb-1.5"
-                style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}
-              >
-                手机号 / 账号<span className="text-red-500 ml-0.5">*</span>
-              </label>
-              <input
-                id="phone"
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="请输入手机号"
-                required
-                autoComplete="username"
-                maxLength={11}
-                className="w-full px-3.5 py-2.5 text-sm outline-none transition-colors"
-                style={{
-                  border: "1px solid #d1d5db",
-                  borderRadius: 8,
-                  color: "#111827",
-                }}
-              />
-            </div>
-
-            {/* Password */}
-            <div>
-              <label
-                htmlFor="password"
-                className="block mb-1.5"
-                style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}
-              >
-                密码<span className="text-red-500 ml-0.5">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  id="password"
-                  type={showPwd ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="请输入密码"
-                  required
-                  autoComplete="current-password"
-                  className="w-full px-3.5 py-2.5 pr-10 text-sm outline-none transition-colors"
+          {/* ──── 主登录表单 ──── */}
+          {!showForgot && (
+            <form onSubmit={handleSubmit}>
+              {/* Error */}
+              {errorMsg && (
+                <div
                   style={{
-                    border: "1px solid #d1d5db",
+                    background: "#fef2f2",
+                    border: "1px solid #fecaca",
                     borderRadius: 8,
+                    padding: "12px 16px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    marginBottom: 18,
+                    fontSize: 13.5,
+                    color: "#991b1b",
+                  }}
+                >
+                  <XCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{errorMsg}</span>
+                </div>
+              )}
+
+              {/* Phone */}
+              <div style={{ marginBottom: 18 }}>
+                <label
+                  htmlFor="phone"
+                  style={{
+                    display: "block",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: "#374151",
+                    marginBottom: 6,
+                  }}
+                >
+                  手机号 / 账号
+                  <span style={{ color: "#e02424", marginLeft: 2 }}>*</span>
+                </label>
+                <input
+                  id="phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="请输入手机号"
+                  maxLength={11}
+                  autoComplete="username"
+                  style={{
+                    width: "100%",
+                    padding: "10px 14px",
+                    border: errorMsg ? "1px solid #e02424" : "1px solid #d1d5db",
+                    borderRadius: 8,
+                    fontSize: 14,
+                    fontFamily: "inherit",
                     color: "#111827",
+                    background: "white",
+                    outline: "none",
+                    transition: "border-color .15s",
                   }}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPwd((v) => !v)}
-                  aria-label={showPwd ? "隐藏密码" : "显示密码"}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-gray-600"
-                >
-                  {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
               </div>
-            </div>
 
-            {/* Error */}
-            {errorMsg && (
+              {/* Password */}
+              <div style={{ marginBottom: 18 }}>
+                <label
+                  htmlFor="password"
+                  style={{
+                    display: "block",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: "#374151",
+                    marginBottom: 6,
+                  }}
+                >
+                  密码<span style={{ color: "#e02424", marginLeft: 2 }}>*</span>
+                </label>
+                <div style={{ position: "relative" }}>
+                  <input
+                    id="password"
+                    type={showPwd ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="请输入密码"
+                    autoComplete="current-password"
+                    style={{
+                      width: "100%",
+                      padding: "10px 44px 10px 14px",
+                      border: errorMsg ? "1px solid #e02424" : "1px solid #d1d5db",
+                      borderRadius: 8,
+                      fontSize: 14,
+                      fontFamily: "inherit",
+                      color: "#111827",
+                      background: "white",
+                      outline: "none",
+                      transition: "border-color .15s",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPwd((v) => !v)}
+                    aria-label={showPwd ? "隐藏密码" : "显示密码"}
+                    style={{
+                      position: "absolute",
+                      right: 12,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      cursor: "pointer",
+                      color: "#9ca3af",
+                      border: "none",
+                      background: "none",
+                      padding: 2,
+                    }}
+                  >
+                    {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Remember + Forgot */}
               <div
-                className="flex items-start gap-2 px-3 py-2 text-sm"
                 style={{
-                  color: "#b91c1c",
-                  background: "#fef2f2",
-                  border: "1px solid #fecaca",
-                  borderRadius: 6,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 24,
                 }}
               >
-                <XCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                <span>{errorMsg}</span>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    cursor: "pointer",
+                    fontSize: 13,
+                    color: "#374151",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={remember}
+                    onChange={(e) => setRemember(e.target.checked)}
+                  />
+                  <span>记住此设备（7 天内免登录）</span>
+                </label>
+                <span
+                  onClick={() => setShowForgot(true)}
+                  style={{
+                    fontSize: 13,
+                    color: "#1A56DB",
+                    cursor: "pointer",
+                  }}
+                >
+                  忘记密码？
+                </span>
               </div>
-            )}
 
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full text-white text-sm font-semibold py-2.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{
-                background: "var(--color-primary)",
-                borderRadius: 8,
-                marginTop: 8,
-              }}
-            >
-              {isLoading ? "登录中…" : "登 录"}
-            </button>
-          </form>
+              {/* Submit */}
+              <button
+                type="submit"
+                disabled={isLoading}
+                style={{
+                  width: "100%",
+                  padding: 12,
+                  background: "#1A56DB",
+                  color: "white",
+                  border: "none",
+                  borderRadius: 8,
+                  fontSize: 15,
+                  fontWeight: 600,
+                  cursor: isLoading ? "not-allowed" : "pointer",
+                  opacity: isLoading ? 0.6 : 1,
+                  transition: "background .15s",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                }}
+              >
+                {isLoading ? (
+                  <span
+                    style={{
+                      width: 18,
+                      height: 18,
+                      border: "2px solid rgba(255,255,255,.3)",
+                      borderTopColor: "white",
+                      borderRadius: "50%",
+                      animation: "spin 0.7s linear infinite",
+                    }}
+                  />
+                ) : (
+                  "登 录"
+                )}
+              </button>
 
-          <div
-            className="mt-4 text-center"
-            style={{ fontSize: 12.5, color: "#9ca3af" }}
-          >
-            登录即表示您同意
-            <a href="#" style={{ color: "var(--color-primary)", marginLeft: 4 }}>
-              服务条款
-            </a>{" "}
-            和{" "}
-            <a href="#" style={{ color: "var(--color-primary)" }}>
-              隐私政策
-            </a>
-          </div>
+              {/* Terms */}
+              <div
+                style={{
+                  marginTop: 16,
+                  textAlign: "center",
+                  fontSize: 12.5,
+                  color: "#9ca3af",
+                }}
+              >
+                登录即表示您同意
+                <a href="#" style={{ color: "#1A56DB", marginLeft: 4 }}>
+                  服务条款
+                </a>
+                {" 和 "}
+                <a href="#" style={{ color: "#1A56DB" }}>
+                  隐私政策
+                </a>
+              </div>
+            </form>
+          )}
+
+          {/* ──── 忘记密码表单 ──── */}
+          {showForgot && (
+            <ForgotPasswordForm onBack={() => setShowForgot(false)} />
+          )}
+
+          {/* Spinner keyframes */}
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
+  const [secs, setSecs] = useState(0);
+
+  const sendCode = () => {
+    if (!phone) return;
+    setSecs(60);
+    const t = setInterval(() => {
+      setSecs((s) => {
+        if (s <= 1) {
+          clearInterval(t);
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+  };
+
+  return (
+    <div>
+      <div
+        style={{
+          background: "#f0fdf4",
+          border: "1px solid #bbf7d0",
+          borderRadius: 20,
+          padding: "4px 12px",
+          fontSize: 12,
+          color: "#065f46",
+          marginBottom: 20,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
+        <ShieldCheck className="w-3.5 h-3.5" />
+        重置流程受系统保护，全程加密
+      </div>
+      <div style={{ marginBottom: 18 }}>
+        <label
+          style={{
+            display: "block",
+            fontSize: 13,
+            fontWeight: 500,
+            color: "#374151",
+            marginBottom: 6,
+          }}
+        >
+          手机号<span style={{ color: "#e02424", marginLeft: 2 }}>*</span>
+        </label>
+        <input
+          type="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="请输入注册手机号"
+          maxLength={11}
+          style={{
+            width: "100%",
+            padding: "10px 14px",
+            border: "1px solid #d1d5db",
+            borderRadius: 8,
+            fontSize: 14,
+            color: "#111827",
+            background: "white",
+            outline: "none",
+          }}
+        />
+      </div>
+      <div style={{ display: "flex", gap: 10 }}>
+        <input
+          type="text"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          placeholder="验证码"
+          maxLength={6}
+          style={{
+            flex: 1,
+            padding: "10px 14px",
+            border: "1px solid #d1d5db",
+            borderRadius: 8,
+            fontSize: 14,
+            color: "#111827",
+            background: "white",
+            outline: "none",
+          }}
+        />
+        <button
+          type="button"
+          onClick={sendCode}
+          disabled={!phone || secs > 0}
+          style={{
+            padding: "10px 16px",
+            background: "white",
+            border: "1px solid #d1d5db",
+            borderRadius: 8,
+            fontSize: 13,
+            cursor: phone && secs === 0 ? "pointer" : "not-allowed",
+            whiteSpace: "nowrap",
+            color: "#374151",
+            opacity: phone && secs === 0 ? 1 : 0.5,
+          }}
+        >
+          {secs > 0 ? `${secs}s 后重发` : "获取验证码"}
+        </button>
+      </div>
+      <div style={{ marginTop: 6, fontSize: 12, color: "#9ca3af" }}>
+        验证码 10 分钟内有效 · 来自"有证慧催"
+      </div>
+      <button
+        type="button"
+        style={{
+          marginTop: 20,
+          width: "100%",
+          padding: 12,
+          background: "#1A56DB",
+          color: "white",
+          border: "none",
+          borderRadius: 8,
+          fontSize: 15,
+          fontWeight: 600,
+          cursor: "pointer",
+        }}
+        onClick={() => alert("重置链接已发送至您的手机")}
+      >
+        发送重置链接
+      </button>
+      <div style={{ marginTop: 14, textAlign: "center" }}>
+        <span
+          onClick={onBack}
+          style={{ color: "#6b7280", fontSize: 13, cursor: "pointer" }}
+        >
+          ← 返回登录
+        </span>
       </div>
     </div>
   );

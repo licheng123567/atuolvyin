@@ -45,6 +45,10 @@ class ConnectionManager:
     def list_roles(self, call_id: int) -> list[str]:
         return list(self._rooms.get(call_id, {}).values())
 
+    def total_connections(self) -> int:
+        """All active websockets across all rooms (single-worker accurate)."""
+        return sum(len(room) for room in self._rooms.values())
+
 
 _manager: ConnectionManager | None = None
 

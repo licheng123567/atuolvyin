@@ -24,6 +24,7 @@ from app.core.db import get_db
 from app.core.security import require_roles
 from app.models.call import CallRecord
 from app.models.user import UserAccount
+from app.ws.connection_manager import get_connection_manager
 from app.schemas.health import (
     BackendHealth,
     DBHealth,
@@ -92,8 +93,10 @@ async def get_service_health(
         last_check_at=now,
     )
 
-    # ── WebSocket: static placeholder (本期暂用模拟数据) ──────
-    websocket = WebSocketHealth(status="ok", connected_clients=0)
+    # ── WebSocket: live count from in-process connection_manager ──
+    # 单 worker 准确；多 worker 部署需替换为 Redis 计数器（PRD §11 已注约束）
+    ws_clients = get_connection_manager().total_connections()
+    websocket = WebSocketHealth(status="ok", connected_clients=ws_clients)
 
     return ServiceHealthOut(
         db=DBHealth(status=db_status, latency_ms=latency_ms),  # type: ignore[arg-type]

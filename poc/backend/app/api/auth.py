@@ -37,7 +37,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
             },
         )
 
-    # Get first active membership (multi-tenant selector deferred to later sprint)
+    # MVP — seed 数据每个用户单 membership；多 membership 选择器属 v2.x 范畴 (PRD §5)
     membership = db.execute(
         select(UserTenantMembership)
         .where(

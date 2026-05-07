@@ -1,6 +1,7 @@
+// 1:1 还原 ui/agent-pc.html#my-cases 我的案件
 import { useCreate, useList } from "@refinedev/core";
 import type { CrudFilter } from "@refinedev/core";
-import { ChevronDown, Phone, QrCode } from "lucide-react";
+import { ChevronDown, Phone, QrCode, Search } from "lucide-react";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { PaginatedResponse } from "../../../types";
@@ -24,33 +25,43 @@ interface CaseItem {
   amount_owed: string | null;
   months_overdue: number | null;
   priority_score: number;
+  last_contact_at?: string | null;
 }
 
 const STAGE_LABELS: Record<string, string> = {
-  new: "待处理",
-  in_progress: "处理中",
-  promised: "已承诺",
+  new: "待跟进",
+  in_progress: "跟进中",
+  promised: "承诺缴费",
   paid: "已缴费",
-  escalated: "已上报",
+  escalated: "升级处理",
   closed: "已关闭",
 };
 
-const STAGE_COLORS: Record<string, React.CSSProperties> = {
-  new: { background: "var(--color-neutral-100)", color: "var(--color-neutral-600)" },
-  in_progress: { background: "var(--color-primary-light)", color: "var(--color-primary)" },
-  promised: { background: "var(--color-warning-light)", color: "var(--color-warning)" },
-  paid: { background: "var(--color-success-light)", color: "var(--color-success)" },
-  escalated: { background: "var(--color-danger-light)", color: "var(--color-danger)" },
-  closed: { background: "var(--color-neutral-100)", color: "var(--color-neutral-400)" },
+const STAGE_BADGE_CLASS: Record<string, string> = {
+  new: "ds-badge ds-badge-orange",
+  in_progress: "ds-badge ds-badge-blue",
+  promised: "ds-badge ds-badge-blue",
+  paid: "ds-badge ds-badge-green",
+  escalated: "ds-badge ds-badge-purple",
+  closed: "ds-badge ds-badge-gray",
 };
+
+function formatLast(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const today = new Date();
+  if (d.toDateString() === today.toDateString()) return `今天 ${d.toTimeString().slice(0, 5)}`;
+  const yest = new Date(); yest.setDate(yest.getDate() - 1);
+  if (d.toDateString() === yest.toDateString()) return `昨天 ${d.toTimeString().slice(0, 5)}`;
+  return d.toISOString().slice(0, 10);
+}
 
 export function AgentCaseListPage() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [stage, setStage] = useState("");
-  const [poolType, setPoolType] = useState("");
-  const [claimingId, setClaimingId] = useState<number | null>(null);
-  const [dialingId, setDialingId] = useState<number | null>(null);
+  const [keyword, setKeyword] = useState("");
+  const [claimingId] = useState<number | null>(null);
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [qrState, setQrState] = useState<{
     caseId: number;
@@ -62,7 +73,6 @@ export function AgentCaseListPage() {
 
   const filters: CrudFilter[] = [];
   if (stage) filters.push({ field: "stage", operator: "eq", value: stage });
-  if (poolType) filters.push({ field: "pool_type", operator: "eq", value: poolType });
 
   const { query } = useList<CaseItem>({
     resource: "agent/cases",
@@ -76,314 +86,243 @@ export function AgentCaseListPage() {
     (rawData as CaseItem[] | undefined) ??
     [];
   const total = query.data?.total ?? 0;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
-  const isLoading = query.isLoading;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  const { mutate: claimCase } = useCreate();
+  // 过滤关键词
+  const visible = keyword
+    ? items.filter((c) => c.owner.name.includes(keyword) || (c.owner.room ?? "").includes(keyword))
+    : items;
 
-  async function handleDial(caseId: number, mode: "push" | "qr" = "push") {
-    setDialingId(caseId);
+  const { mutate: dialMutate } = useCreate();
+
+  function requestQrPayload(caseId: number) {
     setOpenMenuId(null);
-    try {
-      const token = localStorage.getItem("access_token") ?? "";
-      const resp = await fetch("/api/v1/calls/dial-request", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ case_id: caseId, mode }),
-      });
-      if (!resp.ok) {
-        alert("拨打失败：" + resp.status);
-        return;
-      }
-      const body = (await resp.json()) as {
-        call_id: number;
-        status: string;
-        qr_payload?: string;
-        expires_at?: string;
-      };
-      if (mode === "qr" && body.qr_payload && body.expires_at) {
-        lastQrCaseId.current = caseId;
-        setQrState({
-          caseId,
-          qrPayload: body.qr_payload,
-          expiresAt: body.expires_at,
-        });
-      } else {
-        navigate(`/agent/workstation/${body.call_id}`);
-      }
-    } finally {
-      setDialingId(null);
-    }
-  }
-
-  function handleClaim(caseId: number) {
-    setClaimingId(caseId);
-    claimCase(
+    lastQrCaseId.current = caseId;
+    dialMutate(
       {
-        resource: `agent/cases/${caseId}/claim`,
-        values: {},
+        resource: "calls/dial-request",
+        values: { case_id: caseId },
       },
       {
-        onSuccess: () => {
-          setClaimingId(null);
-          query.refetch();
+        onSuccess: (resp) => {
+          const data = resp.data as { qr_payload?: string; expires_at?: string };
+          if (data.qr_payload && data.expires_at) {
+            setQrState({
+              caseId,
+              qrPayload: data.qr_payload,
+              expiresAt: data.expires_at,
+            });
+          }
         },
-        onError: () => {
-          setClaimingId(null);
-        },
-      }
+      },
     );
   }
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <Phone className="w-5 h-5 text-[var(--color-primary)]" />
-          <h1 className="text-xl font-semibold text-[var(--color-neutral-900)]">
-            我的案件
-          </h1>
-          <span className="text-sm text-[var(--color-neutral-400)] ml-1">
-            共 {total} 件
-          </span>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">我的案件</h1>
+          <div className="page-subtitle">共 {total} 件分配案件</div>
+        </div>
+        <div className="filters-bar">
+          <div className="search-box">
+            <Search className="w-3.5 h-3.5" />
+            <input
+              type="text"
+              className="form-control"
+              placeholder="搜索业主姓名 / 房号"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+            />
+          </div>
+          <select
+            className="form-control"
+            style={{ width: "auto" }}
+            value={stage}
+            onChange={(e) => {
+              setStage(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">全部状态</option>
+            {Object.entries(STAGE_LABELS).map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-3 mb-4">
-        <select
-          value={poolType}
-          onChange={(e) => {
-            setPoolType(e.target.value);
-            setPage(1);
-          }}
-          className="px-3 py-2 text-sm border border-[var(--color-neutral-200)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-          style={{ borderRadius: "var(--radius-md)" }}
-        >
-          <option value="">全部（公池+专属）</option>
-          <option value="public">公池</option>
-          <option value="private">我的专属</option>
-        </select>
-        <select
-          value={stage}
-          onChange={(e) => {
-            setStage(e.target.value);
-            setPage(1);
-          }}
-          className="px-3 py-2 text-sm border border-[var(--color-neutral-200)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-          style={{ borderRadius: "var(--radius-md)" }}
-        >
-          <option value="">全部阶段</option>
-          {Object.entries(STAGE_LABELS).map(([val, label]) => (
-            <option key={val} value={val}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-lg border border-[var(--color-neutral-200)] overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-[var(--color-neutral-50)] border-b border-[var(--color-neutral-200)]">
+      <div className="table-wrap">
+        <table>
+          <thead>
             <tr>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                业主
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                房间
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                欠费(元)
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                逾期月数
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                阶段
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                来源
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                操作
-              </th>
+              <th>业主姓名</th>
+              <th>楼栋/房号</th>
+              <th>欠费金额</th>
+              <th>欠费月数</th>
+              <th>状态</th>
+              <th>最近联系</th>
+              <th>操作</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[var(--color-neutral-100)]">
-            {isLoading && (
+          <tbody>
+            {query.isLoading && (
               <tr>
-                <td
-                  colSpan={7}
-                  className="px-4 py-8 text-center text-[var(--color-neutral-400)]"
-                >
+                <td colSpan={7} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
                   加载中…
                 </td>
               </tr>
             )}
-            {!isLoading && items.length === 0 && (
+            {!query.isLoading && visible.length === 0 && (
               <tr>
-                <td
-                  colSpan={7}
-                  className="px-4 py-8 text-center text-[var(--color-neutral-400)]"
-                >
-                  暂无案件
+                <td colSpan={7} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                  暂无分配的案件
                 </td>
               </tr>
             )}
-            {items.map((c) => (
-              <tr
-                key={c.id}
-                className="hover:bg-[var(--color-neutral-50)]"
-              >
-                <td className="px-4 py-3">
-                  <div className="font-medium text-[var(--color-neutral-900)]">
-                    {c.owner.name}
-                  </div>
-                  <div className="text-xs text-[var(--color-neutral-400)]">
-                    {c.owner.phone_masked}
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-[var(--color-neutral-600)]">
-                  {c.owner.building && c.owner.room
-                    ? `${c.owner.building} ${c.owner.room}`
-                    : (c.owner.building ?? c.owner.room ?? "—")}
-                </td>
-                <td className="px-4 py-3 text-[var(--color-neutral-600)]">
-                  {c.amount_owed ?? "—"}
-                </td>
-                <td className="px-4 py-3 text-[var(--color-neutral-600)]">
-                  {c.months_overdue ?? "—"}
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className="inline-flex px-2 py-0.5 text-xs rounded-full font-medium"
-                    style={STAGE_COLORS[c.stage] ?? {}}
+            {visible.map((c) => {
+              const room =
+                c.owner.building && c.owner.room
+                  ? `${c.owner.building}${c.owner.room}`
+                  : c.owner.building ?? c.owner.room ?? "—";
+              const isPaid = c.stage === "paid";
+              return (
+                <tr key={c.id}>
+                  <td>
+                    <strong>{c.owner.name}</strong>
+                    <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>
+                      {c.owner.phone_masked}
+                    </div>
+                  </td>
+                  <td>{room}</td>
+                  <td
+                    style={{
+                      color: isPaid ? "#057a55" : "#e02424",
+                      fontWeight: 600,
+                    }}
                   >
-                    {STAGE_LABELS[c.stage] ?? c.stage}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-xs text-[var(--color-neutral-600)]">
-                  {c.pool_type === "public" ? "公池" : "专属"}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    {c.pool_type === "public" && c.assigned_to === null ? (
+                    {c.amount_owed
+                      ? `¥${Number(c.amount_owed).toLocaleString()}`
+                      : "—"}
+                  </td>
+                  <td>
+                    {c.months_overdue != null ? `${c.months_overdue}个月` : "—"}
+                  </td>
+                  <td>
+                    <span className={STAGE_BADGE_CLASS[c.stage] ?? "ds-badge ds-badge-gray"}>
+                      {STAGE_LABELS[c.stage] ?? c.stage}
+                    </span>
+                  </td>
+                  <td>{formatLast(c.last_contact_at)}</td>
+                  <td>
+                    <div style={{ position: "relative", display: "inline-block" }}>
                       <button
                         type="button"
-                        disabled={claimingId === c.id}
-                        onClick={() => handleClaim(c.id)}
-                        className="text-xs font-medium text-white px-2 py-1 disabled:opacity-40"
-                        style={{
-                          background: "var(--color-primary)",
-                          borderRadius: "var(--radius-sm)",
-                        }}
+                        className="ds-btn ds-btn-primary ds-btn-sm"
+                        onClick={() =>
+                          setOpenMenuId(openMenuId === c.id ? null : c.id)
+                        }
+                        disabled={claimingId === c.id || c.owner.do_not_call}
                       >
-                        {claimingId === c.id ? "认领中…" : "认领"}
+                        <Phone className="w-3 h-3" />
+                        拨号
+                        <ChevronDown className="w-3 h-3" />
                       </button>
-                    ) : null}
-                    {c.assigned_to !== null && (
-                      <div className="relative">
-                        <div className="inline-flex">
+                      {openMenuId === c.id && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            top: "100%",
+                            right: 0,
+                            marginTop: 4,
+                            background: "white",
+                            border: "1px solid var(--color-neutral-200)",
+                            borderRadius: "var(--radius-md)",
+                            boxShadow: "var(--shadow-md, 0 4px 12px rgba(0,0,0,0.10))",
+                            zIndex: 10,
+                            minWidth: 160,
+                          }}
+                        >
                           <button
                             type="button"
-                            disabled={dialingId === c.id}
-                            onClick={() => handleDial(c.id, "push")}
-                            className="text-xs font-medium text-white px-2 py-1 disabled:opacity-40 flex items-center gap-1 rounded-l"
+                            onClick={() => requestQrPayload(c.id)}
                             style={{
-                              background: "var(--color-success, #16a34a)",
-                              borderRadius: "var(--radius-sm) 0 0 var(--radius-sm)",
+                              display: "flex",
+                              width: "100%",
+                              alignItems: "center",
+                              gap: 6,
+                              padding: "8px 12px",
+                              fontSize: 13,
+                              border: "none",
+                              background: "transparent",
+                              textAlign: "left",
+                              cursor: "pointer",
                             }}
                           >
-                            <Phone className="w-3 h-3" />
-                            {dialingId === c.id ? "拨打中…" : "拨打"}
+                            <QrCode className="w-3.5 h-3.5" />
+                            扫码到 App 拨号
                           </button>
                           <button
                             type="button"
-                            onClick={() =>
-                              setOpenMenuId(openMenuId === c.id ? null : c.id)
-                            }
-                            className="text-xs text-white px-1 py-1"
-                            style={{
-                              background: "var(--color-success, #16a34a)",
-                              borderRadius: "0 var(--radius-sm) var(--radius-sm) 0",
-                              borderLeft: "1px solid rgba(255,255,255,.3)",
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              navigate(`/agent/cases/${c.id}`);
                             }}
-                            aria-label="更多拨打方式"
+                            style={{
+                              display: "flex",
+                              width: "100%",
+                              alignItems: "center",
+                              gap: 6,
+                              padding: "8px 12px",
+                              fontSize: 13,
+                              border: "none",
+                              background: "transparent",
+                              textAlign: "left",
+                              cursor: "pointer",
+                            }}
                           >
-                            <ChevronDown className="w-3 h-3" />
+                            查看详情
                           </button>
                         </div>
-                        {openMenuId === c.id && (
-                          <div
-                            className="absolute right-0 top-full mt-1 bg-white border border-[var(--color-neutral-200)] shadow-lg z-10 min-w-[180px]"
-                            style={{ borderRadius: "var(--radius-md)" }}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => handleDial(c.id, "qr")}
-                              className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--color-neutral-50)] flex items-center gap-2"
-                            >
-                              <QrCode className="w-3 h-3 text-[var(--color-primary)]" />
-                              扫码拨号（华为/OPPO/vivo）
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {c.pool_type !== "public" && c.assigned_to === null && (
-                      <span className="text-xs text-[var(--color-neutral-400)]">—</span>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
+        {totalPages > 1 && (
+          <div className="ds-pagination">
+            <span className="pagination-info">
+              共 {total} 条，第 {page}/{totalPages} 页
+            </span>
+            <div className="pagination-pages">
+              {page > 1 && (
+                <div className="page-btn" onClick={() => setPage((p) => p - 1)}>
+                  ‹
+                </div>
+              )}
+              <div className="page-btn active">{page}</div>
+              {page < totalPages && (
+                <div className="page-btn" onClick={() => setPage((p) => p + 1)}>
+                  ›
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-end gap-2 mt-4">
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className="px-3 py-1.5 text-sm border border-[var(--color-neutral-200)] rounded disabled:opacity-40"
-            style={{ borderRadius: "var(--radius-md)" }}
-          >
-            上一页
-          </button>
-          <span className="text-sm text-[var(--color-neutral-600)]">
-            {page} / {totalPages}
-          </span>
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            className="px-3 py-1.5 text-sm border border-[var(--color-neutral-200)] rounded disabled:opacity-40"
-            style={{ borderRadius: "var(--radius-md)" }}
-          >
-            下一页
-          </button>
-        </div>
-      )}
 
       {qrState && (
         <QrDialDialog
           qrPayload={qrState.qrPayload}
           expiresAt={qrState.expiresAt}
           onClose={() => setQrState(null)}
-          onRegenerate={() => {
-            const cid = lastQrCaseId.current;
-            setQrState(null);
-            if (cid !== null) {
-              void handleDial(cid, "qr");
-            }
-          }}
+          onRegenerate={() => requestQrPayload(qrState.caseId)}
         />
       )}
     </div>

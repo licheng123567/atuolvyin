@@ -207,6 +207,49 @@ def _upsert_owner(db, tenant: Tenant, name: str, phone: str, building: str, room
     return owner
 
 
+def _upsert_project(
+    db,
+    tenant: Tenant,
+    name: str,
+    project_type: str,
+    property_pm_user_id: int | None = None,
+    provider_id: int | None = None,
+    provider_pm_user_id: int | None = None,
+    description: str | None = None,
+):
+    from app.models.case import Project as ProjectModel
+    existing = db.execute(
+        select(ProjectModel).where(
+            ProjectModel.tenant_id == tenant.id,
+            ProjectModel.name == name,
+        )
+    ).scalar_one_or_none()
+    if existing:
+        # 已存在则补关键字段
+        if existing.property_pm_user_id is None and property_pm_user_id:
+            existing.property_pm_user_id = property_pm_user_id
+        if existing.provider_id is None and provider_id:
+            existing.provider_id = provider_id
+        if existing.provider_pm_user_id is None and provider_pm_user_id:
+            existing.provider_pm_user_id = provider_pm_user_id
+        print(f"[exists]  Project: {name}  id={existing.id}")
+        return existing
+    p = ProjectModel(
+        tenant_id=tenant.id,
+        name=name,
+        project_type=project_type,
+        property_pm_user_id=property_pm_user_id,
+        provider_id=provider_id,
+        provider_pm_user_id=provider_pm_user_id,
+        description=description,
+        status="active",
+    )
+    db.add(p)
+    db.flush()
+    print(f"[created] Project: {name}  id={p.id}")
+    return p
+
+
 def _upsert_case(
     db,
     tenant: Tenant,
@@ -214,6 +257,7 @@ def _upsert_case(
     assigned_to: int,
     amount: Decimal,
     months: int,
+    project_id: int | None = None,
 ) -> None:
     existing = db.execute(
         select(CollectionCase).where(
@@ -222,11 +266,17 @@ def _upsert_case(
         )
     ).scalar_one_or_none()
     if existing:
-        print(f"[exists]  CollectionCase for owner_id={owner.id}")
+        # 回填 project_id 到已存在的 case（demo 数据迁移）
+        if existing.project_id is None and project_id is not None:
+            existing.project_id = project_id
+            print(f"[backfill] case_id={existing.id} project_id={project_id}")
+        else:
+            print(f"[exists]  CollectionCase for owner_id={owner.id}")
         return
     case = CollectionCase(
         tenant_id=tenant.id,
         owner_id=owner.id,
+        project_id=project_id,
         assigned_to=assigned_to,
         pool_type="public",
         stage="new",
@@ -341,17 +391,35 @@ def main() -> None:
             db, provider_admin_user, tenant, "provider_admin", provider_id=provider.id
         )
 
-        # 4. OwnerProfile × 5
+        # 3c. 项目（v1.4 — Project 成为一等公民）
+        project_main = _upsert_project(
+            db, tenant,
+            name="金桂园 2026 年欠费催收",
+            project_type="collection",
+            property_pm_user_id=pm_property_user.id,
+            provider_id=provider.id,
+            provider_pm_user_id=pm_provider_user.id,
+            description="2026 年第一季度物业费欠费回收专项",
+        )
+        project_elevator = _upsert_project(
+            db, tenant,
+            name="翠湖湾电梯专项整改",
+            project_type="collection",
+            property_pm_user_id=pm_property_user.id,
+            description="电梯维护基金筹集（业委会自营，无服务商）",
+        )
+
+        # 4. OwnerProfile × 5（前 3 个归"金桂园"，后 2 个归"翠湖湾"）
         owners_data = [
-            ("张大明", "13100000001", "1栋", "101", Decimal("3200.00"), 3),
-            ("李小红", "13100000002", "2栋", "202", Decimal("5600.00"), 6),
-            ("王建国", "13100000003", "3栋", "303", Decimal("1800.00"), 2),
-            ("陈美华", "13100000004", "1栋", "405", Decimal("9100.00"), 9),
-            ("刘志强", "13100000005", "4栋", "501", Decimal("2400.00"), 4),
+            ("张大明", "13100000001", "1栋", "101", Decimal("3200.00"), 3, project_main.id),
+            ("李小红", "13100000002", "2栋", "202", Decimal("5600.00"), 6, project_main.id),
+            ("王建国", "13100000003", "3栋", "303", Decimal("1800.00"), 2, project_main.id),
+            ("陈美华", "13100000004", "1栋", "405", Decimal("9100.00"), 9, project_elevator.id),
+            ("刘志强", "13100000005", "4栋", "501", Decimal("2400.00"), 4, project_elevator.id),
         ]
-        for name, phone, building, room, amount, months in owners_data:
+        for name, phone, building, room, amount, months, pid in owners_data:
             owner = _upsert_owner(db, tenant, name, phone, building, room)
-            _upsert_case(db, tenant, owner, agent_internal_user.id, amount, months)
+            _upsert_case(db, tenant, owner, agent_internal_user.id, amount, months, project_id=pid)
 
         # 5. RiskKeyword
         _upsert_risk_keyword(

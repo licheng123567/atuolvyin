@@ -39,6 +39,8 @@ from app.schemas.work_order import (
 router = APIRouter()
 
 WORKORDER_ROLES = ("workorder", "admin", "supervisor")
+# 创建工单允许坐席（PRD §10.1：通话现场起单），读取/分配等仍限管理角色
+WORKORDER_CREATE_ROLES = WORKORDER_ROLES + ("agent_internal",)
 
 
 def _require_tenant(payload: dict) -> int:
@@ -143,7 +145,7 @@ async def list_work_orders(
 async def create_work_order(
     body: WorkOrderCreate,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*WORKORDER_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_roles(*WORKORDER_CREATE_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> WorkOrderOut:
     tenant_id = _require_tenant(payload)

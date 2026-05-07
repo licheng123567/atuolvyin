@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
 from app.models.call import CallRecord
-from app.models.case import CollectionCase, OwnerProfile
+from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.settlement import SettlementStatement
 from app.models.tenant import (
     ProviderTenantContract,
@@ -274,3 +274,107 @@ async def get_provider_pm_stats(
         pending_settlements=pending_settlements,
         top_tenants_by_volume=top_tenants,
     )
+
+
+# ── v1.4 — PM 管理多项目 ──────────────────────────────────
+
+
+from pydantic import BaseModel  # noqa: E402
+
+
+class PmProjectCard(BaseModel):
+    project_id: int
+    project_name: str
+    project_type: str
+    role_in_project: str  # "property_pm" / "provider_pm"
+    case_count: int
+    receivable: float
+    received: float
+    promised_count: int
+    new_count: int
+    in_progress_count: int
+    escalated_count: int
+    provider_name: str | None
+    allow_internal_assist: bool
+
+
+@router.get("/projects", response_model=list[PmProjectCard])
+async def list_my_projects(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[
+        UserAccount,
+        Depends(require_roles("project_manager_property", "project_manager_provider")),
+    ],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[PmProjectCard]:
+    """返回当前 PM 管理的所有项目（卡片列表）。一人多项目场景。"""
+    user_id = int(payload.get("user_id") or 0)
+    role = payload.get("role", "")
+
+    if role == "project_manager_property":
+        rows = db.execute(
+            select(Project).where(Project.property_pm_user_id == user_id)
+            .order_by(Project.id.desc())
+        ).scalars().all()
+    elif role == "project_manager_provider":
+        rows = db.execute(
+            select(Project).where(Project.provider_pm_user_id == user_id)
+            .order_by(Project.id.desc())
+        ).scalars().all()
+    else:
+        return []
+
+    cards: list[PmProjectCard] = []
+    for p in rows:
+        case_data = db.execute(
+            select(CollectionCase.stage, CollectionCase.amount_owed).where(
+                CollectionCase.project_id == p.id,
+                CollectionCase.tenant_id == p.tenant_id,
+            )
+        ).all()
+        receivable = 0.0
+        received = 0.0
+        promised = new_c = in_progress = escalated = 0
+        for stage, amt in case_data:
+            f = float(amt or 0)
+            receivable += f
+            if stage == "paid":
+                received += f
+            elif stage == "promised":
+                promised += 1
+            elif stage == "new":
+                new_c += 1
+            elif stage == "in_progress":
+                in_progress += 1
+            elif stage == "escalated":
+                escalated += 1
+
+        provider_name = None
+        if p.provider_id:
+            from app.models.tenant import ServiceProvider
+            provider_name = db.execute(
+                select(ServiceProvider.name).where(
+                    ServiceProvider.id == p.provider_id
+                )
+            ).scalar_one_or_none()
+
+        cards.append(PmProjectCard(
+            project_id=p.id,
+            project_name=p.name,
+            project_type=p.project_type,
+            role_in_project=(
+                "property_pm"
+                if role == "project_manager_property"
+                else "provider_pm"
+            ),
+            case_count=len(case_data),
+            receivable=round(receivable, 2),
+            received=round(received, 2),
+            promised_count=promised,
+            new_count=new_c,
+            in_progress_count=in_progress,
+            escalated_count=escalated,
+            provider_name=provider_name,
+            allow_internal_assist=p.allow_internal_assist,
+        ))
+    return cards

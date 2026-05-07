@@ -1,4 +1,4 @@
-// frontend/src/pages/supervisor/reviews/index.tsx
+// 1:1 还原 ui/supervisor.html#sv-review 质检复核
 import { useList } from "@refinedev/core";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -11,183 +11,206 @@ interface ReviewItemOut {
   duration_sec: number | null;
   ai_intent: string | null;
   ai_summary: string | null;
+  ai_confidence?: number | null;
   needs_review: boolean;
   supervisor_quality: "good" | "bad" | "needs_improvement" | null;
   supervisor_review_note: string | null;
   supervisor_reviewed_at: string | null;
+  agent_name?: string | null;
 }
 
 const QUALITY_LABELS: Record<string, string> = {
-  good: "优质",
-  bad: "差",
-  needs_improvement: "需改进",
+  good: "已确认",
+  bad: "已修正",
+  needs_improvement: "需修正",
 };
 
-const QUALITY_STYLES: Record<string, { background: string; color: string }> = {
-  good: { background: "#dcfce7", color: "#15803d" },
-  bad: { background: "#fee2e2", color: "#b91c1c" },
-  needs_improvement: { background: "#fef9c3", color: "#92400e" },
+const QUALITY_BADGE_CLASS: Record<string, string> = {
+  good: "ds-badge ds-badge-green",
+  bad: "ds-badge ds-badge-blue",
+  needs_improvement: "ds-badge ds-badge-orange",
 };
+
+function formatDuration(sec: number | null): string {
+  if (!sec) return "—";
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function formatStartedAt(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const today = new Date();
+  if (d.toDateString() === today.toDateString()) {
+    return d.toTimeString().slice(0, 5);
+  }
+  const yest = new Date();
+  yest.setDate(yest.getDate() - 1);
+  if (d.toDateString() === yest.toDateString()) {
+    return `昨天 ${d.toTimeString().slice(0, 5)}`;
+  }
+  const days = Math.floor((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+  if (days <= 7) return `${days}天前`;
+  return d.toISOString().slice(0, 10);
+}
 
 export function SupervisorReviewsPage() {
-  const [onlyPending, setOnlyPending] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<"pending" | "all" | "confirmed" | "fixed">("pending");
   const [page, setPage] = useState(1);
   const pageSize = 20;
-
   const navigate = useNavigate();
 
+  const onlyPending = statusFilter === "pending";
   const { query } = useList<ReviewItemOut>({
     resource: "supervisor/reviews",
-    filters: onlyPending
-      ? [{ field: "only_pending", operator: "eq", value: true }]
-      : [{ field: "only_pending", operator: "eq", value: false }],
+    filters: [{ field: "only_pending", operator: "eq", value: onlyPending }],
     pagination: { currentPage: page, pageSize },
   });
 
-  // 后端返回 {items, total}；某些场景可能是裸数组；防御兼容
   const raw = query.data?.data as unknown;
-  const items: ReviewItemOut[] = Array.isArray(raw)
+  const allItems: ReviewItemOut[] = Array.isArray(raw)
     ? (raw as ReviewItemOut[])
     : ((raw as { items?: ReviewItemOut[] } | undefined)?.items ?? []);
-  const total = query.data?.total ?? 0;
-  const totalPages = Math.ceil(total / pageSize);
 
-  const handleToggle = () => {
-    setOnlyPending((v) => !v);
-    setPage(1);
-  };
+  // 前端附加过滤（统一 pending/confirmed/fixed/all 体验）
+  let items = allItems;
+  if (statusFilter === "confirmed") items = allItems.filter((i) => i.supervisor_quality === "good");
+  if (statusFilter === "fixed") items = allItems.filter((i) => i.supervisor_quality === "bad");
+
+  const total = query.data?.total ?? items.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div style={{ padding: 24 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>质检复核工作台</h2>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, cursor: "pointer" }}>
-          <input
-            type="checkbox"
-            checked={onlyPending}
-            onChange={handleToggle}
-          />
-          仅看待复核
-        </label>
+    <div>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">质检复核</h1>
+          <div className="page-subtitle">对 AI 自动质检结果进行人工复核与修正</div>
+        </div>
+        <div className="filters-bar">
+          <select
+            className="form-control"
+            style={{ width: "auto" }}
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value as typeof statusFilter);
+              setPage(1);
+            }}
+          >
+            <option value="pending">待复核</option>
+            <option value="all">全部</option>
+            <option value="confirmed">已确认</option>
+            <option value="fixed">已修正</option>
+          </select>
+        </div>
       </div>
 
-      {/* Table */}
-      {query.isLoading ? (
-        <div style={{ color: "var(--color-neutral-400)", fontSize: 14, padding: "32px 0" }}>加载中…</div>
-      ) : items.length === 0 ? (
-        <div style={{ color: "var(--color-neutral-400)", fontSize: 14, padding: "48px 0", textAlign: "center" }}>
-          暂无待复核通话
-        </div>
-      ) : (
-        <>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid #e5e7eb", background: "#f9fafb" }}>
-                {["通话时间", "业主电话", "时长", "AI 意图", "AI 摘要", "评级状态", "操作"].map((h) => (
-                  <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 500 }}>
-                    {h}
-                  </th>
-                ))}
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>通话时间</th>
+              <th>催收员</th>
+              <th>业主电话</th>
+              <th>时长</th>
+              <th>AI 判断</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {query.isLoading && (
+              <tr>
+                <td colSpan={7} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                  加载中…
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.call_id} style={{ borderBottom: "1px solid #f3f4f6" }}>
-                  <td style={{ padding: "10px 12px" }}>
-                    {item.started_at ? new Date(item.started_at).toLocaleString("zh-CN") : "—"}
+            )}
+            {!query.isLoading && items.length === 0 && (
+              <tr>
+                <td colSpan={7} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                  暂无待复核通话
+                </td>
+              </tr>
+            )}
+            {items.map((it) => {
+              const isPending = !it.supervisor_quality;
+              return (
+                <tr key={it.call_id}>
+                  <td>{formatStartedAt(it.started_at)}</td>
+                  <td>{it.agent_name ?? "—"}</td>
+                  <td style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 12 }}>
+                    {it.callee_phone_masked}
                   </td>
-                  <td style={{ padding: "10px 12px", fontFamily: "monospace" }}>
-                    {item.callee_phone_masked}
-                  </td>
-                  <td style={{ padding: "10px 12px" }}>
-                    {item.duration_sec != null
-                      ? `${Math.floor(item.duration_sec / 60)}分${item.duration_sec % 60}秒`
-                      : "—"}
-                  </td>
-                  <td style={{ padding: "10px 12px" }}>
-                    {item.ai_intent ?? "—"}
-                  </td>
-                  <td style={{ padding: "10px 12px", maxWidth: 200 }}>
-                    {item.ai_summary
-                      ? `${item.ai_summary.slice(0, 60)}${item.ai_summary.length > 60 ? "…" : ""}`
-                      : "—"}
-                  </td>
-                  <td style={{ padding: "10px 12px" }}>
-                    {item.supervisor_quality ? (
+                  <td>{formatDuration(it.duration_sec)}</td>
+                  <td>
+                    {it.ai_intent ?? "—"}
+                    {it.ai_confidence != null && (
                       <span
                         style={{
-                          padding: "2px 8px",
-                          borderRadius: 4,
+                          color: "var(--color-neutral-500)",
                           fontSize: 12,
-                          ...QUALITY_STYLES[item.supervisor_quality],
+                          marginLeft: 6,
                         }}
                       >
-                        {QUALITY_LABELS[item.supervisor_quality]}
+                        ({it.ai_confidence.toFixed(2)})
                       </span>
-                    ) : (
-                      <span style={{ fontSize: 12, color: "#9ca3af" }}>未评级</span>
                     )}
                   </td>
-                  <td style={{ padding: "10px 12px" }}>
+                  <td>
+                    {isPending ? (
+                      <span className="ds-badge ds-badge-orange">待复核</span>
+                    ) : (
+                      <span className={QUALITY_BADGE_CLASS[it.supervisor_quality!]}>
+                        {QUALITY_LABELS[it.supervisor_quality!]}
+                      </span>
+                    )}
+                  </td>
+                  <td>
                     <button
-                      onClick={() => navigate(`/supervisor/reviews/${item.call_id}`)}
-                      style={{
-                        padding: "4px 10px",
-                        background: "var(--color-primary)",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: 4,
-                        cursor: "pointer",
-                        fontSize: 12,
-                      }}
+                      type="button"
+                      className={
+                        isPending
+                          ? "ds-btn ds-btn-primary ds-btn-sm"
+                          : "ds-btn ds-btn-secondary ds-btn-sm"
+                      }
+                      onClick={() => navigate(`/supervisor/reviews/${it.call_id}`)}
                     >
-                      复核
+                      {isPending ? "复核" : "查看"}
                     </button>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              );
+            })}
+          </tbody>
+        </table>
 
-          {/* Pagination */}
+        <div className="ds-pagination">
+          <span className="pagination-info">
+            共 {total} 条记录
+            {totalPages > 1 && `，第 ${page}/${totalPages} 页`}
+          </span>
           {totalPages > 1 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16, fontSize: 14 }}>
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                style={{
-                  padding: "4px 12px",
-                  border: "1px solid #d1d5db",
-                  borderRadius: 4,
-                  background: page === 1 ? "#f9fafb" : "#fff",
-                  cursor: page === 1 ? "default" : "pointer",
-                  color: page === 1 ? "#9ca3af" : "#374151",
-                }}
-              >
-                上一页
-              </button>
-              <span style={{ color: "#6b7280" }}>
-                第 {page} / {totalPages} 页，共 {total} 条
-              </span>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                style={{
-                  padding: "4px 12px",
-                  border: "1px solid #d1d5db",
-                  borderRadius: 4,
-                  background: page === totalPages ? "#f9fafb" : "#fff",
-                  cursor: page === totalPages ? "default" : "pointer",
-                  color: page === totalPages ? "#9ca3af" : "#374151",
-                }}
-              >
-                下一页
-              </button>
+            <div className="pagination-pages">
+              {page > 1 && (
+                <div className="page-btn" onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                  ‹
+                </div>
+              )}
+              <div className="page-btn active">{page}</div>
+              {page < totalPages && (
+                <div
+                  className="page-btn"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  ›
+                </div>
+              )}
             </div>
           )}
-        </>
-      )}
+        </div>
+      </div>
     </div>
   );
 }

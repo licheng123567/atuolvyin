@@ -29,6 +29,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private val adapter = CaseAdapter(::onCallClick)
 
+    // v1.6 — self-check 闸门：失败时禁用所有呼叫入口，避免脏录音上传
+    private var canCall: Boolean = false
+    private var lastFailReasons: List<String> = emptyList()
+
     private val uploadDoneReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context?, i: Intent?) {
             val callId = i?.getLongExtra("call_id", -1) ?: -1
@@ -191,6 +195,29 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ---------- 自检 + 拉运行时配置 ----------
+    // P1：登录后必须先 register → 才能 self-check（后端要求设备已注册否则 404）
+    private suspend fun ensureDeviceRegistered() {
+        val api = ApiClient.get(this@MainActivity)
+        val token = AppConfig.jwtToken(this@MainActivity) ?: return
+        runCatching {
+            api.registerDevice(
+                authHeader = "Bearer $token",
+                body = RegisterDeviceRequest(
+                    device_id = DeviceId.get(this@MainActivity),
+                    brand = android.os.Build.BRAND,
+                    model = android.os.Build.MODEL,
+                    os_version = "Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})",
+                    // MiPush stub 不可用 → push_reg_id 暂留 null；
+                    // backend 上 COALESCE 保留旧值，未来 MiPush 真接入后再补上
+                    push_reg_id = null,
+                ),
+            )
+        }.onFailure {
+            // 注册失败不抛断 self-check 流程；self-check 自己会 404，统一在那里报错
+            android.util.Log.w("AutoluyinMain", "registerDevice failed: ${it.message}")
+        }
+    }
+
     private fun doSelfCheck() {
         renderHeader()
         val recDirs = RecordingScanner.listDirsExisting()
@@ -199,6 +226,7 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
+                ensureDeviceRegistered()
                 val api = ApiClient.get(this@MainActivity)
                 val resp = api.selfCheck(SelfCheckReq(
                     device_id = DeviceId.get(this@MainActivity),
@@ -213,9 +241,18 @@ class MainActivity : AppCompatActivity() {
                 }
                 renderHeader()
 
+                canCall = resp.can_call
+                lastFailReasons = resp.fail_reasons
                 binding.btnRefresh.isEnabled = resp.can_call
-                if (resp.can_call) loadTasks()
-                else toast("自检未通过，呼叫禁用")
+                adapter.setCanCall(resp.can_call)
+                renderHeader()
+                if (resp.can_call) {
+                    loadTasks()
+                } else {
+                    val why = resp.fail_reasons.joinToString("、") { reasonLabel(it) }
+                        .ifBlank { "未知原因" }
+                    toast("自检未通过（$why），呼叫已禁用")
+                }
             } catch (t: Throwable) {
                 if (t.message?.contains("401") == true || t.message?.contains("403") == true) {
                     AppConfig.clearJwtToken(this@MainActivity)
@@ -239,6 +276,13 @@ class MainActivity : AppCompatActivity() {
                 && !Environment.isExternalStorageManager()) {
                 append("⚠️ 需要授予「所有文件访问权限」才能读 MIUI 录音目录\n")
             }
+            // v1.6 — 把后端 self-check 的失败项可视化到 header
+            if (canCall) {
+                append("✅ 自检通过，可以呼叫\n")
+            } else if (lastFailReasons.isNotEmpty()) {
+                append("⛔ 自检未通过，需要修复：\n")
+                lastFailReasons.forEach { append("  • ${reasonLabel(it)}\n") }
+            }
         }
     }
 
@@ -259,8 +303,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun reasonLabel(code: String): String = when (code) {
+        "recording_dir" -> "录音目录未命中"
+        "recording_toggle" -> "系统通话录音未开启"
+        "permissions" -> "必要权限未授予"
+        else -> code
+    }
+
     // ---------- 一键拨号（Sprint 11.1：拨号前预览）----------
     private fun onCallClick(c: CaseItem) {
+        // v1.6 闸门：自检未通过禁止拨号；UI 已置灰，这里再兜底一道
+        if (!canCall) {
+            toast("自检未通过，请先重新自检")
+            ensurePermsThenCheck()
+            return
+        }
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
             != PackageManager.PERMISSION_GRANTED) {
             toast("请先授予拨打电话权限"); return
@@ -306,25 +363,34 @@ class CaseAdapter(
 ) : RecyclerView.Adapter<CaseAdapter.VH>() {
 
     private val items = mutableListOf<CaseItem>()
+    private var canCall: Boolean = false
 
     fun submitCases(list: List<CaseItem>) {
         items.clear(); items.addAll(list); notifyDataSetChanged()
     }
     fun findById(id: Long) = items.firstOrNull { it.id == id }
 
+    /** v1.6 — self-check 通过前所有「呼叫」按钮置灰。 */
+    fun setCanCall(enabled: Boolean) {
+        if (canCall != enabled) {
+            canCall = enabled
+            notifyDataSetChanged()
+        }
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val v = LayoutInflater.from(parent.context)
             .inflate(R.layout.item_task, parent, false)
         return VH(v)
     }
-    override fun onBindViewHolder(h: VH, p: Int) = h.bind(items[p])
+    override fun onBindViewHolder(h: VH, p: Int) = h.bind(items[p], canCall)
     override fun getItemCount() = items.size
 
     inner class VH(v: android.view.View) : RecyclerView.ViewHolder(v) {
         private val title: TextView = v.findViewById(R.id.title)
         private val sub: TextView = v.findViewById(R.id.sub)
         private val btn: android.widget.Button = v.findViewById(R.id.btnCall)
-        fun bind(c: CaseItem) {
+        fun bind(c: CaseItem, canCall: Boolean) {
             val tag = if (c.stage == "vote") "[投票]" else "[催收]"
             val location = listOfNotNull(c.owner.building, c.owner.room).joinToString("")
             title.text = "$tag ${c.owner.name}（$location）"
@@ -333,8 +399,10 @@ class CaseAdapter(
             else
                 "阶段：${c.stage}"
             val displayPhone = c.owner.phone ?: c.owner.phone_masked
-            btn.text = "呼叫 $displayPhone"
-            btn.setOnClickListener { onCall(c) }
+            btn.text = if (canCall) "呼叫 $displayPhone" else "自检未通过"
+            btn.isEnabled = canCall
+            btn.alpha = if (canCall) 1.0f else 0.4f
+            btn.setOnClickListener { if (canCall) onCall(c) }
         }
     }
 }

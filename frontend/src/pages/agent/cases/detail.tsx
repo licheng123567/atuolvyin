@@ -1,5 +1,11 @@
 // frontend/src/pages/agent/cases/detail.tsx
-import { useGetIdentity, useGo, useList, useOne } from "@refinedev/core";
+import {
+  useCustomMutation,
+  useGetIdentity,
+  useGo,
+  useList,
+  useOne,
+} from "@refinedev/core";
 import { GitBranch, Phone, PhoneOff, Scale } from "lucide-react";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
@@ -49,6 +55,50 @@ export function AgentWorkstationPage() {
   const detail = detailQuery.data?.data;
   const isLoading = detailQuery.isLoading;
   const selectedCall = detail?.calls[selectedCallIdx] ?? null;
+  const { mutate: customMutate } = useCustomMutation();
+
+  const handleCreateWorkOrder = () => {
+    if (!detail) return;
+    const description = window.prompt("工单内容（必填）：");
+    if (!description?.trim()) return;
+    customMutate(
+      {
+        url: "workorders",
+        method: "post",
+        values: {
+          case_id: detail.id,
+          order_type: "case_followup",
+          description: description.trim(),
+          priority: "normal",
+        },
+      },
+      {
+        onSuccess: (resp) => {
+          const wo = resp.data as { id?: number };
+          alert(`工单 #${wo.id ?? "?"} 已创建`);
+        },
+        onError: (err) => alert(`建工单失败：${err.message}`),
+      },
+    );
+  };
+
+  const handleCaseIntent = (
+    action: "transfer_supervisor" | "transfer_legal",
+    label: string,
+  ) => {
+    if (!detail) return;
+    customMutate(
+      {
+        url: `agent/cases/${detail.id}/intent`,
+        method: "post",
+        values: { action },
+      },
+      {
+        onSuccess: () => alert(`${label} 已记录，等待业务流程接入`),
+        onError: (err) => alert(`${label} 失败：${err.message}`),
+      },
+    );
+  };
 
   return (
     <div
@@ -279,14 +329,14 @@ export function AgentWorkstationPage() {
             <div className="flex flex-col gap-2">
               <button
                 type="button"
-                onClick={() => alert("建工单功能将在 v1.1 上线")}
+                onClick={handleCreateWorkOrder}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-[var(--color-neutral-300)] text-[var(--color-neutral-600)] hover:bg-[var(--color-neutral-50)] transition-colors"
               >
                 建工单
               </button>
               <button
                 type="button"
-                onClick={() => alert("转主管功能将在 v1.1 上线")}
+                onClick={() => handleCaseIntent("transfer_supervisor", "转主管")}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-[var(--color-neutral-300)] text-[var(--color-neutral-600)] hover:bg-[var(--color-neutral-50)] transition-colors"
               >
                 <GitBranch className="w-4 h-4" />
@@ -294,7 +344,7 @@ export function AgentWorkstationPage() {
               </button>
               <button
                 type="button"
-                onClick={() => alert("转法务功能将在 v1.1 上线")}
+                onClick={() => handleCaseIntent("transfer_legal", "转法务")}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-[var(--color-neutral-300)] text-[var(--color-neutral-600)] hover:bg-[var(--color-neutral-50)] transition-colors"
               >
                 <Scale className="w-4 h-4" />

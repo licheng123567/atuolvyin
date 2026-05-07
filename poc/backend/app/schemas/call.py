@@ -205,3 +205,20 @@ class SuggestionFeedbackIn(BaseModel):
     action: str  # "adopt" | "ignore"
     suggestion_text: str | None = None
     script_template_id: int | None = None
+
+
+# Sprint 16 — Intent stub: 记录坐席在通话/案件页面发起的动作意向，
+# 真实业务流程（转主管派发/支付码生成）尚未实现，先有 audit 痕迹。
+_INTENT_ACTIONS = ("transfer_supervisor", "send_payment_code", "transfer_legal")
+
+
+class CallIntentIn(BaseModel):
+    action: str  # 见 _INTENT_ACTIONS
+    note: str | None = None
+
+
+class CallIntentOut(BaseModel):
+    call_id: int
+    action: str
+    recorded_at: datetime
+    status: str  # "queued"

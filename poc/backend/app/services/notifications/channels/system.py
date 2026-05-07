@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.models.notification import Notification
 
+from . import log_delivery
+
 
 def send(
     db: Session,
@@ -29,4 +31,15 @@ def send(
             body=body,
             payload=payload,
         ))
+        log_delivery(
+            db,
+            channel="system",
+            tenant_id=tenant_id,
+            user_id=user_id,
+            event_type=event_type,
+            severity=severity,
+            title=title,
+            status="sent",
+            payload=payload,
+        )
     db.flush()

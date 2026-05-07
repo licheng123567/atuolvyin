@@ -16,13 +16,19 @@ from app.models.call import (
     RiskEvent,
     SuggestionFeedback,
 )
-from app.models.case import CollectionCase
+from app.models.case import CollectionCase, Project
 from app.models.audit import PlanConfig
-from app.models.tenant import Tenant, TenantMinuteUsage, UserTenantMembership
+from app.models.tenant import (
+    ServiceProvider,
+    Tenant,
+    TenantMinuteUsage,
+    UserTenantMembership,
+)
 from app.models.user import UserAccount
 from app.schemas.dashboard import (
     AdminDashboardStats,
     AgentRanking,
+    ProjectKpi,
     QuotaStats,
     TodayStats,
 )
@@ -74,6 +80,10 @@ def get_dashboard_stats(
     # Promised: AnalysisResult.key_segments['intent'] in PROMISE_INTENTS
     # key_segments is a JSON column — use PostgreSQL ->> operator via sa.type_coerce / cast
     promised_count = _count_promised(db, tenant_id, today_start, today_end)
+
+    # 今日承诺缴金额合计：今日 promise 通话所属 case 的 amount_owed 累计
+    # （MVP 没有独立回款流水表；schema 标注语义为「今日承诺缴金额」）
+    recovered_amount = _sum_promised_amount(db, tenant_id, today_start, today_end)
 
     # ── 2. Quota ──────────────────────────────────────────────────────────────
 
@@ -150,12 +160,15 @@ def get_dashboard_stats(
         )
     ).all()
 
+    # 当月每位坐席的 promise 通话数：按 caller_user_id 聚合 AnalysisResult.key_segments['intent']
+    month_promised_by_user = _count_month_promised_by_user(db, tenant_id, month_start, today_end)
+
     rankings = [
         AgentRanking(
             user_id=u.id,
             name=u.name,
             today_calls=today_calls_by_user.get(u.id, 0),
-            month_promised=0,  # TODO(sprint-settlement): query AnalysisResult for full month
+            month_promised=month_promised_by_user.get(u.id, 0),
         )
         for u in agent_users
     ]
@@ -194,7 +207,7 @@ def get_dashboard_stats(
             outbound_count=outbound_count,
             connected_count=connected_count,
             promised_count=promised_count,
-            recovered_amount=0.0,
+            recovered_amount=recovered_amount,
         ),
         minute_quota=QuotaStats(
             used_min=used_min,
@@ -241,3 +254,158 @@ def _count_promised(
             if segments.get("intent") in _PROMISE_INTENTS:
                 count += 1
     return count
+
+
+def _sum_promised_amount(
+    db: Session,
+    tenant_id: int,
+    start: datetime,
+    end: datetime,
+) -> float:
+    """Sum CollectionCase.amount_owed for calls in [start,end) whose intent is promise."""
+    rows = db.execute(
+        select(AnalysisResult.key_segments, CollectionCase.amount_owed)
+        .join(CallRecord, AnalysisResult.call_id == CallRecord.id)
+        .join(CollectionCase, CallRecord.case_id == CollectionCase.id)
+        .where(
+            CallRecord.tenant_id == tenant_id,
+            CallRecord.started_at >= start,
+            CallRecord.started_at < end,
+        )
+    ).all()
+
+    total = 0.0
+    for segments, amount in rows:
+        if not (segments and isinstance(segments, dict)):
+            continue
+        if segments.get("intent") not in _PROMISE_INTENTS:
+            continue
+        if amount is None:
+            continue
+        total += float(amount)
+    return round(total, 2)
+
+
+def _count_month_promised_by_user(
+    db: Session,
+    tenant_id: int,
+    start: datetime,
+    end: datetime,
+) -> dict[int, int]:
+    """Per-caller count of promise calls in [start,end)."""
+    rows = db.execute(
+        select(CallRecord.caller_user_id, AnalysisResult.key_segments)
+        .join(AnalysisResult, AnalysisResult.call_id == CallRecord.id)
+        .where(
+            CallRecord.tenant_id == tenant_id,
+            CallRecord.started_at >= start,
+            CallRecord.started_at < end,
+        )
+    ).all()
+
+    counts: dict[int, int] = {}
+    for caller_user_id, segments in rows:
+        if caller_user_id is None:
+            continue
+        if not (segments and isinstance(segments, dict)):
+            continue
+        if segments.get("intent") not in _PROMISE_INTENTS:
+            continue
+        counts[caller_user_id] = counts.get(caller_user_id, 0) + 1
+    return counts
+
+
+@router.get("/dashboard/by-project", response_model=list[ProjectKpi])
+def get_dashboard_by_project(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[ProjectKpi]:
+    """v1.4 — 按项目分维度看 KPI（admin/物业管理员/督导都能看）"""
+    tenant_id = payload.get("tenant_id")
+    if not tenant_id:
+        return []
+    tenant_id = int(tenant_id)
+
+    projects = db.execute(
+        select(Project).where(Project.tenant_id == tenant_id).order_by(Project.id)
+    ).scalars().all()
+
+    now = datetime.now(timezone.utc)
+    cutoff_30d = now - timedelta(days=30)
+    items: list[ProjectKpi] = []
+
+    for p in projects:
+        case_rows = db.execute(
+            select(CollectionCase.stage, CollectionCase.amount_owed).where(
+                CollectionCase.tenant_id == tenant_id,
+                CollectionCase.project_id == p.id,
+            )
+        ).all()
+        case_count = len(case_rows)
+        receivable = 0.0
+        received = 0.0
+        promised = in_progress = new_c = escalated = closed = 0
+        for stage, amt in case_rows:
+            amt_f = float(amt or 0)
+            receivable += amt_f
+            if stage == "paid":
+                received += amt_f
+                closed += 1
+            elif stage == "closed":
+                closed += 1
+            elif stage == "promised":
+                promised += 1
+            elif stage == "in_progress":
+                in_progress += 1
+            elif stage == "new":
+                new_c += 1
+            elif stage == "escalated":
+                escalated += 1
+
+        # 通话数 30 天
+        total_calls = db.execute(
+            select(func.count(CallRecord.id))
+            .join(CollectionCase, CollectionCase.id == CallRecord.case_id)
+            .where(
+                CallRecord.tenant_id == tenant_id,
+                CollectionCase.project_id == p.id,
+                CallRecord.started_at >= cutoff_30d,
+            )
+        ).scalar_one() or 0
+        connected = db.execute(
+            select(func.count(CallRecord.id))
+            .join(CollectionCase, CollectionCase.id == CallRecord.case_id)
+            .where(
+                CallRecord.tenant_id == tenant_id,
+                CollectionCase.project_id == p.id,
+                CallRecord.started_at >= cutoff_30d,
+                CallRecord.duration_sec > 10,
+            )
+        ).scalar_one() or 0
+
+        provider_name = None
+        if p.provider_id:
+            provider_name = db.execute(
+                select(ServiceProvider.name).where(ServiceProvider.id == p.provider_id)
+            ).scalar_one_or_none()
+
+        items.append(ProjectKpi(
+            project_id=p.id,
+            project_name=p.name,
+            provider_id=p.provider_id,
+            provider_name=provider_name,
+            case_count=case_count,
+            receivable=round(receivable, 2),
+            received=round(received, 2),
+            recovery_rate=round(received / receivable, 4) if receivable > 0 else 0.0,
+            promised_count=promised,
+            in_progress_count=in_progress,
+            new_count=new_c,
+            escalated_count=escalated,
+            closed_count=closed,
+            connected_30d=int(connected),
+            total_calls_30d=int(total_calls),
+        ))
+
+    return items

@@ -1,10 +1,10 @@
-// frontend/src/pages/admin/scripts/list.tsx
+// 1:1 还原 ui/admin.html#a-scripts 话术库管理
 import { useCreate, useDelete, useGo, useList } from "@refinedev/core";
 import type { CrudFilter } from "@refinedev/core";
-import { Plus, Upload, History, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
+import { AlertTriangle, Plus, Search, Upload } from "lucide-react";
 import { useState } from "react";
 import type { PaginatedResponse } from "../../../types";
-import { getScoreGradeColor, formatAdoptionRate, TRIGGER_INTENTS } from "./helpers";
+import { TRIGGER_INTENTS, formatAdoptionRate } from "./helpers";
 import { ScriptSheet } from "./ScriptSheet";
 
 interface ScriptItem {
@@ -21,6 +21,13 @@ interface ScriptItem {
   content: string;
   notes: string | null;
 }
+
+const SCORE_CLASS: Record<string, string> = {
+  A: "score-a",
+  B: "score-b",
+  C: "score-c",
+  D: "score-d",
+};
 
 export function ScriptListPage() {
   const go = useGo();
@@ -43,142 +50,283 @@ export function ScriptListPage() {
     filters,
   });
 
-  const data = query.data?.data as unknown as PaginatedResponse<ScriptItem> | undefined;
+  const data = query.data?.data as unknown as
+    | PaginatedResponse<ScriptItem>
+    | undefined;
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const { mutate: toggle } = useCreate();
   const { mutate: del } = useDelete();
 
-  const hasAutoDisabled = items.some((s) => s.score_grade === "D" && !s.is_active);
+  const autoDisabledCount = items.filter(
+    (s) => s.score_grade === "D" && !s.is_active,
+  ).length;
 
   return (
-    <div style={{ padding: 24 }}>
-      {hasAutoDisabled && (
-        <div style={{
-          background: "var(--color-danger-light)", color: "var(--color-danger)",
-          padding: "8px 16px", borderRadius: 6, marginBottom: 16, fontSize: 14,
-        }}>
-          ⚠ 有话术因 D 级评分被自动禁用，请检查并决定是否删除或重写。
+    <div>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">话术库管理</h1>
+          <div className="page-subtitle">共 {total} 条话术</div>
         </div>
-      )}
-
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        <input
-          placeholder="搜索标题/内容"
-          value={keyword}
-          onChange={(e) => { setKeyword(e.target.value); setPage(1); }}
-          style={{ padding: "6px 10px", border: "1px solid #d1d5db", borderRadius: 6, width: 200 }}
-        />
-        <select value={intent} onChange={(e) => { setIntent(e.target.value); setPage(1); }}
-          style={{ padding: "6px 10px", border: "1px solid #d1d5db", borderRadius: 6 }}>
-          <option value="">全部类型</option>
-          {TRIGGER_INTENTS.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-          style={{ padding: "6px 10px", border: "1px solid #d1d5db", borderRadius: 6 }}>
-          <option value="">全部状态</option>
-          <option value="active">启用</option>
-          <option value="inactive">禁用</option>
-        </select>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-          <button onClick={() => go({ to: "/admin/scripts/import" })}
-            style={{ padding: "6px 14px", background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-            <Upload size={14} /> 批量导入
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            className="ds-btn ds-btn-secondary"
+            onClick={() => go({ to: "/admin/scripts/import" })}
+          >
+            <Upload className="w-3.5 h-3.5" />
+            批量导入
           </button>
-          <button onClick={() => { setEditScript(null); setSheetOpen(true); }}
-            style={{ padding: "6px 14px", background: "var(--color-primary)", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-            <Plus size={14} /> 新增话术
+          <button
+            type="button"
+            className="ds-btn ds-btn-primary"
+            onClick={() => {
+              setEditScript(null);
+              setSheetOpen(true);
+            }}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            新增话术
           </button>
         </div>
       </div>
 
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-        <thead>
-          <tr style={{ borderBottom: "1px solid #e5e7eb", background: "#f9fafb" }}>
-            {["话术标题", "异议类型", "版本", "使用次数", "采用率", "评分", "状态", "操作"].map((h) => (
-              <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 500, color: "#374151" }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {query.isLoading && (
-            <tr><td colSpan={8} style={{ padding: 24, textAlign: "center", color: "#9ca3af" }}>加载中…</td></tr>
-          )}
-          {items.map((s) => (
-            <tr key={s.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
-              <td style={{ padding: "10px 12px", maxWidth: 200 }}>
-                <div style={{ fontWeight: 500 }}>{s.title}</div>
-                {s.tenant_id === null && (
-                  <span style={{ fontSize: 11, color: "#6b7280", background: "#f3f4f6", padding: "1px 6px", borderRadius: 4 }}>平台预置</span>
-                )}
-              </td>
-              <td style={{ padding: "10px 12px" }}>{s.trigger_intent}</td>
-              <td style={{ padding: "10px 12px" }}>v{s.version}</td>
-              <td style={{ padding: "10px 12px" }}>{s.usage_count}</td>
-              <td style={{ padding: "10px 12px" }}>{formatAdoptionRate(s.adoption_rate)}</td>
-              <td style={{ padding: "10px 12px" }}>
-                {s.score_grade ? (
-                  <span
-                    style={{ fontSize: 12, padding: "2px 8px", borderRadius: 4, border: "1px solid" }}
-                    className={getScoreGradeColor(s.score_grade)}
-                  >
-                    {s.score_grade}
-                  </span>
-                ) : "—"}
-              </td>
-              <td style={{ padding: "10px 12px" }}>
-                <span style={{
-                  fontSize: 12, padding: "2px 8px", borderRadius: 4,
-                  background: s.is_active ? "#dcfce7" : "#f3f4f6",
-                  color: s.is_active ? "#15803d" : "#6b7280",
-                }}>
-                  {s.is_active ? "启用" : "禁用"}
-                </span>
-              </td>
-              <td style={{ padding: "10px 12px" }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <button onClick={() => { setEditScript(s); setSheetOpen(true); }}
-                    style={{ fontSize: 12, color: "var(--color-primary)", background: "none", border: "none", cursor: "pointer" }}>
-                    编辑
-                  </button>
-                  <button onClick={() => toggle({ resource: `admin/scripts/${s.id}/toggle`, values: {} })}
-                    title={s.is_active ? "禁用" : "启用"}
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280" }}>
-                    {s.is_active ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
-                  </button>
-                  <button onClick={() => go({ to: `/admin/scripts/${s.id}/versions` })}
-                    title="版本历史"
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280" }}>
-                    <History size={16} />
-                  </button>
-                  {!s.is_active && (
-                    <button onClick={() => del({ resource: "admin/scripts", id: s.id })}
-                      title="删除"
-                      style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444" }}>
-                      <Trash2 size={16} />
-                    </button>
-                  )}
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {total > PAGE_SIZE && (
-        <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 16 }}>
-          <button disabled={page === 1} onClick={() => setPage(p => p - 1)}>上一页</button>
-          <span>第 {page} 页 / 共 {Math.ceil(total / PAGE_SIZE)} 页</span>
-          <button disabled={page * PAGE_SIZE >= total} onClick={() => setPage(p => p + 1)}>下一页</button>
+      {autoDisabledCount > 0 && (
+        <div
+          style={{
+            background: "#fef9c3",
+            border: "1px solid #fde047",
+            borderRadius: 8,
+            padding: "12px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            marginBottom: 16,
+            fontSize: 13.5,
+            color: "#854d0e",
+          }}
+        >
+          <AlertTriangle className="w-4 h-4" />
+          <span>
+            {autoDisabledCount} 条 <strong>D 级话术</strong>（综合评分过低）已被自动禁用，建议修订后重新启用。
+          </span>
         </div>
       )}
+
+      <div className="table-wrap">
+        <div className="table-toolbar">
+          <div className="search-box">
+            <Search className="w-3.5 h-3.5" />
+            <input
+              className="form-control"
+              placeholder="搜索话术标题或内容"
+              value={keyword}
+              onChange={(e) => {
+                setKeyword(e.target.value);
+                setPage(1);
+              }}
+              style={{ minWidth: 200 }}
+            />
+          </div>
+          <select
+            className="form-control"
+            style={{ width: 140 }}
+            value={intent}
+            onChange={(e) => {
+              setIntent(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">全部异议类型</option>
+            {TRIGGER_INTENTS.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+          <select
+            className="form-control"
+            style={{ width: 110 }}
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">全部状态</option>
+            <option value="active">启用</option>
+            <option value="inactive">已禁用</option>
+          </select>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>话术标题</th>
+              <th>异议类型</th>
+              <th>级别</th>
+              <th>使用次数</th>
+              <th>采用率</th>
+              <th>转化率</th>
+              <th>综合评分</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {query.isLoading && (
+              <tr>
+                <td colSpan={9} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                  加载中…
+                </td>
+              </tr>
+            )}
+            {!query.isLoading && items.length === 0 && (
+              <tr>
+                <td colSpan={9} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                  暂无话术
+                </td>
+              </tr>
+            )}
+            {items.map((s) => {
+              const isAutoDisabled = !s.is_active && s.score_grade === "D";
+              return (
+                <tr key={s.id} style={isAutoDisabled ? { opacity: 0.6 } : undefined}>
+                  <td style={{ fontWeight: 500 }}>
+                    {s.title}
+                    {s.tenant_id === null && (
+                      <span
+                        className="ds-badge ds-badge-gray"
+                        style={{ marginLeft: 6, fontSize: 10 }}
+                      >
+                        平台预置
+                      </span>
+                    )}
+                  </td>
+                  <td>{s.trigger_intent}</td>
+                  <td>
+                    <span className="ds-badge ds-badge-gray">v{s.version}</span>
+                  </td>
+                  <td>{s.usage_count.toLocaleString()}次</td>
+                  <td>{formatAdoptionRate(s.adoption_rate)}</td>
+                  <td>{formatAdoptionRate(s.conversion_rate)}</td>
+                  <td>
+                    {s.score_grade ? (
+                      <span className={SCORE_CLASS[s.score_grade] ?? ""}>
+                        {s.score_grade}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td>
+                    {s.is_active ? (
+                      <span className="ds-badge ds-badge-green">启用</span>
+                    ) : isAutoDisabled ? (
+                      <span className="ds-badge ds-badge-red">已禁用（自动）</span>
+                    ) : (
+                      <span className="ds-badge ds-badge-gray">已禁用</span>
+                    )}
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="ds-btn ds-btn-ghost ds-btn-sm"
+                      onClick={() => {
+                        setEditScript(s);
+                        setSheetOpen(true);
+                      }}
+                    >
+                      编辑
+                    </button>
+                    <button
+                      type="button"
+                      className="ds-btn ds-btn-ghost ds-btn-sm"
+                      onClick={() => go({ to: `/admin/scripts/${s.id}/versions` })}
+                    >
+                      版本历史
+                    </button>
+                    {s.is_active ? (
+                      <button
+                        type="button"
+                        className="ds-btn ds-btn-ghost ds-btn-sm"
+                        style={{ color: "#e02424" }}
+                        onClick={() =>
+                          toggle({
+                            resource: `admin/scripts/${s.id}/toggle`,
+                            values: {},
+                          })
+                        }
+                      >
+                        禁用
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="ds-btn ds-btn-ghost ds-btn-sm"
+                        style={{ color: "#057a55" }}
+                        onClick={() =>
+                          toggle({
+                            resource: `admin/scripts/${s.id}/toggle`,
+                            values: {},
+                          })
+                        }
+                      >
+                        启用
+                      </button>
+                    )}
+                    {!s.is_active && s.tenant_id !== null && (
+                      <button
+                        type="button"
+                        className="ds-btn ds-btn-ghost ds-btn-sm"
+                        style={{ color: "#e02424" }}
+                        onClick={() =>
+                          del({ resource: "admin/scripts", id: s.id })
+                        }
+                      >
+                        删除
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        {totalPages > 1 && (
+          <div className="ds-pagination">
+            <span className="pagination-info">
+              共 {total} 条，第 {page}/{totalPages} 页
+            </span>
+            <div className="pagination-pages">
+              {page > 1 && (
+                <div className="page-btn" onClick={() => setPage((p) => p - 1)}>
+                  ‹
+                </div>
+              )}
+              <div className="page-btn active">{page}</div>
+              {page < totalPages && (
+                <div className="page-btn" onClick={() => setPage((p) => p + 1)}>
+                  ›
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       <ScriptSheet
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
         script={editScript}
-        onSuccess={() => { setSheetOpen(false); query.refetch(); }}
+        onSuccess={() => {
+          setSheetOpen(false);
+          query.refetch();
+        }}
       />
     </div>
   );

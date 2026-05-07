@@ -46,6 +46,7 @@ class CaseImportRow(BaseModel):
     room: str | None = None
     amount_owed: Decimal | None = None
     months_overdue: int | None = None
+    notes: str | None = None  # 欠费情况说明（拒缴/暂时困难/失联等）
 
 
 class OwnerInfo(BaseModel):
@@ -74,11 +75,13 @@ class CaseWithOwnerResponse(BaseModel):
     last_contact_at: datetime | None
     monthly_contact_count: int
     status: str
+    notes: str | None = None
     created_at: datetime
     updated_at: datetime
 
 
 class CaseImportRequest(BaseModel):
+    project_id: int | None = None
     rows: list[CaseImportRow] = Field(..., min_length=1, max_length=500)
 
 

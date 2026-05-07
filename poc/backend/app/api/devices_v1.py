@@ -46,6 +46,18 @@ class SelfCheckRequest(BaseModel):
 
 class SelfCheckResponse(BaseModel):
     can_call: bool
+    fail_reasons: list[str] = []  # v1.6 — recording_dir / recording_toggle / permissions
+
+
+class PushRegPatchRequest(BaseModel):
+    device_id: str
+    push_reg_id: str
+    push_provider: str  # 'xiaomi' | 'huawei' | 'google'
+
+
+class PushRegPatchResponse(BaseModel):
+    device_id: str
+    push_reg_id_set: bool
 
 
 @router.post("/register", response_model=DeviceRegisterResponse, status_code=201)
@@ -115,26 +127,87 @@ def self_check(
     user_id: int = payload["user_id"]
     tenant_id: int = payload["tenant_id"]
 
+    # 区分「设备未注册」与「属他人/他租户」两类失败 — 前端给出不同引导
     device = db.execute(
-        select(DeviceProfile).where(
-            DeviceProfile.device_id == body.device_id,
-            DeviceProfile.user_id == user_id,
-            DeviceProfile.tenant_id == tenant_id,
-        )
+        select(DeviceProfile).where(DeviceProfile.device_id == body.device_id)
     ).scalar_one_or_none()
-
-    if not device:
+    if device is None:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
-            detail={"code": "ERR_DEVICE_NOT_FOUND", "message": "设备未注册或不属于当前用户"},
+            detail={
+                "code": "ERR_DEVICE_NOT_REGISTERED",
+                "message": "设备尚未注册，请先完成登录后的设备注册",
+            },
+        )
+    if device.user_id != user_id or device.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "ERR_DEVICE_OWNED_BY_OTHER",
+                "message": "本设备已绑定其他账号，请改账号或联系管理员",
+            },
         )
 
-    is_healthy = body.recording_dir_ok and body.recording_toggle_on and body.permissions_ok
+    fail_reasons: list[str] = []
+    if not body.recording_dir_ok:
+        fail_reasons.append("recording_dir")
+    if not body.recording_toggle_on:
+        fail_reasons.append("recording_toggle")
+    if not body.permissions_ok:
+        fail_reasons.append("permissions")
+
+    is_healthy = not fail_reasons
     device.is_healthy = is_healthy
     device.last_check_at = datetime.now(UTC)
     db.commit()
 
-    return SelfCheckResponse(can_call=is_healthy)
+    return SelfCheckResponse(can_call=is_healthy, fail_reasons=fail_reasons)
+
+
+@router.patch("/push-reg", response_model=PushRegPatchResponse)
+def patch_push_reg(
+    body: PushRegPatchRequest,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> PushRegPatchResponse:
+    """v1.6 — push 通道单独注册回调入口。
+
+    要求 device 已经通过 /devices/register 创建（一般在登录后由 App 触发）。
+    push 回调晚于登录到达：仅 patch push_reg_id/push_provider，不创建 row、
+    不改 brand/model 等字段，避免跨账号的 push 回调污染设备绑定。
+    """
+    user_id: int = payload["user_id"]
+    tenant_id: int = payload["tenant_id"]
+
+    device = db.execute(
+        select(DeviceProfile).where(DeviceProfile.device_id == body.device_id)
+    ).scalar_one_or_none()
+    if device is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "ERR_DEVICE_NOT_REGISTERED",
+                "message": "设备尚未注册，请先登录完成主注册流程",
+            },
+        )
+    if device.user_id != user_id or device.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "ERR_DEVICE_OWNED_BY_OTHER",
+                "message": "本设备已绑定其他账号",
+            },
+        )
+
+    device.push_reg_id = body.push_reg_id
+    device.push_provider = body.push_provider
+    db.commit()
+
+    return PushRegPatchResponse(
+        device_id=device.device_id,
+        push_reg_id_set=bool(device.push_reg_id),
+    )
 
 
 @router.get("/config")

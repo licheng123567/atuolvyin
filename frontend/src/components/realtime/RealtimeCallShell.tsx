@@ -5,6 +5,10 @@ import { AlertTriangle, ClipboardList, CreditCard, Headphones, X } from "lucide-
 import { useCallSocket } from "../../hooks/useCallSocket";
 import type { RiskEvent } from "../../lib/realtime/types";
 import { postSuggestionFeedback } from "../../lib/realtime/feedback-api";
+import {
+  createCallWorkOrder,
+  postCallIntent,
+} from "../../lib/realtime/call-intent-api";
 import { ConnectionBadge } from "./ConnectionBadge";
 import { TranscriptStream } from "./TranscriptStream";
 import { SuggestionCardStack } from "./SuggestionCardStack";
@@ -70,12 +74,13 @@ interface OwnerSummary {
 
 interface Props {
   callId: number;
+  caseId?: number | null;
   role: "agent" | "observer";
   token: string;
   owner: OwnerSummary | null;
 }
 
-export function RealtimeCallShell({ callId, role, token, owner }: Props) {
+export function RealtimeCallShell({ callId, caseId = null, role, token, owner }: Props) {
   const navigate = useNavigate();
   const { status, transcript, suggestions, tag, risks, sendFeedback } = useCallSocket({ callId, role, token });
   const [elapsed, setElapsed] = useState(0);
@@ -105,6 +110,32 @@ export function RealtimeCallShell({ callId, role, token, owner }: Props) {
     void postSuggestionFeedback(callId, id, action, token);  // durable
   };
 
+  const handleCreateWorkOrder = async () => {
+    const description = window.prompt("工单内容（必填）：");
+    if (!description?.trim()) return;
+    try {
+      const wo = await createCallWorkOrder(
+        { callId, caseId, description: description.trim() },
+        token,
+      );
+      alert(`工单 #${wo.id} 已创建`);
+    } catch (e) {
+      alert("建工单失败：" + (e as Error).message);
+    }
+  };
+
+  const handleIntent = async (
+    action: "send_payment_code" | "transfer_supervisor",
+    label: string,
+  ) => {
+    try {
+      await postCallIntent(callId, action, token);
+      alert(`${label} 已记录，等待业务流程接入`);
+    } catch (e) {
+      alert(`${label} 失败：` + (e as Error).message);
+    }
+  };
+
   const mm = String(Math.floor(elapsed / 60)).padStart(2, "0");
   const ss = String(elapsed % 60).padStart(2, "0");
 
@@ -119,7 +150,7 @@ export function RealtimeCallShell({ callId, role, token, owner }: Props) {
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => alert("建工单功能将在 v1.1 上线")}
+              onClick={() => void handleCreateWorkOrder()}
               className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors"
             >
               <ClipboardList className="w-3.5 h-3.5" />
@@ -127,7 +158,7 @@ export function RealtimeCallShell({ callId, role, token, owner }: Props) {
             </button>
             <button
               type="button"
-              onClick={() => alert("发支付码功能将在 v1.1 上线")}
+              onClick={() => void handleIntent("send_payment_code", "发支付码")}
               className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors"
             >
               <CreditCard className="w-3.5 h-3.5" />
@@ -135,7 +166,7 @@ export function RealtimeCallShell({ callId, role, token, owner }: Props) {
             </button>
             <button
               type="button"
-              onClick={() => alert("转接督导功能将在 v1.1 上线")}
+              onClick={() => void handleIntent("transfer_supervisor", "转接督导")}
               className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors"
             >
               <Headphones className="w-3.5 h-3.5" />

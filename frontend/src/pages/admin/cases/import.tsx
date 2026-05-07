@@ -1,6 +1,8 @@
-import { useCreate, useGo } from "@refinedev/core";
-import { ArrowLeft, Upload } from "lucide-react";
+// 1:1 还原 ui/admin.html#a-import 业主名单导入
+import { useCreate, useGo, useList } from "@refinedev/core";
+import { CheckCircle, Download, Upload as UploadIcon } from "lucide-react";
 import { useState } from "react";
+import type { PaginatedResponse } from "../../../types";
 
 interface ImportRow {
   name: string;
@@ -9,6 +11,7 @@ interface ImportRow {
   room: string;
   amount_owed: string;
   months_overdue: string;
+  notes: string;
 }
 
 const EMPTY_ROW: ImportRow = {
@@ -18,36 +21,62 @@ const EMPTY_ROW: ImportRow = {
   room: "",
   amount_owed: "",
   months_overdue: "",
+  notes: "",
 };
+
+interface LastImportSummary {
+  added: number;
+  updated: number;
+  skipped: number;
+  total: number;
+  preview: { name: string; room: string; phone: string; amount: string; status: "added" | "updated" | "skipped" }[];
+}
+
+interface ProjectOption {
+  id: number;
+  name: string;
+  case_count: number;
+}
 
 export function CaseImportPage() {
   const go = useGo();
   const [rows, setRows] = useState<ImportRow[]>([{ ...EMPTY_ROW }]);
-  const [result, setResult] = useState<{
-    imported: number;
-    skipped: number;
-    errors: string[];
-  } | null>(null);
+  const [lastImport, setLastImport] = useState<LastImportSummary | null>(null);
+  const [projectId, setProjectId] = useState<number | "">("");
+  const [error, setError] = useState<string | null>(null);
+
+  const { query: projectQuery } = useList<ProjectOption>({
+    resource: "admin/projects",
+    pagination: { currentPage: 1, pageSize: 100 },
+  });
+  const projectsRaw = projectQuery.data?.data;
+  const projects: ProjectOption[] =
+    (projectsRaw as unknown as PaginatedResponse<ProjectOption>)?.items ??
+    (projectsRaw as ProjectOption[] | undefined) ??
+    [];
 
   const { mutate: importCases, mutation: importMutation } = useCreate();
   const isPending = importMutation.isPending;
 
   function updateRow(idx: number, field: keyof ImportRow, value: string) {
     setRows((prev) =>
-      prev.map((r, i) => (i === idx ? { ...r, [field]: value } : r))
+      prev.map((r, i) => (i === idx ? { ...r, [field]: value } : r)),
     );
   }
-
   function addRow() {
     setRows((prev) => [...prev, { ...EMPTY_ROW }]);
   }
-
   function removeRow(idx: number) {
     setRows((prev) => prev.filter((_, i) => i !== idx));
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
+    if (projectId === "") {
+      setError("请先选择导入到哪个项目");
+      return;
+    }
     const payload = rows
       .filter((r) => r.name && r.phone)
       .map((r) => ({
@@ -57,229 +86,372 @@ export function CaseImportPage() {
         room: r.room.trim() || null,
         amount_owed: r.amount_owed ? r.amount_owed.trim() : null,
         months_overdue: r.months_overdue
-          ? (parseInt(r.months_overdue, 10) || null)
+          ? parseInt(r.months_overdue, 10) || null
           : null,
+        notes: r.notes.trim() || null,
       }));
 
     importCases(
       {
         resource: "admin/cases/import",
-        values: { rows: payload },
+        values: { project_id: projectId, rows: payload },
       },
       {
         onSuccess: (data) => {
           const d = data.data as {
-            imported: number;
-            skipped: number;
-            errors: string[];
+            imported?: number;
+            updated?: number;
+            skipped?: number;
+            errors?: string[];
           };
-          setResult(d);
+          const total = (d.imported ?? 0) + (d.updated ?? 0) + (d.skipped ?? 0);
+          setLastImport({
+            added: d.imported ?? 0,
+            updated: d.updated ?? 0,
+            skipped: d.skipped ?? 0,
+            total,
+            preview: payload.slice(0, 5).map((r, i) => ({
+              name: r.name,
+              room:
+                r.building && r.room
+                  ? `${r.building}-${r.room}`
+                  : r.building ?? r.room ?? "—",
+              phone: r.phone.replace(/(\d{3})\d{4}(\d{4})/, "$1****$2"),
+              amount: r.amount_owed ? `¥${Number(r.amount_owed).toLocaleString()}` : "—",
+              status: i < (d.imported ?? 0) ? "added" : "updated",
+            })),
+          });
+          setRows([{ ...EMPTY_ROW }]);
         },
-      }
-    );
-  }
-
-  if (result) {
-    return (
-      <div className="max-w-lg">
-        <div
-          className="p-6 bg-white border border-[var(--color-neutral-200)]"
-          style={{ borderRadius: "var(--radius-lg)" }}
-        >
-          <h2 className="text-lg font-semibold text-[var(--color-neutral-900)] mb-4">
-            导入完成
-          </h2>
-          <div className="space-y-2 mb-6">
-            <div className="flex justify-between text-sm">
-              <span className="text-[var(--color-neutral-600)]">成功导入</span>
-              <span
-                className="font-medium"
-                style={{ color: "var(--color-success)" }}
-              >
-                {result.imported} 件
-              </span>
-            </div>
-            {result.skipped > 0 && (
-              <div className="flex justify-between text-sm">
-                <span className="text-[var(--color-neutral-600)]">跳过</span>
-                <span
-                  className="font-medium"
-                  style={{ color: "var(--color-warning)" }}
-                >
-                  {result.skipped} 件
-                </span>
-              </div>
-            )}
-            {result.errors.length > 0 && (
-              <div className="mt-3">
-                <p
-                  className="text-sm font-medium mb-1"
-                  style={{ color: "var(--color-danger)" }}
-                >
-                  错误详情：
-                </p>
-                <ul className="text-xs space-y-0.5 text-[var(--color-neutral-600)]">
-                  {result.errors.map((err, i) => (
-                    <li key={i}>{err}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setResult(null);
-                setRows([{ ...EMPTY_ROW }]);
-              }}
-              className="px-4 py-2 text-sm border border-[var(--color-neutral-200)]"
-              style={{ borderRadius: "var(--radius-md)" }}
-            >
-              继续导入
-            </button>
-            <button
-              type="button"
-              onClick={() => go({ to: "/admin/cases" })}
-              className="px-4 py-2 text-sm font-medium text-white"
-              style={{
-                background: "var(--color-primary)",
-                borderRadius: "var(--radius-md)",
-              }}
-            >
-              查看案件列表
-            </button>
-          </div>
-        </div>
-      </div>
+      },
     );
   }
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <button
-          type="button"
-          onClick={() => go({ to: "/admin/cases" })}
-          className="text-[var(--color-neutral-400)] hover:text-[var(--color-neutral-700)]"
-        >
-          <ArrowLeft className="w-5 h-5" />
+      {/* Page header */}
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">业主名单导入</h1>
+          <div className="page-subtitle">支持手工逐行录入，或批量导入 Excel/CSV</div>
+        </div>
+        <button type="button" className="ds-btn ds-btn-secondary">
+          <Download className="w-3.5 h-3.5" />
+          下载导入模板
         </button>
-        <div className="flex items-center gap-2">
-          <Upload className="w-5 h-5 text-[var(--color-primary)]" />
-          <h1 className="text-xl font-semibold text-[var(--color-neutral-900)]">
-            批量导入案件
-          </h1>
+      </div>
+
+      {/* 项目选择器（v1.4 — 案件归属项目） */}
+      <div className="ds-card section-gap">
+        <div className="card-body" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <label className="form-label" style={{ marginBottom: 0 }}>
+            导入到项目<span className="req">*</span>
+          </label>
+          <select
+            className="form-control"
+            style={{ width: 320 }}
+            value={projectId}
+            onChange={(e) =>
+              setProjectId(e.target.value === "" ? "" : Number(e.target.value))
+            }
+          >
+            <option value="">— 选择项目 —</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}（已有 {p.case_count} 个案件）
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="ds-btn ds-btn-ghost"
+            onClick={() => go({ to: "/admin/projects" })}
+          >
+            管理项目
+          </button>
+          {projects.length === 0 && (
+            <span style={{ fontSize: 13, color: "#d97706" }}>
+              ⚠ 还没有项目，请先去「项目管理」创建
+            </span>
+          )}
         </div>
       </div>
 
-      <form onSubmit={handleSubmit}>
-        <div className="bg-white border border-[var(--color-neutral-200)] overflow-hidden mb-4">
-          <table className="w-full text-sm">
-            <thead className="bg-[var(--color-neutral-50)] border-b border-[var(--color-neutral-200)]">
-              <tr>
-                <th className="px-3 py-2 text-left font-medium text-[var(--color-neutral-600)]">
-                  姓名 *
-                </th>
-                <th className="px-3 py-2 text-left font-medium text-[var(--color-neutral-600)]">
-                  手机号 *
-                </th>
-                <th className="px-3 py-2 text-left font-medium text-[var(--color-neutral-600)]">
-                  楼栋
-                </th>
-                <th className="px-3 py-2 text-left font-medium text-[var(--color-neutral-600)]">
-                  房间
-                </th>
-                <th className="px-3 py-2 text-left font-medium text-[var(--color-neutral-600)]">
-                  欠费金额
-                </th>
-                <th className="px-3 py-2 text-left font-medium text-[var(--color-neutral-600)]">
-                  逾期月数
-                </th>
-                <th className="px-3 py-2 w-8" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--color-neutral-100)]">
-              {rows.map((row, idx) => (
-                <tr key={idx}>
-                  {(
-                    [
-                      "name",
-                      "phone",
-                      "building",
-                      "room",
-                      "amount_owed",
-                      "months_overdue",
-                    ] as (keyof ImportRow)[]
-                  ).map((field) => (
-                    <td key={field} className="px-3 py-2">
-                      <input
-                        type={
-                          field === "amount_owed" || field === "months_overdue"
-                            ? "number"
-                            : "text"
-                        }
-                        value={row[field]}
-                        onChange={(e) => updateRow(idx, field, e.target.value)}
-                        className="w-full px-2 py-1 text-sm border border-[var(--color-neutral-200)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
-                        style={{ borderRadius: "var(--radius-sm)" }}
-                        placeholder={
-                          field === "name"
-                            ? "张三"
-                            : field === "phone"
-                              ? "138xxxx"
-                              : ""
-                        }
-                      />
-                    </td>
-                  ))}
-                  <td className="px-3 py-2">
-                    <button
-                      type="button"
-                      onClick={() => removeRow(idx)}
-                      disabled={rows.length === 1}
-                      className="text-[var(--color-danger)] disabled:opacity-30 text-xs"
-                    >
-                      删除
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <button
-            type="button"
-            onClick={addRow}
-            className="text-sm text-[var(--color-primary)] hover:underline"
-          >
-            + 添加一行
-          </button>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => go({ to: "/admin/cases" })}
-              className="px-4 py-2 text-sm border border-[var(--color-neutral-200)]"
-              style={{ borderRadius: "var(--radius-md)" }}
-            >
-              取消
-            </button>
-            <button
-              type="submit"
-              disabled={isPending || rows.filter((r) => r.name && r.phone).length === 0}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+      {/* Upload zone (visual; v1.x 接 Excel 解析) */}
+      <div className="ds-card section-gap">
+        <div className="card-body">
+          <div className="upload-zone">
+            <UploadIcon
+              size={48}
+              strokeWidth={1.5}
+              color="#9ca3af"
+              style={{ margin: "0 auto 12px", display: "block" }}
+            />
+            <div
               style={{
-                background: "var(--color-primary)",
-                borderRadius: "var(--radius-md)",
+                fontSize: 15,
+                fontWeight: 600,
+                color: "#374151",
+                marginBottom: 6,
               }}
             >
-              {isPending ? "导入中…" : `导入 ${rows.filter((r) => r.name && r.phone).length} 条`}
-            </button>
+              拖拽 Excel / CSV 文件到此区域
+            </div>
+            <div style={{ fontSize: 13, color: "#9ca3af" }}>
+              或 <span style={{ color: "#1A56DB", cursor: "pointer" }}>点击选择文件</span>
+            </div>
+            <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 8 }}>
+              支持 .xlsx / .csv · 最大 100MB · 必须包含：姓名、房号、手机号、欠费金额
+            </div>
           </div>
         </div>
-      </form>
+      </div>
+
+      {/* 手工逐行录入 */}
+      <div className="ds-card section-gap">
+        <div className="card-header">
+          <span className="card-title">或手工录入</span>
+          <span className="text-sm text-muted">
+            已填 {rows.filter((r) => r.name && r.phone).length} 条
+          </span>
+        </div>
+        <div className="card-body">
+          <form onSubmit={handleSubmit}>
+            <div className="table-wrap" style={{ marginBottom: 16 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>姓名*</th>
+                    <th>手机号*</th>
+                    <th>楼栋*</th>
+                    <th>房间</th>
+                    <th>欠费金额</th>
+                    <th>逾期月数</th>
+                    <th>欠费情况说明</th>
+                    <th style={{ width: 60 }} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, idx) => (
+                    <tr key={idx}>
+                      {(
+                        [
+                          "name",
+                          "phone",
+                          "building",
+                          "room",
+                          "amount_owed",
+                          "months_overdue",
+                          "notes",
+                        ] as (keyof ImportRow)[]
+                      ).map((field) => (
+                        <td key={field}>
+                          <input
+                            type={
+                              field === "amount_owed" || field === "months_overdue"
+                                ? "number"
+                                : "text"
+                            }
+                            value={row[field]}
+                            onChange={(e) =>
+                              updateRow(idx, field, e.target.value)
+                            }
+                            className="form-control"
+                            style={{
+                              padding: "6px 10px",
+                              fontSize: 13,
+                              minWidth: field === "notes" ? 180 : undefined,
+                            }}
+                            placeholder={
+                              field === "name"
+                                ? "张三"
+                                : field === "phone"
+                                  ? "138xxxx"
+                                  : field === "building"
+                                    ? "1栋"
+                                    : field === "notes"
+                                      ? "如：经济困难/失联/拒缴"
+                                      : ""
+                            }
+                          />
+                        </td>
+                      ))}
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => removeRow(idx)}
+                          disabled={rows.length === 1}
+                          className="ds-btn ds-btn-ghost ds-btn-sm"
+                          style={{ color: "#e02424" }}
+                        >
+                          删除
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {error && (
+              <div
+                style={{
+                  background: "var(--color-danger-light)",
+                  color: "var(--color-danger)",
+                  padding: "8px 12px",
+                  borderRadius: 6,
+                  fontSize: 13,
+                  marginBottom: 12,
+                }}
+              >
+                {error}
+              </div>
+            )}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <button
+                type="button"
+                onClick={addRow}
+                className="ds-btn ds-btn-ghost"
+              >
+                + 添加一行
+              </button>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => go({ to: "/admin/cases" })}
+                  className="ds-btn ds-btn-secondary"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  disabled={
+                    isPending ||
+                    rows.filter((r) => r.name && r.phone).length === 0
+                  }
+                  className="ds-btn ds-btn-primary"
+                >
+                  {isPending
+                    ? "导入中…"
+                    : `导入 ${rows.filter((r) => r.name && r.phone).length} 条`}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* 上次导入结果 */}
+      {lastImport && (
+        <div className="ds-card">
+          <div className="card-header">
+            <span className="card-title">上次导入结果</span>
+            <span className="ds-badge ds-badge-green">
+              <CheckCircle className="w-3 h-3" />
+              导入成功
+            </span>
+          </div>
+          <div className="card-body">
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(4,1fr)",
+                gap: 12,
+                marginBottom: 20,
+              }}
+            >
+              <ImportStat label="新增" value={lastImport.added} bg="#f0fdf4" color="#057a55" />
+              <ImportStat label="更新" value={lastImport.updated} bg="#eff6ff" color="#1A56DB" />
+              <ImportStat
+                label="跳过重复"
+                value={lastImport.skipped}
+                bg="#fffbeb"
+                color="#d97706"
+              />
+              <ImportStat label="总计" value={lastImport.total} bg="#f3f4f6" color="#374151" />
+            </div>
+
+            {lastImport.preview.length > 0 && (
+              <>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+                  数据预览（前 {lastImport.preview.length} 条）
+                </div>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>姓名</th>
+                        <th>房号</th>
+                        <th>手机号</th>
+                        <th>欠费金额</th>
+                        <th>状态</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lastImport.preview.map((r, i) => (
+                        <tr key={i}>
+                          <td>{r.name}</td>
+                          <td>{r.room}</td>
+                          <td>{r.phone}</td>
+                          <td>{r.amount}</td>
+                          <td>
+                            <span
+                              className={
+                                r.status === "added"
+                                  ? "ds-badge ds-badge-green"
+                                  : r.status === "updated"
+                                    ? "ds-badge ds-badge-blue"
+                                    : "ds-badge ds-badge-gray"
+                              }
+                            >
+                              {r.status === "added"
+                                ? "新增"
+                                : r.status === "updated"
+                                  ? "更新"
+                                  : "跳过"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ImportStat({
+  label,
+  value,
+  bg,
+  color,
+}: {
+  label: string;
+  value: number;
+  bg: string;
+  color: string;
+}) {
+  return (
+    <div
+      style={{
+        textAlign: "center",
+        padding: 12,
+        background: bg,
+        borderRadius: 8,
+      }}
+    >
+      <div style={{ fontSize: 24, fontWeight: 700, color }}>{value}</div>
+      <div style={{ fontSize: 12, color: "#6b7280" }}>{label}</div>
     </div>
   );
 }

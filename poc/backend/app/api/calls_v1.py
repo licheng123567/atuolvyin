@@ -29,6 +29,8 @@ from app.models.user import UserAccount
 from app.schemas.call import (
     AnalysisResultOut,
     CallDetailResponse,
+    CallIntentIn,
+    CallIntentOut,
     CallListItem,
     CallTagOut,
     CallTagPatch,
@@ -471,6 +473,71 @@ async def respond_takeover(
         note=body.note,
     )
     return TakeoverResponseOut(call_id=call.id, accepted=body.accepted)
+
+
+_INTENT_ACTIONS = {"transfer_supervisor", "send_payment_code", "transfer_legal"}
+
+
+@router.post("/{call_id}/intent", response_model=CallIntentOut, status_code=201)
+def post_call_intent(
+    call_id: int,
+    body: CallIntentIn,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> CallIntentOut:
+    """Sprint 16 — 记录坐席意向动作（转主管/发支付码/转法务）。
+
+    实际派发流程（v1.x 主管 inbox / 微信支付码生成 / 法务转化撮合）尚未上线；
+    本端点产出 audit_log 痕迹，保证 PC 端按钮真实落地，便于后续接入实际处理器。
+    """
+    if body.action not in _INTENT_ACTIONS:
+        raise HTTPException(
+            status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "ERR_INVALID_INTENT", "message": "未知的意向动作"},
+        )
+
+    user_id = int(payload.get("user_id") or 0)
+    tenant_id = int(payload.get("tenant_id") or 0)
+    role = str(payload.get("role") or "")
+
+    call = db.execute(
+        select(CallRecord).where(
+            CallRecord.id == call_id,
+            CallRecord.tenant_id == tenant_id,
+        )
+    ).scalar_one_or_none()
+    if call is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "通话不存在"},
+        )
+    # agent 仅能对自己的通话发起意向
+    if call.caller_user_id != user_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_FORBIDDEN", "message": "仅可对本人通话发起动作"},
+        )
+
+    now = datetime.now(UTC)
+    log_audit(
+        db,
+        actor_user_id=user_id,
+        actor_role=role,
+        tenant_id=tenant_id,
+        action=f"call.intent.{body.action}",
+        target_type="call_record",
+        target_id=call_id,
+        payload={"note": body.note} if body.note else None,
+    )
+    db.commit()
+
+    return CallIntentOut(
+        call_id=call_id,
+        action=body.action,
+        recorded_at=now,
+        status="queued",
+    )
 
 
 @router.get("/{call_id}/dial-info", response_model=DialInfoOut)

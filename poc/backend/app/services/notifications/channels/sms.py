@@ -15,6 +15,8 @@ from sqlalchemy.orm import Session
 from app.core.crypto import decrypt_phone
 from app.models.user import UserAccount
 
+from . import log_delivery
+
 logger = logging.getLogger(__name__)
 
 
@@ -43,6 +45,30 @@ def send(
                 "[SMS-stub] tenant=%s event=%s → %s : %s | %s",
                 tenant_id, event_type, phone, title, body,
             )
+            log_delivery(
+                db,
+                channel="sms",
+                tenant_id=tenant_id,
+                user_id=int(u.id),
+                event_type=event_type,
+                severity=severity,
+                title=title,
+                status="skipped",
+                error="AUTOLUYIN_SMS_ENABLED=false (dev stub)",
+                payload=payload,
+            )
             continue
         # TODO: 接入阿里云 SMS SDK
         logger.warning("AUTOLUYIN_SMS_ENABLED=true but SDK not yet wired (event=%s)", event_type)
+        log_delivery(
+            db,
+            channel="sms",
+            tenant_id=tenant_id,
+            user_id=int(u.id),
+            event_type=event_type,
+            severity=severity,
+            title=title,
+            status="failed",
+            error="SDK not wired",
+            payload=payload,
+        )

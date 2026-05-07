@@ -22,11 +22,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi import status as http_status
 from sqlalchemy import case, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.crypto import mask_phone
+from app.core.crypto import encrypt_phone, mask_phone
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_password_hash, get_token_payload, require_roles
 from app.models.call import CallRecord
 from app.models.case import CollectionCase, OwnerProfile
 from app.models.settlement import DisputeRecord, SettlementStatement
@@ -52,6 +53,7 @@ from app.schemas.provider_admin import (
     ProviderTeamMemberOut,
     ProviderTenantOut,
     TeamActiveIn,
+    TeamMemberCreateIn,
 )
 from app.schemas.settlement import DisputeOut
 
@@ -286,6 +288,67 @@ async def list_partner_tenants(
 
 
 # ── PA.3.3 team management ──────────────────────────────────────────
+
+
+@router.post(
+    "/team",
+    response_model=ProviderTeamMemberOut,
+    status_code=http_status.HTTP_201_CREATED,
+)
+async def create_team_member(
+    body: TeamMemberCreateIn,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> ProviderTeamMemberOut:
+    user_id = _user_id_from_payload(payload)
+    provider_id = _resolve_provider_id(user_id, db)
+
+    # tenant must be a partner the provider has an active contract with
+    contract = db.execute(
+        select(ProviderTenantContract).where(
+            ProviderTenantContract.provider_id == provider_id,
+            ProviderTenantContract.tenant_id == body.tenant_id,
+            ProviderTenantContract.status == "active",
+        )
+    ).scalar_one_or_none()
+    if contract is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "ERR_NO_CONTRACT",
+                "message": "未与该租户建立合作合同",
+            },
+        )
+
+    new_user = UserAccount(
+        phone_enc=encrypt_phone(body.phone),
+        name=body.name,
+        password_hash=get_password_hash(body.password),
+        is_active=True,
+    )
+    db.add(new_user)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail={"code": "ERR_DUPLICATE_PHONE", "message": "手机号已被注册"},
+        ) from None
+
+    membership = UserTenantMembership(
+        user_id=new_user.id,
+        tenant_id=body.tenant_id,
+        role=body.role,
+        source_type="PROVIDER",
+        provider_id=provider_id,
+        is_active=True,
+    )
+    db.add(membership)
+    db.commit()
+    db.refresh(new_user)
+    return _team_member_to_out(new_user, body.role, True)
 
 
 @router.get(

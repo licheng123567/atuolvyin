@@ -4,6 +4,7 @@
    those into `@theme {}` blocks below for a fully CSS-first config. */
 @import "tailwindcss";
 @config "../tailwind.config.ts";
+/* design-system.css 在 main.tsx 单独 import，避开 Tailwind v4 import 处理 */
 
 @layer base {
   :root {

@@ -77,6 +77,25 @@ class TeamActiveIn(BaseModel):
     is_active: bool
 
 
+class TeamMemberCreateIn(BaseModel):
+    """Provider creates a new team member (catcher / supervisor / external).
+
+    `tenant_id` is required so the membership row has a tenant scope —
+    a provider may serve multiple tenants, so they pick which tenant
+    the new member is assigned to (must be a tenant the provider has
+    an active contract with).
+    """
+
+    name: str = Field(..., min_length=1, max_length=50)
+    phone: str = Field(..., pattern=r"^1[3-9]\d{9}$")
+    password: str = Field(..., min_length=8, max_length=72)
+    role: str = Field(
+        ...,
+        pattern=r"^(supervisor|agent_internal|agent_external)$",
+    )
+    tenant_id: int
+
+
 # ── Settlements (PA.3.4) — read-only ────────────────────────────────────
 
 
