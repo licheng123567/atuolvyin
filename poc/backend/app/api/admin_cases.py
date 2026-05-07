@@ -38,9 +38,11 @@ router = APIRouter()
 
 ADMIN_ROLES = ("admin",)
 # v1.4 — 项目经理可读 admin/cases（看自己管的项目案件）但不可写
+# v1.5 — 督导可读自己被加入项目的案件
 READ_ROLES = ADMIN_ROLES + (
     "project_manager_property",
     "project_manager_provider",
+    "supervisor",
 )
 
 
@@ -100,8 +102,10 @@ async def import_cases(
     tenant_id = _require_tenant(payload)
 
     # 校验 project_id 属本租户
+    project_agent_ids: list[int] = []
     if body.project_id is not None:
         from app.models.case import Project
+        from app.models.project_member import ProjectMember
         project = db.execute(
             select(Project).where(
                 Project.id == body.project_id,
@@ -113,9 +117,17 @@ async def import_cases(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
                 detail={"code": "ERR_INVALID_PROJECT", "message": "项目不存在或不属本租户"},
             )
+        # v1.5 S18.5 — 取项目的默认催收员，导入时 round-robin 分配
+        project_agent_ids = list(db.execute(
+            select(ProjectMember.user_id).where(
+                ProjectMember.project_id == body.project_id,
+                ProjectMember.role_in_project == "agent",
+                ProjectMember.is_active.is_(True),
+            ).order_by(ProjectMember.id)
+        ).scalars().all())
 
     imported = 0
-    for row in body.rows:
+    for idx, row in enumerate(body.rows):
         existing_owner = db.execute(
             select(OwnerProfile).where(
                 OwnerProfile.tenant_id == tenant_id,
@@ -136,11 +148,19 @@ async def import_cases(
         else:
             owner = existing_owner
 
+        # v1.5 S18.5 — round-robin 分配给项目的默认催收员
+        assigned_to: int | None = None
+        pool_type = "public"
+        if project_agent_ids:
+            assigned_to = project_agent_ids[idx % len(project_agent_ids)]
+            pool_type = "private"
+
         case = CollectionCase(
             tenant_id=tenant_id,
             project_id=body.project_id,
             owner_id=owner.id,
-            pool_type="public",
+            assigned_to=assigned_to,
+            pool_type=pool_type,
             stage="new",
             amount_owed=row.amount_owed,
             months_overdue=row.months_overdue,
@@ -170,12 +190,31 @@ async def list_cases(
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[CaseWithOwnerResponse]:
     tenant_id = _require_tenant(payload)
+    role = payload.get("role", "")
+    user_id = int(payload.get("user_id") or 0)
 
     stmt = (
         select(CollectionCase, OwnerProfile)
         .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
         .where(CollectionCase.tenant_id == tenant_id)
     )
+
+    # v1.5 S18.5 — 督导只看自己被加入项目的案件
+    if role == "supervisor":
+        from app.models.project_member import ProjectMember
+        visible_project_ids = list(db.execute(
+            select(ProjectMember.project_id).where(
+                ProjectMember.user_id == user_id,
+                ProjectMember.role_in_project == "supervisor",
+                ProjectMember.is_active.is_(True),
+            )
+        ).scalars().all())
+        if not visible_project_ids:
+            # 无项目归属 — 返回空集
+            stmt = stmt.where(CollectionCase.id == -1)
+        else:
+            stmt = stmt.where(CollectionCase.project_id.in_(visible_project_ids))
+
     if stage:
         stmt = stmt.where(CollectionCase.stage == stage)
     if pool_type:

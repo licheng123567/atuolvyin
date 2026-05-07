@@ -11,6 +11,7 @@ from app.api import (
     admin_compliance,
     admin_dashboard,
     admin_legal_conversion,
+    admin_project_members,
     admin_projects,
     admin_provider_recommendation,
     admin_providers,
@@ -148,6 +149,11 @@ app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 app.include_router(admin_cases.router, prefix="/api/v1/admin", tags=["admin-cases"])
 app.include_router(admin_legal_conversion.router, prefix="/api/v1/admin", tags=["admin-legal-conversion"])
 app.include_router(admin_projects.router, prefix="/api/v1/admin", tags=["admin-projects"])
+app.include_router(
+    admin_project_members.router,
+    prefix="/api/v1/admin",
+    tags=["admin-project-members"],
+)
 app.include_router(admin_risk_keywords.router, prefix="/api/v1/admin", tags=["admin-risk-keywords"])
 app.include_router(supervisor.router, prefix="/api/v1/supervisor", tags=["supervisor"])
 app.include_router(agent_cases.router, prefix="/api/v1/agent", tags=["agent"])

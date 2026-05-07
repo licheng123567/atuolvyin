@@ -72,6 +72,7 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
   supervisor: [
     {
       items: [
+        { label: "我的项目", path: "/supervisor/projects", icon: "FolderKanban" },
         { label: "实时通话墙", path: "/supervisor/live-wall", icon: "RadioTower" },
         {
           label: "质检复核",

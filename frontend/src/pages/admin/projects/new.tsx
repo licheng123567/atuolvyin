@@ -24,9 +24,12 @@ export function AdminProjectNewPage() {
   const [providerPmId, setProviderPmId] = useState<number | "">("");
   const [description, setDescription] = useState("");
   const [allowInternalAssist, setAllowInternalAssist] = useState(false);
+  // v1.5 S18.5 — 督导组 + 默认催收团队
+  const [supervisorIds, setSupervisorIds] = useState<number[]>([]);
+  const [agentIds, setAgentIds] = useState<number[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // 获取物业项目经理 + 服务商项目经理
+  // 获取物业项目经理 + 服务商项目经理 + 督导 + 催收员
   const { query: userQuery } = useList<UserItem>({
     resource: "admin/users",
     pagination: { currentPage: 1, pageSize: 200 },
@@ -42,6 +45,8 @@ export function AdminProjectNewPage() {
   const providerPMs = allUsers.filter(
     (u) => u.role === "project_manager_provider",
   );
+  const supervisors = allUsers.filter((u) => u.role === "supervisor");
+  const agents = allUsers.filter((u) => u.role === "agent_internal");
 
   // 服务商列表（已签约的）
   const { query: providerQuery } = useList<ProviderItem>({
@@ -76,6 +81,8 @@ export function AdminProjectNewPage() {
           provider_pm_user_id: providerPmId === "" ? null : providerPmId,
           description: description.trim() || null,
           allow_internal_assist: allowInternalAssist,
+          supervisor_user_ids: supervisorIds,
+          agent_user_ids: agentIds,
         },
       },
       {
@@ -200,6 +207,52 @@ export function AdminProjectNewPage() {
             />
           </div>
 
+          {/* v1.5 S18.5 — 项目团队 */}
+          <div
+            className="form-group"
+            style={{
+              background: "#f9fafb",
+              padding: 12,
+              borderRadius: 6,
+              border: "1px solid #e5e7eb",
+            }}
+          >
+            <div className="setting-label" style={{ marginBottom: 8 }}>
+              项目团队
+            </div>
+            <div className="setting-hint" style={{ marginBottom: 12 }}>
+              指定督导组和默认催收员后，导入案件时会按团队 round-robin 自动分配；督导只看自己加入项目下的案件。
+            </div>
+
+            <div style={{ marginBottom: 10 }}>
+              <label className="form-label">督导组（可多选）</label>
+              <CheckboxList
+                items={supervisors.map((u) => ({ id: u.id, label: u.name }))}
+                selected={supervisorIds}
+                onToggle={(id) =>
+                  setSupervisorIds((prev) =>
+                    prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+                  )
+                }
+                emptyHint="还没有督导角色用户，请先到「用户管理」创建"
+              />
+            </div>
+
+            <div>
+              <label className="form-label">默认催收团队（可多选）</label>
+              <CheckboxList
+                items={agents.map((u) => ({ id: u.id, label: u.name }))}
+                selected={agentIds}
+                onToggle={(id) =>
+                  setAgentIds((prev) =>
+                    prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+                  )
+                }
+                emptyHint="还没有内部催收员，请先到「用户管理」创建"
+              />
+            </div>
+          </div>
+
           {providerId !== "" && (
             <div
               className="form-group"
@@ -263,6 +316,66 @@ export function AdminProjectNewPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function CheckboxList({
+  items,
+  selected,
+  onToggle,
+  emptyHint,
+}: {
+  items: { id: number; label: string }[];
+  selected: number[];
+  onToggle: (id: number) => void;
+  emptyHint: string;
+}) {
+  if (items.length === 0) {
+    return (
+      <div className="form-hint" style={{ color: "#d97706", fontSize: 12 }}>
+        ⚠ {emptyHint}
+      </div>
+    );
+  }
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 6,
+      }}
+    >
+      {items.map((it) => {
+        const isSel = selected.includes(it.id);
+        return (
+          <label
+            key={it.id}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 13,
+              padding: "4px 10px",
+              borderRadius: 999,
+              border: isSel
+                ? "1px solid var(--color-primary)"
+                : "1px solid var(--color-neutral-200, #e5e7eb)",
+              background: isSel ? "var(--color-primary-light, #eff6ff)" : "white",
+              color: isSel ? "var(--color-primary)" : "var(--color-neutral-700)",
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={isSel}
+              onChange={() => onToggle(it.id)}
+              style={{ width: 12, height: 12 }}
+            />
+            {it.label}
+          </label>
+        );
+      })}
     </div>
   );
 }

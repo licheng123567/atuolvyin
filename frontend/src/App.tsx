@@ -81,6 +81,7 @@ import { WorkOrderNewPage } from "./pages/workorder/orders/new";
 import { WorkOrderDetailPage } from "./pages/workorder/orders/[id]";
 import { PMDashboardPage } from "./pages/pm/dashboard";
 import { MePage } from "./pages/me";
+import { SupervisorProjectsPage } from "./pages/supervisor/projects";
 import { ProviderDashboardPage } from "./pages/provider/dashboard";
 import { ProviderScriptListPage } from "./pages/provider/scripts";
 import { ProviderTenantsPage } from "./pages/provider/tenants";
@@ -100,7 +101,7 @@ const ROLE_HOME: Record<string, string> = {
   platform_super: "/ops/tenants",
   platform_ops: "/ops/tenants",
   admin: "/admin/projects",
-  supervisor: "/supervisor/reviews",
+  supervisor: "/supervisor/projects",
   agent_internal: "/agent/cases",
   agent_external: "/agent/cases",
   legal: "/legal/cases",
@@ -383,6 +384,8 @@ function App() {
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
             {/* Supervisor - Script Labels */}
             <Route path="/supervisor/script-labels" element={<SupervisorScriptLabelsPage />} />
+            {/* v1.5 — Supervisor projects 落地页 */}
+            <Route path="/supervisor/projects" element={<SupervisorProjectsPage />} />
             {/* Supervisor - Reviews */}
             <Route path="/supervisor/reviews" element={<SupervisorReviewsPage />} />
             <Route path="/supervisor/reviews/:call_id" element={<SupervisorReviewDetailPage />} />

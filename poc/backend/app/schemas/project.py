@@ -15,6 +15,9 @@ class ProjectCreateIn(BaseModel):
     plan_end: datetime | None = None
     description: str | None = None
     allow_internal_assist: bool = False
+    # v1.5 S18.5 — 项目团队（督导组 + 默认催收员），创建时一次性写入 ProjectMember
+    supervisor_user_ids: list[int] = []
+    agent_user_ids: list[int] = []
 
 
 class ProjectUpdateIn(BaseModel):

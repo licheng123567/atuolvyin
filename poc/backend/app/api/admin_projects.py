@@ -173,6 +173,38 @@ def create_project(
     )
     db.add(p)
     db.flush()
+
+    # v1.5 S18.5 — 写入项目团队成员（督导 + 催收员）
+    from app.models.project_member import ProjectMember
+
+    def _validate_member_role(uid: int, expected_role: str) -> None:
+        m = db.execute(
+            select(UserTenantMembership).where(
+                UserTenantMembership.user_id == uid,
+                UserTenantMembership.tenant_id == tenant_id,
+                UserTenantMembership.is_active.is_(True),
+            )
+        ).scalar_one_or_none()
+        if m is None or m.role != expected_role:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "ERR_INVALID_MEMBER",
+                    "message": f"用户 {uid} 不是 {expected_role} 角色或不属本租户",
+                },
+            )
+
+    for uid in body.supervisor_user_ids:
+        _validate_member_role(uid, "supervisor")
+        db.add(ProjectMember(
+            project_id=p.id, user_id=uid, role_in_project="supervisor",
+        ))
+    for uid in body.agent_user_ids:
+        _validate_member_role(uid, "agent_internal")
+        db.add(ProjectMember(
+            project_id=p.id, user_id=uid, role_in_project="agent",
+        ))
+
     log_audit(
         db,
         actor_user_id=int(payload.get("user_id") or 0) or None,
@@ -181,7 +213,12 @@ def create_project(
         action="project.created",
         target_type="project",
         target_id=p.id,
-        payload={"name": p.name, "provider_id": p.provider_id},
+        payload={
+            "name": p.name,
+            "provider_id": p.provider_id,
+            "supervisor_count": len(body.supervisor_user_ids),
+            "agent_count": len(body.agent_user_ids),
+        },
     )
     db.commit()
     db.refresh(p)
