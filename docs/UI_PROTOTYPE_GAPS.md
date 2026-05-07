@@ -134,7 +134,7 @@
 | React 页 | 备注 |
 |---|---|
 | ~~supervisor/live-wall~~ | ✅ Sprint 15.4 反向出原型，作为 supervisor.html 子 section（sv-livewall） |
-| **agent/workstation/live** | 实时通话 PC 主控页，无原型 |
+| ~~agent/workstation/live~~ | ✅ Sprint 16.2 反向出原型 → ui/agent-workstation-live.html |
 | **admin/workstation/live** | 实时通话 PC 管理员视图，无原型 |
 | **calls/detail** | 通话详情页（录音回放/转写/AI/风控时间线）|
 
@@ -175,7 +175,7 @@
 1. ~~supervisor/live-wall~~ ✅ 已落（supervisor.html#sv-livewall, Sprint 15.4）
 2. ~~help/app~~ ✅ 已落（ui/help-app.html, Sprint 16.2）
 3. ~~verify~~ ✅ 已落（ui/verify.html, Sprint 16.2）
-4. agent/workstation/live
+4. ~~agent/workstation/live~~ ✅ 已落（ui/agent-workstation-live.html, Sprint 16.2）
 5. admin/workstation/live
 
 **第二批（缺失功能页 3 个 — 待 v1.4 实施时同步出原型）**：

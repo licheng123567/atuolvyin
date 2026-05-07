@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>实时通话工作台（坐席） — 有证慧催</title>
+  <link rel="stylesheet" href="assets/design-system.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    body { background: var(--color-neutral-50); min-height: 100vh; }
+    .ws-page { padding: 16px; min-height: 100vh; display: flex; flex-direction: column; gap: 14px; }
+
+    /* Header bar */
+    .ws-header {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: 10px 16px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .ws-timer {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 18px;
+      color: var(--color-neutral-700);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .ws-conn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: var(--color-success-light);
+      color: var(--color-success);
+      border: 1px solid #A7F3D0;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .ws-conn-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--color-success);
+      animation: pulse 1.6s infinite;
+    }
+    @keyframes pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(16,185,129,0.5); }
+      70%  { box-shadow: 0 0 0 6px rgba(16,185,129,0); }
+      100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+    }
+    .ws-actions { display: flex; gap: 6px; }
+    .ws-btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 5px 11px;
+      border: 1px solid var(--color-neutral-300);
+      background: white;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      color: var(--color-neutral-700);
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .ws-btn:hover { background: var(--color-neutral-50); }
+    .ws-btn svg { width: 13px; height: 13px; }
+
+    /* 3-column grid */
+    .ws-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 280px 1fr 340px;
+      gap: 14px;
+      min-height: 0;
+    }
+
+    /* Left — Owner card */
+    .owner-card {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      padding: 18px;
+    }
+    .owner-name {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--color-neutral-900);
+    }
+    .owner-addr {
+      font-size: 13px;
+      color: var(--color-neutral-500);
+      margin-top: 4px;
+    }
+    .owner-amount {
+      margin-top: 14px;
+      padding: 12px 14px;
+      background: var(--color-danger-light);
+      border-radius: var(--radius-md);
+      text-align: center;
+    }
+    .owner-amount-label {
+      font-size: 11.5px;
+      color: var(--color-neutral-500);
+      margin-bottom: 4px;
+    }
+    .owner-amount-value {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--color-danger);
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    }
+    .owner-extra-row {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--color-neutral-100);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 12.5px;
+      color: var(--color-neutral-700);
+    }
+    .owner-extra-row .label { color: var(--color-neutral-500); }
+
+    /* Middle — Transcript */
+    .transcript-card {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .transcript-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--color-neutral-100);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--color-neutral-800);
+    }
+    .transcript-header svg {
+      width: 16px; height: 16px;
+      color: var(--color-primary);
+    }
+    .transcript-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .ts-line { display: flex; gap: 10px; max-width: 90%; }
+    .ts-line.right { margin-left: auto; flex-direction: row-reverse; }
+    .ts-avatar {
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 600;
+    }
+    .ts-avatar.agent { background: var(--color-primary-light); color: var(--color-primary); }
+    .ts-avatar.owner { background: var(--color-neutral-100); color: var(--color-neutral-700); }
+    .ts-bubble {
+      padding: 8px 12px;
+      border-radius: 12px;
+      font-size: 13.5px;
+      color: var(--color-neutral-800);
+      line-height: 1.55;
+      max-width: 100%;
+    }
+    .ts-bubble.agent {
+      background: var(--color-primary-light);
+      color: var(--color-primary);
+      border-bottom-right-radius: 4px;
+    }
+    .ts-bubble.owner {
+      background: var(--color-neutral-100);
+      border-bottom-left-radius: 4px;
+    }
+    .ts-bubble.streaming { opacity: 0.7; }
+    .ts-bubble.streaming::after {
+      content: '▌';
+      animation: blink 1s infinite;
+      margin-left: 2px;
+    }
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      50.01%, 100% { opacity: 0; }
+    }
+    .ts-time {
+      font-size: 10px;
+      color: var(--color-neutral-400);
+      margin-top: 4px;
+      text-align: right;
+    }
+
+    /* Right — Suggestions + Risk */
+    .right-panel { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; }
+
+    .suggestion-card {
+      background: white;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      padding: 12px 14px;
+    }
+    .suggestion-card.fresh {
+      border-left: 3px solid var(--color-primary);
+    }
+    .suggestion-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11.5px;
+      color: var(--color-neutral-500);
+      margin-bottom: 6px;
+    }
+    .suggestion-tag {
+      padding: 1px 7px;
+      background: var(--color-primary-light);
+      color: var(--color-primary);
+      border-radius: 999px;
+      font-size: 10.5px;
+      font-weight: 500;
+    }
+    .suggestion-text {
+      font-size: 13px;
+      color: var(--color-neutral-800);
+      line-height: 1.55;
+    }
+    .suggestion-actions {
+      margin-top: 10px;
+      display: flex;
+      gap: 6px;
+    }
+    .sug-btn {
+      flex: 1;
+      padding: 5px 8px;
+      border-radius: var(--radius-sm);
+      border: 1px solid;
+      font-size: 11.5px;
+      cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+      transition: background 0.15s ease;
+    }
+    .sug-btn svg { width: 12px; height: 12px; }
+    .sug-btn-adopt {
+      background: var(--color-success-light);
+      border-color: #A7F3D0;
+      color: var(--color-success);
+    }
+    .sug-btn-adopt:hover { background: #D1FAE5; }
+    .sug-btn-ignore {
+      background: white;
+      border-color: var(--color-neutral-300);
+      color: var(--color-neutral-600);
+    }
+    .sug-btn-ignore:hover { background: var(--color-neutral-50); }
+
+    /* Risk banner */
+    .risk-banner {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      border: 1px solid;
+      font-size: 12.5px;
+    }
+    .risk-banner svg.icon { width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px; }
+    .risk-banner.l1 {
+      background: var(--color-warning-light);
+      border-color: #FCD34D;
+      color: #92400E;
+    }
+    .risk-banner.l1 svg.icon { color: var(--color-warning); }
+    .risk-banner.l2 {
+      background: var(--color-danger-light);
+      border-color: #FCA5A5;
+      color: #991B1B;
+    }
+    .risk-banner.l2 svg.icon { color: var(--color-danger); }
+    .risk-title { font-weight: 600; margin-bottom: 2px; }
+    .risk-keywords { font-size: 11px; opacity: 0.85; }
+    .risk-close {
+      flex-shrink: 0;
+      cursor: pointer;
+      opacity: 0.55;
+      transition: opacity 0.15s ease;
+    }
+    .risk-close svg { width: 14px; height: 14px; }
+    .risk-close:hover { opacity: 1; }
+
+    .panel-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--color-neutral-700);
+      margin-bottom: 4px;
+      padding-left: 4px;
+    }
+    .panel-title svg { width: 14px; height: 14px; color: var(--color-primary); }
+  </style>
+</head>
+<body>
+
+  <div class="ws-page">
+
+    <!-- ── Header ── -->
+    <header class="ws-header">
+      <div class="ws-timer">通话 03:42</div>
+      <div class="ws-conn">
+        <span class="ws-conn-dot"></span>
+        实时连接
+      </div>
+      <div class="ws-actions">
+        <button class="ws-btn"><i data-lucide="clipboard-list"></i>建工单</button>
+        <button class="ws-btn"><i data-lucide="credit-card"></i>发支付码</button>
+        <button class="ws-btn"><i data-lucide="headphones"></i>转接督导</button>
+      </div>
+    </header>
+
+    <!-- ── 3-column body ── -->
+    <div class="ws-grid">
+
+      <!-- Left: Owner -->
+      <aside class="owner-card">
+        <div class="owner-name">张大伟</div>
+        <div class="owner-addr">3-1201 · 138****6677</div>
+        <div class="owner-amount">
+          <div class="owner-amount-label">累计欠费</div>
+          <div class="owner-amount-value">¥3,240</div>
+        </div>
+        <div class="owner-extra-row">
+          <div><span class="label">逾期：</span>4 个月</div>
+          <div><span class="label">最近联络：</span>2026-04-15 14:20</div>
+          <div><span class="label">案件 #：</span>C-20260315-0042</div>
+          <div><span class="label">阶段：</span>处理中</div>
+        </div>
+      </aside>
+
+      <!-- Middle: Transcript -->
+      <div class="transcript-card">
+        <div class="transcript-header">
+          <i data-lucide="captions"></i>
+          实时转写
+        </div>
+        <div class="transcript-body">
+          <!-- Owner -->
+          <div class="ts-line">
+            <div class="ts-avatar owner">主</div>
+            <div>
+              <div class="ts-bubble owner">喂，你好。</div>
+              <div class="ts-time">14:31:02</div>
+            </div>
+          </div>
+          <!-- Agent -->
+          <div class="ts-line right">
+            <div class="ts-avatar agent">坐</div>
+            <div>
+              <div class="ts-bubble agent">您好，请问是 3-1201 的张先生吗？我是绿城锦绣物业的客服。</div>
+              <div class="ts-time">14:31:05</div>
+            </div>
+          </div>
+          <!-- Owner -->
+          <div class="ts-line">
+            <div class="ts-avatar owner">主</div>
+            <div>
+              <div class="ts-bubble owner">是的，什么事？</div>
+              <div class="ts-time">14:31:11</div>
+            </div>
+          </div>
+          <div class="ts-line right">
+            <div class="ts-avatar agent">坐</div>
+            <div>
+              <div class="ts-bubble agent">是这样的，您 1 月到 4 月的物业费一共 3240 元还没缴，今天给您打个电话提醒一下。</div>
+              <div class="ts-time">14:31:18</div>
+            </div>
+          </div>
+          <div class="ts-line">
+            <div class="ts-avatar owner">主</div>
+            <div>
+              <div class="ts-bubble owner">不想交，电梯老坏，物业服务质量太差。</div>
+              <div class="ts-time">14:31:30</div>
+            </div>
+          </div>
+          <!-- Streaming -->
+          <div class="ts-line right">
+            <div class="ts-avatar agent">坐</div>
+            <div>
+              <div class="ts-bubble agent streaming">您说的电梯问题我们记录一下，我会反馈给</div>
+              <div class="ts-time">14:31:42 · 转写中</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Suggestions + Risk -->
+      <aside class="right-panel">
+
+        <div class="panel-title">
+          <i data-lucide="sparkles"></i>
+          AI 推荐话术
+        </div>
+
+        <!-- Suggestion (fresh) -->
+        <div class="suggestion-card fresh">
+          <div class="suggestion-meta">
+            <span class="suggestion-tag">质量异议</span>
+            <span>14:31:35 · 命中"服务质量"</span>
+          </div>
+          <div class="suggestion-text">
+            "我理解您的不满。电梯维修问题我会立即反馈给项目经理，今天就有人现场处理。
+            但物业费和服务争议是两件事，欠费久了会影响您的征信和未来房产交易。
+            您看是分两月付还是一次付清？"
+          </div>
+          <div class="suggestion-actions">
+            <button class="sug-btn sug-btn-adopt">
+              <i data-lucide="thumbs-up"></i>采纳
+            </button>
+            <button class="sug-btn sug-btn-ignore">
+              <i data-lucide="thumbs-down"></i>跳过
+            </button>
+          </div>
+        </div>
+
+        <!-- Suggestion (older) -->
+        <div class="suggestion-card">
+          <div class="suggestion-meta">
+            <span class="suggestion-tag">破冰</span>
+            <span>14:31:08 · 已采纳</span>
+          </div>
+          <div class="suggestion-text">
+            "您好，请问是 X-XXXX 的 Y 先生/女士吗？我是 [小区] 物业的客服 …"
+          </div>
+        </div>
+
+        <div class="panel-title" style="margin-top:6px;">
+          <i data-lucide="alert-triangle"></i>
+          风控告警
+        </div>
+
+        <!-- Risk L2 -->
+        <div class="risk-banner l2">
+          <i data-lucide="alert-triangle" class="icon"></i>
+          <div style="flex:1;">
+            <div class="risk-title">⛔ 高风险 · 业主威胁/抵触</div>
+            <div class="risk-keywords">关键词：不想交、服务质量太差</div>
+            <a href="#" style="font-size:11px;text-decoration:underline;opacity:0.75;display:inline-block;margin-top:2px;">
+              查看详情
+            </a>
+          </div>
+          <span class="risk-close"><i data-lucide="x"></i></span>
+        </div>
+
+        <!-- Risk L1 -->
+        <div class="risk-banner l1">
+          <i data-lucide="alert-triangle" class="icon"></i>
+          <div style="flex:1;">
+            <div class="risk-title">⚠ 轻微提示 · 语速过快</div>
+            <div class="risk-keywords">语速 320 字/分（建议 ≤ 240）</div>
+          </div>
+          <span class="risk-close"><i data-lucide="x"></i></span>
+        </div>
+
+      </aside>
+
+    </div>
+
+  </div>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>
