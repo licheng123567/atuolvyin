@@ -23,11 +23,12 @@ interface LoginHistoryItem {
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "物业管理员",
-  supervisor: "主管/督导",
-  agent_internal: "催收员（内部）",
-  agent_external: "催收员（外部）",
-  legal: "法务专员",
-  workorder: "工单处理员",
+  supervisor: "督导",
+  agent_internal: "内部催收员",
+  agent_external: "外勤催收员（服务商）",
+  legal: "法务对接人",
+  workorder: "协调员",
+  coordinator: "协调员",
   project_manager_property: "项目负责人（物业）",
   project_manager_provider: "项目负责人（服务商）",
   provider_admin: "服务商管理员",
@@ -246,8 +247,13 @@ function ContactSection({
   const [phoneErr, setPhoneErr] = useState<string | null>(null);
   const { mutate: phoneAction, mutation: phoneMutation } = useCustomMutation();
 
-  const [emailStep, setEmailStep] = useState(false);
-  const [email, setEmail] = useState(me.email ?? "");
+  // 邮箱换绑状态机：idle → form（输入新邮箱）→ verify-new（首次绑定，单 OTP）/ verify-both（已绑定，双 OTP）
+  type EmailStep = "idle" | "form" | "verify-new" | "verify-both";
+  const [emailStep, setEmailStep] = useState<EmailStep>("idle");
+  const [newEmail, setNewEmail] = useState("");
+  const [emailOldOtp, setEmailOldOtp] = useState("");
+  const [emailNewOtp, setEmailNewOtp] = useState("");
+  const [emailHint, setEmailHint] = useState<string | null>(null);
   const [emailErr, setEmailErr] = useState<string | null>(null);
   const [emailDone, setEmailDone] = useState(false);
   const { mutate: emailAction, mutation: emailMutation } = useCustomMutation();
@@ -312,24 +318,53 @@ function ContactSection({
     );
   }
 
-  function bindEmail() {
+  function startEmailChange() {
     setEmailErr(null);
+    setEmailHint(null);
     setEmailDone(false);
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(newEmail)) {
       setEmailErr("邮箱格式无效");
       return;
     }
     emailAction(
-      { url: "me/email/bind", method: "post", values: { email } },
+      { url: "me/email/change-request", method: "post", values: { new_email: newEmail } },
+      {
+        onSuccess: (resp) => {
+          const data = (resp as { data?: { requires_old_otp?: boolean; dev_code_old?: string; dev_code_new?: string } }).data;
+          const requiresOld = !!data?.requires_old_otp;
+          setEmailStep(requiresOld ? "verify-both" : "verify-new");
+          const hints: string[] = [];
+          if (data?.dev_code_old) hints.push(`旧邮箱验证码 ${data.dev_code_old}`);
+          if (data?.dev_code_new) hints.push(`新邮箱验证码 ${data.dev_code_new}`);
+          setEmailHint(
+            hints.length ? `开发模式：${hints.join("，")}` : "验证码已发送，5 分钟内有效",
+          );
+        },
+        onError: (e) => {
+          const msg = (e as { response?: { data?: { detail?: { message?: string } } } }).response?.data?.detail?.message;
+          setEmailErr(msg ?? "发送失败");
+        },
+      },
+    );
+  }
+
+  function confirmEmailChange() {
+    setEmailErr(null);
+    const values: Record<string, string> = { new_email: newEmail, new_otp: emailNewOtp };
+    if (emailStep === "verify-both") values.old_otp = emailOldOtp;
+    emailAction(
+      { url: "me/email/change-confirm", method: "post", values },
       {
         onSuccess: () => {
+          setEmailStep("idle");
+          setNewEmail(""); setEmailOldOtp(""); setEmailNewOtp("");
           setEmailDone(true);
-          setEmailStep(false);
+          setEmailHint(null);
           onChanged();
         },
         onError: (e) => {
-          const code = (e as { response?: { data?: { detail?: { message?: string } } } }).response?.data?.detail?.message;
-          setEmailErr(code ?? "绑定失败");
+          const msg = (e as { response?: { data?: { detail?: { message?: string } } } }).response?.data?.detail?.message;
+          setEmailErr(msg ?? "校验失败");
         },
       },
     );
@@ -384,21 +419,99 @@ function ContactSection({
           邮箱
         </span>
         <div>
-          {!emailStep ? (
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <span>{me.email ?? <span className="text-muted">未绑定</span>}</span>
-              <button type="button" className="ds-btn ds-btn-ghost ds-btn-sm" onClick={() => { setEmailStep(true); setEmail(me.email ?? ""); setEmailErr(null); setEmailDone(false); }}>
-                {me.email ? "换绑" : "绑定"}
-              </button>
-              {emailDone && <span style={{ color: "#057a55", fontSize: 12 }}>✅ 已更新</span>}
-            </div>
-          ) : (
+          {emailStep === "idle" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 360 }}>
-              <input className="form-control" type="email" placeholder="example@company.com" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={120} />
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <span>{me.email ?? <span className="text-muted">未绑定</span>}</span>
+                <button
+                  type="button"
+                  className="ds-btn ds-btn-ghost ds-btn-sm"
+                  onClick={() => {
+                    setNewEmail(""); setEmailErr(null); setEmailDone(false);
+                    setEmailStep("form");
+                  }}
+                >
+                  {me.email ? "换绑邮箱" : "绑定邮箱"}
+                </button>
+                {emailDone && <span style={{ color: "#057a55", fontSize: 12 }}>✅ 已更新</span>}
+              </div>
+            </div>
+          )}
+          {emailStep === "form" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 360 }}>
+              <input
+                className="form-control"
+                type="email"
+                placeholder="example@company.com"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value.toLowerCase())}
+                maxLength={120}
+              />
               {emailErr && <span style={{ color: "#e02424", fontSize: 12 }}>{emailErr}</span>}
               <div style={{ display: "flex", gap: 8 }}>
-                <button type="button" className="ds-btn ds-btn-primary ds-btn-sm" disabled={emailMutation.isPending} onClick={bindEmail}>保存</button>
-                <button type="button" className="ds-btn ds-btn-secondary ds-btn-sm" onClick={() => { setEmailStep(false); setEmailErr(null); }}>取消</button>
+                <button
+                  type="button"
+                  className="ds-btn ds-btn-primary ds-btn-sm"
+                  disabled={emailMutation.isPending || !newEmail}
+                  onClick={startEmailChange}
+                >
+                  发送验证码
+                </button>
+                <button
+                  type="button"
+                  className="ds-btn ds-btn-secondary ds-btn-sm"
+                  onClick={() => { setEmailStep("idle"); setEmailErr(null); }}
+                >
+                  取消
+                </button>
+              </div>
+            </div>
+          )}
+          {(emailStep === "verify-new" || emailStep === "verify-both") && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 360 }}>
+              {emailHint && <span style={{ fontSize: 12, color: "#6b7280" }}>{emailHint}</span>}
+              <div style={{ fontSize: 12, color: "#6b7280" }}>
+                目标邮箱：<span style={{ fontFamily: "monospace" }}>{newEmail}</span>
+              </div>
+              {emailStep === "verify-both" && (
+                <input
+                  className="form-control"
+                  placeholder="旧邮箱收到的验证码"
+                  value={emailOldOtp}
+                  onChange={(e) => setEmailOldOtp(e.target.value.replace(/\D/g, ""))}
+                  maxLength={8}
+                  style={{ fontFamily: "monospace", letterSpacing: 4, textAlign: "center" }}
+                />
+              )}
+              <input
+                className="form-control"
+                placeholder="新邮箱收到的验证码"
+                value={emailNewOtp}
+                onChange={(e) => setEmailNewOtp(e.target.value.replace(/\D/g, ""))}
+                maxLength={8}
+                style={{ fontFamily: "monospace", letterSpacing: 4, textAlign: "center" }}
+              />
+              {emailErr && <span style={{ color: "#e02424", fontSize: 12 }}>{emailErr}</span>}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  className="ds-btn ds-btn-primary ds-btn-sm"
+                  disabled={
+                    emailMutation.isPending ||
+                    !emailNewOtp ||
+                    (emailStep === "verify-both" && !emailOldOtp)
+                  }
+                  onClick={confirmEmailChange}
+                >
+                  确认换绑
+                </button>
+                <button
+                  type="button"
+                  className="ds-btn ds-btn-secondary ds-btn-sm"
+                  onClick={() => { setEmailStep("idle"); setEmailErr(null); setEmailHint(null); }}
+                >
+                  取消
+                </button>
               </div>
             </div>
           )}

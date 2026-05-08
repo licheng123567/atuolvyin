@@ -112,7 +112,7 @@ async function dismissAppIntroIfPresent(page: Page) {
 
 async function login(page: Page, phone: string) {
   await page.goto("/login");
-  await page.fill('input[id="phone"]', phone);
+  await page.fill('input[id="account"]', phone);
   await page.fill('input[id="password"]', PASSWORD);
   await Promise.all([
     page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 10_000 }),

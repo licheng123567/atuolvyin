@@ -63,7 +63,10 @@ def _calc_priority(
 
 
 def _case_row_to_response(
-    case: CollectionCase, owner: OwnerProfile
+    case: CollectionCase,
+    owner: OwnerProfile,
+    provider_id: int | None = None,
+    provider_name: str | None = None,
 ) -> CaseWithOwnerResponse:
     return CaseWithOwnerResponse(
         id=case.id,
@@ -89,6 +92,8 @@ def _case_row_to_response(
         notes=case.notes,
         created_at=case.created_at,
         updated_at=case.updated_at,
+        provider_id=provider_id,
+        provider_name=provider_name,
     )
 
 
@@ -166,6 +171,12 @@ async def import_cases(
             months_overdue=row.months_overdue,
             priority_score=_calc_priority(row.amount_owed, row.months_overdue),
             notes=row.notes,
+            # v1.6.3 — 账单字段从导入直接录入，不再按月推算
+            bill_period_start=row.bill_period_start,
+            bill_period_end=row.bill_period_end,
+            principal_amount=row.principal_amount,
+            late_fee_amount=row.late_fee_amount,
+            arrears_reason=row.arrears_reason,
         )
         db.add(case)
         imported += 1
@@ -184,18 +195,24 @@ async def list_cases(
     pool_type: str | None = Query(None),
     assigned_to: int | None = Query(None),
     project_id: int | None = Query(None),
+    provider_id: int | None = Query(None),
     building: str | None = Query(None),
     keyword: str | None = Query(None, max_length=100),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[CaseWithOwnerResponse]:
+    from app.models.case import Project
+    from app.models.tenant import ServiceProvider
+
     tenant_id = _require_tenant(payload)
     role = payload.get("role", "")
     user_id = int(payload.get("user_id") or 0)
 
     stmt = (
-        select(CollectionCase, OwnerProfile)
+        select(CollectionCase, OwnerProfile, Project.provider_id, ServiceProvider.name)
         .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
+        .join(Project, Project.id == CollectionCase.project_id, isouter=True)
+        .join(ServiceProvider, ServiceProvider.id == Project.provider_id, isouter=True)
         .where(CollectionCase.tenant_id == tenant_id)
     )
 
@@ -223,6 +240,8 @@ async def list_cases(
         stmt = stmt.where(CollectionCase.assigned_to == assigned_to)
     if project_id is not None:
         stmt = stmt.where(CollectionCase.project_id == project_id)
+    if provider_id is not None:
+        stmt = stmt.where(Project.provider_id == provider_id)
     if building:
         stmt = stmt.where(OwnerProfile.building == building)
     if keyword:
@@ -238,7 +257,10 @@ async def list_cases(
     ).all()
 
     return PaginatedResponse(
-        items=[_case_row_to_response(case, owner) for case, owner in rows],
+        items=[
+            _case_row_to_response(case, owner, prov_id, prov_name)
+            for case, owner, prov_id, prov_name in rows
+        ],
         total=total,
         page=page,
         page_size=page_size,
@@ -289,6 +311,40 @@ async def assign_cases(
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail={"code": "ERR_USER_NOT_IN_TENANT", "message": "指定用户不在本租户"},
+        )
+
+    # v1.5.6 — 组织边界：物业 admin 只能分给内部催收员；外勤由服务商内部分配
+    if member.role != "agent_internal":
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "ERR_NOT_INTERNAL_AGENT",
+                "message": "物业 admin 仅可分配给内部催收员；外勤请由服务商管理",
+            },
+        )
+
+    # v1.5.6 收尾 — 组织边界硬约束：外包项目（有 provider_id）一律由服务商内部分配
+    # 砍掉 allow_internal_assist 例外（项目要么自办要么外包，二选一）
+    from app.models.case import Project
+    bad_cases = db.execute(
+        select(CollectionCase.id)
+        .join(Project, Project.id == CollectionCase.project_id, isouter=True)
+        .where(
+            CollectionCase.id.in_(body.case_ids),
+            CollectionCase.tenant_id == tenant_id,
+            Project.provider_id.is_not(None),
+        )
+    ).all()
+    if bad_cases:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "ERR_OUTSOURCED_PROJECT",
+                "message": (
+                    f"{len(bad_cases)} 个案件属外包项目，由服务商内部分配。"
+                    "若要由物业自办，请将项目「合作服务商」改为空。"
+                ),
+            },
         )
 
     stmt = (
@@ -369,13 +425,34 @@ async def get_case(
             agent_name=agent_name,
         ))
 
-    # v1.4 — 拼项目名 + 协作来源 role
+    # v1.4 — 拼项目名 + 协作来源 role；v1.5 — 拼电话团队（项目签约服务商）+ 法务团队（已撮合的律所）
+    # v1.6.3 — 同时取项目合同 / 收费信息（嵌入 project_info）
     project_name: str | None = None
+    calling_provider_id: int | None = None
+    calling_provider_name: str | None = None
+    project_info_dict: dict | None = None
     if case.project_id is not None:
         from app.models.case import Project
-        project_name = db.execute(
-            select(Project.name).where(Project.id == case.project_id)
-        ).scalar_one_or_none()
+        from app.models.tenant import ServiceProvider
+        proj = db.get(Project, case.project_id)
+        if proj is not None:
+            project_name = proj.name
+            calling_provider_id = proj.provider_id
+            if calling_provider_id is not None:
+                calling_provider_name = db.execute(
+                    select(ServiceProvider.name).where(ServiceProvider.id == calling_provider_id)
+                ).scalar_one_or_none()
+            project_info_dict = {
+                "name": proj.name,
+                "charge_rate_text": proj.charge_rate_text,
+                "charge_period": proj.charge_period,
+                "contract_type": proj.contract_type,
+                "contract_start_date": proj.contract_start_date,
+                "contract_end_date": proj.contract_end_date,
+                "contract_attachment_key": proj.contract_attachment_key,
+                "contract_attachment_filename": proj.contract_attachment_filename,
+                "charge_notes": proj.charge_notes,
+            }
 
     assigned_role: str | None = None
     if case.assigned_to is not None:
@@ -387,11 +464,30 @@ async def get_case(
         ).scalar_one_or_none()
         assigned_role = m
 
+    # v1.5 — 法务团队：取最近一条非 cancelled 的转化订单
+    legal_law_firm_name: str | None = None
+    legal_lawyer_name: str | None = None
+    legal_order_status: str | None = None
+    from app.models.legal_conversion import LegalConversionOrder
+    legal_order = db.execute(
+        select(LegalConversionOrder)
+        .where(
+            LegalConversionOrder.case_id == case_id,
+            LegalConversionOrder.status != "cancelled",
+        )
+        .order_by(LegalConversionOrder.created_at.desc())
+    ).scalars().first()
+    if legal_order is not None:
+        legal_law_firm_name = legal_order.assigned_law_firm
+        legal_lawyer_name = legal_order.assigned_lawyer_name
+        legal_order_status = legal_order.status
+
     return CaseDetailResponse(
         id=case.id,
         tenant_id=case.tenant_id,
         project_id=case.project_id,
         project_name=project_name,
+        project_info=project_info_dict,  # type: ignore[arg-type]
         owner=OwnerInfo(
             id=owner.id,
             name=owner.name,
@@ -406,6 +502,12 @@ async def get_case(
         stage=case.stage,
         amount_owed=case.amount_owed,
         months_overdue=case.months_overdue,
+        # v1.6.3 — 账单字段
+        bill_period_start=case.bill_period_start,
+        bill_period_end=case.bill_period_end,
+        principal_amount=case.principal_amount,
+        late_fee_amount=case.late_fee_amount,
+        arrears_reason=case.arrears_reason,
         priority_score=case.priority_score,
         last_contact_at=case.last_contact_at,
         monthly_contact_count=case.monthly_contact_count,
@@ -414,6 +516,11 @@ async def get_case(
         updated_at=case.updated_at,
         calls=call_items,
         timeline_events=build_case_timeline(db, case_id, tenant_id),
+        calling_provider_id=calling_provider_id,
+        calling_provider_name=calling_provider_name,
+        legal_law_firm_name=legal_law_firm_name,
+        legal_lawyer_name=legal_lawyer_name,
+        legal_order_status=legal_order_status,
     )
 
 

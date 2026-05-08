@@ -60,7 +60,8 @@ def _build_visible_case_filter(
         provider_id = _agent_provider_id(db, user_id, tenant_id)
         if provider_id is None:
             return own_clause
-        # 外勤可见：自己的 OR 公海+本服务商负责的项目
+        # 外勤可见：自己的 OR 公海 + 本服务商负责的「服务期内 active」项目
+        # v1.5.5 — 加 status='active' + plan_end 守门
         external_visible = sa.and_(
             CollectionCase.pool_type == "public",
             CollectionCase.assigned_to.is_(None),
@@ -68,18 +69,20 @@ def _build_visible_case_filter(
                 sa.select(Project.id).where(
                     Project.tenant_id == tenant_id,
                     Project.provider_id == provider_id,
+                    Project.status == "active",
+                    sa.or_(Project.plan_end.is_(None), Project.plan_end >= sa.func.now()),
                 )
             ),
         )
         return sa.or_(own_clause, external_visible)
 
-    # 内勤：自己的 + 公海（无项目 OR 项目无服务商 OR 项目开了协助开关）
+    # 内勤：自己的 + 公海（仅自办项目；外包项目完全归服务商，不再支持混合协助）
+    # v1.5.6 收尾 — 砍 allow_internal_assist；项目要么自办要么外包，二选一
     visible_project_ids = sa.select(Project.id).where(
         Project.tenant_id == tenant_id,
-        sa.or_(
-            Project.provider_id.is_(None),
-            Project.allow_internal_assist.is_(True),
-        ),
+        Project.status == "active",
+        sa.or_(Project.plan_end.is_(None), Project.plan_end >= sa.func.now()),
+        Project.provider_id.is_(None),  # 仅自办
     )
     internal_visible = sa.and_(
         CollectionCase.pool_type == "public",

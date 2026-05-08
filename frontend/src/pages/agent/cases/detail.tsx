@@ -149,8 +149,19 @@ export function AgentWorkstationPage() {
               {[detail.owner.building, detail.owner.room].filter(Boolean).join(" ")}
             </div>
             {detail.project_name && (
-              <div className="text-xs text-[var(--color-neutral-400)] mb-3">
+              <div className="text-xs text-[var(--color-neutral-400)] mb-1">
                 项目：{detail.project_name}
+              </div>
+            )}
+            {detail.calling_provider_name && (
+              <div className="text-xs text-[var(--color-neutral-400)] mb-1">
+                电话团队：{detail.calling_provider_name}
+              </div>
+            )}
+            {detail.legal_law_firm_name && (
+              <div className="text-xs text-[var(--color-neutral-400)] mb-3">
+                法务：{detail.legal_law_firm_name}
+                {detail.legal_lawyer_name ? ` · ${detail.legal_lawyer_name}` : ""}
               </div>
             )}
             {/* T2: agent_external guard — never render full phone for external agents */}

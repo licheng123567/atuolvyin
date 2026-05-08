@@ -47,58 +47,66 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
     {
       title: "结算与配置",
       items: [
+        // 结算 → 报表 紧邻（财务月结视角）
         { label: "结算管理", path: "/admin/settlements", icon: "Receipt" },
-        { label: "话术库管理", path: "/admin/scripts/list", icon: "MessageSquare" },
-        { label: "话术效果", path: "/admin/scripts/effectiveness", icon: "BarChart3" },
         {
           label: "数据报表",
           path: "/admin/reports",
           icon: "BarChart2",
-          badge: "P1",
         },
         {
           label: "合规月报",
           path: "/admin/compliance",
           icon: "Shield",
-          badge: "P1",
         },
+        // 话术 → 风控 紧邻（话术 + 风险词同属对话质量管理）
+        { label: "话术库管理", path: "/admin/scripts", icon: "MessageSquare" },
+        { label: "话术效果", path: "/admin/scripts/effectiveness", icon: "BarChart3" },
+        { label: "风控关键词", path: "/admin/risk-keywords", icon: "ShieldAlert" },
+        // 法务 + 审计 + 设置 殿后
         { label: "法务转化", path: "/admin/legal-conversion", icon: "Scale" },
+        { label: "减免大额审批", path: "/admin/discount-approvals", icon: "BadgePercent" },
+        { label: "审计日志", path: "/admin/audit-logs", icon: "ScrollText" },
         { label: "系统配置", path: "/admin/settings", icon: "Settings" },
       ],
     },
   ],
 
-  // ── 督导（supervisor.html）─────────────────────────────
+  // ── 督导（mock 9 项 + v1.5.7 新增 5 项）─────────────────
   supervisor: [
     {
+      title: "实时监控",
       items: [
-        { label: "我的项目", path: "/supervisor/projects", icon: "FolderKanban" },
+        { label: "督导工作台", path: "/supervisor/workspace", icon: "LayoutDashboard" },
         { label: "实时通话墙", path: "/supervisor/live-wall", icon: "RadioTower" },
-        {
-          label: "质检复核",
-          path: "/supervisor/reviews",
-          icon: "ShieldCheck",
-        },
-        {
-          label: "风险警报",
-          path: "/supervisor/alerts",
-          icon: "Bell",
-        },
-        {
-          label: "风控事件",
-          path: "/supervisor/risk-events",
-          icon: "AlertTriangle",
-        },
-        {
-          label: "团队报表",
-          path: "/supervisor/team-performance",
-          icon: "BarChart2",
-        },
-        {
-          label: "话术标注",
-          path: "/supervisor/script-labels",
-          icon: "MessageCircle",
-        },
+        { label: "团队监控", path: "/supervisor/team-performance", icon: "Activity" },
+      ],
+    },
+    {
+      title: "案件管理",
+      items: [
+        { label: "案件分配", path: "/supervisor/cases", icon: "ClipboardList" },
+        { label: "升级案件处理", path: "/supervisor/escalated", icon: "AlertCircle" },
+        { label: "承诺催付", path: "/supervisor/promises", icon: "CalendarClock" },
+        { label: "案件超期报警", path: "/supervisor/case-alerts", icon: "BellRing" },
+        { label: "减免审批", path: "/supervisor/discount-approvals", icon: "BadgePercent" },
+      ],
+    },
+    {
+      title: "质检与培训",
+      items: [
+        { label: "质检复核", path: "/supervisor/reviews", icon: "ShieldCheck" },
+        { label: "话术反馈", path: "/supervisor/script-labels", icon: "MessageCircle" },
+        { label: "风控事件", path: "/supervisor/risk-events", icon: "AlertTriangle" },
+        { label: "培训案例库", path: "/supervisor/training", icon: "BookMarked" },
+      ],
+    },
+    {
+      title: "我的工作",
+      items: [
+        { label: "我的 KPI", path: "/supervisor/my-kpi", icon: "BarChart3" },
+        { label: "值班排班", path: "/supervisor/shifts", icon: "Calendar" },
+        { label: "团队报表", path: "/supervisor/stats", icon: "BarChart2" },
       ],
     },
   ],
@@ -122,16 +130,33 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
   ],
 
   // ── 法务（legal.html）──────────────────────────────────
+  // v1.5.7：物业租户内法务对接人 + 律所/律师都用 legal 角色，按租户/律所上下文区分
   legal: [
     {
+      title: "我的工作",
       items: [
-        { label: "案件清单", path: "/legal/cases", icon: "List" },
+        { label: "法务订单（物业视角）", path: "/legal/orders", icon: "Briefcase" },
+        { label: "律所工作台", path: "/lawfirm/orders", icon: "Building2" },
+        { label: "律师工作台", path: "/lawyer/orders", icon: "Scale" },
+      ],
+    },
+    {
+      title: "历史",
+      items: [
+        { label: "法务案件（旧版）", path: "/legal/cases", icon: "List" },
       ],
     },
   ],
 
-  // ── 工单专员（workorder.html）─────────────────────────
+  // ── 协调员（v1.5.6 重命名 workorder → coordinator；保留 workorder 兼容旧账号）─
   workorder: [
+    {
+      items: [
+        { label: "工单列表", path: "/workorder/orders", icon: "ClipboardList" },
+      ],
+    },
+  ],
+  coordinator: [
     {
       items: [
         { label: "工单列表", path: "/workorder/orders", icon: "ClipboardList" },
@@ -161,11 +186,13 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
     {
       items: [
         { label: "总览", path: "/provider/dashboard", icon: "LayoutDashboard" },
+        { label: "我的项目", path: "/provider/projects", icon: "FolderKanban" },
         { label: "合作租户", path: "/provider/tenants", icon: "Building2" },
         { label: "团队管理", path: "/provider/team", icon: "Users" },
         { label: "团队绩效", path: "/provider/team-performance", icon: "TrendingUp" },
         { label: "话术库", path: "/provider/scripts", icon: "MessageSquare" },
         { label: "收入结算", path: "/provider/settlements", icon: "Receipt" },
+        { label: "历史报表", path: "/provider/historical-reports", icon: "Archive" },
       ],
     },
   ],

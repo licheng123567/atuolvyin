@@ -25,6 +25,8 @@ interface CaseItem {
   priority_score: number;
   created_at: string;
   release_reason?: string | null;
+  provider_id?: number | null;
+  provider_name?: string | null;
 }
 
 interface UserItem {
@@ -96,8 +98,11 @@ export function AdminPoolPage() {
     (rawCases as CaseItem[] | undefined) ??
     [];
 
-  // 过滤
+  // v1.5.6 — 双层公海：物业公海仅显示自营项目（无 provider）+ 无项目的 case
+  // 外包项目的公海归服务商管，物业 admin 不在此分配
+  const outsourcedCount = allCases.filter((c) => c.provider_id != null).length;
   let cases = allCases.filter((c) => {
+    if (c.provider_id != null) return false;  // 外包不显示
     if (
       keyword &&
       !c.owner.name.includes(keyword) &&
@@ -137,7 +142,8 @@ export function AdminPoolPage() {
     (rawAgents as unknown as PaginatedResponse<UserItem>)?.items ??
     (agentsResult.data as UserItem[] | undefined) ??
     [];
-  const agents = allUsers.filter((u) => u.role.startsWith("agent_"));
+  // v1.5.6 — 物业 admin 只能分给内部催收员（外勤由服务商管理）
+  const agents = allUsers.filter((u) => u.role === "agent_internal");
 
   const { mutate: assign } = useCustomMutation();
 
@@ -168,8 +174,15 @@ export function AdminPoolPage() {
       {/* Page Header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">公海管理</h1>
-          <div className="page-subtitle">当前公海：{allCases.length} 个案件</div>
+          <h1 className="page-title">物业公海</h1>
+          <div className="page-subtitle">
+            自营项目待分配：{cases.length} 个案件
+            {outsourcedCount > 0 && (
+              <span style={{ marginLeft: 12, color: "#9ca3af", fontSize: 12 }}>
+                · 另有 {outsourcedCount} 个外包案件由服务商管理（不在此显示）
+              </span>
+            )}
+          </div>
         </div>
         <button type="button" className="ds-btn ds-btn-primary" disabled>
           批量分配

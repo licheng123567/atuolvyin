@@ -29,6 +29,13 @@ const PROVIDER_TYPE_LABEL: Record<string, string> = {
   both: "法务+催收",
 };
 
+const SERVICE_TYPE_LABEL: Record<string, string> = {
+  legal_letter: "律师函",
+  litigation: "诉讼",
+  collection: "催收",
+  consulting: "咨询",
+};
+
 const STATUS_LABEL: Record<string, string> = {
   active: "合作中",
   paused: "已暂停",
@@ -502,7 +509,7 @@ function InviteDialog({ onClose }: { onClose: () => void }) {
                       color: checked ? "var(--color-primary)" : "var(--color-neutral-600)",
                     }}
                   >
-                    {t}
+                    {SERVICE_TYPE_LABEL[t] ?? t}
                   </button>
                 );
               })}

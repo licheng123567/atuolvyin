@@ -27,6 +27,20 @@ interface ComplianceMonthlyReport {
   generated_at: string;
 }
 
+// 风控分类英文 → 中文（与 admin/risk-keywords/list 保持一致 + 补常见后端值）
+const RISK_CATEGORY_LABEL: Record<string, string> = {
+  owner_abuse: "业主辱骂",
+  owner_threat: "业主威胁",
+  agent_violation: "催收员违规",
+  agent_minor_misconduct: "轻微不当",
+  complaint: "投诉",
+  threat: "威胁",
+  owner: "业主端",
+  agent: "催收员端",
+  customer: "业主端",
+  none: "无",
+};
+
 export function ComplianceDetailPage() {
   const { yearMonth } = useParams<{ yearMonth: string }>();
   const go = useGo();
@@ -164,7 +178,7 @@ export function ComplianceDetailPage() {
                 {data.risk_events_by_category.map((b, i) => (
                   <tr key={i} className="border-b border-[var(--color-neutral-100)]">
                     <td className="py-2">{b.level}</td>
-                    <td className="py-2">{b.category}</td>
+                    <td className="py-2">{RISK_CATEGORY_LABEL[b.category] ?? b.category}</td>
                     <td className="py-2 text-right">{b.count}</td>
                   </tr>
                 ))}

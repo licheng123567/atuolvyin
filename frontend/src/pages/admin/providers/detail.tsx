@@ -1,8 +1,10 @@
 // 物业管理员 - 服务商详情：成员配置 / 配额调整 / 合同状态（PRD §3.9）
-import { useCustom, useCustomMutation, useGo, useInvalidate } from "@refinedev/core";
-import { AlertTriangle, ArrowLeft, Save, ToggleLeft, ToggleRight, Users, X } from "lucide-react";
+// v1.5.6 — 加合作项目 + 合作案件下钻
+import { useCustom, useCustomMutation, useGo, useInvalidate, useList } from "@refinedev/core";
+import { AlertTriangle, ArrowLeft, Briefcase, FileStack, Save, ToggleLeft, ToggleRight, Users, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
+import type { PaginatedResponse } from "../../../types";
 
 interface ProviderMember {
   user_id: number;
@@ -43,6 +45,47 @@ const ROLE_LABEL: Record<string, string> = {
   legal: "法务专员",
 };
 
+const PROJECT_STATUS_LABEL: Record<string, string> = {
+  active: "进行中",
+  paused: "暂停",
+  closed: "已结束",
+};
+
+const PROJECT_STATUS_BADGE: Record<string, string> = {
+  active: "ds-badge ds-badge-green",
+  paused: "ds-badge ds-badge-orange",
+  closed: "ds-badge ds-badge-gray",
+};
+
+const STAGE_LABEL: Record<string, string> = {
+  new: "新单",
+  contacting: "联系中",
+  promised: "已承诺",
+  paid: "已结清",
+  legal: "已转法务",
+  closed: "已关闭",
+  unreachable: "失联",
+};
+
+interface ProjectRow {
+  id: number;
+  name: string;
+  status: string;
+  case_count: number;
+  plan_end: string | null;
+  property_pm_name: string | null;
+}
+
+interface CaseRow {
+  id: number;
+  project_id: number | null;
+  owner: { name: string; phone_masked: string; building: string | null; room: string | null };
+  stage: string;
+  amount_owed: number | string;
+  months_overdue: number | null;
+  assigned_to: number | null;
+}
+
 export function AdminProviderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const providerId = Number(id);
@@ -62,10 +105,45 @@ export function AdminProviderDetailPage() {
   });
   const members = membersQuery.data?.data ?? [];
 
+  // v1.5.6 — 合作项目（按 provider_id 过滤）
+  const { query: projectsQuery } = useList<ProjectRow>({
+    resource: "admin/projects",
+    pagination: { currentPage: 1, pageSize: 100 },
+    filters: [{ field: "provider_id", operator: "eq", value: providerId }],
+    queryOptions: { enabled: Number.isFinite(providerId) },
+  });
+  const projectsRaw = projectsQuery.data?.data;
+  const projects: ProjectRow[] =
+    (projectsRaw as unknown as PaginatedResponse<ProjectRow>)?.items ??
+    (projectsRaw as ProjectRow[] | undefined) ??
+    [];
+
+  // v1.5.6 — 合作案件（按 provider_id 过滤，预览取前 10 条）
+  const CASE_PREVIEW_SIZE = 10;
+  const { query: casesQuery } = useList<CaseRow>({
+    resource: "admin/cases",
+    pagination: { currentPage: 1, pageSize: CASE_PREVIEW_SIZE },
+    filters: [{ field: "provider_id", operator: "eq", value: providerId }],
+    queryOptions: { enabled: Number.isFinite(providerId) },
+  });
+  const casesRaw = casesQuery.data?.data;
+  const cases: CaseRow[] =
+    (casesRaw as unknown as PaginatedResponse<CaseRow>)?.items ??
+    (casesRaw as CaseRow[] | undefined) ??
+    [];
+  const totalCases = casesQuery.data?.total ?? 0;
+  const totalCaseAmount = cases.reduce(
+    (sum, c) => sum + Number(c.amount_owed ?? 0),
+    0,
+  );
+
   const [contractStatus, setContractStatus] = useState<string>(provider?.status ?? "active");
   const [contractExpires, setContractExpires] = useState<string>(
     provider?.expires_at?.slice(0, 10) ?? "",
   );
+  // v1.5.6 — tab 化
+  type TabKey = "overview" | "projects" | "cases" | "members" | "contract";
+  const [activeTab, setActiveTab] = useState<TabKey>("overview");
 
   // Sync server-provided values into form once on first load only
   // (subsequent edits live in local state until "保存"); ref-based init flag
@@ -201,6 +279,153 @@ export function AdminProviderDetailPage() {
         </p>
       </header>
 
+      {/* v1.5.6 — KPI 概览条 */}
+      <div
+        className="grid gap-3"
+        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}
+      >
+        <KpiTile
+          label="合作项目"
+          value={projects.length}
+          unit="个"
+          tone={projects.length === 0 ? "muted" : "primary"}
+        />
+        <KpiTile
+          label="承接案件"
+          value={totalCases}
+          unit="单"
+          tone={totalCases === 0 ? "muted" : "primary"}
+        />
+        <KpiTile
+          label="服务商成员"
+          value={members.length}
+          unit="人"
+          tone={members.length === 0 ? "muted" : "primary"}
+        />
+        <KpiTile
+          label="合同状态"
+          value={
+            provider.status === "active"
+              ? "合作中"
+              : provider.status === "paused"
+                ? "已暂停"
+                : "已终止"
+          }
+          tone={
+            provider.status === "active"
+              ? "success"
+              : provider.status === "paused"
+                ? "warning"
+                : "danger"
+          }
+        />
+        <KpiTile
+          label="服务期到"
+          value={
+            provider.expires_at
+              ? provider.expires_at.slice(0, 10)
+              : "长期"
+          }
+          tone="muted"
+        />
+      </div>
+
+      {/* v1.5.6 — 解约 pending 时的全局横幅（任何 tab 都看见）*/}
+      {term &&
+        term.status !== "terminated" &&
+        term.termination_requested_at &&
+        !term.termination_confirmed_at && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("contract")}
+            className="w-full text-left flex items-center gap-2 p-3 text-sm"
+            style={{
+              background: "var(--color-warning-light, #fef3c7)",
+              border: "1px solid var(--color-warning, #f59e0b)",
+              borderRadius: "var(--radius-md)",
+              color: "#92400e",
+            }}
+          >
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <span>
+              {term.termination_requested_by === 1 ? (
+                <>解约请求已发出，等待服务商确认（剩 {term.timeout_days_remaining ?? 0} 天）</>
+              ) : (
+                <>服务商已申请解约，请在剩余 {term.timeout_days_remaining ?? 0} 天内确认</>
+              )}
+              <span className="ml-2 underline">→ 处理</span>
+            </span>
+          </button>
+        )}
+
+      {/* v1.5.6 — Tab bar */}
+      <div
+        className="flex gap-1 border-b border-[var(--color-neutral-200)]"
+        style={{ paddingBottom: 0 }}
+      >
+        {(
+          [
+            { key: "overview", label: "概览" },
+            { key: "projects", label: `合作项目 (${projects.length})` },
+            { key: "cases", label: `合作案件 (${totalCases})` },
+            { key: "members", label: `成员 (${members.length})` },
+            { key: "contract", label: "合同 / 解约" },
+          ] as { key: TabKey; label: string }[]
+        ).map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setActiveTab(t.key)}
+            className="px-4 py-2 text-sm"
+            style={{
+              borderBottom:
+                activeTab === t.key
+                  ? "2px solid var(--color-primary)"
+                  : "2px solid transparent",
+              color:
+                activeTab === t.key
+                  ? "var(--color-primary)"
+                  : "var(--color-neutral-600)",
+              fontWeight: activeTab === t.key ? 600 : 400,
+              background: "transparent",
+              marginBottom: -1,
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 概览 tab：简易 README + 引导到各 tab */}
+      {activeTab === "overview" && (
+        <section
+          className="bg-white p-5 border border-[var(--color-neutral-200)]"
+          style={{ borderRadius: "var(--radius-lg)" }}
+        >
+          <h2 className="text-base font-semibold mb-3">概览</h2>
+          <div className="text-sm text-[var(--color-neutral-700)] space-y-2">
+            <p>
+              <strong>{provider.provider_name}</strong> 为本租户承接{" "}
+              <button type="button" onClick={() => setActiveTab("projects")} className="text-[var(--color-primary)] underline">
+                {projects.length} 个项目
+              </button>，共{" "}
+              <button type="button" onClick={() => setActiveTab("cases")} className="text-[var(--color-primary)] underline">
+                {totalCases} 单案件
+              </button>，{" "}
+              <button type="button" onClick={() => setActiveTab("members")} className="text-[var(--color-primary)] underline">
+                {members.length} 名成员
+              </button>{" "}
+              在本公司活跃。
+            </p>
+            <p className="text-xs text-[var(--color-neutral-500)]">
+              切换上方 tab 进入对应详情。需要终止合作请到「合同 / 解约」tab。
+            </p>
+          </div>
+        </section>
+      )}
+
+      {activeTab === "contract" && (
+      <>
       <section
         className="bg-white p-5 border border-[var(--color-neutral-200)]"
         style={{ borderRadius: "var(--radius-lg)" }}
@@ -357,6 +582,8 @@ export function AdminProviderDetailPage() {
             </div>
           )}
       </section>
+      </>
+      )}
 
       {showTermDialog && (
         <div className="modal-overlay" onClick={() => setShowTermDialog(false)}>
@@ -414,6 +641,159 @@ export function AdminProviderDetailPage() {
         </div>
       )}
 
+      {/* v1.5.6 — 合作项目 */}
+      {activeTab === "projects" && (
+      <section
+        className="bg-white p-5 border border-[var(--color-neutral-200)]"
+        style={{ borderRadius: "var(--radius-lg)" }}
+      >
+        <div className="flex items-center gap-2 mb-3">
+          <Briefcase className="w-4 h-4 text-[var(--color-primary)]" />
+          <h2 className="text-base font-semibold">合作项目</h2>
+          <span className="text-xs text-[var(--color-neutral-400)]">
+            共 {projects.length} 个
+          </span>
+        </div>
+        {projectsQuery.isLoading && (
+          <p className="text-sm text-[var(--color-neutral-400)]">加载中…</p>
+        )}
+        {!projectsQuery.isLoading && projects.length === 0 && (
+          <p className="text-sm text-[var(--color-neutral-400)]">
+            暂无项目外包给该服务商
+          </p>
+        )}
+        {projects.length > 0 && (
+          <table className="w-full text-sm">
+            <thead className="text-left text-[var(--color-neutral-500)]">
+              <tr>
+                <th className="py-2 font-medium">项目名称</th>
+                <th className="py-2 font-medium">物业项目负责人</th>
+                <th className="py-2 font-medium">案件数</th>
+                <th className="py-2 font-medium">服务期到</th>
+                <th className="py-2 font-medium">状态</th>
+                <th className="py-2 font-medium">操作</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-neutral-100)]">
+              {projects.map((p) => (
+                <tr key={p.id} className="text-[var(--color-neutral-700)]">
+                  <td className="py-2 font-medium">{p.name}</td>
+                  <td className="py-2">{p.property_pm_name ?? "—"}</td>
+                  <td className="py-2">{p.case_count}</td>
+                  <td className="py-2 text-[var(--color-neutral-500)]">
+                    {p.plan_end ? p.plan_end.slice(0, 10) : "长期"}
+                  </td>
+                  <td className="py-2">
+                    <span className={PROJECT_STATUS_BADGE[p.status] ?? "ds-badge"}>
+                      {PROJECT_STATUS_LABEL[p.status] ?? p.status}
+                    </span>
+                  </td>
+                  <td className="py-2">
+                    <button
+                      type="button"
+                      className="text-xs text-[var(--color-primary)] hover:underline"
+                      onClick={() => go({ to: `/admin/projects/${p.id}/edit` })}
+                    >
+                      编辑
+                    </button>
+                    <button
+                      type="button"
+                      className="ml-3 text-xs text-[var(--color-primary)] hover:underline"
+                      onClick={() => go({ to: `/admin/cases?project_id=${p.id}` })}
+                    >
+                      查看案件
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+      )}
+
+      {/* v1.5.6 — 合作案件预览 */}
+      {activeTab === "cases" && (
+      <section
+        className="bg-white p-5 border border-[var(--color-neutral-200)]"
+        style={{ borderRadius: "var(--radius-lg)" }}
+      >
+        <div className="flex items-center gap-2 mb-3">
+          <FileStack className="w-4 h-4 text-[var(--color-primary)]" />
+          <h2 className="text-base font-semibold">合作案件</h2>
+          <span className="text-xs text-[var(--color-neutral-400)]">
+            共 {totalCases} 单 · 预览金额合计 ¥{totalCaseAmount.toLocaleString("zh-CN")}
+          </span>
+          <button
+            type="button"
+            onClick={() => go({ to: `/admin/cases?provider_id=${providerId}` })}
+            className="ml-auto text-xs text-[var(--color-primary)] hover:underline"
+          >
+            查看全部 →
+          </button>
+        </div>
+        {casesQuery.isLoading && (
+          <p className="text-sm text-[var(--color-neutral-400)]">加载中…</p>
+        )}
+        {!casesQuery.isLoading && cases.length === 0 && (
+          <p className="text-sm text-[var(--color-neutral-400)]">
+            该服务商当前没有承接案件
+          </p>
+        )}
+        {cases.length > 0 && (
+          <>
+            <table className="w-full text-sm">
+              <thead className="text-left text-[var(--color-neutral-500)]">
+                <tr>
+                  <th className="py-2 font-medium">业主</th>
+                  <th className="py-2 font-medium">楼栋/房号</th>
+                  <th className="py-2 font-medium">欠费金额</th>
+                  <th className="py-2 font-medium">欠费月数</th>
+                  <th className="py-2 font-medium">阶段</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-neutral-100)]">
+                {cases.map((c) => (
+                  <tr key={c.id} className="text-[var(--color-neutral-700)]">
+                    <td className="py-2">
+                      <div className="font-medium">{c.owner.name}</div>
+                      <div className="text-xs text-[var(--color-neutral-500)]">
+                        {c.owner.phone_masked}
+                      </div>
+                    </td>
+                    <td className="py-2 text-[var(--color-neutral-500)]">
+                      {c.owner.building ?? "—"}
+                      {c.owner.room ? `-${c.owner.room}` : ""}
+                    </td>
+                    <td className="py-2">¥{Number(c.amount_owed).toLocaleString("zh-CN")}</td>
+                    <td className="py-2">{c.months_overdue ?? "—"} 月</td>
+                    <td className="py-2">
+                      <span className="ds-badge ds-badge-gray" style={{ fontSize: 11 }}>
+                        {STAGE_LABEL[c.stage] ?? c.stage}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {totalCases > CASE_PREVIEW_SIZE && (
+              <p className="text-xs text-[var(--color-neutral-400)] mt-3">
+                仅显示前 {CASE_PREVIEW_SIZE} 条 · 还有 {totalCases - CASE_PREVIEW_SIZE} 条
+                <button
+                  type="button"
+                  className="ml-2 text-[var(--color-primary)] hover:underline"
+                  onClick={() => go({ to: `/admin/cases?provider_id=${providerId}` })}
+                >
+                  查看全部
+                </button>
+              </p>
+            )}
+          </>
+        )}
+      </section>
+      )}
+
+      {activeTab === "members" && (
       <section
         className="bg-white p-5 border border-[var(--color-neutral-200)]"
         style={{ borderRadius: "var(--radius-lg)" }}
@@ -459,6 +839,42 @@ export function AdminProviderDetailPage() {
           </table>
         )}
       </section>
+      )}
+    </div>
+  );
+}
+
+function KpiTile({
+  label,
+  value,
+  unit,
+  tone = "muted",
+}: {
+  label: string;
+  value: number | string;
+  unit?: string;
+  tone?: "primary" | "success" | "warning" | "danger" | "muted";
+}) {
+  const toneColors: Record<string, string> = {
+    primary: "var(--color-primary)",
+    success: "#16a34a",
+    warning: "#d97706",
+    danger: "#dc2626",
+    muted: "var(--color-neutral-700)",
+  };
+  return (
+    <div
+      className="bg-white p-3 border border-[var(--color-neutral-200)]"
+      style={{ borderRadius: "var(--radius-lg)" }}
+    >
+      <div className="text-xs text-[var(--color-neutral-500)]">{label}</div>
+      <div
+        className="mt-1 font-semibold"
+        style={{ fontSize: 18, color: toneColors[tone] }}
+      >
+        {value}
+        {unit && <span style={{ fontSize: 12, marginLeft: 2, fontWeight: 400 }}>{unit}</span>}
+      </div>
     </div>
   );
 }

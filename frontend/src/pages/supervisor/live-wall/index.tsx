@@ -11,6 +11,7 @@ import {
   User2,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { HelpPanel } from "../../../components/ui/HelpPanel";
 import { useLiveCallStore, type LiveCall } from "../../../store/live-calls";
 
 interface LiveCallsResp {
@@ -81,6 +82,18 @@ export function SupervisorLiveWallPage() {
           通
         </div>
       </div>
+
+      <HelpPanel
+        tone="info"
+        dismissKey="/supervisor/live-wall"
+        title="督导 3 种干预手段（对正在通话）"
+        bullets={[
+          <><strong>点击卡片 = 进入实时跟单</strong>：旁路监听通话音频 + 实时看 ASR 转录文字 + 看 AI 弹的话术建议（不影响通话双方，催收员不知情）</>,
+          <><strong>申请接管</strong>（黄按钮）：发送通知到催收员 App，催收员点确认后通话音频路由到督导耳麦，由督导继续与业主对话；适用于 L2 风控时业主情绪激烈、催收员控不住</>,
+          <><strong>强制结束</strong>（红按钮）：填写理由后立刻挂断通话，催收员 App 收到强制结束提示；适用于催收员违规话术（语气强硬/威胁）需立即止损</>,
+        ]}
+        footer="⚠ 接管 / 强制结束都会写入审计日志，案件时间线和员工 KPI 都会记录"
+      />
 
       {sorted.length === 0 && !query.isLoading && (
         <div className="livewall-empty">

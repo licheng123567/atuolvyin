@@ -1,9 +1,11 @@
 // 1:1 还原 ui/admin.html#a-cases CRM 案件列表
 import { useCreate, useCustom, useGetIdentity, useGo, useList } from "@refinedev/core";
 import type { CrudFilter } from "@refinedev/core";
-import { CheckSquare, KanbanSquare, List, Plus, Search, UserCheck } from "lucide-react";
+import { CheckSquare, Download, KanbanSquare, List, Plus, Search, UserCheck } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { SearchableSelect } from "../../../components/ui/SearchableSelect";
+import { exportToCsv } from "../../../lib/csv";
 import type { AuthUser } from "../../../providers/auth-provider";
 import type { PaginatedResponse } from "../../../types";
 
@@ -30,11 +32,18 @@ interface CaseItem {
   notes: string | null;
   last_contact_at?: string | null;
   case_no?: string | null;
+  provider_id?: number | null;
+  provider_name?: string | null;
 }
 
 interface ProjectOption {
   id: number;
   name: string;
+}
+
+interface ProviderOption {
+  provider_id: number;
+  provider_name: string;
 }
 
 interface AgentItem {
@@ -83,12 +92,14 @@ export function CaseListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const projectIdParam = searchParams.get("project_id");
   const projectIdFilter = projectIdParam ? Number(projectIdParam) : null;
+  const providerIdParam = searchParams.get("provider_id");
+  const providerIdFilter = providerIdParam ? Number(providerIdParam) : null;
   const { data: identity } = useGetIdentity<AuthUser>();
   const isPM =
     identity?.role === "project_manager_property" ||
     identity?.role === "project_manager_provider";
 
-  const [keyword, setKeyword] = useState("");
+  const [keyword, setKeyword] = useState(searchParams.get("keyword") ?? "");
   const [stage, setStage] = useState("");
   const [agentFilter, setAgentFilter] = useState<number | "">("");
   const [buildingFilter, setBuildingFilter] = useState("");
@@ -104,6 +115,9 @@ export function CaseListPage() {
   if (projectIdFilter !== null) {
     filters.push({ field: "project_id", operator: "eq", value: projectIdFilter });
   }
+  if (providerIdFilter !== null) {
+    filters.push({ field: "provider_id", operator: "eq", value: providerIdFilter });
+  }
   if (agentFilter !== "") {
     filters.push({ field: "assigned_to", operator: "eq", value: agentFilter });
   }
@@ -117,11 +131,10 @@ export function CaseListPage() {
     filters,
   });
 
-  // 当前项目（用于页头显示）
+  // 项目下拉数据（始终拉，供过滤器使用）
   const { query: projectQuery } = useList<ProjectOption>({
     resource: "admin/projects",
     pagination: { currentPage: 1, pageSize: 100 },
-    queryOptions: { enabled: projectIdFilter !== null },
   });
   const projectsRaw = projectQuery.data?.data;
   const allProjects: ProjectOption[] =
@@ -129,6 +142,17 @@ export function CaseListPage() {
     (projectsRaw as ProjectOption[] | undefined) ??
     [];
   const currentProject = allProjects.find((p) => p.id === projectIdFilter);
+
+  // v1.5.6 — 服务商下拉（用于按合作服务商过滤）
+  const { query: providerQuery } = useList<ProviderOption>({
+    resource: "admin/providers",
+    pagination: { currentPage: 1, pageSize: 50 },
+  });
+  const providersRaw = providerQuery.data?.data;
+  const allProviders: ProviderOption[] =
+    (providersRaw as unknown as PaginatedResponse<ProviderOption>)?.items ??
+    (providersRaw as ProviderOption[] | undefined) ??
+    [];
 
   // 楼栋下拉数据：从 GET /admin/cases/buildings 拿，按当前项目过滤
   const { query: buildingsQuery } = useCustom<string[]>({
@@ -160,10 +184,13 @@ export function CaseListPage() {
     (rawAgents as unknown as PaginatedResponse<AgentItem>)?.items ??
     (rawAgents as AgentItem[] | undefined) ??
     [];
-  // 只看催收员（内勤 + 兼职），过滤下拉与批量分配下拉都用
-  const agents = allAgents.filter(
+  // v1.5.6 — 物业 admin 只能分配给内部催收员（外勤由服务商内部分配）
+  // 但筛选下拉仍可显示外部坐席，方便看「外勤负责的案件」
+  const agentsAll = allAgents.filter(
     (a) => a.role === "agent_internal" || a.role === "agent_external",
   );
+  const agents = agentsAll;
+  const internalAgents = allAgents.filter((a) => a.role === "agent_internal");
 
   const { mutate: assignCases, mutation: assignMutation } = useCreate();
   const assigning = assignMutation.isPending;
@@ -225,6 +252,31 @@ export function CaseListPage() {
                 ← 返回全部项目
               </button>
             )}
+            {providerIdFilter !== null && (
+              <>
+                <span style={{ marginLeft: 12, fontSize: 12, color: "var(--color-neutral-500)" }}>
+                  · 仅显示服务商 #{providerIdFilter} 的案件
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    searchParams.delete("provider_id");
+                    setSearchParams(searchParams);
+                    setPage(1);
+                  }}
+                  style={{
+                    marginLeft: 8,
+                    fontSize: 12,
+                    color: "var(--color-primary)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  ← 清除
+                </button>
+              </>
+            )}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -265,6 +317,46 @@ export function CaseListPage() {
               批量分配（{selectedIds.length}）
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => {
+              exportToCsv(
+                `cases-${new Date().toISOString().slice(0, 10)}.csv`,
+                [
+                  { key: "id", label: "案件ID" },
+                  { key: "owner_name", label: "业主" },
+                  { key: "phone_masked", label: "手机（掩码）" },
+                  { key: "building", label: "楼栋" },
+                  { key: "room", label: "房号" },
+                  { key: "stage", label: "阶段" },
+                  { key: "amount_owed", label: "欠费金额" },
+                  { key: "months_overdue", label: "欠费月数" },
+                  { key: "assigned_to", label: "经办员工ID" },
+                  { key: "provider_name", label: "服务商" },
+                  { key: "last_contact_at", label: "上次联系" },
+                ],
+                items.map((c) => ({
+                  id: c.id,
+                  owner_name: c.owner.name,
+                  phone_masked: c.owner.phone_masked,
+                  building: c.owner.building ?? "",
+                  room: c.owner.room ?? "",
+                  stage: STAGE_LABELS[c.stage] ?? c.stage,
+                  amount_owed: c.amount_owed ?? "",
+                  months_overdue: c.months_overdue ?? "",
+                  assigned_to: c.assigned_to ?? "",
+                  provider_name: c.provider_name ?? "",
+                  last_contact_at: c.last_contact_at ?? "",
+                })),
+              );
+            }}
+            disabled={items.length === 0}
+            className="ds-btn ds-btn-secondary"
+            title="导出当前页面的案件为 CSV"
+          >
+            <Download className="w-3.5 h-3.5" />
+            导出 CSV
+          </button>
           {!isPM && (
             <button
               type="button"
@@ -296,6 +388,33 @@ export function CaseListPage() {
               style={{ minWidth: 240 }}
             />
           </div>
+          <SearchableSelect
+            style={{ width: 200 }}
+            value={projectIdFilter ?? ""}
+            placeholder="全部项目"
+            onChange={(v) => {
+              if (v === "") searchParams.delete("project_id");
+              else searchParams.set("project_id", String(v));
+              setSearchParams(searchParams);
+              setPage(1);
+            }}
+            options={allProjects.map((p) => ({ value: p.id, label: p.name }))}
+          />
+          <SearchableSelect
+            style={{ width: 180 }}
+            value={providerIdFilter ?? ""}
+            placeholder="全部服务商"
+            onChange={(v) => {
+              if (v === "") searchParams.delete("provider_id");
+              else searchParams.set("provider_id", String(v));
+              setSearchParams(searchParams);
+              setPage(1);
+            }}
+            options={allProviders.map((p) => ({
+              value: p.provider_id,
+              label: p.provider_name,
+            }))}
+          />
           <select
             className="form-control"
             style={{ width: 140 }}
@@ -312,38 +431,30 @@ export function CaseListPage() {
               </option>
             ))}
           </select>
-          <select
-            className="form-control"
-            style={{ width: 140 }}
+          <SearchableSelect
+            style={{ width: 160 }}
             value={agentFilter}
-            onChange={(e) => {
-              setAgentFilter(e.target.value === "" ? "" : Number(e.target.value));
+            placeholder="全部员工"
+            onChange={(v) => {
+              setAgentFilter(v === "" ? "" : Number(v));
               setPage(1);
             }}
-          >
-            <option value="">全部员工</option>
-            {agents.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-          <select
-            className="form-control"
-            style={{ width: 120 }}
+            options={agents.map((a) => ({
+              value: a.id,
+              label: a.name,
+              subtitle: a.phone_masked,
+            }))}
+          />
+          <SearchableSelect
+            style={{ width: 130 }}
             value={buildingFilter}
-            onChange={(e) => {
-              setBuildingFilter(e.target.value);
+            placeholder="全部楼栋"
+            onChange={(v) => {
+              setBuildingFilter(String(v));
               setPage(1);
             }}
-          >
-            <option value="">全部楼栋</option>
-            {buildings.map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-          </select>
+            options={buildings.map((b) => ({ value: b, label: b }))}
+          />
         </div>
 
         <table>
@@ -367,6 +478,7 @@ export function CaseListPage() {
               <th>欠费月数</th>
               <th>欠费情况</th>
               <th>阶段</th>
+              <th>服务商</th>
               <th>负责员工</th>
               <th>最后联系</th>
               <th>操作</th>
@@ -375,14 +487,14 @@ export function CaseListPage() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={isPM ? 10 : 11} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                <td colSpan={isPM ? 11 : 12} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
                   加载中…
                 </td>
               </tr>
             )}
             {!isLoading && items.length === 0 && (
               <tr>
-                <td colSpan={isPM ? 10 : 11} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                <td colSpan={isPM ? 11 : 12} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
                   暂无案件数据
                 </td>
               </tr>
@@ -444,6 +556,17 @@ export function CaseListPage() {
                     </span>
                   </td>
                   <td>
+                    {c.provider_name ? (
+                      <span className="ds-badge ds-badge-blue" style={{ fontSize: 11 }}>
+                        {c.provider_name}
+                      </span>
+                    ) : (
+                      <span className="ds-badge ds-badge-gray" style={{ fontSize: 11 }}>
+                        物业自办
+                      </span>
+                    )}
+                  </td>
+                  <td>
                     {(() => {
                       const a = agents.find((x) => x.id === c.assigned_to);
                       return a ? (
@@ -470,7 +593,7 @@ export function CaseListPage() {
                     >
                       详情
                     </button>
-                    {!isPM && !c.assigned_to && (
+                    {!isPM && !c.assigned_to && !c.provider_id && (
                       <button
                         type="button"
                         className="ds-btn ds-btn-ghost ds-btn-sm"
@@ -481,6 +604,15 @@ export function CaseListPage() {
                       >
                         分配
                       </button>
+                    )}
+                    {!isPM && !c.assigned_to && c.provider_id && (
+                      <span
+                        className="text-muted"
+                        style={{ fontSize: 11, marginLeft: 4 }}
+                        title="本案件归外包项目，由服务商内部决定坐席"
+                      >
+                        服务商待分配
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -525,17 +657,16 @@ export function CaseListPage() {
                   value={selectedAgentId ?? ""}
                   onChange={(e) => setSelectedAgentId(Number(e.target.value) || null)}
                 >
-                  <option value="">请选择</option>
-                  {agents
-                    .filter((a) =>
-                      ["agent_internal", "agent_external"].includes(a.role),
-                    )
-                    .map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}（{a.phone_masked}）
-                      </option>
-                    ))}
+                  <option value="">请选择内部催收员</option>
+                  {internalAgents.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}（{a.phone_masked}）
+                    </option>
+                  ))}
                 </select>
+                <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
+                  外包项目的案件由服务商内部分配，本入口仅可分给物业内部催收员。
+                </div>
               </div>
             </div>
             <div className="modal-footer">

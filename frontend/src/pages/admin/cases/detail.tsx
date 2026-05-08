@@ -199,21 +199,10 @@ export function AdminCaseDetailPage() {
 
   const monthsOverdue = detail.months_overdue ?? 0;
   const amountOwed = detail.amount_owed ? Number(detail.amount_owed) : 0;
-  const perMonth =
-    monthsOverdue > 0 ? Math.round(amountOwed / monthsOverdue) : amountOwed;
-
-  // 模拟月度账目（v1.x：等后端 billing_line_item 表）
-  const debtRows = Array.from({ length: monthsOverdue }, (_, i) => {
-    const date = new Date();
-    date.setMonth(date.getMonth() - (monthsOverdue - i));
-    return {
-      month: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`,
-      base: perMonth,
-      penalty: Math.max(0, (monthsOverdue - i - 1) * 11),
-    };
-  });
-  const totalBase = debtRows.reduce((s, r) => s + r.base, 0);
-  const totalPenalty = debtRows.reduce((s, r) => s + r.penalty, 0);
+  // v1.6.3 — 不再按月推算；直接展示导入时录入的物业费 + 违约金
+  const principalAmount = detail.principal_amount ? Number(detail.principal_amount) : 0;
+  const lateFeeAmount = detail.late_fee_amount ? Number(detail.late_fee_amount) : 0;
+  const hasBillBreakdown = principalAmount > 0 || lateFeeAmount > 0;
 
   return (
     <div>
@@ -323,7 +312,7 @@ export function AdminCaseDetailPage() {
                 </div>
               </div>
 
-              {/* big debt block */}
+              {/* v1.6.3 — 累计欠费（保留 hero 卡） */}
               {amountOwed > 0 && (
                 <div
                   style={{
@@ -342,40 +331,45 @@ export function AdminCaseDetailPage() {
                   >
                     ¥{amountOwed.toLocaleString()}
                   </div>
-                  <div style={{ fontSize: 12, color: "#6b7280" }}>
-                    共 {monthsOverdue} 个月
+                  {monthsOverdue > 0 && (
+                    <div style={{ fontSize: 12, color: "#6b7280" }}>
+                      共 {monthsOverdue} 个月
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* v1.6.3 — 欠费拆分：物业费 + 违约金 + 总额（不再按月推算） */}
+              {hasBillBreakdown && (
+                <div style={{ marginBottom: 16 }}>
+                  {(detail.bill_period_start || detail.bill_period_end) && (
+                    <div style={{ fontSize: 12, color: "var(--color-neutral-500)", marginBottom: 8 }}>
+                      账单期：{detail.bill_period_start ?? "—"} ~ {detail.bill_period_end ?? "—"}
+                    </div>
+                  )}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+                    <div style={{ padding: 10, background: "#f9fafb", borderRadius: 6, textAlign: "center" }}>
+                      <div style={{ fontSize: 11, color: "var(--color-neutral-500)" }}>物业费</div>
+                      <div style={{ fontSize: 16, fontWeight: 600, marginTop: 2 }}>¥{principalAmount.toLocaleString()}</div>
+                    </div>
+                    <div style={{ padding: 10, background: "#fef3c7", borderRadius: 6, textAlign: "center" }}>
+                      <div style={{ fontSize: 11, color: "#92400e" }}>违约金</div>
+                      <div style={{ fontSize: 16, fontWeight: 600, marginTop: 2, color: "#92400e" }}>¥{lateFeeAmount.toLocaleString()}</div>
+                    </div>
+                    <div style={{ padding: 10, background: "#fee2e2", borderRadius: 6, textAlign: "center" }}>
+                      <div style={{ fontSize: 11, color: "#991b1b" }}>欠费总额</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, marginTop: 2, color: "#991b1b" }}>¥{amountOwed.toLocaleString()}</div>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* debt table */}
-              {monthsOverdue > 0 && (
-                <table className="debt-table">
-                  <thead>
-                    <tr>
-                      <th>月份</th>
-                      <th>物业费</th>
-                      <th>滞纳金</th>
-                      <th>合计</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {debtRows.map((r) => (
-                      <tr key={r.month}>
-                        <td>{r.month}</td>
-                        <td>¥{r.base.toLocaleString()}</td>
-                        <td>{r.penalty > 0 ? `¥${r.penalty}` : "¥—"}</td>
-                        <td>¥{(r.base + r.penalty).toLocaleString()}</td>
-                      </tr>
-                    ))}
-                    <tr style={{ fontWeight: 700, background: "#fef2f2" }}>
-                      <td>合计</td>
-                      <td>¥{totalBase.toLocaleString()}</td>
-                      <td>¥{totalPenalty}</td>
-                      <td>¥{(totalBase + totalPenalty).toLocaleString()}</td>
-                    </tr>
-                  </tbody>
-                </table>
+              {/* v1.6.3 — 欠费理由（导入时录入） */}
+              {detail.arrears_reason && (
+                <div style={{ marginBottom: 16, padding: "10px 12px", background: "#fffbeb", borderRadius: 6, border: "1px solid #fde68a" }}>
+                  <div style={{ fontSize: 11, color: "#92400e", marginBottom: 2 }}>欠费理由</div>
+                  <div style={{ fontSize: 13, color: "#78350f" }}>{detail.arrears_reason}</div>
+                </div>
               )}
 
               {/* tags 占位（v1.x 后端 owner.tags 字段上线后启用） */}
@@ -399,6 +393,108 @@ export function AdminCaseDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* v1.6.3 — 项目基本情况（合同 + 收费） */}
+          {detail.project_info && (
+            <div className="ds-card section-gap" style={{ borderLeft: "3px solid #6366f1" }}>
+              <div className="card-header">
+                <span className="card-title">📁 项目基本情况</span>
+                <span className="ds-badge ds-badge-blue" style={{ fontSize: 11 }}>{detail.project_info.name}</span>
+              </div>
+              <div className="card-body">
+                <div className="info-grid">
+                  {detail.project_info.charge_rate_text && (
+                    <div className="info-item" style={{ gridColumn: "span 2" }}>
+                      <div className="info-label">收费标准</div>
+                      <div className="info-value" style={{ whiteSpace: "pre-wrap" }}>{detail.project_info.charge_rate_text}</div>
+                    </div>
+                  )}
+                  {detail.project_info.charge_period && (
+                    <div className="info-item">
+                      <div className="info-label">收费周期</div>
+                      <div className="info-value">
+                        {{ monthly: "按月", quarterly: "按季", semiannual: "按半年", annual: "按年" }[detail.project_info.charge_period] ?? detail.project_info.charge_period}
+                      </div>
+                    </div>
+                  )}
+                  {detail.project_info.contract_type && (
+                    <div className="info-item">
+                      <div className="info-label">合同类型</div>
+                      <div className="info-value">
+                        {{ preliminary_service: "前期物业服务合同", elected: "选聘合同", re_elected: "续聘合同", interim_management: "临时管理合同" }[detail.project_info.contract_type] ?? detail.project_info.contract_type}
+                      </div>
+                    </div>
+                  )}
+                  {(detail.project_info.contract_start_date || detail.project_info.contract_end_date) && (
+                    <div className="info-item" style={{ gridColumn: "span 2" }}>
+                      <div className="info-label">合同期</div>
+                      <div className="info-value">{detail.project_info.contract_start_date ?? "—"} ~ {detail.project_info.contract_end_date ?? "—"}</div>
+                    </div>
+                  )}
+                  {detail.project_info.contract_attachment_key && (
+                    <div className="info-item" style={{ gridColumn: "span 2" }}>
+                      <div className="info-label">合同附件</div>
+                      <div className="info-value">📎 {detail.project_info.contract_attachment_filename ?? "已上传"}</div>
+                    </div>
+                  )}
+                  {detail.project_info.charge_notes && (
+                    <div className="info-item" style={{ gridColumn: "span 2" }}>
+                      <div className="info-label">收费备注</div>
+                      <div className="info-value" style={{ whiteSpace: "pre-wrap" }}>{detail.project_info.charge_notes}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* v1.5 — 服务团队（电话团队 + 法务团队）*/}
+          {(detail.calling_provider_name || detail.legal_law_firm_name) && (
+            <div className="ds-card section-gap">
+              <div className="card-header">
+                <span className="card-title">
+                  <Users className="w-4 h-4" style={{ display: "inline", marginRight: 6, verticalAlign: "-3px" }} />
+                  服务团队
+                </span>
+              </div>
+              <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div>
+                  <div className="info-label">电话团队</div>
+                  <div className="info-value">
+                    {detail.calling_provider_name ? (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <span className="ds-badge ds-badge-blue">服务商</span>
+                        {detail.calling_provider_name}
+                      </span>
+                    ) : (
+                      <span className="text-muted">物业自办（未签约服务商）</span>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <div className="info-label">法务团队</div>
+                  <div className="info-value">
+                    {detail.legal_law_firm_name ? (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <Scale className="w-3.5 h-3.5" style={{ color: "#7e3af2" }} />
+                        <span>{detail.legal_law_firm_name}</span>
+                        {detail.legal_lawyer_name && (
+                          <span style={{ fontSize: 12, color: "#6b7280" }}>· {detail.legal_lawyer_name}</span>
+                        )}
+                        {detail.legal_order_status && (
+                          <span className="ds-badge ds-badge-purple" style={{ fontSize: 11 }}>
+                            {legalStatusLabel(detail.legal_order_status)}
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-muted">未转化法务</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* operation buttons */}
           {!isPM && (
@@ -763,6 +859,16 @@ export function AdminCaseDetailPage() {
       </span>
     </div>
   );
+}
+
+function legalStatusLabel(status: string): string {
+  switch (status) {
+    case "pending": return "待撮合";
+    case "dispatched": return "已派单";
+    case "in_service": return "服务中";
+    case "completed": return "已完结";
+    default: return status;
+  }
 }
 
 function renderTimelineEventMeta(type: string): {

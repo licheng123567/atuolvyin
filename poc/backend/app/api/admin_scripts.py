@@ -49,13 +49,24 @@ def _script_source(script: ScriptTemplate) -> str:
     return "platform"
 
 
-def _to_out(script: ScriptTemplate) -> ScriptTemplateOut:
+def _to_out(script: ScriptTemplate, project_name: str | None = None) -> ScriptTemplateOut:
     return ScriptTemplateOut.model_validate(
         {
             **{c.name: getattr(script, c.name) for c in script.__table__.columns},
             "source": _script_source(script),
+            "project_name": project_name,
         }
     )
+
+
+def _enrich_with_project(db: Session, script: ScriptTemplate) -> ScriptTemplateOut:
+    project_name: str | None = None
+    if script.project_id:
+        from app.models.case import Project
+        project_name = db.execute(
+            select(Project.name).where(Project.id == script.project_id)
+        ).scalar_one_or_none()
+    return _to_out(script, project_name)
 
 
 def _get_script_or_404(
@@ -104,6 +115,7 @@ def list_scripts(
     q: Optional[str] = Query(None),
     intent: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    project_id: Optional[int] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[ScriptTemplateOut]:
@@ -127,6 +139,11 @@ def list_scripts(
         stmt = stmt.where(ScriptTemplate.is_active.is_(True))
     elif status == "inactive":
         stmt = stmt.where(ScriptTemplate.is_active.is_(False))
+    # v1.5.7 — 项目级过滤：传 project_id=N 时返回「全项目通用 + 该项目专属」
+    if project_id is not None:
+        stmt = stmt.where(
+            or_(ScriptTemplate.project_id.is_(None), ScriptTemplate.project_id == project_id)
+        )
 
     total_ids = db.execute(stmt.with_only_columns(ScriptTemplate.id)).scalars().all()
     items = db.execute(
@@ -134,7 +151,7 @@ def list_scripts(
         .offset((page - 1) * page_size).limit(page_size)
     ).scalars().all()
     return PaginatedResponse(
-        items=[_to_out(s) for s in items],
+        items=[_enrich_with_project(db, s) for s in items],
         total=len(total_ids),
         page=page,
         page_size=page_size,
@@ -152,8 +169,25 @@ def create_script(
     tenant_id = int(payload.get("tenant_id") or 0)
     user_id = int(payload.get("user_id") or 0)
 
+    # v1.5.7 — 校验 project_id 属本租户
+    project_id_to_set: int | None = None
+    if body.project_id is not None and role != "platform_superadmin":
+        from app.models.case import Project
+        ok = db.execute(
+            select(Project.id).where(
+                Project.id == body.project_id, Project.tenant_id == tenant_id
+            )
+        ).scalar_one_or_none()
+        if ok is None:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail={"code": "ERR_INVALID_PROJECT", "message": "项目不存在或不属本租户"},
+            )
+        project_id_to_set = body.project_id
+
     script = ScriptTemplate(
         tenant_id=None if role == "platform_superadmin" else tenant_id,
+        project_id=project_id_to_set,
         title=body.title,
         scene=body.scene,
         trigger_intent=body.trigger_intent,
@@ -167,7 +201,7 @@ def create_script(
     _write_snapshot(db, script, user_id)
     db.commit()
     db.refresh(script)
-    return _to_out(script)
+    return _enrich_with_project(db, script)
 
 
 @router.post("/scripts/import", response_model=ImportResultOut)
@@ -271,12 +305,27 @@ def update_script(
         script.content = body.content
     if body.notes is not None:
         script.notes = body.notes
+    # v1.5.7 — 项目级范围可改：明确传 project_id（含 null）即更新
+    if "project_id" in body.model_fields_set:
+        if body.project_id is not None and role != "platform_superadmin":
+            from app.models.case import Project
+            ok = db.execute(
+                select(Project.id).where(
+                    Project.id == body.project_id, Project.tenant_id == tenant_id
+                )
+            ).scalar_one_or_none()
+            if ok is None:
+                raise HTTPException(
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
+                    detail={"code": "ERR_INVALID_PROJECT", "message": "项目不存在或不属本租户"},
+                )
+        script.project_id = body.project_id
     script.version += 1
     _write_snapshot(db, script, user_id)
 
     db.commit()
     db.refresh(script)
-    return _to_out(script)
+    return _enrich_with_project(db, script)
 
 
 @router.post("/scripts/{script_id}/fork", response_model=ScriptTemplateOut, status_code=201)

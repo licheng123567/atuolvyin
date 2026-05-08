@@ -316,8 +316,14 @@ async def list_my_projects(
             .order_by(Project.id.desc())
         ).scalars().all()
     elif role == "project_manager_provider":
+        # v1.5.5 — 服务商 PM 仅看到 active + 服务期未过的项目
+        from sqlalchemy import or_
         rows = db.execute(
-            select(Project).where(Project.provider_pm_user_id == user_id)
+            select(Project).where(
+                Project.provider_pm_user_id == user_id,
+                Project.status == "active",
+                or_(Project.plan_end.is_(None), Project.plan_end >= func.now()),
+            )
             .order_by(Project.id.desc())
         ).scalars().all()
     else:

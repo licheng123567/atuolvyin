@@ -9,8 +9,13 @@ interface ImportRow {
   phone: string;
   building: string;
   room: string;
-  amount_owed: string;
-  months_overdue: string;
+  // v1.6.3 — 账单字段（不再自动按月推算）
+  bill_period_start: string;  // 账单开始日期 YYYY-MM-DD
+  bill_period_end: string;    // 账单结束日期 YYYY-MM-DD
+  principal_amount: string;   // 物业费（本金）
+  late_fee_amount: string;    // 违约金 / 滞纳金
+  amount_owed: string;        // 欠费总额（= 物业费 + 违约金，可手填或自动算）
+  arrears_reason: string;     // 欠费理由
   notes: string;
 }
 
@@ -19,8 +24,12 @@ const EMPTY_ROW: ImportRow = {
   phone: "",
   building: "",
   room: "",
+  bill_period_start: "",
+  bill_period_end: "",
+  principal_amount: "",
+  late_fee_amount: "",
   amount_owed: "",
-  months_overdue: "",
+  arrears_reason: "",
   notes: "",
 };
 
@@ -79,17 +88,37 @@ export function CaseImportPage() {
     }
     const payload = rows
       .filter((r) => r.name && r.phone)
-      .map((r) => ({
-        name: r.name.trim(),
-        phone: r.phone.trim(),
-        building: r.building.trim() || null,
-        room: r.room.trim() || null,
-        amount_owed: r.amount_owed ? r.amount_owed.trim() : null,
-        months_overdue: r.months_overdue
-          ? parseInt(r.months_overdue, 10) || null
-          : null,
-        notes: r.notes.trim() || null,
-      }));
+      .map((r) => {
+        const principal = r.principal_amount ? Number(r.principal_amount.trim()) : 0;
+        const lateFee = r.late_fee_amount ? Number(r.late_fee_amount.trim()) : 0;
+        // 欠费总额：手填优先，否则自动 = 物业费 + 违约金
+        const totalManual = r.amount_owed ? r.amount_owed.trim() : "";
+        const total = totalManual !== "" ? totalManual : String(principal + lateFee);
+        // 月数：根据账单起止自动算（仅传给后端做参考；不影响展示）
+        let months: number | null = null;
+        if (r.bill_period_start && r.bill_period_end) {
+          const s = new Date(r.bill_period_start);
+          const e = new Date(r.bill_period_end);
+          if (!Number.isNaN(s.getTime()) && !Number.isNaN(e.getTime())) {
+            months = Math.max(1, Math.round((e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth())) + 1);
+          }
+        }
+        return {
+          name: r.name.trim(),
+          phone: r.phone.trim(),
+          building: r.building.trim() || null,
+          room: r.room.trim() || null,
+          // v1.6.3 — 账单字段（导入时录入，不再按月自动推算）
+          bill_period_start: r.bill_period_start || null,
+          bill_period_end: r.bill_period_end || null,
+          principal_amount: r.principal_amount ? r.principal_amount.trim() : null,
+          late_fee_amount: r.late_fee_amount ? r.late_fee_amount.trim() : null,
+          amount_owed: total || null,
+          arrears_reason: r.arrears_reason.trim() || null,
+          months_overdue: months,
+          notes: r.notes.trim() || null,
+        };
+      });
 
     importCases(
       {
@@ -201,7 +230,7 @@ export function CaseImportPage() {
               或 <span style={{ color: "#1A56DB", cursor: "pointer" }}>点击选择文件</span>
             </div>
             <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 8 }}>
-              支持 .xlsx / .csv · 最大 100MB · 必须包含：姓名、房号、手机号、欠费金额
+              支持 .xlsx / .csv · 最大 100MB · 必须包含：姓名、手机号、楼栋、账单开始日期、账单结束日期、物业费、违约金、欠费总额（= 物业费 + 违约金）
             </div>
           </div>
         </div>
@@ -225,70 +254,75 @@ export function CaseImportPage() {
                     <th>手机号*</th>
                     <th>楼栋*</th>
                     <th>房间</th>
-                    <th>欠费金额</th>
-                    <th>逾期月数</th>
-                    <th>欠费情况说明</th>
+                    <th>账单开始日期</th>
+                    <th>账单结束日期</th>
+                    <th>物业费 ¥</th>
+                    <th>违约金 ¥</th>
+                    <th>欠费总额 ¥</th>
+                    <th>欠费理由</th>
+                    <th>备注</th>
                     <th style={{ width: 60 }} />
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row, idx) => (
-                    <tr key={idx}>
-                      {(
-                        [
-                          "name",
-                          "phone",
-                          "building",
-                          "room",
-                          "amount_owed",
-                          "months_overdue",
-                          "notes",
-                        ] as (keyof ImportRow)[]
-                      ).map((field) => (
-                        <td key={field}>
-                          <input
-                            type={
-                              field === "amount_owed" || field === "months_overdue"
-                                ? "number"
-                                : "text"
-                            }
-                            value={row[field]}
-                            onChange={(e) =>
-                              updateRow(idx, field, e.target.value)
-                            }
-                            className="form-control"
-                            style={{
-                              padding: "6px 10px",
-                              fontSize: 13,
-                              minWidth: field === "notes" ? 180 : undefined,
-                            }}
-                            placeholder={
-                              field === "name"
-                                ? "张三"
-                                : field === "phone"
-                                  ? "138xxxx"
-                                  : field === "building"
-                                    ? "1栋"
-                                    : field === "notes"
-                                      ? "如：经济困难/失联/拒缴"
-                                      : ""
-                            }
-                          />
+                  {rows.map((row, idx) => {
+                    const fieldList: { name: keyof ImportRow; type: "text" | "number" | "date" | "select"; placeholder?: string; minWidth?: number }[] = [
+                      { name: "name", type: "text", placeholder: "张三" },
+                      { name: "phone", type: "text", placeholder: "138xxxx" },
+                      { name: "building", type: "text", placeholder: "1栋" },
+                      { name: "room", type: "text", placeholder: "101" },
+                      { name: "bill_period_start", type: "date" },
+                      { name: "bill_period_end", type: "date" },
+                      { name: "principal_amount", type: "number", placeholder: "本金" },
+                      { name: "late_fee_amount", type: "number", placeholder: "违约金" },
+                      { name: "amount_owed", type: "number", placeholder: "自动 = 本金+违约金" },
+                      { name: "arrears_reason", type: "select" },
+                      { name: "notes", type: "text", placeholder: "失联/拒缴等", minWidth: 140 },
+                    ];
+                    return (
+                      <tr key={idx}>
+                        {fieldList.map((f) => (
+                          <td key={f.name}>
+                            {f.type === "select" ? (
+                              <select
+                                value={row[f.name]}
+                                onChange={(e) => updateRow(idx, f.name, e.target.value)}
+                                className="form-control"
+                                style={{ padding: "6px 8px", fontSize: 13, minWidth: 110 }}
+                              >
+                                <option value="">— 选择 —</option>
+                                <option value="经济困难">经济困难</option>
+                                <option value="服务质量异议">服务质量异议</option>
+                                <option value="房屋空置">房屋空置</option>
+                                <option value="租客拖欠">租客拖欠</option>
+                                <option value="其他">其他</option>
+                              </select>
+                            ) : (
+                              <input
+                                type={f.type}
+                                value={row[f.name]}
+                                onChange={(e) => updateRow(idx, f.name, e.target.value)}
+                                className="form-control"
+                                style={{ padding: "6px 10px", fontSize: 13, minWidth: f.minWidth }}
+                                placeholder={f.placeholder}
+                              />
+                            )}
+                          </td>
+                        ))}
+                        <td>
+                          <button
+                            type="button"
+                            onClick={() => removeRow(idx)}
+                            disabled={rows.length === 1}
+                            className="ds-btn ds-btn-ghost ds-btn-sm"
+                            style={{ color: "#e02424" }}
+                          >
+                            删除
+                          </button>
                         </td>
-                      ))}
-                      <td>
-                        <button
-                          type="button"
-                          onClick={() => removeRow(idx)}
-                          disabled={rows.length === 1}
-                          className="ds-btn ds-btn-ghost ds-btn-sm"
-                          style={{ color: "#e02424" }}
-                        >
-                          删除
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

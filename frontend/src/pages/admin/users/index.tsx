@@ -1,7 +1,8 @@
-// 1:1 还原 ui/admin.html#a-users 用户管理（含内部员工 / 外部兼职 tabs）
-import { useGo, useList } from "@refinedev/core";
+// v1.5.6 收尾 — 物业用户管理：仅展示物业内部员工，外勤归服务商管理
+import { useCustomMutation, useGo, useList } from "@refinedev/core";
 import { Plus, Search } from "lucide-react";
 import { useState } from "react";
+import { InviteQrModal } from "../../../components/admin/InviteQrModal";
 import type { PaginatedResponse } from "../../../types";
 
 interface UserItem {
@@ -11,6 +12,16 @@ interface UserItem {
   role: string;
   is_active: boolean;
   created_at: string;
+  login_method?: string | null;
+  last_login_at?: string | null;
+  // v1.5.6 — 多 membership 兼岗
+  all_roles?: string[];
+}
+
+interface IssueOtpResponse {
+  phone_masked: string;
+  phone_full: string | null;
+  otp: string | null;
 }
 
 const ROLE_BADGE_CLASS: Record<string, string> = {
@@ -20,6 +31,7 @@ const ROLE_BADGE_CLASS: Record<string, string> = {
   agent_external: "ds-badge ds-badge-blue",
   legal: "ds-badge ds-badge-purple",
   workorder: "ds-badge ds-badge-gray",
+  coordinator: "ds-badge ds-badge-gray",
   project_manager_property: "ds-badge ds-badge-purple",
   project_manager_provider: "ds-badge ds-badge-purple",
   provider_admin: "ds-badge ds-badge-purple",
@@ -30,20 +42,32 @@ const ROLE_LABEL: Record<string, string> = {
   supervisor: "督导",
   agent_internal: "催收员",
   agent_external: "兼职坐席",
-  legal: "法务",
-  workorder: "工单专员",
+  legal: "法务对接人",
+  workorder: "协调员",
+  coordinator: "协调员",
   project_manager_property: "项目经理",
   project_manager_provider: "项目经理",
   provider_admin: "服务商管理员",
 };
 
-type Tab = "internal" | "external";
-
 export function UserListPage() {
   const go = useGo();
-  const [tab, setTab] = useState<Tab>("internal");
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
+  const [invite, setInvite] = useState<{ name: string; resp: IssueOtpResponse } | null>(null);
+  const { mutate: issueOtp, mutation: otpMutation } = useCustomMutation();
+
+  const handleIssueOtp = (u: UserItem) => {
+    issueOtp(
+      { url: `admin/users/${u.id}/issue-otp`, method: "post", values: {} },
+      {
+        onSuccess: (resp) => {
+          setInvite({ name: u.name, resp: resp.data as unknown as IssueOtpResponse });
+        },
+        onError: () => alert("生成首登码失败，请稍后重试"),
+      },
+    );
+  };
 
   const { query } = useList<UserItem>({
     resource: "admin/users",
@@ -57,10 +81,10 @@ export function UserListPage() {
     [];
   const isLoading = query.isLoading;
 
+  // v1.5.6 — 移除外勤 tab：物业 admin 只看内部员工，外勤归服务商管理
   const internal = allItems.filter((u) => u.role !== "agent_external");
-  const external = allItems.filter((u) => u.role === "agent_external");
 
-  const visible = (tab === "internal" ? internal : external).filter((u) => {
+  const visible = internal.filter((u) => {
     if (q && !u.name.includes(q) && !u.phone_masked.includes(q)) return false;
     if (roleFilter && u.role !== roleFilter) return false;
     return true;
@@ -73,13 +97,13 @@ export function UserListPage() {
         <div>
           <h1 className="page-title">用户管理</h1>
           <div className="page-subtitle">
-            内部 {internal.length} · 外部兼职 {external.length}
+            物业内部员工 {internal.length} 人
+            <span style={{ marginLeft: 12, color: "#9ca3af", fontSize: 12 }}>
+              · 外勤由对应服务商在自家系统管理
+            </span>
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" className="ds-btn ds-btn-secondary" disabled>
-            生成邀请链接
-          </button>
           <button
             type="button"
             className="ds-btn ds-btn-primary"
@@ -88,34 +112,6 @@ export function UserListPage() {
             <Plus className="w-3.5 h-3.5" />
             新建员工
           </button>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="ds-tabs">
-        <div
-          className={`ds-tab${tab === "internal" ? " active" : ""}`}
-          onClick={() => setTab("internal")}
-        >
-          内部员工{" "}
-          <span
-            className="ds-badge ds-badge-gray"
-            style={{ fontSize: 11, marginLeft: 4 }}
-          >
-            {internal.length}
-          </span>
-        </div>
-        <div
-          className={`ds-tab${tab === "external" ? " active" : ""}`}
-          onClick={() => setTab("external")}
-        >
-          外部兼职{" "}
-          <span
-            className="ds-badge ds-badge-gray"
-            style={{ fontSize: 11, marginLeft: 4 }}
-          >
-            {external.length}
-          </span>
         </div>
       </div>
 
@@ -132,25 +128,23 @@ export function UserListPage() {
               onChange={(e) => setQ(e.target.value)}
             />
           </div>
-          {tab === "internal" && (
-            <select
-              className="form-control"
-              style={{ width: 130 }}
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
-            >
-              <option value="">全部角色</option>
-              <option value="supervisor">督导</option>
-              <option value="agent_internal">催收员</option>
-              <option value="legal">法务</option>
-              <option value="workorder">工单专员</option>
-              <option value="admin">管理员</option>
-            </select>
-          )}
+          <select
+            className="form-control"
+            style={{ width: 130 }}
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+          >
+            <option value="">全部角色</option>
+            <option value="supervisor">督导</option>
+            <option value="agent_internal">内部催收员</option>
+            <option value="coordinator">协调员</option>
+            <option value="legal">法务对接人</option>
+            <option value="project_manager_property">项目经理</option>
+            <option value="admin">管理员</option>
+          </select>
         </div>
 
-        {tab === "internal" ? (
-          <table>
+        <table>
             <thead>
               <tr>
                 <th>姓名</th>
@@ -192,6 +186,15 @@ export function UserListPage() {
                     >
                       {ROLE_LABEL[u.role] ?? u.role}
                     </span>
+                    {u.all_roles && u.all_roles.length > 1 && (
+                      <span
+                        className="ds-badge ds-badge-purple"
+                        style={{ marginLeft: 6, fontSize: 10 }}
+                        title={u.all_roles.map((r) => ROLE_LABEL[r] ?? r).join(" / ")}
+                      >
+                        兼 {u.all_roles.length} 职
+                      </span>
+                    )}
                   </td>
                   <td className="text-muted">—</td>
                   <td className="text-muted">—</td>
@@ -208,16 +211,21 @@ export function UserListPage() {
                     </span>
                   </td>
                   <td>
-                    <button type="button" className="ds-btn ds-btn-ghost ds-btn-sm">
+                    <button
+                      type="button"
+                      className="ds-btn ds-btn-ghost ds-btn-sm"
+                      onClick={() => go({ to: `/admin/users/${u.id}/edit` })}
+                    >
                       编辑
                     </button>
-                    {u.is_active && (
+                    {u.login_method === "otp" && !u.last_login_at && (
                       <button
                         type="button"
                         className="ds-btn ds-btn-ghost ds-btn-sm"
-                        style={{ color: "#e02424" }}
+                        disabled={otpMutation.isPending}
+                        onClick={() => handleIssueOtp(u)}
                       >
-                        停用
+                        重发首登码
                       </button>
                     )}
                   </td>
@@ -225,60 +233,17 @@ export function UserListPage() {
               ))}
             </tbody>
           </table>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>姓名</th>
-                <th>手机</th>
-                <th>服务商</th>
-                <th>配额 / 上限</th>
-                <th>有效期</th>
-                <th>可拨打时段</th>
-                <th>状态</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.length === 0 && (
-                <tr>
-                  <td colSpan={8} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
-                    暂无外部兼职坐席
-                  </td>
-                </tr>
-              )}
-              {visible.map((u) => (
-                <tr key={u.id}>
-                  <td>{u.name}</td>
-                  <td style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 12 }}>
-                    {u.phone_masked}
-                  </td>
-                  <td className="text-muted">—</td>
-                  <td className="text-muted">—</td>
-                  <td className="text-muted">—</td>
-                  <td className="text-muted">—</td>
-                  <td>
-                    <span
-                      className={
-                        u.is_active
-                          ? "ds-badge ds-badge-green"
-                          : "ds-badge ds-badge-gray"
-                      }
-                    >
-                      {u.is_active ? "正常" : "停用"}
-                    </span>
-                  </td>
-                  <td>
-                    <button type="button" className="ds-btn ds-btn-ghost ds-btn-sm">
-                      编辑
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
       </div>
+
+      <InviteQrModal
+        open={!!invite}
+        onClose={() => setInvite(null)}
+        userName={invite?.name ?? ""}
+        phoneFull={invite?.resp.phone_full ?? null}
+        phoneMasked={invite?.resp.phone_masked ?? ""}
+        otp={invite?.resp.otp ?? null}
+        devMode={!!invite?.resp.otp}
+      />
     </div>
   );
 }

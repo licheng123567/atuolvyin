@@ -21,7 +21,7 @@ class ProjectMember(Base, TimestampMixin):
     )
     role_in_project: Mapped[str] = mapped_column(
         sa.String(32), nullable=False
-    )  # supervisor | agent
+    )  # supervisor | agent | coordinator | legal (v1.5.6 — 协调员/法务对接人按项目绑定)
     is_active: Mapped[bool] = mapped_column(
         sa.Boolean, nullable=False, default=True
     )
@@ -32,7 +32,7 @@ class ProjectMember(Base, TimestampMixin):
             name="uq_project_member_pid_uid_role",
         ),
         sa.CheckConstraint(
-            "role_in_project IN ('supervisor','agent')",
+            "role_in_project IN ('supervisor','agent','coordinator','legal')",
             name="ck_project_member_role",
         ),
         sa.Index("idx_project_member_pid", "project_id"),

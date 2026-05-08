@@ -2,6 +2,7 @@
 import { useCustom } from "@refinedev/core";
 import { TrendingUp } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { LeaderboardTopN } from "../../../components/ui/LeaderboardTopN";
 import { formatMinutes, formatCurrency } from "./helpers";
 
 interface TodayStats {
@@ -238,58 +239,42 @@ export function AdminDashboardPage() {
 
       {/* Two-column main */}
       <div className="two-col">
-        {/* Left: ranking table */}
+        {/* Left: ranking table（v1.6.4 — Top 10 + 查看更多）*/}
         <div className="ds-card">
           <div className="card-header">
             <span className="card-title">全员今日排名</span>
             <span className="text-sm text-muted">实时更新</span>
           </div>
           <div
-            className="table-wrap"
-            style={{ border: "none", boxShadow: "none", borderRadius: 0 }}
+            style={{ padding: "0 16px 16px" }}
           >
-            <table>
-              <thead>
-                <tr>
-                  <th>排名</th>
-                  <th>姓名</th>
-                  <th>通话数</th>
-                  <th>承诺数</th>
-                  <th>回款金额</th>
-                  <th>AI 采用率</th>
+            <LeaderboardTopN
+              rows={topAgents}
+              topN={10}
+              viewMoreLink="/admin/reports"
+              columns={[
+                { key: "rank", label: "排名" },
+                { key: "name", label: "姓名" },
+                { key: "calls", label: "通话数" },
+                { key: "promised", label: "承诺数" },
+                { key: "paid", label: "回款金额" },
+                { key: "ai", label: "AI 采用率" },
+              ]}
+              renderRow={(a, i) => (
+                <tr key={a.user_id}>
+                  <td>
+                    <RankBadge rank={i + 1} />
+                  </td>
+                  <td>{a.name}</td>
+                  <td>{a.today_calls} 次</td>
+                  <td>{a.month_promised} 单</td>
+                  <td>—</td>
+                  <td>
+                    <span className="ds-badge ds-badge-blue">—</span>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {topAgents.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={6}
-                      style={{
-                        textAlign: "center",
-                        color: "#9ca3af",
-                        padding: 24,
-                      }}
-                    >
-                      暂无数据
-                    </td>
-                  </tr>
-                )}
-                {topAgents.map((a, i) => (
-                  <tr key={a.user_id}>
-                    <td>
-                      <RankBadge rank={i + 1} />
-                    </td>
-                    <td>{a.name}</td>
-                    <td>{a.today_calls} 次</td>
-                    <td>{a.month_promised} 单</td>
-                    <td>—</td>
-                    <td>
-                      <span className="ds-badge ds-badge-blue">—</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+              )}
+            />
           </div>
         </div>
 
@@ -408,7 +393,7 @@ export function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* v1.4 — 按项目统计 */}
+      {/* v1.4 — 按项目统计（v1.6.4 — Top 10 + 查看更多）*/}
       {projectKpis.length > 0 && (
         <div className="ds-card" style={{ marginTop: 16 }}>
           <div className="card-header">
@@ -417,94 +402,91 @@ export function AdminDashboardPage() {
               共 {projectKpis.length} 个项目
             </span>
           </div>
-          <div className="card-body" style={{ padding: 0 }}>
-            <div className="table-wrap" style={{ borderRadius: 0, border: "none" }}>
-              <table>
-                <thead>
-                  <tr>
-                    <th>项目名称</th>
-                    <th>合作服务商</th>
-                    <th style={{ textAlign: "right" }}>案件数</th>
-                    <th style={{ textAlign: "right" }}>应收</th>
-                    <th style={{ textAlign: "right" }}>已收</th>
-                    <th style={{ textAlign: "right" }}>回款率</th>
-                    <th>阶段分布</th>
-                    <th style={{ textAlign: "right" }}>30 天接通</th>
-                    <th style={{ width: 80 }}>操作</th>
+          <div style={{ padding: "0 16px 16px" }}>
+            <LeaderboardTopN
+              rows={projectKpis}
+              topN={10}
+              viewMoreLink="/admin/projects"
+              columns={[
+                { key: "name", label: "项目名称" },
+                { key: "provider", label: "合作服务商" },
+                { key: "case_count", label: "案件数", align: "right" },
+                { key: "receivable", label: "应收", align: "right" },
+                { key: "received", label: "已收", align: "right" },
+                { key: "rate", label: "回款率", align: "right" },
+                { key: "stages", label: "阶段分布" },
+                { key: "calls", label: "30 天接通", align: "right" },
+                { key: "actions", label: "操作", width: 80 },
+              ]}
+              renderRow={(p) => {
+                const connectedRate =
+                  p.total_calls_30d > 0
+                    ? (p.connected_30d / p.total_calls_30d) * 100
+                    : 0;
+                return (
+                  <tr key={p.project_id}>
+                    <td>
+                      <strong>{p.project_name}</strong>
+                    </td>
+                    <td>
+                      {p.provider_name ?? (
+                        <span style={{ color: "#9ca3af" }}>自营</span>
+                      )}
+                    </td>
+                    <td style={{ textAlign: "right" }}>{p.case_count}</td>
+                    <td style={{ textAlign: "right", fontWeight: 600 }}>
+                      ¥{p.receivable.toLocaleString()}
+                    </td>
+                    <td
+                      style={{
+                        textAlign: "right",
+                        fontWeight: 600,
+                        color: "#057a55",
+                      }}
+                    >
+                      ¥{p.received.toLocaleString()}
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      <span
+                        style={{
+                          color:
+                            p.recovery_rate > 0.5
+                              ? "#057a55"
+                              : p.recovery_rate > 0.2
+                                ? "#d97706"
+                                : "#9ca3af",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {(p.recovery_rate * 100).toFixed(1)}%
+                      </span>
+                    </td>
+                    <td style={{ fontSize: 11, color: "#6b7280" }}>
+                      新 {p.new_count} · 跟 {p.in_progress_count} · 诺{" "}
+                      {p.promised_count} · 升 {p.escalated_count} · 结{" "}
+                      {p.closed_count}
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      {p.connected_30d}/{p.total_calls_30d}{" "}
+                      <span style={{ fontSize: 11, color: "#9ca3af" }}>
+                        ({connectedRate.toFixed(0)}%)
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="ds-btn ds-btn-ghost ds-btn-sm"
+                        onClick={() =>
+                          navigate(`/admin/cases?project_id=${p.project_id}`)
+                        }
+                      >
+                        查看案件
+                      </button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {projectKpis.map((p) => {
-                    const connectedRate =
-                      p.total_calls_30d > 0
-                        ? (p.connected_30d / p.total_calls_30d) * 100
-                        : 0;
-                    return (
-                      <tr key={p.project_id}>
-                        <td>
-                          <strong>{p.project_name}</strong>
-                        </td>
-                        <td>
-                          {p.provider_name ?? (
-                            <span style={{ color: "#9ca3af" }}>自营</span>
-                          )}
-                        </td>
-                        <td style={{ textAlign: "right" }}>{p.case_count}</td>
-                        <td style={{ textAlign: "right", fontWeight: 600 }}>
-                          ¥{p.receivable.toLocaleString()}
-                        </td>
-                        <td
-                          style={{
-                            textAlign: "right",
-                            fontWeight: 600,
-                            color: "#057a55",
-                          }}
-                        >
-                          ¥{p.received.toLocaleString()}
-                        </td>
-                        <td style={{ textAlign: "right" }}>
-                          <span
-                            style={{
-                              color:
-                                p.recovery_rate > 0.5
-                                  ? "#057a55"
-                                  : p.recovery_rate > 0.2
-                                    ? "#d97706"
-                                    : "#9ca3af",
-                              fontWeight: 600,
-                            }}
-                          >
-                            {(p.recovery_rate * 100).toFixed(1)}%
-                          </span>
-                        </td>
-                        <td style={{ fontSize: 11, color: "#6b7280" }}>
-                          新 {p.new_count} · 跟 {p.in_progress_count} · 诺{" "}
-                          {p.promised_count} · 升 {p.escalated_count} · 结{" "}
-                          {p.closed_count}
-                        </td>
-                        <td style={{ textAlign: "right" }}>
-                          {p.connected_30d}/{p.total_calls_30d}{" "}
-                          <span style={{ fontSize: 11, color: "#9ca3af" }}>
-                            ({connectedRate.toFixed(0)}%)
-                          </span>
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="ds-btn ds-btn-ghost ds-btn-sm"
-                            onClick={() =>
-                              navigate(`/admin/cases?project_id=${p.project_id}`)
-                            }
-                          >
-                            查看案件
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                );
+              }}
+            />
           </div>
         </div>
       )}
@@ -518,112 +500,109 @@ export function AdminDashboardPage() {
               共 {providerKpis.length} 家签约
             </span>
           </div>
-          <div className="card-body" style={{ padding: 0 }}>
-            <div className="table-wrap" style={{ borderRadius: 0, border: "none" }}>
-              <table>
-                <thead>
-                  <tr>
-                    <th style={{ width: 50 }}>排名</th>
-                    <th>服务商</th>
-                    <th style={{ textAlign: "right" }}>承接项目</th>
-                    <th style={{ textAlign: "right" }}>案件数</th>
-                    <th style={{ textAlign: "right" }}>已结清</th>
-                    <th style={{ textAlign: "right" }}>结清率</th>
-                    <th style={{ textAlign: "right" }}>30 天回款</th>
-                    <th style={{ textAlign: "right" }}>30 天通话</th>
-                    <th style={{ textAlign: "right" }}>接通率</th>
-                    <th style={{ width: 80 }}>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {providerKpis.map((p, idx) => (
-                    <tr key={p.provider_id}>
-                      <td>
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            width: 24,
-                            height: 24,
-                            borderRadius: "50%",
-                            fontSize: 11,
-                            fontWeight: 700,
-                            background:
-                              idx === 0
-                                ? "#fef3c7"
-                                : idx === 1
-                                  ? "#e5e7eb"
-                                  : idx === 2
-                                    ? "#fed7aa"
-                                    : "transparent",
-                            color:
-                              idx === 0
-                                ? "#92400e"
-                                : idx === 1
-                                  ? "#374151"
-                                  : idx === 2
-                                    ? "#9a3412"
-                                    : "#9ca3af",
-                          }}
-                        >
-                          {idx + 1}
-                        </span>
-                      </td>
-                      <td>
-                        <strong>{p.provider_name}</strong>
-                      </td>
-                      <td style={{ textAlign: "right" }}>
-                        {p.active_project_count}
-                      </td>
-                      <td style={{ textAlign: "right" }}>{p.case_count}</td>
-                      <td style={{ textAlign: "right" }}>{p.paid_count}</td>
-                      <td style={{ textAlign: "right" }}>
-                        <span
-                          style={{
-                            color:
-                              p.paid_rate > 0.4
-                                ? "#057a55"
-                                : p.paid_rate > 0.15
-                                  ? "#d97706"
-                                  : "#9ca3af",
-                            fontWeight: 600,
-                          }}
-                        >
-                          {(p.paid_rate * 100).toFixed(1)}%
-                        </span>
-                      </td>
-                      <td
-                        style={{
-                          textAlign: "right",
-                          fontWeight: 600,
-                          color: "#057a55",
-                        }}
-                      >
-                        ¥{p.recovered_30d.toLocaleString()}
-                      </td>
-                      <td style={{ textAlign: "right" }}>{p.call_count_30d}</td>
-                      <td style={{ textAlign: "right" }}>
-                        <span style={{ fontSize: 12, color: "#6b7280" }}>
-                          {(p.connected_rate_30d * 100).toFixed(0)}%
-                        </span>
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          className="ds-btn ds-btn-ghost ds-btn-sm"
-                          onClick={() =>
-                            navigate(`/admin/providers/${p.provider_id}`)
-                          }
-                        >
-                          详情
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div style={{ padding: "0 16px 16px" }}>
+            <LeaderboardTopN
+              rows={providerKpis}
+              topN={10}
+              viewMoreLink="/admin/providers"
+              columns={[
+                { key: "rank", label: "排名", width: 50 },
+                { key: "name", label: "服务商" },
+                { key: "projects", label: "承接项目", align: "right" },
+                { key: "cases", label: "案件数", align: "right" },
+                { key: "paid", label: "已结清", align: "right" },
+                { key: "rate", label: "结清率", align: "right" },
+                { key: "rev30", label: "30 天回款", align: "right" },
+                { key: "calls30", label: "30 天通话", align: "right" },
+                { key: "conn", label: "接通率", align: "right" },
+                { key: "actions", label: "操作", width: 80 },
+              ]}
+              renderRow={(p, idx) => (
+                <tr key={p.provider_id}>
+                  <td>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 24,
+                        height: 24,
+                        borderRadius: "50%",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        background:
+                          idx === 0
+                            ? "#fef3c7"
+                            : idx === 1
+                              ? "#e5e7eb"
+                              : idx === 2
+                                ? "#fed7aa"
+                                : "transparent",
+                        color:
+                          idx === 0
+                            ? "#92400e"
+                            : idx === 1
+                              ? "#374151"
+                              : idx === 2
+                                ? "#9a3412"
+                                : "#9ca3af",
+                      }}
+                    >
+                      {idx + 1}
+                    </span>
+                  </td>
+                  <td>
+                    <strong>{p.provider_name}</strong>
+                  </td>
+                  <td style={{ textAlign: "right" }}>
+                    {p.active_project_count}
+                  </td>
+                  <td style={{ textAlign: "right" }}>{p.case_count}</td>
+                  <td style={{ textAlign: "right" }}>{p.paid_count}</td>
+                  <td style={{ textAlign: "right" }}>
+                    <span
+                      style={{
+                        color:
+                          p.paid_rate > 0.4
+                            ? "#057a55"
+                            : p.paid_rate > 0.15
+                              ? "#d97706"
+                              : "#9ca3af",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {(p.paid_rate * 100).toFixed(1)}%
+                    </span>
+                  </td>
+                  <td
+                    style={{
+                      textAlign: "right",
+                      fontWeight: 600,
+                      color: "#057a55",
+                    }}
+                  >
+                    ¥{p.recovered_30d.toLocaleString()}
+                  </td>
+                  <td style={{ textAlign: "right" }}>{p.call_count_30d}</td>
+                  <td style={{ textAlign: "right" }}>
+                    <span style={{ fontSize: 12, color: "#6b7280" }}>
+                      {(p.connected_rate_30d * 100).toFixed(0)}%
+                    </span>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="ds-btn ds-btn-ghost ds-btn-sm"
+                      onClick={() =>
+                        navigate(`/admin/providers/${p.provider_id}`)
+                      }
+                    >
+                      详情
+                    </button>
+                  </td>
+                </tr>
+              )}
+            />
           </div>
         </div>
       )}

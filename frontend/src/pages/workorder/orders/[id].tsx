@@ -21,6 +21,19 @@ interface CaseRef {
   owner_phone_masked: string;
 }
 
+const ROLE_LABEL: Record<string, string> = {
+  admin: "物业管理员",
+  supervisor: "督导",
+  agent_internal: "内勤催收员",
+  agent_external: "外勤催收员",
+  legal: "法务对接人",
+  coordinator: "物业协调员",
+  workorder: "物业协调员",
+  project_manager_property: "项目经理",
+  project_manager_provider: "项目经理",
+  provider_admin: "服务商管理员",
+};
+
 interface CallRef {
   id: number;
   started_at: string | null;
@@ -322,7 +335,7 @@ export function WorkOrderDetailPage() {
                 <option value="">未分配</option>
                 {users.map((u) => (
                   <option key={u.id} value={u.id}>
-                    {u.name}（{u.role}）
+                    {u.name}（{ROLE_LABEL[u.role] ?? u.role}）
                   </option>
                 ))}
                 {/* If current assigned_to isn't in users list (e.g. user list inaccessible), still show */}

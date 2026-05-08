@@ -24,9 +24,11 @@ from app.core.security import (
 )
 from app.models.call import CallRecord
 from app.models.case import CollectionCase, OwnerProfile
+from app.models.tenant import UserTenantMembership
 from app.models.user import UserAccount
 from app.models.work import WorkOrder
 from app.schemas.common import PaginatedResponse
+from app.services.audit import log_audit
 from app.schemas.work_order import (
     CallRef,
     CaseRef,
@@ -38,7 +40,7 @@ from app.schemas.work_order import (
 
 router = APIRouter()
 
-WORKORDER_ROLES = ("workorder", "admin", "supervisor")
+WORKORDER_ROLES = ("workorder", "coordinator", "admin", "supervisor")
 # 创建工单允许坐席（PRD §10.1：通话现场起单），读取/分配等仍限管理角色
 WORKORDER_CREATE_ROLES = WORKORDER_ROLES + ("agent_internal",)
 
@@ -165,17 +167,77 @@ async def create_work_order(
                 detail={"code": "ERR_CALL_NOT_FOUND", "message": "通话记录不存在"},
             )
 
+    # v1.5.6 — 未指定 assigned_to 时自动派单
+    # 优先：case → project → 项目绑定的 coordinator（外包项目专属）
+    # 兜底：本租户全部协调员 round-robin（按当日已派单数取最少）
+    assigned_to = body.assigned_to
+    auto_assigned = False
+    if assigned_to is None:
+        # 尝试：从 case 反查项目绑定的 coordinator
+        project_coord_id: int | None = None
+        if body.case_id is not None:
+            from app.models.project_member import ProjectMember
+            project_coord_id = db.execute(
+                select(ProjectMember.user_id)
+                .join(CollectionCase, CollectionCase.project_id == ProjectMember.project_id)
+                .where(
+                    CollectionCase.id == body.case_id,
+                    ProjectMember.role_in_project == "coordinator",
+                    ProjectMember.is_active.is_(True),
+                ).limit(1)
+            ).scalar_one_or_none()
+
+        if project_coord_id is not None:
+            assigned_to = project_coord_id
+            auto_assigned = True
+        else:
+            coordinator_ids = list(db.execute(
+                select(UserTenantMembership.user_id).where(
+                    UserTenantMembership.tenant_id == tenant_id,
+                    UserTenantMembership.role.in_(["coordinator", "workorder"]),
+                    UserTenantMembership.is_active.is_(True),
+                ).order_by(UserTenantMembership.id)
+            ).scalars().all())
+            if coordinator_ids:
+                today_start = datetime.now().replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
+                counts: dict[int, int] = dict(db.execute(
+                    select(WorkOrder.assigned_to, func.count())
+                    .where(
+                        WorkOrder.tenant_id == tenant_id,
+                        WorkOrder.assigned_to.in_(coordinator_ids),
+                        WorkOrder.created_at >= today_start,
+                    ).group_by(WorkOrder.assigned_to)
+                ).all())
+                assigned_to = min(coordinator_ids, key=lambda uid: counts.get(uid, 0))
+                auto_assigned = True
+
     wo = WorkOrder(
         tenant_id=tenant_id,
         case_id=body.case_id,
         call_id=body.call_id,
         order_type=body.order_type,
         description=body.description,
-        assigned_to=body.assigned_to,
+        assigned_to=assigned_to,
         status="open",
         priority=body.priority,
     )
     db.add(wo)
+    db.flush()
+
+    if auto_assigned:
+        log_audit(
+            db,
+            actor_user_id=int(payload.get("user_id") or 0) or None,
+            actor_role=payload.get("role"),
+            tenant_id=tenant_id,
+            action="workorder.auto_assigned",
+            target_type="work_order",
+            target_id=wo.id,
+            payload={"coordinator_id": assigned_to},
+        )
+
     db.commit()
     db.refresh(wo)
 

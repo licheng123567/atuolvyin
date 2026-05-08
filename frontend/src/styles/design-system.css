@@ -598,6 +598,78 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 }
 .livewall-card:hover { box-shadow: var(--shadow-md, 0 4px 12px rgba(0,0,0,0.10)); }
 .livewall-card--risk { border-color: #FCA5A5; box-shadow: 0 0 0 2px #FECACA, var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.10)); }
+/* Scripts adoption bar (sv-scripts) */
+.script-excerpt { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.adopt-bar { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.adopt-bg { background: var(--color-neutral-200); border-radius: 4px; height: 6px; width: 60px; overflow: hidden; }
+.adopt-fill { background: var(--color-success); height: 100%; border-radius: 4px; }
+
+/* ════════════════════════════════════════════════════════════════
+   v1.5.7 — Script Effectiveness 样式（从 ui/admin-scripts-effectiveness.html 1:1 还原）
+   ══════════════════════════════════════════════════════════════ */
+.filter-select {
+  padding: 7px 12px;
+  font-size: 13px;
+  border: 1px solid var(--color-neutral-300);
+  border-radius: var(--radius-sm);
+  background: white;
+  outline: none;
+  cursor: pointer;
+}
+.stats-band {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+@media (max-width: 900px) { .stats-band { grid-template-columns: repeat(2, 1fr); } }
+.stats-card {
+  background: white;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+}
+.stats-card-label { font-size: 12px; color: var(--color-neutral-500); }
+.stats-card-value {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--color-neutral-900);
+  margin-top: 4px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+.stats-card-value .pct { font-size: 14px; color: var(--color-neutral-500); margin-left: 4px; }
+.title-cell {
+  font-weight: 500;
+  color: var(--color-neutral-900);
+  max-width: 320px;
+}
+.ratio-detail {
+  font-size: 11.5px;
+  color: var(--color-neutral-400);
+  margin-left: 4px;
+}
+.grade {
+  display: inline-flex;
+  width: 26px; height: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+}
+.grade-a { background: var(--color-success-light); color: var(--color-success); }
+.grade-b { background: var(--color-primary-light); color: var(--color-primary); }
+.grade-c { background: var(--color-warning-light); color: var(--color-warning); }
+.grade-d { background: var(--color-danger-light); color: var(--color-danger); }
+.status-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11.5px;
+  font-weight: 500;
+  border-radius: 999px;
+}
+.status-active { background: var(--color-success-light); color: var(--color-success); }
+.status-inactive { background: var(--color-neutral-100); color: var(--color-neutral-500); }
 .livewall-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .livewall-caller { display: flex; align-items: center; gap: 6px; font-size: 14.5px; font-weight: 600; color: var(--color-neutral-900); }
 .livewall-caller svg { width: 16px; height: 16px; color: var(--color-neutral-500); }
@@ -746,7 +818,162 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .load-bar { height: 100%; border-radius: 4px; background: var(--color-primary); }
 .load-bar.over { background: var(--color-danger); }
 
+/* ── Utility ────────────────────────────────────────── */
+.text-muted { color: var(--color-neutral-600); }
+.text-sm { font-size: 13px; }
+
 /* ── Scrollbar ──────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--color-neutral-300); border-radius: 3px; }
+
+/* ════════════════════════════════════════════════════════════════
+   v1.5.7 — Supervisor 工作台专属样式（从 ui/supervisor.html 1:1 还原）
+   ══════════════════════════════════════════════════════════════ */
+
+/* Status bar — 顶部「通话中 X 人 / 空闲 / 离线 / 风控告警」 */
+.status-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 20px;
+  background: white;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  padding: 10px 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-sm);
+  flex-wrap: wrap;
+}
+.status-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--color-neutral-700);
+}
+.dot-green { width: 9px; height: 9px; border-radius: 50%; background: var(--color-success); display: inline-block; }
+.dot-gray  { width: 9px; height: 9px; border-radius: 50%; background: var(--color-neutral-400); display: inline-block; }
+.dot-red   { width: 9px; height: 9px; border-radius: 50%; background: var(--color-danger); display: inline-block; }
+
+/* Workspace grid — 左 60% Agent cards / 右 40% panels */
+.workspace-grid {
+  display: grid;
+  grid-template-columns: 60% 40%;
+  gap: 20px;
+}
+@media (max-width: 1100px) {
+  .workspace-grid { grid-template-columns: 1fr; }
+}
+
+/* Agent cards — 固定最小高度，让多张卡片视觉对齐 */
+.agent-card {
+  min-height: 78px;
+  background: white;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.15s;
+}
+.agent-card:hover { box-shadow: var(--shadow-md); }
+.agent-card.risk-l2 { border-left: 3px solid var(--color-danger); }
+.agent-card.risk-l1 { border-left: 3px solid var(--color-warning); }
+.agent-info { flex: 1; min-width: 0; }
+.agent-name { font-size: 14px; font-weight: 600; color: var(--color-neutral-900); }
+.agent-detail { font-size: 12.5px; color: var(--color-neutral-600); margin-top: 3px; }
+.agent-timer { font-size: 13px; font-weight: 600; color: var(--color-primary); font-variant-numeric: tabular-nums; }
+.agent-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.agent-avatar {
+  width: 38px; height: 38px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 600;
+  background: var(--color-primary-light); color: var(--color-primary);
+  flex-shrink: 0;
+}
+.agent-avatar.tone-danger  { background: #FEE2E2; color: var(--color-danger); }
+.agent-avatar.tone-success { background: var(--color-success-light); color: var(--color-success); }
+.agent-avatar.tone-neutral { background: var(--color-neutral-100); color: var(--color-neutral-600); }
+
+/* Right column panels */
+.panel-alert {
+  background: var(--color-warning-light);
+  border: 1px solid #FCD34D;
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+.panel-alert-title { font-size: 14px; font-weight: 600; color: var(--color-warning); display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+.panel-risk {
+  background: var(--color-danger-light);
+  border: 1px solid #FECACA;
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+.panel-risk-title { font-size: 14px; font-weight: 600; color: var(--color-danger); display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+.risk-event-item { font-size: 13px; color: var(--color-neutral-700); display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; }
+.panel-stat {
+  background: var(--color-success-light);
+  border: 1px solid #A7F3D0;
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+.panel-stat-title { font-size: 14px; font-weight: 600; color: var(--color-success); display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+
+/* P1 Banner */
+.p1-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--color-neutral-100);
+  border: 1px dashed var(--color-neutral-300);
+  border-radius: var(--radius-lg);
+  padding: 40px 24px;
+  color: var(--color-neutral-500);
+  font-size: 14px;
+  flex-direction: column;
+}
+.p1-banner-label { font-size: 18px; font-weight: 700; color: var(--color-neutral-400); }
+.p1-banner-desc { font-size: 13px; color: var(--color-neutral-400); }
+
+/* Section subtitle */
+.section-subtitle { font-size: 15px; font-weight: 600; color: var(--color-neutral-800); margin-bottom: 14px; }
+
+/* KPI grid for team monitoring */
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+@media (max-width: 900px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* Workload bar */
+.workload-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--color-neutral-100); font-size: 13.5px; }
+.workload-row:last-child { border-bottom: none; }
+.workload-bar { background: var(--color-neutral-200); border-radius: 4px; height: 6px; width: 80px; overflow: hidden; margin-top: 2px; }
+.workload-fill { background: var(--color-primary); height: 100%; border-radius: 4px; }
+
+/* Cases assignment */
+.cases-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.case-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--color-neutral-100); }
+.case-row:last-child { border-bottom: none; }
+.priority-score { font-size: 13px; font-weight: 700; color: var(--color-danger); }
+
+/* Risk events table row tinting */
+.risk-l2-row { background: #FFF5F5; }
+.risk-l2-row td:first-child { border-left: 3px solid var(--color-danger); }
+.risk-l1-row td:first-child { border-left: 3px solid var(--color-warning); }
+
+/* Sidebar P1 badge variant */
+.sidebar-badge-p1 {
+  margin-left: auto;
+  background: var(--color-neutral-200);
+  color: var(--color-neutral-600);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}

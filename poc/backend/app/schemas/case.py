@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -46,6 +46,12 @@ class CaseImportRow(BaseModel):
     room: str | None = None
     amount_owed: Decimal | None = None
     months_overdue: int | None = None
+    # v1.6.3 — 账单字段（导入时直接录入，不再按月推算明细）
+    bill_period_start: date | None = None
+    bill_period_end: date | None = None
+    principal_amount: Decimal | None = None  # 物业费
+    late_fee_amount: Decimal | None = None  # 违约金 / 滞纳金
+    arrears_reason: str | None = None  # 经济困难 / 服务质量异议 / 房屋空置 / 租客拖欠 / 其他
     notes: str | None = None  # 欠费情况说明（拒缴/暂时困难/失联等）
 
 
@@ -78,6 +84,9 @@ class CaseWithOwnerResponse(BaseModel):
     notes: str | None = None
     created_at: datetime
     updated_at: datetime
+    # v1.5.5 — 项目所属服务商（无项目 / 物业自办时为 None）
+    provider_id: int | None = None
+    provider_name: str | None = None
 
 
 class CaseImportRequest(BaseModel):
@@ -120,11 +129,25 @@ class TimelineEvent(BaseModel):
     note: str | None
 
 
+class CaseProjectInfo(BaseModel):
+    """v1.6.3 — 案件详情中嵌入项目基本信息（合同 + 收费），无需另起接口。"""
+    name: str
+    charge_rate_text: str | None = None
+    charge_period: str | None = None
+    contract_type: str | None = None
+    contract_start_date: date | None = None
+    contract_end_date: date | None = None
+    contract_attachment_key: str | None = None
+    contract_attachment_filename: str | None = None
+    charge_notes: str | None = None
+
+
 class CaseDetailResponse(BaseModel):
     id: int
     tenant_id: int
     project_id: int | None
     project_name: str | None = None
+    project_info: CaseProjectInfo | None = None  # v1.6.3
     owner: OwnerInfo
     assigned_to: int | None
     assigned_role: str | None = None  # v1.4 — 协作来源 badge：agent_internal / agent_external / null
@@ -132,6 +155,12 @@ class CaseDetailResponse(BaseModel):
     stage: str
     amount_owed: Decimal | None
     months_overdue: int | None
+    # v1.6.3 — 账单字段（导入时录入，不再按月推算）
+    bill_period_start: date | None = None
+    bill_period_end: date | None = None
+    principal_amount: Decimal | None = None
+    late_fee_amount: Decimal | None = None
+    arrears_reason: str | None = None
     priority_score: int
     last_contact_at: datetime | None
     monthly_contact_count: int
@@ -140,3 +169,9 @@ class CaseDetailResponse(BaseModel):
     updated_at: datetime
     calls: list[CaseCallItem]
     timeline_events: list[TimelineEvent]
+    # v1.5 — 服务团队（电话团队 = 项目签约的服务商；法务团队 = 转化订单已撮合的律所）
+    calling_provider_id: int | None = None
+    calling_provider_name: str | None = None
+    legal_law_firm_name: str | None = None
+    legal_lawyer_name: str | None = None
+    legal_order_status: str | None = None

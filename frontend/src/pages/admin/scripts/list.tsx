@@ -3,6 +3,7 @@ import { useCreate, useCustomMutation, useDelete, useGo, useInvalidate, useList 
 import type { CrudFilter } from "@refinedev/core";
 import { AlertTriangle, GitFork, Plus, Search, Upload } from "lucide-react";
 import { useState } from "react";
+import { HelpPanel } from "../../../components/ui/HelpPanel";
 import type { PaginatedResponse } from "../../../types";
 import { TRIGGER_INTENTS, formatAdoptionRate } from "./helpers";
 import { ScriptSheet } from "./ScriptSheet";
@@ -13,6 +14,8 @@ interface ScriptItem {
   id: number;
   tenant_id: number | null;
   provider_id: number | null;
+  project_id: number | null;
+  project_name: string | null;
   source: "platform" | "tenant" | "provider";
   title: string;
   scene: SceneKey;
@@ -131,6 +134,19 @@ export function ScriptListPage() {
         </div>
       </div>
 
+      <HelpPanel
+        tone="info"
+        dismissKey="/admin/scripts"
+        title="话术库的作用"
+        bullets={[
+          <><strong>实时辅助</strong>：催收员在通话中遇到业主异议（如「经济困难」「质量问题」），AI 根据通话内容自动从话术库匹配 1-3 条话术弹屏推荐，辅助应答</>,
+          <><strong>三层来源</strong>：平台预置（通用模板）/ 本物业（你创建的）/ 服务商（外部合作商私有），列表 badge 标识来源；本物业可 Fork 平台预置版到自己改</>,
+          <><strong>四种场景</strong>：开场白 / 异议处理 / 承诺确认 / 挂断收尾，按场景维度分组管理</>,
+          <><strong>生效范围</strong>：默认全项目通用；新增/编辑时可指定「仅金桂园 2026」等具体项目，仅在该项目通话内推荐</>,
+          <><strong>效果反馈</strong>：每条话术被使用 → 督导在「话术反馈」标好/差 → 数据汇总到「话术效果」看板，A/B/C/D 级评分用于优化推荐</>,
+        ]}
+      />
+
       {/* v1.5 S18.6 — 视图切换 */}
       <div
         style={{
@@ -244,6 +260,7 @@ export function ScriptListPage() {
                           <tr>
                             <th>话术标题</th>
                             <th>来源</th>
+                            <th>生效范围</th>
                             {sceneKey === "objection_handling" && <th>异议类型</th>}
                             <th>评分</th>
                             <th>采用率</th>
@@ -258,6 +275,15 @@ export function ScriptListPage() {
                               <tr key={s.id}>
                                 <td style={{ fontWeight: 500 }}>{s.title}</td>
                                 <td><span className={meta.cls}>{meta.label}</span></td>
+                                <td style={{ fontSize: 12 }}>
+                                  {s.project_id ? (
+                                    <span className="ds-badge ds-badge-orange" style={{ fontSize: 11 }}>
+                                      仅 {s.project_name ?? `项目#${s.project_id}`}
+                                    </span>
+                                  ) : (
+                                    <span style={{ color: "#9ca3af" }}>全项目</span>
+                                  )}
+                                </td>
                                 {sceneKey === "objection_handling" && <td>{s.trigger_intent}</td>}
                                 <td>
                                   {s.score_grade ? (

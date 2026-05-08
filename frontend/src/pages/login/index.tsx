@@ -62,6 +62,25 @@ export function LoginPage() {
     return () => clearTimeout(t);
   }, [otpCountdown]);
 
+  // v1.5.5 — 首登邀请二维码 / URL 自填：?phone=...&otp=...&first_login=1
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("first_login") !== "1") return;
+    const p = params.get("phone");
+    const o = params.get("otp");
+    if (p && /^1[3-9]\d{9}$/.test(p)) {
+      setMode("phone-otp");
+      setPhone(p);
+      if (o) {
+        setOtpCode(o);
+        setOtpHint("已为你填好首登验证码，点「登录」即可");
+      }
+      // 清掉 URL 上的敏感参数（防误分享）
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
   const [loginReason] = useState<string | null>(() => {
     if (typeof sessionStorage === "undefined") return null;
     const r = sessionStorage.getItem("login_reason");

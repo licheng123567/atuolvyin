@@ -24,6 +24,24 @@ const ACTION_OPTIONS = [
   { value: "settlement.pay", label: "支付结算" },
 ];
 
+// 角色英文 → 中文（与 admin/users 保持一致）
+const ROLE_LABEL: Record<string, string> = {
+  platform_super: "平台超管",
+  platform_superadmin: "平台超管",
+  platform_ops: "平台运营",
+  admin: "物业管理员",
+  supervisor: "督导",
+  agent_internal: "内勤催收员",
+  agent_external: "外勤催收员",
+  legal: "法务对接人",
+  coordinator: "物业协调员",
+  workorder: "物业协调员",
+  project_manager_property: "项目经理（物业）",
+  project_manager_provider: "项目经理（服务商）",
+  provider_admin: "服务商管理员",
+  owner: "业主",
+};
+
 const PAGE_SIZE = 20;
 
 export function SuperAuditPage() {
@@ -191,7 +209,7 @@ export function SuperAuditPage() {
                     {new Date(row.created_at).toLocaleString()}
                   </td>
                   <td className="px-4 py-2">{row.actor_user_id ?? "—"}</td>
-                  <td className="px-4 py-2">{row.actor_role ?? "—"}</td>
+                  <td className="px-4 py-2">{row.actor_role ? (ROLE_LABEL[row.actor_role] ?? row.actor_role) : "—"}</td>
                   <td className="px-4 py-2 font-medium">{row.action}</td>
                   <td className="px-4 py-2">
                     {row.target_type ? `${row.target_type}/${row.target_id ?? "—"}` : "—"}

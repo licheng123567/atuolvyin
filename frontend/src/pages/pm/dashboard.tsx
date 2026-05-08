@@ -24,7 +24,6 @@ interface PmProjectCard {
   in_progress_count: number;
   escalated_count: number;
   provider_name: string | null;
-  allow_internal_assist: boolean;
 }
 
 interface TopOverdueItem {
@@ -167,14 +166,6 @@ function MyProjectsSection() {
                     <span>合作服务商：{p.provider_name}</span>
                   ) : (
                     <span>自营</span>
-                  )}
-                  {p.allow_internal_assist && (
-                    <span
-                      className="ds-badge ds-badge-blue"
-                      style={{ marginLeft: 6, fontSize: 10 }}
-                    >
-                      内勤协助
-                    </span>
                   )}
                 </div>
                 <div

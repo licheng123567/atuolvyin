@@ -1,6 +1,7 @@
-import { useGo, useDelete, useList, useGetIdentity } from "@refinedev/core";
-import { Shield, Plus, Pencil, Trash2 } from "lucide-react";
+import { useDelete, useGetIdentity, useGo, useList } from "@refinedev/core";
+import { Pencil, Plus, Shield, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { HelpPanel } from "../../../components/ui/HelpPanel";
 import type { PaginatedResponse } from "../../../types";
 import { isPlatformPreset, type RiskKeywordItem } from "./helpers";
 
@@ -66,6 +67,28 @@ export function RiskKeywordListPage() {
           新增关键词
         </button>
       </div>
+
+      <HelpPanel
+        tone="danger"
+        dismissKey="/admin/risk-keywords"
+        title="风控关键词的作用"
+        bullets={[
+          <><strong>实时检测</strong>：催收员通话上传后，ASR 识别出文本，系统实时扫描这些关键词命中情况，触发后立刻产生「风控事件」并推送给督导</>,
+          <><strong>双向监控</strong>：
+            <span style={{ color: "#9a3412", fontWeight: 600 }}>业主端</span>词（如「不想交」「你们这是骚扰」「投诉」）= 业主负面情绪/投诉风险；
+            <span style={{ color: "#9a3412", fontWeight: 600 }}>催收员端</span>词（如「起诉」「逼你」语气强硬）= 催收员违规话术
+          </>,
+          <><strong>分级处置</strong>：
+            <span className="ds-badge ds-badge-orange" style={{ fontSize: 11 }}>L1 提醒</span> AI 自动给催收员弹屏提醒；
+            <span className="ds-badge ds-badge-red" style={{ fontSize: 11 }}>L2 高危</span> 立即通知督导，督导可在「实时通话墙」监听 / 强制接管 / 强制结束
+          </>,
+          <><strong>词库分层</strong>：
+            <strong>平台预置</strong>（灰 badge，平台超管维护，全租户共享）+
+            <strong>本物业自定义</strong>（蓝 badge，仅本物业生效）。本物业不能删平台预置词，可加自己的特殊关注词
+          </>,
+          <><strong>查看触发记录</strong>：被触发后的所有事件 → 督导端「风控事件」页查看 + 处置（介入 / 关闭 / 转法务）</>,
+        ]}
+      />
 
       {isLoading ? (
         <div className="text-center py-10 text-[var(--color-neutral-400)]">加载中...</div>

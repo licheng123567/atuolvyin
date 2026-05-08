@@ -46,6 +46,29 @@ class TenantSettings(Base):
         sa.Integer, nullable=False, default=365
     )
 
+    # v1.6 — 协商打折 / 减免审批策略（admin 配置）
+    # v1.6.2 — 拆分为「本金打折」+「滞纳金减免」两类（多数物业愿意减免滞纳金，但本金打折更严格）
+    # 旧字段 discount_* 现等价于「本金打折」策略
+    discount_auto_approve_threshold_pct: Mapped[int] = mapped_column(
+        sa.SmallInteger, nullable=False, default=10, server_default=sa.text("10")
+    )  # 本金打折 < X% 自动通过；0 = 不允许任何自动通过
+    discount_supervisor_max_pct: Mapped[int] = mapped_column(
+        sa.SmallInteger, nullable=False, default=30, server_default=sa.text("30")
+    )  # 本金打折 ≤ X% 督导可批；> X% 转 admin
+    discount_disabled: Mapped[bool] = mapped_column(
+        sa.Boolean, nullable=False, default=False, server_default=sa.false()
+    )  # true 表示本租户完全禁用「本金打折」功能
+    # v1.6.2 — 滞纳金减免（独立策略；默认更宽松：100% 督导可批）
+    late_fee_waive_auto_approve_threshold_pct: Mapped[int] = mapped_column(
+        sa.SmallInteger, nullable=False, default=50, server_default=sa.text("50")
+    )  # 滞纳金减免 < X% 自动通过；默认 50%
+    late_fee_waive_supervisor_max_pct: Mapped[int] = mapped_column(
+        sa.SmallInteger, nullable=False, default=100, server_default=sa.text("100")
+    )  # 滞纳金减免 ≤ X% 督导可批；默认 100%（即全部减）
+    late_fee_waive_disabled: Mapped[bool] = mapped_column(
+        sa.Boolean, nullable=False, default=False, server_default=sa.false()
+    )  # true 表示本租户禁用滞纳金减免功能
+
     # Sprint 12.3 — 通知规则 (PRD §L412)
     notify_quota_warning: Mapped[bool] = mapped_column(
         sa.Boolean, nullable=False, default=True, server_default=sa.true()
@@ -88,5 +111,29 @@ class TenantSettings(Base):
         sa.CheckConstraint(
             "retention_days BETWEEN 30 AND 3650",
             name="ck_tenant_settings_retention",
+        ),
+        sa.CheckConstraint(
+            "discount_auto_approve_threshold_pct BETWEEN 0 AND 100",
+            name="ck_tenant_settings_discount_auto_threshold",
+        ),
+        sa.CheckConstraint(
+            "discount_supervisor_max_pct BETWEEN 0 AND 100",
+            name="ck_tenant_settings_discount_supervisor_max",
+        ),
+        sa.CheckConstraint(
+            "discount_auto_approve_threshold_pct <= discount_supervisor_max_pct",
+            name="ck_tenant_settings_discount_thresholds_order",
+        ),
+        sa.CheckConstraint(
+            "late_fee_waive_auto_approve_threshold_pct BETWEEN 0 AND 100",
+            name="ck_tenant_settings_late_fee_waive_auto",
+        ),
+        sa.CheckConstraint(
+            "late_fee_waive_supervisor_max_pct BETWEEN 0 AND 100",
+            name="ck_tenant_settings_late_fee_waive_sup_max",
+        ),
+        sa.CheckConstraint(
+            "late_fee_waive_auto_approve_threshold_pct <= late_fee_waive_supervisor_max_pct",
+            name="ck_tenant_settings_late_fee_waive_order",
         ),
     )

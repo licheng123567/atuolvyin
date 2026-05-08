@@ -2,6 +2,7 @@
 import { useList } from "@refinedev/core";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { HelpPanel } from "../../../components/ui/HelpPanel";
 
 interface ReviewItemOut {
   call_id: number;
@@ -105,6 +106,23 @@ export function SupervisorReviewsPage() {
           </select>
         </div>
       </div>
+
+      <HelpPanel
+        tone="tip"
+        dismissKey="/supervisor/reviews"
+        title="质检复核策略：抽检 + 触发式"
+        bullets={[
+          <><strong>不是所有通话都人工复核</strong> — AI 已对每通完成自动质检（意图识别 / 情绪 / 合规扫描）；人工只复核「高价值 + 高风险」两类</>,
+          <><strong>必复核</strong>（自动入待办列表）：
+            ① AI 置信度 &lt; 0.85 的（标黄）；
+            ② 触发风控 L1/L2 的；
+            ③ 业主结果是「承诺缴费」「已转法务」「拒缴」三种关键阶段的；
+            ④ 说话人识别异常（系统提示「可能错位」）的</>,
+          <><strong>抽检</strong>（按月配额）：每位催收员每月按 10% 比例随机抽检，确保整体质量底线</>,
+          <><strong>督导动作</strong>：「正确 ✓」= 确认 AI 判断 → 状态「已确认」；「修正为 X」= 督导改判 → 状态「已修正」并喂给 AI 训练</>,
+          <><strong>评级</strong>：每通可打「优秀 / 良好 / 待改进 / 需整改」，关联到员工月度 KPI</>,
+        ]}
+      />
 
       <div className="table-wrap">
         <table>

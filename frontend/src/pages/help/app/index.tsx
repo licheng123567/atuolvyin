@@ -1,6 +1,7 @@
 // Sprint 14.3 — 公开 App 下载与使用指南页 (PRD §8.2)
 // 公开路由：所有人（含未登录）可见
 import {
+  ArrowLeft,
   Download,
   Headphones,
   KeyRound,
@@ -11,6 +12,14 @@ import { useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:18000";
+
+function goBackOrHome() {
+  if (window.history.length > 1) {
+    window.history.back();
+  } else {
+    window.location.href = "/";
+  }
+}
 
 interface AppInfo {
   apk_url: string;
@@ -34,6 +43,13 @@ export function HelpAppPage() {
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4">
       <div className="max-w-3xl mx-auto space-y-6">
+        <button
+          type="button"
+          onClick={goBackOrHome}
+          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-blue-600"
+        >
+          <ArrowLeft className="w-4 h-4" /> 返回
+        </button>
         <header className="text-center">
           <div className="inline-flex items-center gap-2 mb-2">
             <Smartphone className="w-7 h-7 text-blue-600" />

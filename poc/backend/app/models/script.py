@@ -25,6 +25,14 @@ class ScriptTemplate(Base):
         sa.ForeignKey("service_provider.id", ondelete="CASCADE"),
         nullable=True,
     )
+    # v1.5.7 — 项目级生效范围：
+    #   project_id NULL → 本物业（或本服务商）全项目通用
+    #   project_id NOT NULL → 仅指定项目可见
+    project_id: Mapped[Optional[int]] = mapped_column(
+        sa.BigInteger,
+        sa.ForeignKey("project.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     title: Mapped[str] = mapped_column(sa.String(128), nullable=False)
     # v1.5 S18.6 — 通话场景维度：opening/objection_handling/promise_confirm/closing
     scene: Mapped[str] = mapped_column(

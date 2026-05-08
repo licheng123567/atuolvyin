@@ -57,6 +57,12 @@ export function ProviderDashboardPage() {
     url: "provider/contracts",
     method: "get",
   });
+  // v1.5.5 — 30 天内即将到期的项目
+  const { query: expiringQuery } = useCustom<{ count: number; items: { id: number; name: string; plan_end: string }[] }>({
+    url: "provider/projects/expiring",
+    method: "get",
+  });
+  const expiring = expiringQuery.data?.data;
   const contracts = termQuery.data?.data ?? [];
   const incomingRequests = contracts.filter(
     (c) =>
@@ -108,6 +114,29 @@ export function ProviderDashboardPage() {
 
   return (
     <div className="space-y-6">
+      {expiring && expiring.count > 0 && (
+        <div
+          className="flex items-start gap-3 px-4 py-3"
+          style={{
+            background: "var(--color-warning-light, #fef3c7)",
+            border: "1px solid var(--color-warning, #f59e0b)",
+            borderRadius: "var(--radius-md)",
+          }}
+        >
+          <AlertTriangle className="w-4 h-4 mt-0.5 text-[var(--color-warning,#f59e0b)]" />
+          <div style={{ flex: 1, fontSize: 13 }}>
+            <strong>您有 {expiring.count} 个项目将在 30 天内到期</strong>，请联系物业续约。
+            <ul style={{ marginTop: 6, paddingLeft: 18, fontSize: 12, color: "var(--color-neutral-600)" }}>
+              {expiring.items.map((it) => (
+                <li key={it.id}>
+                  {it.name} — 服务期至 {it.plan_end ? it.plan_end.slice(0, 10) : "—"}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
       {(incomingRequests.length > 0 ||
         ownPendingRequests.length > 0 ||
         recentlyTerminated.length > 0) && (

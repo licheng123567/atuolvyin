@@ -133,10 +133,11 @@ export const authProvider: AuthProvider = {
   },
 
   onError: async (error: { status?: number; code?: string; message?: string }) => {
-    if (error.status === 401 || error.status === 403) {
-      // Sprint 15.1 — 多设备踢出：友好提示而非静默跳转
+    // v1.5.7 — 只在 401（认证失败 / 会话失效）时强制登出
+    // 403（认证有效但当前角色无权限）应保持登录，让页面自行处理（如显示「无权限」），
+    // 否则多角色用户访问到非自己角色的端点会被误踢回登录页。
+    if (error.status === 401) {
       if (error.code === "ERR_SESSION_EVICTED") {
-        // 用 sessionStorage 暂存原因，登录页读出后展示 banner
         sessionStorage.setItem(
           "login_reason",
           "您的账号已在其他设备登录，请重新登录",

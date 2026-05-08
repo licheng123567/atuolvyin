@@ -15,6 +15,8 @@ class ScriptTemplateCreate(BaseModel):
     trigger_intent: str = Field(..., max_length=64)
     content: str
     notes: Optional[str] = None
+    # v1.5.7 — 项目级生效范围（None=本物业全项目通用）
+    project_id: Optional[int] = None
 
 
 class ScriptTemplateUpdate(BaseModel):
@@ -23,12 +25,15 @@ class ScriptTemplateUpdate(BaseModel):
     trigger_intent: Optional[str] = Field(None, max_length=64)
     content: Optional[str] = None
     notes: Optional[str] = None
+    project_id: Optional[int] = None
 
 
 class ScriptTemplateOut(BaseModel):
     id: int
     tenant_id: Optional[int] = None
     provider_id: Optional[int] = None
+    project_id: Optional[int] = None
+    project_name: Optional[str] = None  # v1.5.7 — 派生字段，前端展示项目名
     title: str
     scene: str = "objection_handling"
     trigger_intent: str

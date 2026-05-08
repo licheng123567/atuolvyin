@@ -27,6 +27,7 @@ from app.core.db import get_db
 from app.core.security import (
     create_access_token,
     get_password_hash,
+    get_token_payload,
     verify_password,
 )
 from app.models.active_session import ActiveSession
@@ -254,6 +255,74 @@ def _consume_otp(db: Session, phone: str, code: str, purpose: str) -> bool:
     return True
 
 
+# v1.5.5 — 邮箱 OTP（复用 LoginOtp 表，phone_enc 列存 email 明文 + "email:" 前缀）
+def _email_key(email: str) -> str:
+    return f"email:{email.strip().lower()}"
+
+
+def _create_otp_email(db: Session, email: str, purpose: str) -> str:
+    """生成邮箱 OTP，用 email_send dispatcher 发送（dev console 直接打印）。
+    返回 code 供 dev 模式回传给前端。"""
+    from app.services.email_send import send_email
+
+    key = _email_key(email)
+    recent = db.execute(
+        select(LoginOtp)
+        .where(
+            LoginOtp.phone_enc == key,
+            LoginOtp.purpose == purpose,
+            LoginOtp.created_at >= datetime.now(UTC) - timedelta(seconds=OTP_RATE_LIMIT_SECONDS),
+        )
+        .order_by(LoginOtp.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if recent is not None and recent.consumed_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "ERR_OTP_RATE_LIMIT",
+                "message": "验证码请求过于频繁，请 60 秒后再试",
+            },
+        )
+    code = _generate_otp()
+    db.add(
+        LoginOtp(
+            phone_enc=key,
+            code=code,
+            purpose=purpose,
+            expires_at=datetime.now(UTC) + timedelta(seconds=OTP_TTL_SECONDS),
+        )
+    )
+    db.commit()
+    send_email(
+        to=email,
+        subject="【有证慧催】邮箱验证码",
+        body=f"您的验证码：{code}\n5 分钟内有效，请勿告知他人。",
+    )
+    return code
+
+
+def _consume_otp_email(db: Session, email: str, code: str, purpose: str) -> bool:
+    key = _email_key(email)
+    row = db.execute(
+        select(LoginOtp)
+        .where(
+            LoginOtp.phone_enc == key,
+            LoginOtp.code == code,
+            LoginOtp.purpose == purpose,
+            LoginOtp.consumed_at.is_(None),
+            LoginOtp.expires_at > datetime.now(UTC),
+        )
+        .order_by(LoginOtp.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if row is None:
+        return False
+    row.consumed_at = datetime.now(UTC)
+    db.commit()
+    return True
+
+
 # ─── Endpoints ────────────────────────────────────────────────
 
 
@@ -436,3 +505,81 @@ def password_reset_confirm(
     user.password_hash = get_password_hash(body.new_password)
     db.commit()
     return {"status": "ok"}
+
+
+# v1.5.6 — 多 membership 切换：拿目标 membership_id 重新签 token
+class SelectMembershipIn(BaseModel):
+    membership_id: int
+    device_type: str = "pc"
+
+
+@router.post("/select-membership", response_model=TokenResponse)
+def select_membership(
+    body: SelectMembershipIn,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(get_token_payload),
+) -> TokenResponse:
+    user_id = int(payload.get("user_id") or 0)
+    membership = db.execute(
+        select(UserTenantMembership).where(
+            UserTenantMembership.id == body.membership_id,
+            UserTenantMembership.user_id == user_id,
+            UserTenantMembership.is_active.is_(True),
+        )
+    ).scalar_one_or_none()
+    if membership is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_MEMBERSHIP_NOT_FOUND", "message": "未找到该角色，可能已被禁用"},
+        )
+
+    user = db.get(UserAccount, user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "ERR_USER_NOT_FOUND", "message": "用户不存在"},
+        )
+
+    tenant_id = membership.tenant_id
+    role = membership.role
+    scope = f"tenant:{tenant_id}" if tenant_id else "platform"
+    tenant_name = None
+    if tenant_id:
+        tenant_name = db.execute(
+            select(Tenant.name).where(Tenant.id == tenant_id)
+        ).scalar_one_or_none()
+
+    token = create_access_token(
+        {
+            "sub": str(user.id),
+            "user_id": user.id,
+            "tenant_id": tenant_id,
+            "role": role,
+            "scope": scope,
+        }
+    )
+    # 同步 active_session（按 device_type）
+    import hashlib
+
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    stmt = pg_insert(ActiveSession).values(
+        user_id=user.id,
+        device_type=body.device_type,
+        token_hash=token_hash,
+    ).on_conflict_do_update(
+        index_elements=["user_id", "device_type"],
+        set_={"token_hash": token_hash, "updated_at": datetime.now(UTC)},
+    )
+    db.execute(stmt)
+    db.commit()
+
+    return TokenResponse(
+        access_token=token,
+        user_id=user.id,
+        name=user.name,
+        role=role,
+        tenant_id=tenant_id,
+        tenant_name=tenant_name,
+        scope=scope,
+    )

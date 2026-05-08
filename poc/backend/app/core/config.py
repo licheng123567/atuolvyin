@@ -68,6 +68,15 @@ class Settings(BaseSettings):
     realtime_llm_timeout_sec: int = 20
     realtime_llm_silence_ms: int = 1500
 
+    # v1.5.5 — 邮件发送 dispatcher
+    email_backend: str = "console"  # "console" | "smtp" | "ses"
+    email_from: str = "noreply@autoluyin.local"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_use_tls: bool = True
+
     # Sprint 5a — risk detection
     risk_analyzer_backend: str = "mock"         # "mock" | "api"
     risk_llm_confidence_min: float = 0.70       # discard LLM verdict below this

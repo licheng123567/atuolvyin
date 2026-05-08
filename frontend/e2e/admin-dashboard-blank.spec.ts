@@ -30,7 +30,7 @@ test("admin 13000000002 sees dashboard data", async ({ page }) => {
   });
 
   await page.goto("/login");
-  await page.fill('input[id="phone"]', "13000000002");
+  await page.fill('input[id="account"]', "13000000002");
   await page.fill('input[id="password"]', "Demo@123!");
   await page.click('button[type="submit"]');
 

@@ -25,6 +25,14 @@ interface TenantSettings {
   l3_hangup_enabled: boolean;
   contact_freq_max: number;
   retention_days: number;
+  // v1.6 — 本金打折审批策略
+  discount_auto_approve_threshold_pct: number;
+  discount_supervisor_max_pct: number;
+  discount_disabled: boolean;
+  // v1.6.2 — 滞纳金减免独立策略
+  late_fee_waive_auto_approve_threshold_pct: number;
+  late_fee_waive_supervisor_max_pct: number;
+  late_fee_waive_disabled: boolean;
   notify_quota_warning: boolean;
   notify_script_disabled: boolean;
   notify_work_order_completed: boolean;
@@ -53,6 +61,25 @@ const SENSITIVITY_LABELS: Record<number, string> = {
   1: "低（保守）",
   3: "中",
   5: "高（积极）",
+};
+
+const DEFAULT_TENANT_SETTINGS: TenantSettings = {
+  recording_mode: "auto",
+  l3_hangup_enabled: false,
+  contact_freq_max: 3,
+  retention_days: 365,
+  discount_auto_approve_threshold_pct: 10,
+  discount_supervisor_max_pct: 30,
+  discount_disabled: false,
+  late_fee_waive_auto_approve_threshold_pct: 50,
+  late_fee_waive_supervisor_max_pct: 100,
+  late_fee_waive_disabled: false,
+  notify_quota_warning: true,
+  notify_script_disabled: true,
+  notify_work_order_completed: true,
+  notify_case_escalated: true,
+  notify_promise_expiring: true,
+  notify_channels: ["system"],
 };
 
 export function AdminSettingsPage() {
@@ -95,14 +122,32 @@ export function AdminSettingsPage() {
   const suggestInitRef = useRef(false);
 
   useEffect(() => {
-    if (settings && !formInitRef.current) {
+    // 初始化策略：拿到 settings 立即初始化；查询完成（无论成功失败）也要初始化以避免一直「加载中」
+    if (formInitRef.current) return;
+    if (settings) {
       formInitRef.current = true;
       setForm({
+        ...DEFAULT_TENANT_SETTINGS,
         ...settings,
         notify_channels: settings.notify_channels ?? ["system"],
       });
+    } else if (!query.isLoading) {
+      // 查询失败（如 401/403/500）：用前端默认值初始化，让用户至少能编辑
+      formInitRef.current = true;
+      setForm({ ...DEFAULT_TENANT_SETTINGS });
     }
-  }, [settings]);
+  }, [settings, query.isLoading]);
+
+  // 兜底：3 秒内如果还没初始化（无论原因），用默认值初始化避免页面永久卡死
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (!formInitRef.current) {
+        formInitRef.current = true;
+        setForm({ ...DEFAULT_TENANT_SETTINGS });
+      }
+    }, 3000);
+    return () => clearTimeout(t);
+  }, []);
   useEffect(() => {
     if (suggestion && !suggestInitRef.current) {
       suggestInitRef.current = true;
@@ -362,6 +407,188 @@ export function AdminSettingsPage() {
             />
             <span style={{ fontSize: 13, color: "#374151" }}>小时</span>
           </div>
+        </div>
+      </div>
+
+      {/* ─── §2.5 协商打折 / 减免审批策略 (v1.6 / v1.6.2) ─── */}
+      <div className="config-section">
+        <div className="config-section-title">💰 减免审批策略（本金打折 + 滞纳金减免）</div>
+        <div className="form-hint" style={{ marginBottom: 12 }}>
+          多数物业愿意减免滞纳金以换取本金回收，但本金打折通常严格管控。两类策略可独立设置。
+        </div>
+
+        {/* 本金打折策略 */}
+        <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 6, padding: 12, marginBottom: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#7c2d12", marginBottom: 8 }}>
+            💴 本金打折策略
+          </div>
+
+          <div className="setting-row">
+            <div>
+              <div className="setting-label">是否启用本金打折</div>
+              <div className="setting-hint">停用后无法发起本金打折申请</div>
+            </div>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={!form.discount_disabled}
+                onChange={(e) =>
+                  setForm({ ...form, discount_disabled: !e.target.checked })
+                }
+                style={{ width: 16, height: 16 }}
+              />
+              <span style={{ fontSize: 13, color: form.discount_disabled ? "var(--color-danger)" : "var(--color-success)" }}>
+                {form.discount_disabled ? "已停用" : "已启用"}
+              </span>
+            </label>
+          </div>
+
+          <div className="setting-row">
+            <div>
+              <div className="setting-label">自动批准阈值</div>
+              <div className="setting-hint">折扣 &lt; X% 系统直接批准；设为 0 表示任何打折都需人工审批</div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <input
+                type="number"
+                className="form-control"
+                value={form.discount_auto_approve_threshold_pct}
+                min={0}
+                max={100}
+                style={{ width: 80 }}
+                disabled={form.discount_disabled}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    discount_auto_approve_threshold_pct: Math.max(0, Math.min(100, Number(e.target.value) || 0)),
+                  })
+                }
+              />
+              <span style={{ fontSize: 13, color: "#374151" }}>%</span>
+            </div>
+          </div>
+
+          <div className="setting-row">
+            <div>
+              <div className="setting-label">督导审批上限</div>
+              <div className="setting-hint">折扣 ≤ X% 督导可批；&gt; X% 转 admin。一般物业建议 30%</div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <input
+                type="number"
+                className="form-control"
+                value={form.discount_supervisor_max_pct}
+                min={form.discount_auto_approve_threshold_pct}
+                max={100}
+                style={{ width: 80 }}
+                disabled={form.discount_disabled}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    discount_supervisor_max_pct: Math.max(0, Math.min(100, Number(e.target.value) || 0)),
+                  })
+                }
+              />
+              <span style={{ fontSize: 13, color: "#374151" }}>%</span>
+            </div>
+          </div>
+
+          {!form.discount_disabled && (
+            <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: 10, marginTop: 4, fontSize: 12.5, color: "#166534", lineHeight: 1.7 }}>
+              <strong>规则</strong>：
+              {form.discount_auto_approve_threshold_pct === 0 ? (
+                <>本金打折申请都需人工审批。</>
+              ) : (
+                <>催收员可独立打折 0–{form.discount_auto_approve_threshold_pct - 1}%；</>
+              )}
+              督导可批 {form.discount_auto_approve_threshold_pct}–{form.discount_supervisor_max_pct}%；&gt; {form.discount_supervisor_max_pct}% 转 admin
+            </div>
+          )}
+        </div>
+
+        {/* 滞纳金减免策略 */}
+        <div style={{ background: "#ecfeff", border: "1px solid #a5f3fc", borderRadius: 6, padding: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#0e7490", marginBottom: 8 }}>
+            ⏰ 滞纳金减免策略
+          </div>
+
+          <div className="setting-row">
+            <div>
+              <div className="setting-label">是否启用滞纳金减免</div>
+              <div className="setting-hint">多数物业愿意全部减免滞纳金以换取本金回收</div>
+            </div>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={!form.late_fee_waive_disabled}
+                onChange={(e) =>
+                  setForm({ ...form, late_fee_waive_disabled: !e.target.checked })
+                }
+                style={{ width: 16, height: 16 }}
+              />
+              <span style={{ fontSize: 13, color: form.late_fee_waive_disabled ? "var(--color-danger)" : "var(--color-success)" }}>
+                {form.late_fee_waive_disabled ? "已停用" : "已启用"}
+              </span>
+            </label>
+          </div>
+
+          <div className="setting-row">
+            <div>
+              <div className="setting-label">自动批准阈值</div>
+              <div className="setting-hint">滞纳金减免 &lt; X% 自动批准；默认 50% 较为宽松</div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <input
+                type="number"
+                className="form-control"
+                value={form.late_fee_waive_auto_approve_threshold_pct}
+                min={0}
+                max={100}
+                style={{ width: 80 }}
+                disabled={form.late_fee_waive_disabled}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    late_fee_waive_auto_approve_threshold_pct: Math.max(0, Math.min(100, Number(e.target.value) || 0)),
+                  })
+                }
+              />
+              <span style={{ fontSize: 13, color: "#374151" }}>%</span>
+            </div>
+          </div>
+
+          <div className="setting-row">
+            <div>
+              <div className="setting-label">督导审批上限</div>
+              <div className="setting-hint">滞纳金减免 ≤ X% 督导可批；默认 100%（即可全部减免）</div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <input
+                type="number"
+                className="form-control"
+                value={form.late_fee_waive_supervisor_max_pct}
+                min={form.late_fee_waive_auto_approve_threshold_pct}
+                max={100}
+                style={{ width: 80 }}
+                disabled={form.late_fee_waive_disabled}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    late_fee_waive_supervisor_max_pct: Math.max(0, Math.min(100, Number(e.target.value) || 0)),
+                  })
+                }
+              />
+              <span style={{ fontSize: 13, color: "#374151" }}>%</span>
+            </div>
+          </div>
+
+          {!form.late_fee_waive_disabled && (
+            <div style={{ background: "#f0fdfa", border: "1px solid #99f6e4", borderRadius: 6, padding: 10, marginTop: 4, fontSize: 12.5, color: "#0f766e", lineHeight: 1.7 }}>
+              <strong>规则</strong>：催收员可独立减免 0–{Math.max(0, form.late_fee_waive_auto_approve_threshold_pct - 1)}%；
+              督导可批 {form.late_fee_waive_auto_approve_threshold_pct}–{form.late_fee_waive_supervisor_max_pct}%；
+              &gt; {form.late_fee_waive_supervisor_max_pct}% 转 admin
+            </div>
+          )}
         </div>
       </div>
 

@@ -48,8 +48,11 @@ function pct(value: number | null): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
+const TOP_N = 10;
+
 export function AdminReportsPage() {
   const [periodDays, setPeriodDays] = useState(30);
+  const [showAllAgents, setShowAllAgents] = useState(false);
   const { query } = useCustom<ReportOverview>({
     url: "admin/reports/overview",
     method: "get",
@@ -148,30 +151,51 @@ export function AdminReportsPage() {
         {data.agent_performance.length === 0 ? (
           <p className="text-sm text-[var(--color-neutral-400)]">该时间窗内暂无外呼数据</p>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="text-left text-[var(--color-neutral-500)]">
-              <tr>
-                <th className="py-2 font-medium">姓名</th>
-                <th className="py-2 font-medium text-right">通话总数</th>
-                <th className="py-2 font-medium text-right">接通数</th>
-                <th className="py-2 font-medium text-right">承诺数</th>
-                <th className="py-2 font-medium text-right">转化率</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--color-neutral-100)]">
-              {data.agent_performance.map((a) => (
-                <tr key={a.user_id}>
-                  <td className="py-2 font-medium text-[var(--color-neutral-700)]">
-                    {a.name}
-                  </td>
-                  <td className="py-2 text-right">{a.total_calls}</td>
-                  <td className="py-2 text-right">{a.connected_calls}</td>
-                  <td className="py-2 text-right">{a.promised_cases}</td>
-                  <td className="py-2 text-right">{pct(a.conversion_rate)}</td>
+          <>
+            <table className="w-full text-sm">
+              <thead className="text-left text-[var(--color-neutral-500)]">
+                <tr>
+                  <th className="py-2 font-medium">姓名</th>
+                  <th className="py-2 font-medium text-right">通话总数</th>
+                  <th className="py-2 font-medium text-right">接通数</th>
+                  <th className="py-2 font-medium text-right">承诺数</th>
+                  <th className="py-2 font-medium text-right">转化率</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-neutral-100)]">
+                {(showAllAgents
+                  ? data.agent_performance
+                  : data.agent_performance.slice(0, TOP_N)
+                ).map((a) => (
+                  <tr key={a.user_id}>
+                    <td className="py-2 font-medium text-[var(--color-neutral-700)]">
+                      {a.name}
+                    </td>
+                    <td className="py-2 text-right">{a.total_calls}</td>
+                    <td className="py-2 text-right">{a.connected_calls}</td>
+                    <td className="py-2 text-right">{a.promised_cases}</td>
+                    <td className="py-2 text-right">{pct(a.conversion_rate)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {data.agent_performance.length > TOP_N && (
+              <div className="text-right text-xs text-[var(--color-neutral-500)] mt-2">
+                {showAllAgents
+                  ? `共 ${data.agent_performance.length} 名`
+                  : `仅显示前 ${TOP_N} 名`}{" "}
+                <button
+                  type="button"
+                  onClick={() => setShowAllAgents((v) => !v)}
+                  className="text-[var(--color-primary)] underline"
+                >
+                  {showAllAgents
+                    ? "收起"
+                    : `查看更多 → 共 ${data.agent_performance.length} 名`}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </section>
 

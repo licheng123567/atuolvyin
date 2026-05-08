@@ -21,6 +21,7 @@ from app.api import (
     admin_settings,
     admin_settlements,
     admin_suggestion_config,
+    discount_offers,
     agent_cases,
     agent_me,
     auth,
@@ -30,9 +31,12 @@ from app.api import (
     calls_v1,
     devices,
     devices_v1,
+    lawfirm_orders,
+    lawyer_orders,
     legal_cases,
     legal_documents,
     legal_workstation,
+    tenant_legal_orders,
     notifications as notifications_api,
     ops,
     ops_extras,
@@ -51,10 +55,14 @@ from app.api import (
     super_health,
     super_plans,
     supervisor,
+    supervisor_case_detail,
     supervisor_extras,
     supervisor_labels,
     supervisor_live,
+    supervisor_escalated,
     supervisor_review,
+    supervisor_shifts,
+    supervisor_team_stats,
     tasks,
     user_preferences,
     users,
@@ -69,6 +77,7 @@ async def lifespan(app: FastAPI):
     import asyncio
     from app.core.crypto import _get_key
     from app.services.call_lifecycle import heartbeat_cleanup_loop
+    from app.services.discount_expiry import discount_expiry_loop
     try:
         _get_key()
     except RuntimeError as exc:
@@ -77,14 +86,17 @@ async def lifespan(app: FastAPI):
         raise SystemExit(1) from exc
     # Sprint 14.2 — 启动通话心跳超时清理后台任务（90s 无心跳 → call.aborted）
     cleanup_task = asyncio.create_task(heartbeat_cleanup_loop())
+    # v1.6 — 减免 offer 7 天有效期自动失效（每小时扫一次）
+    discount_expiry_task = asyncio.create_task(discount_expiry_loop())
     try:
         yield
     finally:
-        cleanup_task.cancel()
-        try:
-            await cleanup_task
-        except (asyncio.CancelledError, Exception):
-            pass
+        for task in (cleanup_task, discount_expiry_task):
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
 
 
 app = FastAPI(
@@ -177,6 +189,15 @@ app.include_router(supervisor_labels.router, prefix="/api/v1/supervisor", tags=[
 app.include_router(supervisor_review.router, prefix="/api/v1/supervisor", tags=["supervisor-review"])
 app.include_router(supervisor_live.router, prefix="/api/v1/supervisor", tags=["supervisor-live"])
 app.include_router(supervisor_extras.router, prefix="/api/v1/supervisor", tags=["supervisor-extras"])
+app.include_router(supervisor_case_detail.router, prefix="/api/v1/supervisor", tags=["supervisor-case-detail"])
+app.include_router(supervisor_shifts.router, prefix="/api/v1/supervisor", tags=["supervisor-shifts"])
+app.include_router(supervisor_team_stats.router, prefix="/api/v1/supervisor", tags=["supervisor-team-stats"])
+app.include_router(supervisor_escalated.router, prefix="/api/v1/supervisor", tags=["supervisor-escalated"])
+app.include_router(lawfirm_orders.router, prefix="/api/v1/lawfirm", tags=["lawfirm-orders"])
+app.include_router(lawyer_orders.router, prefix="/api/v1/lawyer", tags=["lawyer-orders"])
+app.include_router(tenant_legal_orders.router, prefix="/api/v1/legal", tags=["tenant-legal-orders"])
+# v1.6 — 协商打折 / 减免审批
+app.include_router(discount_offers.router, prefix="/api/v1", tags=["discount-offers"])
 app.include_router(admin_suggestion_config.router, prefix="/api/v1/admin", tags=["suggestion-config"])
 app.include_router(admin_settlements.router, prefix="/api/v1/admin", tags=["admin-settlements"])
 app.include_router(admin_providers.router, prefix="/api/v1/admin", tags=["admin-providers"])

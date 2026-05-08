@@ -28,6 +28,7 @@ from app.core.crypto import encrypt_phone
 from app.core.db import SessionLocal
 from app.models.call import AnalysisResult, CallRecord, Transcript
 from app.models.case import CollectionCase, OwnerProfile, Project
+from app.models.project_member import ProjectMember
 from app.models.script import ScriptTemplate
 from app.models.tenant import (
     ProviderTenantContract,
@@ -395,6 +396,75 @@ def main() -> None:
                 Project.tenant_id == tenant.id, Project.status == "active"
             ).order_by(Project.id)
         ).scalars().all()
+
+        # ── 3a. v1.5.7 — 给「督导小李」加 agent_internal + coordinator 多角色 ──
+        # 让督导小李(13000000003)既是督导，又能切换为内勤催收员、协调员，方便测试多 membership UI
+        supervisor_user = db.execute(
+            select(UserAccount).where(UserAccount.name == "督导小李")
+        ).scalar_one_or_none()
+        if supervisor_user:
+            for extra_role in ["agent_internal", "coordinator"]:
+                exists = db.execute(
+                    select(UserTenantMembership).where(
+                        UserTenantMembership.user_id == supervisor_user.id,
+                        UserTenantMembership.tenant_id == tenant.id,
+                        UserTenantMembership.role == extra_role,
+                    )
+                ).scalar_one_or_none()
+                if exists is None:
+                    db.add(UserTenantMembership(
+                        user_id=supervisor_user.id,
+                        tenant_id=tenant.id,
+                        role=extra_role,
+                        source_type="INTERNAL",
+                        is_active=True,
+                    ))
+                    print(f"[membership +] 督导小李 +{extra_role}")
+            db.flush()
+
+        # ── 3b. v1.5.6 — 给所有项目绑定协调员 + 法务对接人 ───
+        # 任意项目（自办 + 外包）都必须有这两个 ProjectMember 行
+        coordinator_user = db.execute(
+            select(UserAccount)
+            .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
+            .where(
+                UserTenantMembership.tenant_id == tenant.id,
+                UserTenantMembership.role.in_(["coordinator", "workorder"]),
+                UserTenantMembership.is_active.is_(True),
+            )
+        ).scalars().first()
+        legal_user = db.execute(
+            select(UserAccount)
+            .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
+            .where(
+                UserTenantMembership.tenant_id == tenant.id,
+                UserTenantMembership.role == "legal",
+                UserTenantMembership.is_active.is_(True),
+            )
+        ).scalars().first()
+        for proj in all_projects:
+            for uid, role in [
+                (coordinator_user.id if coordinator_user else None, "coordinator"),
+                (legal_user.id if legal_user else None, "legal"),
+            ]:
+                if uid is None:
+                    continue
+                exists = db.execute(
+                    select(ProjectMember).where(
+                        ProjectMember.project_id == proj.id,
+                        ProjectMember.role_in_project == role,
+                        ProjectMember.is_active.is_(True),
+                    )
+                ).scalar_one_or_none()
+                if exists is None:
+                    db.add(ProjectMember(
+                        project_id=proj.id,
+                        user_id=uid,
+                        role_in_project=role,
+                        is_active=True,
+                    ))
+                    print(f"[project_member +] project={proj.id} user={uid} role={role}")
+        db.flush()
 
         # ── 4. 30 个新案件（round-robin 分到活跃项目）──────
         seen_phones: set[str] = set()
