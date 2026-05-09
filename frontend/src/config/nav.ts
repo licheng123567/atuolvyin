@@ -65,6 +65,8 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
         { label: "风控关键词", path: "/admin/risk-keywords", icon: "ShieldAlert" },
         // 法务 + 审计 + 设置 殿后
         { label: "法务转化", path: "/admin/legal-conversion", icon: "Scale" },
+        // v1.6.8 — 法务转化两步审批 inbox（催收员申请 → admin 也可代督导审批）
+        { label: "法务转化审批", path: "/admin/legal-conversion-approvals", icon: "ClipboardList" },
         { label: "减免大额审批", path: "/admin/discount-approvals", icon: "BadgePercent" },
         { label: "审计日志", path: "/admin/audit-logs", icon: "ScrollText" },
         { label: "系统配置", path: "/admin/settings", icon: "Settings" },
@@ -90,6 +92,8 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
         { label: "承诺催付", path: "/supervisor/promises", icon: "CalendarClock" },
         { label: "案件超期报警", path: "/supervisor/case-alerts", icon: "BellRing" },
         { label: "减免审批", path: "/supervisor/discount-approvals", icon: "BadgePercent" },
+        // v1.6.8 — 法务转化两步审批：催收员申请 → 督导/admin 审批
+        { label: "法务转化审批", path: "/supervisor/legal-conversion-approvals", icon: "Scale" },
       ],
     },
     {
@@ -115,7 +119,10 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
   agent_internal: [
     {
       items: [
+        { label: "工作台", path: "/agent/workstation", icon: "Headphones" },
         { label: "我的案件", path: "/agent/cases", icon: "ClipboardList" },
+        { label: "通话记录", path: "/agent/call-history", icon: "PhoneCall" },
+        { label: "个人信息", path: "/agent/profile", icon: "User" },
       ],
     },
   ],

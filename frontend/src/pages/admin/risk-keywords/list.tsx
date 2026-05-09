@@ -10,11 +10,19 @@ const CAT_LABELS: Record<string, string> = {
   owner_threat: "业主威胁 (L2)",
   agent_violation: "催收员违规 (L2)",
   agent_minor_misconduct: "轻微不当 (L1)",
+  // v1.6.5 — 兼容后端可能下发的简短分类
+  complaint: "投诉",
+  threat: "威胁",
+  abuse: "辱骂",
+  violation: "违规",
+  none: "无",
 };
 
 const SPEAKER_LABELS: Record<string, string> = {
   customer: "业主端",
+  owner: "业主端",
   agent: "催收员端",
+  admin: "管理员端",
 };
 
 export function RiskKeywordListPage() {

@@ -1,11 +1,15 @@
 // 1:1 还原 ui/agent-pc.html#my-cases 我的案件
-import { useCreate, useList } from "@refinedev/core";
+// v1.6.5 — 加项目过滤 + 统一 SearchInput / PaginationBar
+import { useCustom, useCreate, useList } from "@refinedev/core";
 import type { CrudFilter } from "@refinedev/core";
-import { ChevronDown, Phone, QrCode, Search } from "lucide-react";
+import { Eye, Phone } from "lucide-react";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { PaginatedResponse } from "../../../types";
 import { QrDialDialog } from "../../../components/dial/QrDialDialog";
+import { PaginationBar } from "../../../components/ui/PaginationBar";
+import { SearchInput } from "../../../components/ui/SearchInput";
+import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 
 interface OwnerInfo {
   id: number;
@@ -25,8 +29,12 @@ interface CaseItem {
   amount_owed: string | null;
   months_overdue: number | null;
   priority_score: number;
+  project_id: number | null;
+  project_name: string | null;
   last_contact_at?: string | null;
 }
+
+interface ProjectOption { id: number; name: string }
 
 const STAGE_LABELS: Record<string, string> = {
   new: "待跟进",
@@ -60,9 +68,11 @@ export function AgentCaseListPage() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [stage, setStage] = useState("");
+  const [projectId, setProjectId] = useState<string>("");
   const [keyword, setKeyword] = useState("");
+  const [todayMode, setTodayMode] = useState(false);  // v1.6.7
+  const debouncedKw = useDebouncedValue(keyword, 300);
   const [claimingId] = useState<number | null>(null);
-  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [qrState, setQrState] = useState<{
     caseId: number;
     qrPayload: string;
@@ -73,6 +83,9 @@ export function AgentCaseListPage() {
 
   const filters: CrudFilter[] = [];
   if (stage) filters.push({ field: "stage", operator: "eq", value: stage });
+  if (projectId) filters.push({ field: "project_id", operator: "eq", value: Number(projectId) });
+  if (debouncedKw.trim()) filters.push({ field: "q", operator: "contains", value: debouncedKw.trim() });
+  if (todayMode) filters.push({ field: "today", operator: "eq", value: true });
 
   const { query } = useList<CaseItem>({
     resource: "agent/cases",
@@ -80,28 +93,31 @@ export function AgentCaseListPage() {
     filters,
   });
 
+  // 项目下拉来自专属端点（distinct project visible to agent）
+  const { query: projectsQuery } = useCustom<ProjectOption[]>({
+    url: "agent/me/projects",
+    method: "get",
+  });
+  const projectOptions: ProjectOption[] = projectsQuery.data?.data ?? [];
+
   const rawData = query.data?.data;
   const items: CaseItem[] =
     (rawData as unknown as PaginatedResponse<CaseItem>)?.items ??
     (rawData as CaseItem[] | undefined) ??
     [];
   const total = query.data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  // 过滤关键词
-  const visible = keyword
-    ? items.filter((c) => c.owner.name.includes(keyword) || (c.owner.room ?? "").includes(keyword))
-    : items;
+  const visible = items;
 
   const { mutate: dialMutate } = useCreate();
 
   function requestQrPayload(caseId: number) {
-    setOpenMenuId(null);
     lastQrCaseId.current = caseId;
     dialMutate(
       {
         resource: "calls/dial-request",
-        values: { case_id: caseId },
+        // mode: "qr" — 强制走二维码路径（push 模式需要 MiPush 设备注册，PoC 演示用 qr）
+        values: { case_id: caseId, mode: "qr" },
       },
       {
         onSuccess: (resp) => {
@@ -112,7 +128,12 @@ export function AgentCaseListPage() {
               qrPayload: data.qr_payload,
               expiresAt: data.expires_at,
             });
+          } else {
+            alert("拨号请求成功但未返回二维码，请联系管理员");
           }
+        },
+        onError: (err) => {
+          alert(`拨号失败：${err.message ?? "未知错误"}`);
         },
       },
     );
@@ -125,33 +146,51 @@ export function AgentCaseListPage() {
           <h1 className="page-title">我的案件</h1>
           <div className="page-subtitle">共 {total} 件分配案件</div>
         </div>
-        <div className="filters-bar">
-          <div className="search-box">
-            <Search className="w-3.5 h-3.5" />
-            <input
-              type="text"
-              className="form-control"
-              placeholder="搜索业主姓名 / 房号"
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-            />
-          </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <SearchInput
+            value={keyword}
+            onChange={(v) => { setKeyword(v); setPage(1); }}
+            placeholder="搜索业主姓名 / 房号"
+            width={220}
+          />
           <select
-            className="form-control"
-            style={{ width: "auto" }}
+            className="filter-select"
+            value={projectId}
+            onChange={(e) => { setProjectId(e.target.value); setPage(1); }}
+          >
+            <option value="">全部项目</option>
+            {projectOptions.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <select
+            className="filter-select"
             value={stage}
-            onChange={(e) => {
-              setStage(e.target.value);
-              setPage(1);
-            }}
+            onChange={(e) => { setStage(e.target.value); setPage(1); }}
           >
             <option value="">全部状态</option>
             {Object.entries(STAGE_LABELS).map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
+              <option key={v} value={v}>{l}</option>
             ))}
           </select>
+          <button
+            type="button"
+            data-testid="cases-today-toggle"
+            onClick={() => { setTodayMode((v) => !v); setPage(1); }}
+            className={`ds-btn ${todayMode ? "ds-btn-primary" : "ds-btn-ghost"} ds-btn-sm`}
+            title="只显示今日待联系：未结案 + 今天还没拨过 / 上次联系超过 7 天"
+          >
+            {todayMode ? "✓ 今日待联系" : "今日待联系"}
+          </button>
+          {(keyword || projectId || stage || todayMode) && (
+            <button
+              type="button"
+              className="ds-btn ds-btn-ghost ds-btn-sm"
+              onClick={() => { setKeyword(""); setProjectId(""); setStage(""); setTodayMode(false); setPage(1); }}
+            >
+              清空筛选
+            </button>
+          )}
         </div>
       </div>
 
@@ -161,6 +200,7 @@ export function AgentCaseListPage() {
             <tr>
               <th>业主姓名</th>
               <th>楼栋/房号</th>
+              <th>项目</th>
               <th>欠费金额</th>
               <th>欠费月数</th>
               <th>状态</th>
@@ -171,14 +211,14 @@ export function AgentCaseListPage() {
           <tbody>
             {query.isLoading && (
               <tr>
-                <td colSpan={7} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                <td colSpan={8} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
                   加载中…
                 </td>
               </tr>
             )}
             {!query.isLoading && visible.length === 0 && (
               <tr>
-                <td colSpan={7} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                <td colSpan={8} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
                   暂无分配的案件
                 </td>
               </tr>
@@ -198,6 +238,9 @@ export function AgentCaseListPage() {
                     </div>
                   </td>
                   <td>{room}</td>
+                  <td style={{ fontSize: 12, color: "var(--color-primary)" }}>
+                    {c.project_name ? `📁 ${c.project_name}` : <span style={{ color: "var(--color-neutral-400)" }}>—</span>}
+                  </td>
                   <td
                     style={{
                       color: isPaid ? "#057a55" : "#e02424",
@@ -218,76 +261,23 @@ export function AgentCaseListPage() {
                   </td>
                   <td>{formatLast(c.last_contact_at)}</td>
                   <td>
-                    <div style={{ position: "relative", display: "inline-block" }}>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                       <button
                         type="button"
                         className="ds-btn ds-btn-primary ds-btn-sm"
-                        onClick={() =>
-                          setOpenMenuId(openMenuId === c.id ? null : c.id)
-                        }
+                        onClick={() => requestQrPayload(c.id)}
                         disabled={claimingId === c.id || c.owner.do_not_call}
+                        title={c.owner.do_not_call ? "业主已加入免打扰" : "扫码到 App 拨号"}
                       >
-                        <Phone className="w-3 h-3" />
-                        拨号
-                        <ChevronDown className="w-3 h-3" />
+                        <Phone className="w-3 h-3" /> 拨号
                       </button>
-                      {openMenuId === c.id && (
-                        <div
-                          style={{
-                            position: "absolute",
-                            top: "100%",
-                            right: 0,
-                            marginTop: 4,
-                            background: "white",
-                            border: "1px solid var(--color-neutral-200)",
-                            borderRadius: "var(--radius-md)",
-                            boxShadow: "var(--shadow-md, 0 4px 12px rgba(0,0,0,0.10))",
-                            zIndex: 10,
-                            minWidth: 160,
-                          }}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => requestQrPayload(c.id)}
-                            style={{
-                              display: "flex",
-                              width: "100%",
-                              alignItems: "center",
-                              gap: 6,
-                              padding: "8px 12px",
-                              fontSize: 13,
-                              border: "none",
-                              background: "transparent",
-                              textAlign: "left",
-                              cursor: "pointer",
-                            }}
-                          >
-                            <QrCode className="w-3.5 h-3.5" />
-                            扫码到 App 拨号
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setOpenMenuId(null);
-                              navigate(`/agent/cases/${c.id}`);
-                            }}
-                            style={{
-                              display: "flex",
-                              width: "100%",
-                              alignItems: "center",
-                              gap: 6,
-                              padding: "8px 12px",
-                              fontSize: 13,
-                              border: "none",
-                              background: "transparent",
-                              textAlign: "left",
-                              cursor: "pointer",
-                            }}
-                          >
-                            查看详情
-                          </button>
-                        </div>
-                      )}
+                      <button
+                        type="button"
+                        className="ds-btn ds-btn-ghost ds-btn-sm"
+                        onClick={() => navigate(`/agent/cases/${c.id}`)}
+                      >
+                        <Eye className="w-3 h-3" /> 详情
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -295,26 +285,12 @@ export function AgentCaseListPage() {
             })}
           </tbody>
         </table>
-        {totalPages > 1 && (
-          <div className="ds-pagination">
-            <span className="pagination-info">
-              共 {total} 条，第 {page}/{totalPages} 页
-            </span>
-            <div className="pagination-pages">
-              {page > 1 && (
-                <div className="page-btn" onClick={() => setPage((p) => p - 1)}>
-                  ‹
-                </div>
-              )}
-              <div className="page-btn active">{page}</div>
-              {page < totalPages && (
-                <div className="page-btn" onClick={() => setPage((p) => p + 1)}>
-                  ›
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        <PaginationBar
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={total}
+          onPageChange={setPage}
+        />
       </div>
 
       {qrState && (

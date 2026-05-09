@@ -1,13 +1,18 @@
 // 1:1 还原 ui/admin.html#a-pool 公海管理
+// v1.6.5 — 服务端分页 + debounce 关键字搜索
 import {
   useCustomMutation,
   useGo,
   useInvalidate,
   useList,
 } from "@refinedev/core";
-import { Search } from "lucide-react";
 import { useState } from "react";
+import { PaginationBar } from "../../../components/ui/PaginationBar";
+import { SearchInput } from "../../../components/ui/SearchInput";
+import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 import type { PaginatedResponse } from "../../../types";
+
+const PAGE_SIZE = 20;
 
 interface OwnerInfo {
   id: number;
@@ -60,26 +65,31 @@ interface ProjectOption {
 }
 
 export function AdminPoolPage() {
+  const [page, setPage] = useState(1);
   const [assignFor, setAssignFor] = useState<number | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
   const [keyword, setKeyword] = useState("");
   const [overdueFilter, setOverdueFilter] = useState("");
   const [projectFilter, setProjectFilter] = useState<number | "">("");
   const [sortBy, setSortBy] = useState<"priority" | "amount" | "joined">("priority");
+  const debouncedKw = useDebouncedValue(keyword, 300);
   const invalidate = useInvalidate();
   const go = useGo();
 
-  const filters: Array<{ field: string; operator: "eq"; value: string | number }> = [
+  const filters: Array<{ field: string; operator: "eq" | "contains"; value: string | number }> = [
     { field: "pool_type", operator: "eq", value: "public" },
   ];
   if (projectFilter !== "") {
     filters.push({ field: "project_id", operator: "eq", value: projectFilter });
   }
+  if (debouncedKw.trim()) {
+    filters.push({ field: "keyword", operator: "contains", value: debouncedKw.trim() });
+  }
 
   const { query: casesQuery } = useList<CaseItem>({
     resource: "admin/cases",
     filters,
-    pagination: { currentPage: 1, pageSize: 100 },
+    pagination: { currentPage: page, pageSize: PAGE_SIZE },
   });
 
   const { query: projectsQuery } = useList<ProjectOption>({
@@ -93,23 +103,17 @@ export function AdminPoolPage() {
     [];
 
   const rawCases = casesQuery.data?.data;
+  const paginated = rawCases as unknown as PaginatedResponse<CaseItem> | undefined;
   const allCases: CaseItem[] =
-    (rawCases as unknown as PaginatedResponse<CaseItem>)?.items ??
-    (rawCases as CaseItem[] | undefined) ??
-    [];
+    paginated?.items ?? (rawCases as CaseItem[] | undefined) ?? [];
+  const total = paginated?.total ?? allCases.length;
 
   // v1.5.6 — 双层公海：物业公海仅显示自营项目（无 provider）+ 无项目的 case
   // 外包项目的公海归服务商管，物业 admin 不在此分配
+  // v1.6.5 — 关键字搜索 / 项目筛选已下沉后端；overdue 范围筛选仍在前端做（仅作用于当前页）
   const outsourcedCount = allCases.filter((c) => c.provider_id != null).length;
   let cases = allCases.filter((c) => {
-    if (c.provider_id != null) return false;  // 外包不显示
-    if (
-      keyword &&
-      !c.owner.name.includes(keyword) &&
-      !(c.owner.room ?? "").includes(keyword)
-    ) {
-      return false;
-    }
+    if (c.provider_id != null) return false;
     const m = c.months_overdue ?? 0;
     if (overdueFilter === ">12" && m <= 12) return false;
     if (overdueFilter === "6-12" && (m < 6 || m > 12)) return false;
@@ -200,16 +204,12 @@ export function AdminPoolPage() {
         {/* Left: cases table */}
         <div className="table-wrap">
           <div className="table-toolbar">
-            <div className="search-box">
-              <Search className="w-3.5 h-3.5" />
-              <input
-                type="text"
-                className="form-control"
-                placeholder="搜索业主 / 房号"
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-              />
-            </div>
+            <SearchInput
+              value={keyword}
+              onChange={(v) => { setKeyword(v); setPage(1); }}
+              placeholder="搜索业主 / 房号"
+              width={220}
+            />
             <select
               className="form-control"
               style={{ width: 160 }}
@@ -329,9 +329,12 @@ export function AdminPoolPage() {
               })}
             </tbody>
           </table>
-          <div className="ds-pagination">
-            <span className="pagination-info">共 {cases.length} 条</span>
-          </div>
+          <PaginationBar
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={total}
+            onPageChange={setPage}
+          />
         </div>
 
         {/* Right: 员工私海概览 */}

@@ -7,6 +7,7 @@ export interface CaseCallItem {
   result_tag: string | null;
   confidence: number | null;
   agent_name: string | null;
+  recording_url?: string | null;  // v1.6.7 — E5 inline 录音
 }
 
 export interface TimelineEvent {
@@ -14,6 +15,9 @@ export interface TimelineEvent {
   ts: string;
   actor: string | null;
   note: string | null;
+  // v1.6.9 — 关联实体 ID + 类型，让前端能跳到对应详情页
+  target_id?: number | null;
+  target_type?: "workorder" | "legal_order" | "legal_case" | "call" | "audit" | null;
 }
 
 export interface OwnerInfo {

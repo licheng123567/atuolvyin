@@ -2,9 +2,10 @@
 // v1.5.7 — 大额/疑难案件督导处置 + 介入/转法务/查看历史 实际链接
 // v1.6.4 — wire 真后端 + 简单分页（pageSize=20），无后端时 fallback mock
 import { useCustom } from "@refinedev/core";
-import { AlertCircle, ArrowUpRight, ExternalLink, Phone, Search, X } from "lucide-react";
+import { AlertCircle, ArrowUpRight, BadgePercent, ExternalLink, Phone, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { DiscountRequestModal } from "../../../components/discount/DiscountRequestModal";
 import { HelpPanel } from "../../../components/ui/HelpPanel";
 import { SUPERVISOR_PROJECT_FILTERS } from "../_shared/projectFilters";
 
@@ -54,7 +55,7 @@ const MOCK_CASES: EscalatedCase[] = [
   },
 ];
 
-type Action = "intervene" | "to_legal" | "history" | null;
+type Action = "intervene" | "to_legal" | "history" | "discount" | null;
 
 export function SupervisorEscalatedPage() {
   const navigate = useNavigate();
@@ -63,6 +64,7 @@ export function SupervisorEscalatedPage() {
   const [action, setAction] = useState<Action>(null);
   const [projectFilter, setProjectFilter] = useState<string>("全部项目");
   const [keyword, setKeyword] = useState("");
+  const [discountTarget, setDiscountTarget] = useState<EscalatedCase | null>(null);  // v1.6.9
 
   // v1.6.4 — 优先 wire 后端；查询失败或 0 条时 fallback 到 mock
   const { query } = useCustom<EscalatedListResp>({
@@ -219,6 +221,16 @@ export function SupervisorEscalatedPage() {
                   >
                     介入处理
                   </button>
+                  {/* v1.6.9 — 发起减免：业主谈判达成后督导一键提交减免申请 */}
+                  <button
+                    type="button"
+                    className="ds-btn ds-btn-secondary ds-btn-sm"
+                    style={{ color: "#b45309", borderColor: "#fcd34d" }}
+                    onClick={() => setDiscountTarget(c)}
+                    title="发起减免/分期/违约金减免，按金额自动判定走督导/admin 审批"
+                  >
+                    <BadgePercent className="w-3.5 h-3.5" /> 发起减免
+                  </button>
                   <button
                     type="button"
                     className="ds-btn ds-btn-secondary ds-btn-sm"
@@ -304,6 +316,17 @@ export function SupervisorEscalatedPage() {
               onClick={() => { alert("已提交 admin 审批"); setAction(null); }}
               actionLabel="提交审批"
             />
+            {/* v1.6.9 — 模式 4：发起减免谈判（督导直接代催收员发起 offer）*/}
+            <ActionRow
+              icon={<BadgePercent className="w-4 h-4" />}
+              title="模式 4：发起减免 / 分期申请"
+              desc="业主明确「无力一次性缴清 / 服务异议 / 需分期」时，督导直接代催收员发起减免 offer，按金额自动决定督导/admin 审批"
+              onClick={() => {
+                setDiscountTarget(activeCase);
+                setAction(null);
+              }}
+              actionLabel="发起申请"
+            />
           </div>
         </ActionModal>
       )}
@@ -341,6 +364,20 @@ export function SupervisorEscalatedPage() {
             </button>
           </div>
         </ActionModal>
+      )}
+
+      {/* v1.6.9 — 减免申请 Modal */}
+      {discountTarget && (
+        <DiscountRequestModal
+          caseId={discountTarget.id}
+          originalAmount={discountTarget.amount}
+          ownerName={discountTarget.owner_name}
+          onClose={() => setDiscountTarget(null)}
+          onSuccess={(offerId) => {
+            setDiscountTarget(null);
+            alert(`✓ 减免申请 #${offerId} 已提交`);
+          }}
+        />
       )}
     </div>
   );

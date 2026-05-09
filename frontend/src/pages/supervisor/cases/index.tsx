@@ -1,9 +1,15 @@
 // 案件分配 — 1:1 还原 ui/supervisor.html#sv-cases
 // v1.5.7 — 左：公海案件 checkbox 列表 / 右：催收员工作量 bar
-import { Eye, Info, Search } from "lucide-react";
+// v1.6.5 — 加分页 + debounce 搜索
+import { Eye, Info } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { PaginationBar } from "../../../components/ui/PaginationBar";
+import { SearchInput } from "../../../components/ui/SearchInput";
+import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 import { SUPERVISOR_PROJECT_FILTERS } from "../_shared/projectFilters";
+
+const PAGE_SIZE = 15;
 
 // 优先级分数算法（mock）：欠费月数 ×6 + 金额段 ×3 + 上次联系久 ×0.4，上限 100
 function priorityTone(score: number): { color: string; label: string } {
@@ -55,15 +61,20 @@ export function SupervisorCasesPage() {
   const [showAssign, setShowAssign] = useState(false);
   const [projectFilter, setProjectFilter] = useState<string>("全部项目");
   const [keyword, setKeyword] = useState("");
+  const [page, setPage] = useState(1);
+  const debouncedKw = useDebouncedValue(keyword, 300);
 
-  const visiblePool = useMemo(() => {
-    const kw = keyword.trim().toLowerCase();
+  const filteredPool = useMemo(() => {
+    const kw = debouncedKw.trim().toLowerCase();
     return MOCK_POOL.filter((c) => {
       if (projectFilter !== "全部项目" && c.project_name !== projectFilter) return false;
       if (kw && !`${c.name} ${c.building}`.toLowerCase().includes(kw)) return false;
       return true;
     });
-  }, [projectFilter, keyword]);
+  }, [projectFilter, debouncedKw]);
+
+  const total = filteredPool.length;
+  const visiblePool = filteredPool.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   function toggle(id: number) {
     setSelected((prev) => {
@@ -82,21 +93,16 @@ export function SupervisorCasesPage() {
           <div className="page-subtitle">从公海选取案件，分配给催收员</div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ position: "relative" }}>
-            <Search size={14} style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "var(--color-neutral-400)" }} />
-            <input
-              type="text"
-              className="form-control"
-              placeholder="按业主姓名 / 房号搜索"
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              style={{ paddingLeft: 28, width: 200, height: 32 }}
-            />
-          </div>
+          <SearchInput
+            value={keyword}
+            onChange={(v) => { setKeyword(v); setPage(1); }}
+            placeholder="按业主姓名 / 房号搜索"
+            width={200}
+          />
           <select
             className="filter-select"
             value={projectFilter}
-            onChange={(e) => setProjectFilter(e.target.value)}
+            onChange={(e) => { setProjectFilter(e.target.value); setPage(1); }}
           >
             {SUPERVISOR_PROJECT_FILTERS.map((p) => (
               <option key={p} value={p}>{p}</option>
@@ -112,7 +118,7 @@ export function SupervisorCasesPage() {
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 14, fontWeight: 600 }}>公海案件</span>
               <span style={{ fontSize: 12, color: "var(--color-neutral-500)" }}>
-                共 {visiblePool.length} 条
+                共 {total} 条
               </span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -129,16 +135,8 @@ export function SupervisorCasesPage() {
               </button>
             </div>
           </div>
-          {/* 卡内搜索框 — 比 page-header 上的更近，方便表格内快速定位 */}
+          {/* v1.6.5 — 移除卡内冗余搜索框（page-header 已统一搜索）*/}
           <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 16px", borderBottom: "1px solid var(--color-neutral-100)", background: "#fafafa" }}>
-            <Search size={14} style={{ color: "var(--color-neutral-400)" }} />
-            <input
-              type="text"
-              placeholder="按业主姓名 / 房号在公海中搜索"
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 13, color: "#374151" }}
-            />
             <span style={{ fontSize: 11, color: "var(--color-neutral-500)", display: "inline-flex", alignItems: "center", gap: 3 }} title="优先级分数：欠费月数 + 金额段 + 上次联系时长综合计算，0-100，越高越急需处理">
               <Info size={11} /> 右侧数字为优先级分数（0-100）
             </span>
@@ -181,6 +179,12 @@ export function SupervisorCasesPage() {
               );
             })}
           </div>
+          <PaginationBar
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={total}
+            onPageChange={setPage}
+          />
         </div>
 
         {/* 右：催收员工作量 */}

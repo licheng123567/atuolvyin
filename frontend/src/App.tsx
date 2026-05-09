@@ -37,6 +37,9 @@ import { AdminCaseDetailPage } from "./pages/admin/cases/detail";
 import { AgentWorkstationPage } from "./pages/agent/cases/detail";
 import { CallDetailPage } from "./pages/calls/detail";
 import { AgentLiveWorkstationPage } from "./pages/agent/workstation/live";
+import { AgentWorkstationIndexPage } from "./pages/agent/workstation/index";
+import { AgentCallHistoryPage } from "./pages/agent/call-history/index";
+import { AgentProfilePage } from "./pages/agent/profile/index";
 import { AdminLiveWorkstationPage } from "./pages/admin/workstation/live";
 import { ScriptListPage } from "./pages/admin/scripts/list";
 import { ScriptVersionsPage } from "./pages/admin/scripts/versions";
@@ -51,6 +54,7 @@ import { TenantLegalOrdersPage, TenantLegalOrderDetailPage } from "./pages/legal
 import { LawFirmOrdersPage, LawFirmOrderDetailPage } from "./pages/legal-flow/LawFirmOrdersPage";
 import { LawyerOrdersPage, LawyerOrderDetailPage } from "./pages/legal-flow/LawyerOrdersPage";
 import { SupervisorDiscountApprovalsPage, SupervisorDiscountApprovalDetailPage } from "./pages/discount/SupervisorApprovals";
+import { SupervisorLegalConversionApprovalsPage } from "./pages/supervisor/legal-conversion-approvals/index";
 import { AdminDiscountApprovalsPage, AdminDiscountApprovalDetailPage } from "./pages/discount/AdminApprovals";
 import { AdminSettingsPage } from "./pages/admin/settings/index";
 import { AdminDashboardPage } from "./pages/admin/dashboard";
@@ -385,8 +389,14 @@ function App() {
             <Route path="/agent/cases/:id" element={<AgentWorkstationPage />} />
             {/* Call Detail */}
             <Route path="/calls/:id" element={<CallDetailPage />} />
-            {/* Agent Live Workstation */}
+            {/* Agent Live Workstation — 直接带 call_id 进入（兼容旧链接 / 通话记录跳转） */}
             <Route path="/agent/workstation/:call_id" element={<AgentLiveWorkstationPage />} />
+            {/* Agent — 工作台入口（4 列布局 + 5s 轮询 active-call 实现 App→PC 同步） */}
+            <Route path="/agent/workstation" element={<AgentWorkstationIndexPage />} />
+            {/* Agent — 通话记录 */}
+            <Route path="/agent/call-history" element={<AgentCallHistoryPage />} />
+            {/* Agent — 个人信息 */}
+            <Route path="/agent/profile" element={<AgentProfilePage />} />
             {/* Admin Observer Workstation */}
             <Route path="/admin/workstation/:call_id" element={<AdminLiveWorkstationPage />} />
             {/* Supervisor Alerts */}
@@ -416,6 +426,9 @@ function App() {
             {/* Sprint 16.1 — Legal conversion channel (PRD §20.4) */}
             <Route path="/admin/legal-conversion" element={<AdminLegalConversionListPage />} />
             <Route path="/admin/legal-conversion/:id" element={<AdminLegalConversionDetailPage />} />
+            {/* v1.6.8 — 法务转化两步审批 inbox（supervisor + admin 共用同一组件，后端按 role 过滤）*/}
+            <Route path="/supervisor/legal-conversion-approvals" element={<SupervisorLegalConversionApprovalsPage />} />
+            <Route path="/admin/legal-conversion-approvals" element={<SupervisorLegalConversionApprovalsPage />} />
             {/* Admin - System Settings (Sprint 8.5) */}
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
             {/* Supervisor - Script Labels */}

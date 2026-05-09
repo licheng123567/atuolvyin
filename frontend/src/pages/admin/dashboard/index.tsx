@@ -142,28 +142,6 @@ export function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* v1.4 S16.6 — P1 待充实预览栏：reports / compliance 数据稀疏，下版本充实 */}
-      <div
-        style={{
-          background: "var(--color-warning-light, #fef3c7)",
-          border: "1px solid var(--color-warning, #f59e0b)",
-          borderRadius: "var(--radius-md)",
-          padding: "10px 14px",
-          marginBottom: 16,
-          fontSize: 13,
-          color: "var(--color-neutral-700, #374151)",
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          flexWrap: "wrap",
-        }}
-      >
-        <span style={{ fontWeight: 600 }}>📊 P1 预览功能</span>
-        <span>
-          「数据报表」「合规月报」已上线但 demo 数据稀疏，v1.5 补充后转 P0；其他菜单均为 P0 正式版。
-        </span>
-      </div>
-
       {/* 5 KPI cards */}
       <div
         className="stat-grid"

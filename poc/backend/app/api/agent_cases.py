@@ -12,27 +12,25 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel
 
-from app.core.crypto import decrypt_phone, mask_phone
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
-from app.models.call import AnalysisResult, CallRecord, Transcript
+from app.models.call import CallRecord
 from app.models.case import CollectionCase, OwnerProfile
+from app.models.legal_conversion import LegalConversionOrder, LegalConversionRequest
 from app.models.user import UserAccount
 from app.schemas.case import (
-    CaseCallItem,
     CaseDetailResponse,
     CaseResponse,
+    CaseStageUpdate,
     CaseWithOwnerResponse,
-    OwnerInfo,
 )
 from app.schemas.common import PaginatedResponse
 from app.services.audit import log_audit
-from app.services.case_timeline import build_case_timeline
 
 from app.models.case import Project
 from app.models.tenant import UserTenantMembership
 
-from .admin_cases import _case_row_to_response, _require_tenant
+from .admin_cases import _case_row_to_response, _require_tenant, build_case_detail_response
 
 
 def _agent_provider_id(db: Session, user_id: int, tenant_id: int) -> int | None:
@@ -106,6 +104,9 @@ async def list_my_cases(
     db: Annotated[Session, Depends(get_db)],
     pool_type: str | None = Query(None),
     stage: str | None = Query(None),
+    project_id: int | None = Query(None),
+    q: str | None = Query(None, description="搜索业主姓名 / 房号"),
+    today: bool = Query(False, description="只展示今日待联系：未结案 + (今天没联系过 OR 上次联系超过 7 天)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[CaseWithOwnerResponse]:
@@ -126,6 +127,32 @@ async def list_my_cases(
         stmt = stmt.where(CollectionCase.pool_type == pool_type)
     if stage:
         stmt = stmt.where(CollectionCase.stage == stage)
+    if project_id is not None:
+        stmt = stmt.where(CollectionCase.project_id == project_id)
+    if q and q.strip():
+        kw = f"%{q.strip()}%"
+        stmt = stmt.where(
+            sa.or_(
+                OwnerProfile.name.ilike(kw),
+                OwnerProfile.building.ilike(kw),
+                OwnerProfile.room.ilike(kw),
+            )
+        )
+    if today:
+        # v1.6.7 — 今日聚合：未缴清未关闭，且今天还没拨过 / 拨了 > 7 天没回访
+        from datetime import UTC, datetime as _dt, timedelta
+        now = _dt.now(UTC)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_ago = now - timedelta(days=7)
+        stmt = stmt.where(
+            CollectionCase.stage.notin_(("paid", "closed")),
+            sa.or_(
+                CollectionCase.last_contact_at.is_(None),
+                CollectionCase.last_contact_at < today_start,
+                CollectionCase.last_contact_at < week_ago,
+            ),
+            OwnerProfile.do_not_call.is_(False),
+        )
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total: int = db.execute(count_stmt).scalar_one()
@@ -139,12 +166,56 @@ async def list_my_cases(
         .limit(page_size)
     ).all()
 
+    # 批量解析 project_name（避免 N+1）
+    project_ids = {case.project_id for case, _ in rows if case.project_id}
+    project_name_map: dict[int, str] = {}
+    if project_ids:
+        for pid, pname in db.execute(
+            sa.select(Project.id, Project.name).where(Project.id.in_(project_ids))
+        ).all():
+            project_name_map[pid] = pname
+
     return PaginatedResponse(
-        items=[_case_row_to_response(case, owner) for case, owner in rows],
+        items=[
+            _case_row_to_response(
+                case, owner,
+                project_name=project_name_map.get(case.project_id) if case.project_id else None,
+            )
+            for case, owner in rows
+        ],
         total=total,
         page=page,
         page_size=page_size,
     )
+
+
+class AgentProjectOption(BaseModel):
+    id: int
+    name: str
+
+
+@router.get("/me/projects", response_model=list[AgentProjectOption])
+async def list_my_projects(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[AgentProjectOption]:
+    """催收员可见的项目下拉选项（distinct project_id 来自 visible cases）。"""
+    tenant_id = _require_tenant(payload)
+    role = payload.get("role", "")
+    visible_clause = _build_visible_case_filter(db, user.id, tenant_id, role)
+    rows = db.execute(
+        sa.select(Project.id, Project.name)
+        .join(CollectionCase, CollectionCase.project_id == Project.id)
+        .where(
+            CollectionCase.tenant_id == tenant_id,
+            visible_clause,
+            Project.id.isnot(None),
+        )
+        .distinct()
+        .order_by(Project.name)
+    ).all()
+    return [AgentProjectOption(id=r[0], name=r[1]) for r in rows]
 
 
 @router.get("/cases/{case_id}", response_model=CaseDetailResponse)
@@ -187,77 +258,55 @@ async def get_case_detail(
             detail={"code": "ERR_FORBIDDEN", "message": "无权访问此案件"},
         )
 
-    # Phone visibility by role
-    phone_plain = decrypt_phone(owner.phone_enc) if role == "agent_internal" else None
-
-    # Build call items
-    call_rows = db.execute(
-        select(CallRecord, UserAccount.name.label("agent_name"))
-        .join(UserAccount, UserAccount.id == CallRecord.caller_user_id)
-        .where(CallRecord.case_id == case_id, CallRecord.tenant_id == tenant_id)
-        .order_by(CallRecord.started_at.desc().nulls_last())
-    ).all()
-
-    call_items: list[CaseCallItem] = []
-    for call_row in call_rows:
-        call = call_row[0]
-        agent_name = call_row[1]
-        analysis = db.execute(
-            select(AnalysisResult).where(AnalysisResult.call_id == call.id)
-        ).scalar_one_or_none()
-        transcript = db.execute(
-            select(Transcript).where(Transcript.call_id == call.id)
-        ).scalar_one_or_none()
-        confidence = None
-        if analysis and analysis.key_segments:
-            confidence = analysis.key_segments.get("confidence")
-        preview = transcript.full_text[:100] if transcript and transcript.full_text else None
-        call_items.append(CaseCallItem(
-            id=call.id,
-            started_at=call.started_at,
-            duration_sec=call.duration_sec,
-            status=call.status,
-            transcript_preview=preview,
-            result_tag=call.result_tag,
-            confidence=confidence,
-            agent_name=agent_name,
-        ))
-
-    # v1.4 — 拼项目名（agent 端也要看，方便外勤识别归属）
-    project_name: str | None = None
-    if case.project_id is not None:
-        project_name = db.execute(
-            sa.select(Project.name).where(Project.id == case.project_id)
-        ).scalar_one_or_none()
-
-    return CaseDetailResponse(
-        id=case.id,
-        tenant_id=case.tenant_id,
-        project_id=case.project_id,
-        project_name=project_name,
-        owner=OwnerInfo(
-            id=owner.id,
-            name=owner.name,
-            phone=phone_plain,
-            phone_masked=mask_phone(owner.phone_enc),
-            building=owner.building,
-            room=owner.room,
-            do_not_call=owner.do_not_call,
-        ),
-        assigned_to=case.assigned_to,
-        pool_type=case.pool_type,
-        stage=case.stage,
-        amount_owed=case.amount_owed,
-        months_overdue=case.months_overdue,
-        priority_score=case.priority_score,
-        last_contact_at=case.last_contact_at,
-        monthly_contact_count=case.monthly_contact_count,
-        status=case.status,
-        created_at=case.created_at,
-        updated_at=case.updated_at,
-        calls=call_items,
-        timeline_events=build_case_timeline(db, case_id, tenant_id),
+    # v1.6.6 — 复用 admin 同款 helper；agent_internal 拿到明文手机号用于拨号
+    return build_case_detail_response(
+        db, case, owner,
+        tenant_id=tenant_id,
+        include_phone_plain=(role == "agent_internal"),
     )
+
+
+@router.patch("/cases/{case_id}/stage", response_model=CaseResponse)
+async def agent_update_case_stage(
+    case_id: int,
+    body: CaseStageUpdate,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> CaseResponse:
+    """v1.6.6 — 催收员更新自己的案件阶段（带跟进备注，写入 audit log）。
+
+    权限：仅可更新 assigned_to == 自己 的案件。
+    """
+    tenant_id = _require_tenant(payload)
+    case = db.get(CollectionCase, case_id)
+    if not case or case.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
+        )
+    if case.assigned_to != user.id:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_FORBIDDEN", "message": "只能更新分配给自己的案件"},
+        )
+    prev_stage = case.stage
+    case.stage = body.stage
+    db.commit()
+    db.refresh(case)
+    log_audit(
+        db,
+        actor_user_id=user.id,
+        actor_role=str(payload.get("role") or ""),
+        tenant_id=tenant_id,
+        action="case.stage_changed",
+        target_type="collection_case",
+        target_id=case_id,
+        payload={"from": prev_stage, "to": body.stage, "note": body.note} if body.note
+              else {"from": prev_stage, "to": body.stage},
+    )
+    db.commit()
+    return case
 
 
 _CASE_INTENT_ACTIONS = {"transfer_supervisor", "transfer_legal"}
@@ -303,6 +352,60 @@ def post_case_intent(
             detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
         )
 
+    # v1.6.8 — transfer_legal 走两步审批：催收员申请 → 督导/admin 批准 → 真正建单
+    if body.action == "transfer_legal":
+        # 已存在 active 法务订单 → 不允许再申请
+        active_order = db.execute(
+            select(LegalConversionOrder).where(
+                LegalConversionOrder.case_id == case_id,
+                LegalConversionOrder.status.in_(("pending", "dispatched", "in_service")),
+            )
+        ).scalar_one_or_none()
+        if active_order is not None:
+            raise HTTPException(
+                status_code=http_status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "ERR_LEGAL_ORDER_EXISTS",
+                    "message": "该案件已存在进行中的法务转化订单",
+                },
+            )
+        # 同案件已有 pending 申请 → 不允许重复申请
+        pending_req = db.execute(
+            select(LegalConversionRequest).where(
+                LegalConversionRequest.case_id == case_id,
+                LegalConversionRequest.status == "pending",
+            )
+        ).scalar_one_or_none()
+        if pending_req is not None:
+            raise HTTPException(
+                status_code=http_status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "ERR_REQUEST_PENDING",
+                    "message": "该案件已有待审批的转法务申请",
+                },
+            )
+        request_row = LegalConversionRequest(
+            tenant_id=tenant_id,
+            case_id=case_id,
+            requester_user_id=user_id,
+            requester_role=role,
+            reason=body.note,
+            status="pending",
+        )
+        db.add(request_row)
+        db.flush()
+        log_audit(
+            db,
+            actor_user_id=user_id,
+            actor_role=role,
+            tenant_id=tenant_id,
+            action="legal_conversion_request.created",
+            target_type="legal_conversion_request",
+            target_id=request_row.id,
+            payload={"case_id": case_id, "reason": body.note} if body.note
+                  else {"case_id": case_id},
+        )
+
     now = datetime.now(UTC)
     log_audit(
         db,
@@ -316,6 +419,90 @@ def post_case_intent(
     )
     db.commit()
     return _CaseIntentOut(case_id=case_id, action=body.action, recorded_at=now, status="queued")
+
+
+class _PaymentLinkOut(BaseModel):
+    case_id: int
+    link: str
+    short_link: str
+    sent_to: str  # masked phone
+    sent_at: datetime
+    expires_at: datetime
+    sms_status: str  # "queued" / "sent" / "skipped"
+
+
+@router.post("/cases/{case_id}/send-payment-link", response_model=_PaymentLinkOut, status_code=201)
+def send_payment_link(
+    case_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> _PaymentLinkOut:
+    """v1.6.7 — E4 一键发送缴费链接给业主（PoC：生成短链 + 写 audit log，不真实下发短信）。
+
+    业务流程：
+    - 校验 case 属于当前 agent + tenant
+    - 生成短链 token + H5 缴费链接
+    - 写 audit log（actor / case_id / sent_to_phone_masked）
+    - 短信通道接入留 TODO（sms_status='queued'）
+    """
+    from secrets import token_urlsafe
+    from datetime import timedelta
+    from app.core.crypto import mask_phone
+
+    tenant_id = _require_tenant(payload)
+    case = db.get(CollectionCase, case_id)
+    if not case or case.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
+        )
+    # 仅可发送 assigned_to == 自己 的案件
+    if case.assigned_to != user.id:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_FORBIDDEN", "message": "只能给分配给自己的案件发送链接"},
+        )
+    owner = db.get(OwnerProfile, case.owner_id) if case.owner_id else None
+    if not owner:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_OWNER_MISSING", "message": "案件未关联业主"},
+        )
+
+    token = token_urlsafe(12)
+    now = datetime.now(UTC)
+    expires_at = now + timedelta(days=7)
+    full_link = f"https://pay.autoluyin.example.com/h5/{token}"
+    short_link = f"https://yzhc.cn/p/{token[:6]}"
+    sent_to_masked = mask_phone(owner.phone_enc)
+
+    log_audit(
+        db,
+        actor_user_id=user.id,
+        actor_role=str(payload.get("role") or ""),
+        tenant_id=tenant_id,
+        action="case.payment_link_sent",
+        target_type="collection_case",
+        target_id=case_id,
+        payload={
+            "owner_phone_masked": sent_to_masked,
+            "amount": str(case.amount_owed) if case.amount_owed else None,
+            "short_link": short_link,
+            "expires_at": expires_at.isoformat(),
+        },
+    )
+    db.commit()
+
+    return _PaymentLinkOut(
+        case_id=case_id,
+        link=full_link,
+        short_link=short_link,
+        sent_to=sent_to_masked,
+        sent_at=now,
+        expires_at=expires_at,
+        sms_status="queued",  # 真实短信通道接入后改为 'sent'
+    )
 
 
 @router.post("/cases/{case_id}/claim", response_model=CaseResponse)

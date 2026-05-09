@@ -1,9 +1,21 @@
 // v1.5.6 收尾 — 物业用户管理：仅展示物业内部员工，外勤归服务商管理
-import { useCustomMutation, useGo, useList } from "@refinedev/core";
-import { Plus, Search } from "lucide-react";
+// v1.6.5 — 服务端分页 + debounce 搜索（不再 frontend filter）
+import { useCustom, useCustomMutation, useGo } from "@refinedev/core";
+import { Plus } from "lucide-react";
 import { useState } from "react";
 import { InviteQrModal } from "../../../components/admin/InviteQrModal";
-import type { PaginatedResponse } from "../../../types";
+import { PaginationBar } from "../../../components/ui/PaginationBar";
+import { SearchInput } from "../../../components/ui/SearchInput";
+import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
+
+const PAGE_SIZE = 20;
+
+interface UserListResp {
+  items: UserItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
 
 interface UserItem {
   id: number;
@@ -52,8 +64,10 @@ const ROLE_LABEL: Record<string, string> = {
 
 export function UserListPage() {
   const go = useGo();
+  const [page, setPage] = useState(1);
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
+  const debouncedQ = useDebouncedValue(q, 300);
   const [invite, setInvite] = useState<{ name: string; resp: IssueOtpResponse } | null>(null);
   const { mutate: issueOtp, mutation: otpMutation } = useCustomMutation();
 
@@ -69,26 +83,29 @@ export function UserListPage() {
     );
   };
 
-  const { query } = useList<UserItem>({
-    resource: "admin/users",
-    pagination: { currentPage: 1, pageSize: 100 },
+  // v1.6.5 — 服务端分页；搜索通过 q 走后端 ilike，role filter 仍在前端
+  const queryParams: Record<string, string | number> = {
+    page,
+    page_size: PAGE_SIZE,
+  };
+  if (debouncedQ.trim()) queryParams.q = debouncedQ.trim();
+
+  const { query } = useCustom<UserListResp>({
+    url: "admin/users",
+    method: "get",
+    config: { query: queryParams },
   });
 
-  const rawData = query.data?.data;
-  const allItems: UserItem[] =
-    (rawData as unknown as PaginatedResponse<UserItem>)?.items ??
-    (rawData as UserItem[] | undefined) ??
-    [];
+  const data = query.data?.data;
+  const allItems = data?.items ?? [];
+  const total = data?.total ?? 0;
   const isLoading = query.isLoading;
 
-  // v1.5.6 — 移除外勤 tab：物业 admin 只看内部员工，外勤归服务商管理
+  // v1.5.6 — 移除外勤 tab：物业 admin 只看内部员工
   const internal = allItems.filter((u) => u.role !== "agent_external");
-
-  const visible = internal.filter((u) => {
-    if (q && !u.name.includes(q) && !u.phone_masked.includes(q)) return false;
-    if (roleFilter && u.role !== roleFilter) return false;
-    return true;
-  });
+  const visible = roleFilter
+    ? internal.filter((u) => u.role === roleFilter)
+    : internal;
 
   return (
     <div>
@@ -97,7 +114,7 @@ export function UserListPage() {
         <div>
           <h1 className="page-title">用户管理</h1>
           <div className="page-subtitle">
-            物业内部员工 {internal.length} 人
+            物业内部员工 共 {total} 人
             <span style={{ marginLeft: 12, color: "#9ca3af", fontSize: 12 }}>
               · 外勤由对应服务商在自家系统管理
             </span>
@@ -118,16 +135,12 @@ export function UserListPage() {
       {/* Table */}
       <div className="table-wrap">
         <div className="table-toolbar">
-          <div className="search-box">
-            <Search className="w-3.5 h-3.5" />
-            <input
-              type="text"
-              className="form-control"
-              placeholder="搜索姓名 / 手机"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-          </div>
+          <SearchInput
+            value={q}
+            onChange={(v) => { setQ(v); setPage(1); }}
+            placeholder="搜索姓名"
+            width={220}
+          />
           <select
             className="form-control"
             style={{ width: 130 }}
@@ -233,6 +246,12 @@ export function UserListPage() {
               ))}
             </tbody>
           </table>
+        <PaginationBar
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={total}
+          onPageChange={setPage}
+        />
       </div>
 
       <InviteQrModal

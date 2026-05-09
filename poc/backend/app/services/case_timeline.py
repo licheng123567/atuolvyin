@@ -59,6 +59,8 @@ def build_case_timeline(
                 ts=wo.created_at,
                 actor=assignee_name,
                 note=f"工单 [{wo.order_type}] {wo.description[:80]}",
+                target_id=wo.id,
+                target_type="workorder",
             )
         )
         if wo.status in ("resolved", "closed") and wo.updated_at != wo.created_at:
@@ -68,6 +70,8 @@ def build_case_timeline(
                     ts=wo.updated_at,
                     actor=assignee_name,
                     note=f"工单已处理 · {wo.resolution[:80] if wo.resolution else wo.status}",
+                    target_id=wo.id,
+                    target_type="workorder",
                 )
             )
 
@@ -85,6 +89,8 @@ def build_case_timeline(
                 ts=lc.created_at,
                 actor=None,
                 note=f"转化为法务案件 · {lc.status}",
+                target_id=lc.id,
+                target_type="legal_order",
             )
         )
 
@@ -102,6 +108,8 @@ def build_case_timeline(
                 ts=lc.created_at,
                 actor=lc.lawyer_name,
                 note=f"法务跟进 · {lc.stage}" + (f" ({lc.next_milestone})" if lc.next_milestone else ""),
+                target_id=lc.id,
+                target_type="legal_case",
             )
         )
 

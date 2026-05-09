@@ -1,10 +1,16 @@
 // 案件超期 / 失联报警 — v1.5.7 ⭐⭐
 // 防止案件烂在催收员私海：N 天未联系 / 连续失联 / 接触阻断 自动入此队列
-import { AlertTriangle, CheckCircle2, Phone, RefreshCw, Search, UserX, X } from "lucide-react";
+// v1.6.5 — 加分页 + debounce 搜索
+import { AlertTriangle, CheckCircle2, Phone, RefreshCw, UserX, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { HelpPanel } from "../../../components/ui/HelpPanel";
+import { PaginationBar } from "../../../components/ui/PaginationBar";
+import { SearchInput } from "../../../components/ui/SearchInput";
+import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 import { SUPERVISOR_PROJECT_FILTERS } from "../_shared/projectFilters";
+
+const PAGE_SIZE = 15;
 
 interface CaseAlert {
   id: number;
@@ -46,18 +52,22 @@ export function SupervisorCaseAlertsPage() {
   const [typeFilter, setTypeFilter] = useState<AlertTypeFilter>("all");
   const [projectFilter, setProjectFilter] = useState<string>("全部项目");
   const [keyword, setKeyword] = useState("");
+  const [page, setPage] = useState(1);
+  const debouncedKw = useDebouncedValue(keyword, 300);
   const [reassignTarget, setReassignTarget] = useState<CaseAlert | null>(null);
   const [confirmRelease, setConfirmRelease] = useState<CaseAlert | null>(null);
 
-  const visible = useMemo(() => {
-    const kw = keyword.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    const kw = debouncedKw.trim().toLowerCase();
     return alerts.filter((a) => {
       if (typeFilter !== "all" && a.alert_type !== typeFilter) return false;
       if (projectFilter !== "全部项目" && a.project_name !== projectFilter) return false;
       if (kw && !`${a.owner} ${a.building}`.toLowerCase().includes(kw)) return false;
       return true;
     });
-  }, [alerts, typeFilter, projectFilter, keyword]);
+  }, [alerts, typeFilter, projectFilter, debouncedKw]);
+  const total = filtered.length;
+  const visible = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   function handleUrge(a: CaseAlert) {
     alert(`已给催收员 ${a.agent} 发送催办通知（业主：${a.owner} / ${a.building}）`);
@@ -101,22 +111,17 @@ export function SupervisorCaseAlertsPage() {
 
       {/* 顶部过滤条 */}
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
-        <div style={{ position: "relative" }}>
-          <Search size={14} style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "var(--color-neutral-400)" }} />
-          <input
-            type="text"
-            className="form-control"
-            placeholder="按业主姓名 / 房号搜索"
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            style={{ paddingLeft: 28, width: 220, height: 32 }}
-          />
-        </div>
-        <select className="filter-select" value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
+        <SearchInput
+          value={keyword}
+          onChange={(v) => { setKeyword(v); setPage(1); }}
+          placeholder="按业主姓名 / 房号搜索"
+          width={220}
+        />
+        <select className="filter-select" value={projectFilter} onChange={(e) => { setProjectFilter(e.target.value); setPage(1); }}>
           {SUPERVISOR_PROJECT_FILTERS.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
         {(keyword || projectFilter !== "全部项目" || typeFilter !== "all") && (
-          <button type="button" className="ds-btn ds-btn-ghost ds-btn-sm" onClick={() => { setKeyword(""); setProjectFilter("全部项目"); setTypeFilter("all"); }}>
+          <button type="button" className="ds-btn ds-btn-ghost ds-btn-sm" onClick={() => { setKeyword(""); setProjectFilter("全部项目"); setTypeFilter("all"); setPage(1); }}>
             清空筛选
           </button>
         )}
@@ -133,7 +138,7 @@ export function SupervisorCaseAlertsPage() {
             key={f.v}
             type="button"
             className={`ds-btn ${typeFilter === f.v ? "ds-btn-primary" : "ds-btn-secondary"} ds-btn-sm`}
-            onClick={() => setTypeFilter(f.v)}
+            onClick={() => { setTypeFilter(f.v); setPage(1); }}
           >
             {f.label}
           </button>
@@ -205,6 +210,12 @@ export function SupervisorCaseAlertsPage() {
             })}
           </tbody>
         </table>
+        <PaginationBar
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={total}
+          onPageChange={setPage}
+        />
       </div>
 
       {/* 重派 modal */}

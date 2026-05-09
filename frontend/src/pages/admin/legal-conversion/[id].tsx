@@ -100,7 +100,6 @@ export function AdminLegalConversionDetailPage() {
                 <Field label="律所" value={order.assigned_law_firm ?? <span style={{ color: "var(--color-neutral-400)" }}>未派</span>} />
                 <Field label="律师" value={order.assigned_lawyer_name ?? <span style={{ color: "var(--color-neutral-400)" }}>未派</span>} />
                 <Field label="报价" value={<span style={{ fontWeight: 600 }}>¥{order.price_quoted}</span>} />
-                <Field label="平台分成" value={<span style={{ color: "var(--color-primary)", fontWeight: 600 }}>¥{order.platform_fee_amount}</span>} />
               </div>
             </div>
           </div>

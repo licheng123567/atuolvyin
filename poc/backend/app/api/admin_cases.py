@@ -67,11 +67,13 @@ def _case_row_to_response(
     owner: OwnerProfile,
     provider_id: int | None = None,
     provider_name: str | None = None,
+    project_name: str | None = None,
 ) -> CaseWithOwnerResponse:
     return CaseWithOwnerResponse(
         id=case.id,
         tenant_id=case.tenant_id,
         project_id=case.project_id,
+        project_name=project_name,
         owner=OwnerInfo(
             id=owner.id,
             name=owner.name,
@@ -94,6 +96,160 @@ def _case_row_to_response(
         updated_at=case.updated_at,
         provider_id=provider_id,
         provider_name=provider_name,
+    )
+
+
+def build_case_detail_response(
+    db: Session,
+    case: CollectionCase,
+    owner: OwnerProfile,
+    *,
+    tenant_id: int,
+    include_phone_plain: bool = False,
+) -> CaseDetailResponse:
+    """v1.6.6 — 组装案件详情响应（admin / agent 共用）。
+
+    包含：业主信息 / 通话列表 / 时间线 / 项目信息 / 服务团队（电话+法务）/ 协作来源 role。
+
+    Args:
+        include_phone_plain: 仅 agent_internal 传 True，把手机号明文加入业主信息（用于实际拨号）。
+    """
+    case_id = case.id
+    # 通话列表
+    call_rows = db.execute(
+        select(CallRecord, UserAccount.name.label("agent_name"))
+        .join(UserAccount, UserAccount.id == CallRecord.caller_user_id)
+        .where(CallRecord.case_id == case_id, CallRecord.tenant_id == tenant_id)
+        .order_by(CallRecord.started_at.desc().nulls_last())
+    ).all()
+    call_items: list[CaseCallItem] = []
+    for call_row in call_rows:
+        call = call_row[0]
+        agent_name = call_row[1]
+        analysis = db.execute(
+            select(AnalysisResult).where(AnalysisResult.call_id == call.id)
+        ).scalar_one_or_none()
+        transcript = db.execute(
+            select(Transcript).where(Transcript.call_id == call.id)
+        ).scalar_one_or_none()
+        confidence = None
+        if analysis and analysis.key_segments:
+            confidence = analysis.key_segments.get("confidence")
+        preview = transcript.full_text[:100] if transcript and transcript.full_text else None
+        call_items.append(CaseCallItem(
+            id=call.id,
+            started_at=call.started_at,
+            duration_sec=call.duration_sec,
+            status=call.status,
+            transcript_preview=preview,
+            result_tag=call.result_tag,
+            confidence=confidence,
+            agent_name=agent_name,
+            recording_url=call.recording_url,  # v1.6.7 — E5
+        ))
+
+    # 项目 + 收费 + 合同 + 电话团队
+    project_name: str | None = None
+    calling_provider_id: int | None = None
+    calling_provider_name: str | None = None
+    project_info_dict: dict | None = None
+    if case.project_id is not None:
+        from app.models.case import Project
+        from app.models.tenant import ServiceProvider
+        proj = db.get(Project, case.project_id)
+        if proj is not None:
+            project_name = proj.name
+            calling_provider_id = proj.provider_id
+            if calling_provider_id is not None:
+                calling_provider_name = db.execute(
+                    select(ServiceProvider.name).where(ServiceProvider.id == calling_provider_id)
+                ).scalar_one_or_none()
+            project_info_dict = {
+                "name": proj.name,
+                "charge_rate_text": proj.charge_rate_text,
+                "charge_period": proj.charge_period,
+                "contract_type": proj.contract_type,
+                "contract_start_date": proj.contract_start_date,
+                "contract_end_date": proj.contract_end_date,
+                "contract_attachment_key": proj.contract_attachment_key,
+                "contract_attachment_filename": proj.contract_attachment_filename,
+                "charge_notes": proj.charge_notes,
+            }
+
+    # 协作来源 role
+    assigned_role: str | None = None
+    if case.assigned_to is not None:
+        m = db.execute(
+            select(UserTenantMembership.role).where(
+                UserTenantMembership.user_id == case.assigned_to,
+                UserTenantMembership.tenant_id == tenant_id,
+            )
+        ).scalar_one_or_none()
+        assigned_role = m
+
+    # 法务团队（最近一条非 cancelled 的转化订单）
+    legal_law_firm_name: str | None = None
+    legal_lawyer_name: str | None = None
+    legal_order_status: str | None = None
+    from app.models.legal_conversion import LegalConversionOrder
+    legal_order = db.execute(
+        select(LegalConversionOrder)
+        .where(
+            LegalConversionOrder.case_id == case_id,
+            LegalConversionOrder.status != "cancelled",
+        )
+        .order_by(LegalConversionOrder.created_at.desc())
+    ).scalars().first()
+    if legal_order is not None:
+        legal_law_firm_name = legal_order.assigned_law_firm
+        legal_lawyer_name = legal_order.assigned_lawyer_name
+        legal_order_status = legal_order.status
+
+    # 手机号
+    phone_plain = None
+    if include_phone_plain:
+        from app.core.crypto import decrypt_phone
+        phone_plain = decrypt_phone(owner.phone_enc)
+
+    return CaseDetailResponse(
+        id=case.id,
+        tenant_id=case.tenant_id,
+        project_id=case.project_id,
+        project_name=project_name,
+        project_info=project_info_dict,  # type: ignore[arg-type]
+        owner=OwnerInfo(
+            id=owner.id,
+            name=owner.name,
+            phone=phone_plain,
+            phone_masked=mask_phone(owner.phone_enc),
+            building=owner.building,
+            room=owner.room,
+            do_not_call=owner.do_not_call,
+        ),
+        assigned_to=case.assigned_to,
+        assigned_role=assigned_role,
+        pool_type=case.pool_type,
+        stage=case.stage,
+        amount_owed=case.amount_owed,
+        months_overdue=case.months_overdue,
+        bill_period_start=case.bill_period_start,
+        bill_period_end=case.bill_period_end,
+        principal_amount=case.principal_amount,
+        late_fee_amount=case.late_fee_amount,
+        arrears_reason=case.arrears_reason,
+        priority_score=case.priority_score,
+        last_contact_at=case.last_contact_at,
+        monthly_contact_count=case.monthly_contact_count,
+        status=case.status,
+        created_at=case.created_at,
+        updated_at=case.updated_at,
+        calls=call_items,
+        timeline_events=build_case_timeline(db, case_id, tenant_id),
+        calling_provider_id=calling_provider_id,
+        calling_provider_name=calling_provider_name,
+        legal_law_firm_name=legal_law_firm_name,
+        legal_lawyer_name=legal_lawyer_name,
+        legal_order_status=legal_order_status,
     )
 
 
@@ -382,146 +538,7 @@ async def get_case(
             detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
         )
     case, owner = row[0], row[1]
-
-    # Build call timeline
-    call_rows = db.execute(
-        select(CallRecord, UserAccount.name.label("agent_name"))
-        .join(UserAccount, UserAccount.id == CallRecord.caller_user_id)
-        .where(
-            CallRecord.case_id == case_id,
-            CallRecord.tenant_id == tenant_id,
-        )
-        .order_by(CallRecord.started_at.desc().nulls_last())
-    ).all()
-
-    call_items: list[CaseCallItem] = []
-    for call_row in call_rows:
-        call = call_row[0]
-        agent_name = call_row[1]
-
-        analysis = db.execute(
-            select(AnalysisResult).where(AnalysisResult.call_id == call.id)
-        ).scalar_one_or_none()
-        transcript = db.execute(
-            select(Transcript).where(Transcript.call_id == call.id)
-        ).scalar_one_or_none()
-
-        confidence = None
-        if analysis and analysis.key_segments:
-            confidence = analysis.key_segments.get("confidence")
-
-        preview = None
-        if transcript and transcript.full_text:
-            preview = transcript.full_text[:100]
-
-        call_items.append(CaseCallItem(
-            id=call.id,
-            started_at=call.started_at,
-            duration_sec=call.duration_sec,
-            status=call.status,
-            transcript_preview=preview,
-            result_tag=call.result_tag,
-            confidence=confidence,
-            agent_name=agent_name,
-        ))
-
-    # v1.4 — 拼项目名 + 协作来源 role；v1.5 — 拼电话团队（项目签约服务商）+ 法务团队（已撮合的律所）
-    # v1.6.3 — 同时取项目合同 / 收费信息（嵌入 project_info）
-    project_name: str | None = None
-    calling_provider_id: int | None = None
-    calling_provider_name: str | None = None
-    project_info_dict: dict | None = None
-    if case.project_id is not None:
-        from app.models.case import Project
-        from app.models.tenant import ServiceProvider
-        proj = db.get(Project, case.project_id)
-        if proj is not None:
-            project_name = proj.name
-            calling_provider_id = proj.provider_id
-            if calling_provider_id is not None:
-                calling_provider_name = db.execute(
-                    select(ServiceProvider.name).where(ServiceProvider.id == calling_provider_id)
-                ).scalar_one_or_none()
-            project_info_dict = {
-                "name": proj.name,
-                "charge_rate_text": proj.charge_rate_text,
-                "charge_period": proj.charge_period,
-                "contract_type": proj.contract_type,
-                "contract_start_date": proj.contract_start_date,
-                "contract_end_date": proj.contract_end_date,
-                "contract_attachment_key": proj.contract_attachment_key,
-                "contract_attachment_filename": proj.contract_attachment_filename,
-                "charge_notes": proj.charge_notes,
-            }
-
-    assigned_role: str | None = None
-    if case.assigned_to is not None:
-        m = db.execute(
-            select(UserTenantMembership.role).where(
-                UserTenantMembership.user_id == case.assigned_to,
-                UserTenantMembership.tenant_id == tenant_id,
-            )
-        ).scalar_one_or_none()
-        assigned_role = m
-
-    # v1.5 — 法务团队：取最近一条非 cancelled 的转化订单
-    legal_law_firm_name: str | None = None
-    legal_lawyer_name: str | None = None
-    legal_order_status: str | None = None
-    from app.models.legal_conversion import LegalConversionOrder
-    legal_order = db.execute(
-        select(LegalConversionOrder)
-        .where(
-            LegalConversionOrder.case_id == case_id,
-            LegalConversionOrder.status != "cancelled",
-        )
-        .order_by(LegalConversionOrder.created_at.desc())
-    ).scalars().first()
-    if legal_order is not None:
-        legal_law_firm_name = legal_order.assigned_law_firm
-        legal_lawyer_name = legal_order.assigned_lawyer_name
-        legal_order_status = legal_order.status
-
-    return CaseDetailResponse(
-        id=case.id,
-        tenant_id=case.tenant_id,
-        project_id=case.project_id,
-        project_name=project_name,
-        project_info=project_info_dict,  # type: ignore[arg-type]
-        owner=OwnerInfo(
-            id=owner.id,
-            name=owner.name,
-            phone_masked=mask_phone(owner.phone_enc),
-            building=owner.building,
-            room=owner.room,
-            do_not_call=owner.do_not_call,
-        ),
-        assigned_to=case.assigned_to,
-        assigned_role=assigned_role,
-        pool_type=case.pool_type,
-        stage=case.stage,
-        amount_owed=case.amount_owed,
-        months_overdue=case.months_overdue,
-        # v1.6.3 — 账单字段
-        bill_period_start=case.bill_period_start,
-        bill_period_end=case.bill_period_end,
-        principal_amount=case.principal_amount,
-        late_fee_amount=case.late_fee_amount,
-        arrears_reason=case.arrears_reason,
-        priority_score=case.priority_score,
-        last_contact_at=case.last_contact_at,
-        monthly_contact_count=case.monthly_contact_count,
-        status=case.status,
-        created_at=case.created_at,
-        updated_at=case.updated_at,
-        calls=call_items,
-        timeline_events=build_case_timeline(db, case_id, tenant_id),
-        calling_provider_id=calling_provider_id,
-        calling_provider_name=calling_provider_name,
-        legal_law_firm_name=legal_law_firm_name,
-        legal_lawyer_name=legal_lawyer_name,
-        legal_order_status=legal_order_status,
-    )
+    return build_case_detail_response(db, case, owner, tenant_id=tenant_id)
 
 
 @router.patch("/cases/{case_id}/stage", response_model=CaseResponse)
@@ -543,6 +560,20 @@ async def update_case_stage(
     case.stage = body.stage
     db.commit()
     db.refresh(case)
+    # v1.6.6 — 阶段变更写 audit log（含跟进备注）
+    from app.services.audit import log_audit
+    log_audit(
+        db,
+        actor_user_id=int(payload.get("user_id") or 0),
+        actor_role=str(payload.get("role") or ""),
+        tenant_id=tenant_id,
+        action="case.stage_changed",
+        target_type="collection_case",
+        target_id=case_id,
+        payload={"from": prev_stage, "to": body.stage, "note": body.note} if body.note
+              else {"from": prev_stage, "to": body.stage},
+    )
+    db.commit()
     # Sprint 15.4b — case_escalated 通知：进入 escalated/legal 阶段时触发
     _ESCALATED_STAGES = {"escalated", "legal", "litigation"}
     if (

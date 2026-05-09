@@ -32,6 +32,7 @@ from .discount_offer import DiscountOffer  # noqa: F401
 from .supervisor_shift import SupervisorShift, SupervisorShiftSwapRequest  # noqa: F401
 from .legal_conversion import (  # noqa: F401
     LegalConversionOrder,
+    LegalConversionRequest,
     LegalServicePackage,
 )
 from .legal_document_template import (  # noqa: F401

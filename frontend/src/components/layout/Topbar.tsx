@@ -1,4 +1,5 @@
 import { useCustom, useCustomMutation, useGetIdentity, useLogout } from "@refinedev/core";
+import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, LogOut, RefreshCw, Search, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -72,6 +73,7 @@ export function Topbar() {
   const memberships = membershipsQuery.data?.data ?? [];
   const hasMultiple = memberships.length > 1;
   const { mutate: switchMembership, mutation: switchMutation } = useCustomMutation();
+  const queryClient = useQueryClient();  // v1.6.9 — 切换身份时清空 React Query 缓存
 
   const handleSwitch = (membershipId: number) => {
     switchMembership(
@@ -87,18 +89,25 @@ export function Topbar() {
             tenant_name: string | null;
             scope: string;
           };
-          if (data?.access_token) {
-            localStorage.setItem("autoluyin_token", data.access_token);
-            localStorage.setItem("autoluyin_user", JSON.stringify({
-              id: data.user_id,
-              name: data.name,
-              role: data.role,
-              tenant_id: data.tenant_id,
-              tenant_name: data.tenant_name,
-              scope: data.scope,
-            }));
-            window.location.href = "/";
+          if (!data?.access_token) {
+            // 后端没返回 token —— 不要切换 / 不要刷新（避免身份不一致 → 死循环加载）
+            alert("切换角色失败：服务端未返回新令牌，请重新登录");
+            return;
           }
+          localStorage.setItem("autoluyin_token", data.access_token);
+          localStorage.setItem("autoluyin_user", JSON.stringify({
+            id: data.user_id,
+            name: data.name,
+            role: data.role,
+            tenant_id: data.tenant_id,
+            tenant_name: data.tenant_name,
+            scope: data.scope,
+          }));
+          // v1.6.9 — fix: 清空所有 React Query 缓存，避免新角色复用旧角色的查询结果
+          // （多身份用户从督导切到催收员 → 案件详情卡顿在「加载中」就是这个 stale 缓存导致）
+          queryClient.clear();
+          // 用 replace() 强制硬刷新，且不在 history 留 "/" 旧条目
+          window.location.replace("/");
         },
         onError: () => alert("切换角色失败，请稍后重试"),
       },

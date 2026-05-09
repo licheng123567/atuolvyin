@@ -158,27 +158,24 @@ async def preview_case_conversion(
 # ── 创建订单 ─────────────────────────────────────────────────────
 
 
-@router.post(
-    "/cases/{case_id}/convert-to-legal",
-    response_model=LegalConversionOrderOut,
-    status_code=http_status.HTTP_201_CREATED,
-)
-async def convert_case_to_legal(
-    case_id: int,
-    body: ConvertCaseRequest,
-    payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
-    db: Annotated[Session, Depends(get_db)],
-) -> LegalConversionOrderOut:
-    tenant_id = _require_tenant(payload)
-    case = db.get(CollectionCase, case_id)
-    if case is None or case.tenant_id != tenant_id:
-        raise HTTPException(
-            status_code=http_status.HTTP_404_NOT_FOUND,
-            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
-        )
+def build_legal_conversion_order(
+    db: Session,
+    *,
+    case: CollectionCase,
+    package_id: int,
+    notes: str | None,
+    created_by_user_id: int | None,
+) -> LegalConversionOrder:
+    """v1.6.8 — 共享 helper：校验 package + 去重已有 active 订单 + 创建 Order（不 commit）。
 
-    package = db.get(LegalServicePackage, body.package_id)
+    被两处复用：
+      1. `POST /admin/cases/{case_id}/convert-to-legal`（admin 直接建单）
+      2. `POST /legal-conversion-requests/{id}/approve`（督导/admin 审批申请通过 → 建单）
+
+    抛 HTTPException：400 服务包无效 / 409 已有 active 订单
+    """
+    tenant_id = case.tenant_id
+    package = db.get(LegalServicePackage, package_id)
     if (
         package is None
         or not package.enabled
@@ -189,10 +186,9 @@ async def convert_case_to_legal(
             detail={"code": "ERR_PACKAGE_INVALID", "message": "服务包不可用"},
         )
 
-    # 同案件 active 订单去重
     existing = db.execute(
         select(LegalConversionOrder).where(
-            LegalConversionOrder.case_id == case_id,
+            LegalConversionOrder.case_id == case.id,
             LegalConversionOrder.status.in_(("pending", "dispatched", "in_service")),
         )
     ).scalar_one_or_none()
@@ -224,13 +220,44 @@ async def convert_case_to_legal(
         timeline_summary=timeline,
         recommendation=recommendation,
         cost_estimate=cost,
-        notes=body.notes,
-        created_by=int(payload.get("user_id") or 0) or None,
+        notes=notes,
+        created_by=created_by_user_id,
     )
     db.add(order)
+    db.flush()  # populate order.id without committing parent transaction
+    return order
+
+
+@router.post(
+    "/cases/{case_id}/convert-to-legal",
+    response_model=LegalConversionOrderOut,
+    status_code=http_status.HTTP_201_CREATED,
+)
+async def convert_case_to_legal(
+    case_id: int,
+    body: ConvertCaseRequest,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> LegalConversionOrderOut:
+    tenant_id = _require_tenant(payload)
+    case = db.get(CollectionCase, case_id)
+    if case is None or case.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
+        )
+    order = build_legal_conversion_order(
+        db,
+        case=case,
+        package_id=body.package_id,
+        notes=body.notes,
+        created_by_user_id=int(payload.get("user_id") or 0) or None,
+    )
     db.commit()
     db.refresh(order)
-    return _order_to_out(order, package.name)
+    package = db.get(LegalServicePackage, order.package_id)
+    return _order_to_out(order, package.name if package else None)
 
 
 # ── 订单列表 / 详情 ──────────────────────────────────────────────

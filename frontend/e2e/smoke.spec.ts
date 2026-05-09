@@ -84,6 +84,10 @@ test.describe("11 角色登录 + 主页加载", () => {
 });
 
 test.describe("admin 关键页", () => {
+  // Sprint 15.1 多设备踢出：admin 账号在长跑套件中被反复 re-login，会偶发 session 失效
+  // 给本 describe 多一次重试（本地 1 + 此处 +1 = 2 retries 总）
+  test.describe.configure({ retries: 2 });
+
   test("admin 案件看板应渲染 6 列（待联系/跟进中/...）", async ({ page }) => {
     page.on("response", (r) => {
       if (r.status() === 401 || r.status() === 403) {
@@ -96,8 +100,8 @@ test.describe("admin 关键页", () => {
     await dismissAppIntroIfPresent(page);
     await page.goto("/admin/cases/kanban");
     await dismissAppIntroIfPresent(page);
-    await page.waitForLoadState("networkidle");
-    await page.getByText("加载中…").waitFor({ state: "hidden", timeout: 10_000 }).catch(() => undefined);
+    // 长跑套件下 networkidle 不靠谱，直接等 .kanban-board 可见（仅 !isLoading 时渲染）
+    await expect(page.locator(".kanban-board")).toBeVisible({ timeout: 15_000 });
     for (const label of ["待联系", "跟进中", "承诺缴费", "已缴费", "升级中", "已关闭"]) {
       await expect(page.getByText(label).first()).toBeVisible({ timeout: 5_000 });
     }

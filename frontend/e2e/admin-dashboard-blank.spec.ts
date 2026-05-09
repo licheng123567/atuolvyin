@@ -32,10 +32,14 @@ test("admin 13000000002 sees dashboard data", async ({ page }) => {
   await page.goto("/login");
   await page.fill('input[id="account"]', "13000000002");
   await page.fill('input[id="password"]', "Demo@123!");
-  await page.click('button[type="submit"]');
+  await Promise.all([
+    // admin 默认登录后跳 /admin/projects（不是 /admin/dashboard）
+    // 只要离开 /login 即认为登录成功，再显式 goto 到 dashboard
+    page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 10_000 }),
+    page.click('button[type="submit"]'),
+  ]);
 
-  // wait for redirect to dashboard
-  await page.waitForURL(/\/admin\/dashboard/, { timeout: 10000 });
+  await page.goto("/admin/dashboard");
 
   // wait for at least 2s to let dashboard render
   await page.waitForTimeout(3000);

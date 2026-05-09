@@ -34,6 +34,7 @@ from app.api import (
     lawfirm_orders,
     lawyer_orders,
     legal_cases,
+    legal_conversion_requests,
     legal_documents,
     legal_workstation,
     tenant_legal_orders,
@@ -160,6 +161,7 @@ app.include_router(legal_workstation.router, prefix="/api/v1/legal-workstation",
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 app.include_router(admin_cases.router, prefix="/api/v1/admin", tags=["admin-cases"])
 app.include_router(admin_legal_conversion.router, prefix="/api/v1/admin", tags=["admin-legal-conversion"])
+app.include_router(legal_conversion_requests.router, prefix="/api/v1", tags=["legal-conversion-requests"])
 app.include_router(admin_projects.router, prefix="/api/v1/admin", tags=["admin-projects"])
 app.include_router(
     admin_project_members.router,

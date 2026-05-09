@@ -71,6 +71,7 @@ class CaseWithOwnerResponse(BaseModel):
     id: int
     tenant_id: int
     project_id: int | None
+    project_name: str | None = None
     owner: OwnerInfo
     assigned_to: int | None
     pool_type: str
@@ -102,6 +103,7 @@ class CaseImportResponse(BaseModel):
 
 class CaseStageUpdate(BaseModel):
     stage: Literal["new", "in_progress", "promised", "paid", "escalated", "closed"]
+    note: str | None = None  # v1.6.6 — 阶段变更跟进备注（写入 audit log）
 
 
 class CaseAssignResponse(BaseModel):
@@ -120,6 +122,7 @@ class CaseCallItem(BaseModel):
     result_tag: str | None
     confidence: float | None
     agent_name: str | None
+    recording_url: str | None = None  # v1.6.7 — E5 inline 录音播放
 
 
 class TimelineEvent(BaseModel):
@@ -127,6 +130,10 @@ class TimelineEvent(BaseModel):
     ts: datetime
     actor: str | None
     note: str | None
+    # v1.6.9 — 关联实体 ID，让前端能跳到对应详情页（工单/法务订单/通话）
+    target_id: int | None = None
+    # 'workorder' / 'legal_order' / 'legal_case' / 'call' / 'audit'
+    target_type: str | None = None
 
 
 class CaseProjectInfo(BaseModel):

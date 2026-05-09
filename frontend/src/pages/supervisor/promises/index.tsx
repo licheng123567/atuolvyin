@@ -1,10 +1,16 @@
 // 承诺催付清单 — v1.5.7 ⭐⭐⭐
 // 业主在通话中承诺缴费 → AI 自动入清单 → 到期前 1 天提醒催收员回访
-import { CalendarClock, CheckCircle2, Clock, Eye, Phone, Search } from "lucide-react";
+// v1.6.5 — 加分页 + debounce 搜索
+import { CalendarClock, CheckCircle2, Clock, Eye, Phone } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { HelpPanel } from "../../../components/ui/HelpPanel";
+import { PaginationBar } from "../../../components/ui/PaginationBar";
+import { SearchInput } from "../../../components/ui/SearchInput";
+import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 import { SUPERVISOR_PROJECT_FILTERS } from "../_shared/projectFilters";
+
+const PAGE_SIZE = 15;
 
 interface Promise {
   id: number;
@@ -57,11 +63,13 @@ export function SupervisorPromisesPage() {
   const [dueRange, setDueRange] = useState<DueRange>("all");
   const [projectFilter, setProjectFilter] = useState<string>("全部项目");
   const [keyword, setKeyword] = useState("");
+  const [page, setPage] = useState(1);
+  const debouncedKw = useDebouncedValue(keyword, 300);
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const visible = useMemo(() => {
-    const kw = keyword.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    const kw = debouncedKw.trim().toLowerCase();
     return MOCK_PROMISES.filter((p) => {
       // 状态 filter
       if (filter === "pending" && !(p.status === "pending" || p.status === "due_today")) return false;
@@ -80,7 +88,10 @@ export function SupervisorPromisesPage() {
       }
       return true;
     });
-  }, [filter, projectFilter, keyword, dueRange, today]);
+  }, [filter, projectFilter, debouncedKw, dueRange, today]);
+
+  const total = filtered.length;
+  const visible = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const counts = {
     pending: MOCK_PROMISES.filter((p) => p.status === "pending" || p.status === "due_today").length,
@@ -128,28 +139,23 @@ export function SupervisorPromisesPage() {
 
       {/* 顶部三维过滤：项目 + 搜索 + 时间段 */}
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
-        <div style={{ position: "relative" }}>
-          <Search size={14} style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "var(--color-neutral-400)" }} />
-          <input
-            type="text"
-            className="form-control"
-            placeholder="按业主姓名 / 房号搜索"
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            style={{ paddingLeft: 28, width: 200, height: 32 }}
-          />
-        </div>
-        <select className="filter-select" value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
+        <SearchInput
+          value={keyword}
+          onChange={(v) => { setKeyword(v); setPage(1); }}
+          placeholder="按业主姓名 / 房号搜索"
+          width={200}
+        />
+        <select className="filter-select" value={projectFilter} onChange={(e) => { setProjectFilter(e.target.value); setPage(1); }}>
           {SUPERVISOR_PROJECT_FILTERS.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
-        <select className="filter-select" value={dueRange} onChange={(e) => setDueRange(e.target.value as DueRange)}>
+        <select className="filter-select" value={dueRange} onChange={(e) => { setDueRange(e.target.value as DueRange); setPage(1); }}>
           <option value="all">全部到期日</option>
           <option value="this_week">本周到期</option>
           <option value="next_week">下周到期</option>
           <option value="overdue">已超期</option>
         </select>
         {(keyword || projectFilter !== "全部项目" || dueRange !== "all" || filter !== "all") && (
-          <button type="button" className="ds-btn ds-btn-ghost ds-btn-sm" onClick={() => { setKeyword(""); setProjectFilter("全部项目"); setDueRange("all"); setFilter("all"); }}>
+          <button type="button" className="ds-btn ds-btn-ghost ds-btn-sm" onClick={() => { setKeyword(""); setProjectFilter("全部项目"); setDueRange("all"); setFilter("all"); setPage(1); }}>
             清空筛选
           </button>
         )}
@@ -166,7 +172,7 @@ export function SupervisorPromisesPage() {
             key={f.v}
             type="button"
             className={`ds-btn ${filter === f.v ? "ds-btn-primary" : "ds-btn-secondary"} ds-btn-sm`}
-            onClick={() => setFilter(f.v)}
+            onClick={() => { setFilter(f.v); setPage(1); }}
           >
             {f.label}
           </button>
@@ -225,6 +231,12 @@ export function SupervisorPromisesPage() {
             ))}
           </tbody>
         </table>
+        <PaginationBar
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={total}
+          onPageChange={setPage}
+        />
       </div>
     </div>
   );

@@ -1,6 +1,12 @@
 // 团队监控 — 1:1 还原 ui/supervisor.html#sv-team
 // v1.5.7 — KPI 4 张 stat-card + 团队成员表
-import { useState } from "react";
+// v1.6.5 — 加搜索（按姓名）+ 分页（mock 阶段客户端切片）
+import { useMemo, useState } from "react";
+import { PaginationBar } from "../../../components/ui/PaginationBar";
+import { SearchInput } from "../../../components/ui/SearchInput";
+import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
+
+const PAGE_SIZE = 10;
 
 interface AgentRow {
   name: string;
@@ -45,20 +51,42 @@ const MOCK_AGENTS: AgentRow[] = [
 
 export function SupervisorTeamPerformancePage() {
   const [date] = useState(new Date().toISOString().slice(0, 10));
+  const [page, setPage] = useState(1);
+  const [keyword, setKeyword] = useState("");
+  const debouncedKw = useDebouncedValue(keyword, 300);
+
+  // KPI 仍按全量计算（不受当前页影响）
   const totalCalls = MOCK_AGENTS.reduce((s, a) => s + a.call_count, 0);
   const totalConnect = MOCK_AGENTS.reduce((s, a) => s + a.connect_count, 0);
   const totalPromise = MOCK_AGENTS.reduce((s, a) => s + a.promise_count, 0);
   const avgAdoption = Math.round(MOCK_AGENTS.reduce((s, a) => s + a.ai_adoption, 0) / MOCK_AGENTS.length);
   const connectRate = ((totalConnect / totalCalls) * 100).toFixed(1);
 
+  const filtered = useMemo(() => {
+    const kw = debouncedKw.trim();
+    if (!kw) return MOCK_AGENTS;
+    return MOCK_AGENTS.filter((a) => a.name.includes(kw));
+  }, [debouncedKw]);
+
+  const total = filtered.length;
+  const visible = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   return (
     <div>
       <div className="page-header">
         <div>
           <div className="page-title">团队监控</div>
-          <div className="page-subtitle">今日团队整体绩效概览</div>
+          <div className="page-subtitle">今日团队整体绩效概览 · 共 {total} 名成员</div>
         </div>
-        <div style={{ fontSize: 12.5, color: "var(--color-neutral-500)" }}>统计日期：{date}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <SearchInput
+            value={keyword}
+            onChange={(v) => { setKeyword(v); setPage(1); }}
+            placeholder="按姓名搜索"
+            width={200}
+          />
+          <div style={{ fontSize: 12.5, color: "var(--color-neutral-500)" }}>统计日期：{date}</div>
+        </div>
       </div>
 
       <div className="kpi-grid">
@@ -83,7 +111,14 @@ export function SupervisorTeamPerformancePage() {
             </tr>
           </thead>
           <tbody>
-            {MOCK_AGENTS.map((a) => (
+            {visible.length === 0 && (
+              <tr>
+                <td colSpan={8} style={{ textAlign: "center", padding: 24, color: "var(--color-neutral-400)" }}>
+                  无匹配的成员
+                </td>
+              </tr>
+            )}
+            {visible.map((a) => (
               <tr key={a.name}>
                 <td><strong>{a.name}</strong></td>
                 <td><span className={a.status_badge}>{a.status_label}</span></td>
@@ -109,6 +144,12 @@ export function SupervisorTeamPerformancePage() {
             ))}
           </tbody>
         </table>
+        <PaginationBar
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={total}
+          onPageChange={setPage}
+        />
       </div>
     </div>
   );

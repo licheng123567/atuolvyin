@@ -1,14 +1,20 @@
 // 减免审批列表 — 督导 / admin 共用，按 props.role 区分
+// v1.6.5 — 加分页（服务端 page/pageSize）+ 搜索（前端，后端暂无 keyword）
 import { CheckCircle2, ClipboardList, Eye, X } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { HelpPanel } from "../../components/ui/HelpPanel";
+import { PaginationBar } from "../../components/ui/PaginationBar";
+import { SearchInput } from "../../components/ui/SearchInput";
+import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { useDiscountPolicy } from "../../hooks/useDiscountPolicy";
 import { STATUS_BADGES, STATUS_LABELS } from "./_mock";
 import {
   useApproveOffer, useDiscountOffers, useEscalateOffer, useRejectOffer,
   type DiscountOfferDTO,
 } from "./api";
+
+const PAGE_SIZE = 20;
 
 interface Props {
   approverRole: "supervisor" | "admin";
@@ -18,24 +24,37 @@ interface Props {
 
 export function ApprovalListPage({ approverRole, approverName: _approverName, detailBasePath }: Props) {
   const [tab, setTab] = useState<"pending" | "all">("pending");
+  const [page, setPage] = useState(1);
+  const [keyword, setKeyword] = useState("");
+  const debouncedKw = useDebouncedValue(keyword, 300);
   const [actingOn, setActingOn] = useState<{ offer: DiscountOfferDTO; mode: "approve" | "reject" | "escalate" } | null>(null);
   const policy = useDiscountPolicy();
 
   const pendingStatus = approverRole === "supervisor" ? "pending_supervisor" : "pending_admin";
-  const { items: visibleItems, total: visibleTotal } = useDiscountOffers(
-    tab === "pending" ? { myPending: true } : {},
+  const { items: pageItems, total: visibleTotal } = useDiscountOffers(
+    tab === "pending" ? { myPending: true, page, pageSize: PAGE_SIZE } : { page, pageSize: PAGE_SIZE },
   );
-  const { items: pendingItems } = useDiscountOffers({ myPending: true });
-  const { items: approvedItems } = useDiscountOffers({ status: "approved" });
-  const { items: rejectedItems } = useDiscountOffers({ status: "rejected" });
-  const { items: executedItems } = useDiscountOffers({ status: "executed" });
+  // 计数仅取 total，pageSize=1 避免拉全量
+  const { total: pendingCount } = useDiscountOffers({ myPending: true, page: 1, pageSize: 1 });
+  const { total: approvedCount } = useDiscountOffers({ status: "approved", page: 1, pageSize: 1 });
+  const { total: rejectedCount } = useDiscountOffers({ status: "rejected", page: 1, pageSize: 1 });
+  const { total: executedCount } = useDiscountOffers({ status: "executed", page: 1, pageSize: 1 });
 
   const counts = {
-    pending: pendingItems.length,
-    approved: approvedItems.length,
-    rejected: rejectedItems.length,
-    executed: executedItems.length,
+    pending: pendingCount,
+    approved: approvedCount,
+    rejected: rejectedCount,
+    executed: executedCount,
   };
+
+  // 后端暂未支持 keyword，前端在当前页内做过滤（业主姓名 / 房号 / 申请号）
+  const visibleItems = useMemo(() => {
+    const kw = debouncedKw.trim().toLowerCase();
+    if (!kw) return pageItems;
+    return pageItems.filter((o) =>
+      `${o.case_owner ?? ""} ${o.case_building ?? ""} ${o.id}`.toLowerCase().includes(kw),
+    );
+  }, [pageItems, debouncedKw]);
 
   return (
     <div>
@@ -87,11 +106,17 @@ export function ApprovalListPage({ approverRole, approverName: _approverName, de
         </div>
       </div>
 
-      <div className="filters-bar" style={{ marginBottom: 12 }}>
-        <button type="button" className={`ds-btn ${tab === "pending" ? "ds-btn-primary" : "ds-btn-secondary"} ds-btn-sm`} onClick={() => setTab("pending")}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+        <SearchInput
+          value={keyword}
+          onChange={(v) => { setKeyword(v); setPage(1); }}
+          placeholder="按申请号 / 业主 / 房号搜索"
+          width={240}
+        />
+        <button type="button" className={`ds-btn ${tab === "pending" ? "ds-btn-primary" : "ds-btn-secondary"} ds-btn-sm`} onClick={() => { setTab("pending"); setPage(1); }}>
           待审批（{counts.pending}）
         </button>
-        <button type="button" className={`ds-btn ${tab === "all" ? "ds-btn-primary" : "ds-btn-secondary"} ds-btn-sm`} onClick={() => setTab("all")}>
+        <button type="button" className={`ds-btn ${tab === "all" ? "ds-btn-primary" : "ds-btn-secondary"} ds-btn-sm`} onClick={() => { setTab("all"); setPage(1); }}>
           全部历史（{visibleTotal}）
         </button>
       </div>
@@ -161,6 +186,12 @@ export function ApprovalListPage({ approverRole, approverName: _approverName, de
             })}
           </tbody>
         </table>
+        <PaginationBar
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={visibleTotal}
+          onPageChange={setPage}
+        />
       </div>
 
       {actingOn && (

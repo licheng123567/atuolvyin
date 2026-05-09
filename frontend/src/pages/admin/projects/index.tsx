@@ -1,7 +1,9 @@
 // 物业项目管理 — v1.4 Project 一等公民
+// v1.6.5 — 复用统一 PaginationBar 组件
 import { useGo, useList } from "@refinedev/core";
 import { Download, Pencil, Plus } from "lucide-react";
 import { useState } from "react";
+import { PaginationBar } from "../../../components/ui/PaginationBar";
 import { exportToCsv } from "../../../lib/csv";
 import type { PaginatedResponse } from "../../../types";
 
@@ -61,7 +63,6 @@ export function AdminProjectListPage() {
     (rawData as ProjectItem[] | undefined) ??
     [];
   const total = query.data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div>
@@ -189,26 +190,12 @@ export function AdminProjectListPage() {
           </tbody>
         </table>
 
-        {totalPages > 1 && (
-          <div className="ds-pagination">
-            <span className="pagination-info">
-              共 {total} 条，第 {page}/{totalPages} 页
-            </span>
-            <div className="pagination-pages">
-              {page > 1 && (
-                <div className="page-btn" onClick={() => setPage((x) => x - 1)}>
-                  ‹
-                </div>
-              )}
-              <div className="page-btn active">{page}</div>
-              {page < totalPages && (
-                <div className="page-btn" onClick={() => setPage((x) => x + 1)}>
-                  ›
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        <PaginationBar
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={total}
+          onPageChange={setPage}
+        />
       </div>
     </div>
   );

@@ -113,7 +113,6 @@ export function AdminLegalConversionListPage() {
                 <th className="px-4 py-3 text-left">案件</th>
                 <th className="px-4 py-3 text-left">服务包</th>
                 <th className="px-4 py-3 text-left">报价</th>
-                <th className="px-4 py-3 text-left">平台分成</th>
                 <th className="px-4 py-3 text-left">律所</th>
                 <th className="px-4 py-3 text-left">状态</th>
                 <th className="px-4 py-3 text-left">创建时间</th>
@@ -135,9 +134,6 @@ export function AdminLegalConversionListPage() {
                   <td className="px-4 py-3">案件 #{o.case_id}</td>
                   <td className="px-4 py-3">{o.package_name ?? "—"}</td>
                   <td className="px-4 py-3 font-mono">¥{o.price_quoted}</td>
-                  <td className="px-4 py-3 font-mono text-[var(--color-primary)]">
-                    ¥{o.platform_fee_amount}
-                  </td>
                   <td className="px-4 py-3">
                     {o.assigned_law_firm ? (
                       <span className="text-xs">

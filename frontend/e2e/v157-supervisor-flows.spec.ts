@@ -7,20 +7,27 @@ const SUPERVISOR_PHONE = "13000000003";
 const LEGAL_PHONE = "13000000006";
 
 async function loginAs(page: Page, phone: string) {
+  // v1.4 起登录表单是 dual-mode（账号/手机号），统一用 id selector
   await page.goto("/login");
-  await page.getByPlaceholder(/手机号/).fill(phone);
-  await page.getByPlaceholder(/密码/).fill(PASSWORD);
-  await page.getByRole("button", { name: /登录/ }).click();
-  await page.waitForURL(/^(?!.*\/login)/, { timeout: 5000 });
+  await page.fill('input[id="account"]', phone);
+  await page.fill('input[id="password"]', PASSWORD);
+  await Promise.all([
+    page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 10_000 }),
+    page.click('button[type="submit"]'),
+  ]);
 }
 
 async function dismissIntroIfPresent(page: Page) {
-  const close = page.getByRole("button", { name: "知道了" });
-  try {
-    await close.waitFor({ state: "visible", timeout: 2500 });
-    await close.click();
-  } catch {
-    /* skip */
+  // 部分角色登录后会连弹两个 modal（AppIntroModal + 角色专属提示）；循环 dismiss
+  for (let i = 0; i < 3; i++) {
+    const close = page.getByRole("button", { name: "知道了" }).first();
+    try {
+      await close.waitFor({ state: "visible", timeout: 1500 });
+      await close.click();
+      await page.waitForTimeout(300);
+    } catch {
+      return;
+    }
   }
 }
 
@@ -29,7 +36,8 @@ test.describe("v1.5.7 督导端关键流程", () => {
     await loginAs(page, SUPERVISOR_PHONE);
     await dismissIntroIfPresent(page);
     await page.goto("/supervisor/script-labels");
-    await expect(page.getByText("话术反馈")).toBeVisible();
+    // strict mode：sidebar nav + page-title 都有"话术反馈"；锁定 page-title
+    await expect(page.locator(".page-title").getByText("话术反馈")).toBeVisible();
     // 第一行点「详情」按钮
     const firstDetailBtn = page.getByRole("button", { name: /详情/ }).first();
     await firstDetailBtn.click();
@@ -62,7 +70,7 @@ test.describe("v1.5.7 督导端关键流程", () => {
     await loginAs(page, SUPERVISOR_PHONE);
     await dismissIntroIfPresent(page);
     await page.goto("/supervisor/escalated");
-    await expect(page.getByText("升级案件处理")).toBeVisible();
+    await expect(page.locator(".page-title").getByText("升级案件处理")).toBeVisible();
     const viewBtn = page.getByRole("button", { name: /查看历史/ }).first();
     await viewBtn.click();
     await page.waitForURL(/\/supervisor\/cases\/\d+/);
@@ -74,8 +82,10 @@ test.describe("v1.5.7 督导端关键流程", () => {
     await loginAs(page, SUPERVISOR_PHONE);
     await dismissIntroIfPresent(page);
     await page.goto("/supervisor/cases");
-    await expect(page.getByText("公海案件")).toBeVisible();
-    await expect(page.getByPlaceholder(/按业主姓名 \/ 房号在公海中搜索/)).toBeVisible();
+    // v1.5.7 起页面标题为「案件分配」（左侧卡片是「公海案件」section）
+    await expect(page.locator(".page-title").getByText("案件分配")).toBeVisible();
+    // v1.6.5 — placeholder 统一为「按业主姓名 / 房号搜索」；该页可能有多个 SearchInput
+    await expect(page.getByPlaceholder(/按业主姓名 \/ 房号搜索/).first()).toBeVisible();
     await expect(page.getByText(/右侧数字为优先级分数/)).toBeVisible();
     // 至少一个 P 数字 badge
     await expect(page.getByText(/^P \d+$/).first()).toBeVisible();
@@ -97,22 +107,22 @@ test.describe("v1.5.7 法务订单三视图（mock）", () => {
     await loginAs(page, LEGAL_PHONE);
     await dismissIntroIfPresent(page);
     await page.goto("/legal/orders");
-    await expect(page.getByText(/法务订单/)).toBeVisible();
-    await expect(page.getByText(/待撮合|已派单|服务中|已完成/)).toBeVisible();
+    await expect(page.locator(".page-title").getByText(/法务订单/)).toBeVisible();
+    await expect(page.getByText(/待撮合|已派单|服务中|已完成/).first()).toBeVisible();
   });
 
   test("律所工作台：mock 直接访问 + 看到分律师按钮（dispatched 订单）", async ({ page }) => {
     await loginAs(page, LEGAL_PHONE);
     await dismissIntroIfPresent(page);
     await page.goto("/lawfirm/orders");
-    await expect(page.getByText(/律所工作台/)).toBeVisible();
+    await expect(page.locator(".page-title").getByText(/律所工作台/)).toBeVisible();
   });
 
   test("律师工作台：mock 直接访问 + in_service 订单可上传文书", async ({ page }) => {
     await loginAs(page, LEGAL_PHONE);
     await dismissIntroIfPresent(page);
     await page.goto("/lawyer/orders");
-    await expect(page.getByText(/律师工作台/)).toBeVisible();
+    await expect(page.locator(".page-title").getByText(/律师工作台/)).toBeVisible();
   });
 });
 
