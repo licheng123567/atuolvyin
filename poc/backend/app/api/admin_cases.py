@@ -177,13 +177,17 @@ def build_case_detail_response(
             }
 
     # 协作来源 role
+    # v1.6.10 — 用户可能有多 membership（如督导同时是催收员），优先取 agent 角色（assigned_to 语义）
     assigned_role: str | None = None
     if case.assigned_to is not None:
         m = db.execute(
-            select(UserTenantMembership.role).where(
+            select(UserTenantMembership.role)
+            .where(
                 UserTenantMembership.user_id == case.assigned_to,
                 UserTenantMembership.tenant_id == tenant_id,
+                UserTenantMembership.role.in_(("agent_internal", "agent_external")),
             )
+            .limit(1)
         ).scalar_one_or_none()
         assigned_role = m
 
@@ -456,12 +460,16 @@ async def assign_cases(
 ) -> CaseAssignResponse:
     tenant_id = _require_tenant(payload)
 
+    # v1.6.10 — 用户可能有多个 membership（如督导兼催收员）；分配只看 agent_internal 那条
     member = db.execute(
-        select(UserTenantMembership).where(
+        select(UserTenantMembership)
+        .where(
             UserTenantMembership.user_id == body.assign_to,
             UserTenantMembership.tenant_id == tenant_id,
             UserTenantMembership.is_active.is_(True),
+            UserTenantMembership.role == "agent_internal",
         )
+        .limit(1)
     ).scalar_one_or_none()
     if member is None:
         raise HTTPException(
