@@ -489,7 +489,31 @@ export function AgentWorkstationIndexPage() {
               <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 12, padding: 24 }}>加载中…</div>
             )}
             {!caseListQuery.isLoading && filteredCases.length === 0 && (
-              <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 12, padding: 24 }}>暂无案件</div>
+              <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 12, padding: 24 }}>
+                {todayMode ? (
+                  <>
+                    <div>今日无待联系案件</div>
+                    <button
+                      type="button"
+                      onClick={() => setTodayMode(false)}
+                      style={{
+                        marginTop: 10,
+                        padding: "4px 12px",
+                        background: "var(--color-primary, #1A56DB)",
+                        color: "white",
+                        border: "none",
+                        borderRadius: 4,
+                        fontSize: 11,
+                        cursor: "pointer",
+                      }}
+                    >
+                      查看全部案件
+                    </button>
+                  </>
+                ) : (
+                  <div>暂无分配的案件<br /><span style={{ fontSize: 11 }}>试试到「公海池」抢一些案件</span></div>
+                )}
+              </div>
             )}
             {filteredCases.map((c) => {
               const isActive = selectedCaseId === c.id;

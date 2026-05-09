@@ -691,6 +691,8 @@ def main() -> None:
         _upsert_membership(db, ops_user, tenant, "platform_ops")
         _upsert_membership(db, admin_user, tenant, "admin")
         _upsert_membership(db, supervisor_user, tenant, "supervisor")
+        # v1.6.10 — 督导小李同时拥有催收员身份（多角色切换演示）
+        _upsert_membership(db, supervisor_user, tenant, "agent_internal")
         _upsert_membership(db, agent_internal_user, tenant, "agent_internal")
         _upsert_membership(db, agent_external_user, tenant, "agent_external")
         _upsert_membership(db, legal_user, tenant, "legal")
@@ -776,6 +778,16 @@ def main() -> None:
         for name, phone, building, room, amount, months, pid, reason in owners_data:
             owner = _upsert_owner(db, tenant, name, phone, building, room)
             _upsert_case(db, tenant, owner, agent_internal_user.id, amount, months,
+                         project_id=pid, arrears_reason=reason)
+
+        # v1.6.10 — 给督导小李（同时是催收员）单独分配 2 个案件（多角色切换演示）
+        supervisor_owners = [
+            ("陈小燕", "13100000008", "2栋", "0601", Decimal("21000.00"), 17, project_elevator.id, "服务质量异议（长期欠费）"),
+            ("林瀚", "13100000009", "1栋", "0203", Decimal("4500.00"), 5, project_main.id, "其他"),
+        ]
+        for name, phone, building, room, amount, months, pid, reason in supervisor_owners:
+            owner = _upsert_owner(db, tenant, name, phone, building, room)
+            _upsert_case(db, tenant, owner, supervisor_user.id, amount, months,
                          project_id=pid, arrears_reason=reason)
 
         # 5. RiskKeyword

@@ -1,8 +1,9 @@
 // v1.6.6 — 活动时间线（admin / agent 详情页 + 催收员工作台 共用）
 // v1.6.9 — 工单/法务订单/法务案件节点可跳转详情；其他系统事件可展开看完整 note
+// v1.6.10 — 通话节点加显式「🎧 听录音」按钮，受控展开 audio
 // 1:1 还原图 2 右上：通话 + 工单 + 法务转化 + 阶段变更 + 案件创建 等所有沟通事件
 import { useGo } from "@refinedev/core";
-import { ChevronDown, ChevronRight, ExternalLink, FileText, Phone, PhoneOff, Scale, Upload, Users, Wrench } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, FileText, Headphones, Phone, PhoneOff, Scale, Upload, Users, Wrench } from "lucide-react";
 import { useState } from "react";
 import type { CaseCallItem, TimelineEvent } from "../../types/case";
 import { RESULT_TAG_BADGE_CLASS, formatDateTime, formatDuration } from "./constants";
@@ -38,77 +39,15 @@ export function ActivityTimeline({ calls, timelineEvents, createdAt }: Props) {
       </div>
       <div className="card-body">
         <div className="timeline">
-          {/* 通话记录（按时间倒序） v1.6.8 — 整行可点击跳到通话详情 */}
-          {calls.map((call, idx) => {
-            const isProcessed = call.status === "processed";
-            const isAnswered = (call.duration_sec ?? 0) > 10;
-            const navigateToCall = () => go({ to: `/calls/${call.id}` });
-            return (
-              <div
-                className="tl-item"
-                key={call.id}
-                onClick={navigateToCall}
-                style={{ cursor: "pointer" }}
-                title="点击查看完整通话详情 / 录音 / AI 分析"
-              >
-                <div className="tl-spine">
-                  <div className={`tl-node ${isAnswered ? "tl-call" : "tl-system"}`}>
-                    {isAnswered ? <Phone size={11} stroke="white" /> : <PhoneOff size={11} stroke="white" />}
-                  </div>
-                  {idx < calls.length - 1 && <div className="tl-line" />}
-                </div>
-                <div className="tl-body">
-                  <div className="tl-head">
-                    <span className="tl-title">
-                      {isAnswered ? `通话 · ${formatDuration(call.duration_sec)}` : "无人接听"}
-                    </span>
-                    <span className="tl-meta">
-                      {formatDateTime(call.started_at)} · {call.agent_name ?? "—"}
-                    </span>
-                  </div>
-                  {isProcessed && call.transcript_preview ? (
-                    <div className="tl-card">
-                      <div className="tl-card-head">
-                        AI 话术摘要
-                        {call.result_tag && (
-                          <span
-                            className={RESULT_TAG_BADGE_CLASS[call.result_tag] ?? "ds-badge ds-badge-gray"}
-                            style={{ fontSize: 11 }}
-                          >
-                            {call.result_tag}
-                          </span>
-                        )}
-                        {call.confidence != null && (
-                          <span style={{ fontSize: 11, color: "#9ca3af" }}>
-                            置信度 {call.confidence.toFixed(2)}
-                          </span>
-                        )}
-                      </div>
-                      <div>{call.transcript_preview}</div>
-                      {/* v1.6.7 — E5 inline 录音播放（recording_url 存在时） */}
-                      {call.recording_url && (
-                        <audio
-                          controls
-                          preload="none"
-                          src={call.recording_url}
-                          onClick={(e) => e.stopPropagation()}
-                          style={{ width: "100%", marginTop: 8, height: 32 }}
-                        />
-                      )}
-                      <hr className="tl-card-sep" />
-                      <div className="tl-card-meta">
-                        <span style={{ color: "var(--color-primary)" }}>查看完整 →</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="tl-text">
-                      {isAnswered ? "AI 分析中…" : "AI 标注：无效通话"}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+          {/* 通话记录（按时间倒序） v1.6.8 — 整行可点击跳到通话详情；v1.6.10 — 「🎧 听录音」按钮 */}
+          {calls.map((call, idx) => (
+            <CallRow
+              key={call.id}
+              call={call}
+              showLine={idx < calls.length - 1}
+              onJumpDetail={() => go({ to: `/calls/${call.id}` })}
+            />
+          ))}
 
           {/* 其他活动事件（工单 / 法务 / 阶段 / 分配 / 审计）— v1.6.9 可点击查看详情/展开 */}
           {timelineEvents
@@ -234,6 +173,128 @@ function SystemEventRow({
                 ID：#{event.target_id}
               </span>
             )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * v1.6.10 — 通话节点：整行点击跳通话详情；显式「🎧 听录音」按钮受控展开 audio。
+ * 没有 recording_url 时按钮 disabled，点击不会跳转（stopPropagation）。
+ */
+function CallRow({
+  call,
+  showLine,
+  onJumpDetail,
+}: {
+  call: CaseCallItem;
+  showLine: boolean;
+  onJumpDetail: () => void;
+}) {
+  const [audioOpen, setAudioOpen] = useState(false);
+  const isProcessed = call.status === "processed";
+  const isAnswered = (call.duration_sec ?? 0) > 10;
+  const hasRecording = !!call.recording_url;
+
+  return (
+    <div
+      className="tl-item"
+      onClick={onJumpDetail}
+      style={{ cursor: "pointer" }}
+      title="点击查看完整通话详情 / 录音 / AI 分析"
+    >
+      <div className="tl-spine">
+        <div className={`tl-node ${isAnswered ? "tl-call" : "tl-system"}`}>
+          {isAnswered ? <Phone size={11} stroke="white" /> : <PhoneOff size={11} stroke="white" />}
+        </div>
+        {showLine && <div className="tl-line" />}
+      </div>
+      <div className="tl-body">
+        <div className="tl-head">
+          <span className="tl-title">
+            {isAnswered ? `通话 · ${formatDuration(call.duration_sec)}` : "无人接听"}
+          </span>
+          <span className="tl-meta" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            {formatDateTime(call.started_at)} · {call.agent_name ?? "—"}
+            {/* v1.6.10 — 听录音按钮：始终展示（无录音时 disabled）*/}
+            {isAnswered && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (hasRecording) setAudioOpen((v) => !v);
+                }}
+                disabled={!hasRecording}
+                title={hasRecording ? (audioOpen ? "收起录音" : "播放录音") : "本通话暂无录音"}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 3,
+                  padding: "2px 8px",
+                  borderRadius: 12,
+                  border: "1px solid",
+                  borderColor: hasRecording ? "var(--color-primary)" : "var(--color-neutral-200)",
+                  background: hasRecording
+                    ? audioOpen
+                      ? "var(--color-primary)"
+                      : "var(--color-primary-light, #eff6ff)"
+                    : "var(--color-neutral-50)",
+                  color: hasRecording
+                    ? audioOpen
+                      ? "white"
+                      : "var(--color-primary)"
+                    : "var(--color-neutral-400)",
+                  fontSize: 11,
+                  fontWeight: 500,
+                  cursor: hasRecording ? "pointer" : "not-allowed",
+                }}
+              >
+                <Headphones size={11} />
+                {audioOpen ? "收起" : "听录音"}
+              </button>
+            )}
+          </span>
+        </div>
+        {isProcessed && call.transcript_preview ? (
+          <div className="tl-card">
+            <div className="tl-card-head">
+              AI 话术摘要
+              {call.result_tag && (
+                <span
+                  className={RESULT_TAG_BADGE_CLASS[call.result_tag] ?? "ds-badge ds-badge-gray"}
+                  style={{ fontSize: 11 }}
+                >
+                  {call.result_tag}
+                </span>
+              )}
+              {call.confidence != null && (
+                <span style={{ fontSize: 11, color: "#9ca3af" }}>
+                  置信度 {call.confidence.toFixed(2)}
+                </span>
+              )}
+            </div>
+            <div>{call.transcript_preview}</div>
+            {/* v1.6.10 — 受控展开录音播放器（点击「🎧 听录音」按钮触发） */}
+            {audioOpen && hasRecording && (
+              <audio
+                controls
+                autoPlay
+                preload="none"
+                src={call.recording_url ?? ""}
+                onClick={(e) => e.stopPropagation()}
+                style={{ width: "100%", marginTop: 8, height: 32 }}
+              />
+            )}
+            <hr className="tl-card-sep" />
+            <div className="tl-card-meta">
+              <span style={{ color: "var(--color-primary)" }}>查看完整 →</span>
+            </div>
+          </div>
+        ) : (
+          <div className="tl-text">
+            {isAnswered ? "AI 分析中…" : "AI 标注：无效通话"}
           </div>
         )}
       </div>

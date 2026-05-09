@@ -1,17 +1,20 @@
 // 案件分配 — 1:1 还原 ui/supervisor.html#sv-cases
 // v1.5.7 — 左：公海案件 checkbox 列表 / 右：催收员工作量 bar
 // v1.6.5 — 加分页 + debounce 搜索
+// v1.6.10 — 左侧改用真实后端 GET /supervisor/cases，case.id 与 detail endpoint 对齐（修复 404）
+import type { CrudFilter } from "@refinedev/core";
+import { useList } from "@refinedev/core";
 import { Eye, Info } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PaginationBar } from "../../../components/ui/PaginationBar";
 import { SearchInput } from "../../../components/ui/SearchInput";
 import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
+import type { PaginatedResponse } from "../../../types";
 import { SUPERVISOR_PROJECT_FILTERS } from "../_shared/projectFilters";
 
 const PAGE_SIZE = 15;
 
-// 优先级分数算法（mock）：欠费月数 ×6 + 金额段 ×3 + 上次联系久 ×0.4，上限 100
 function priorityTone(score: number): { color: string; label: string } {
   if (score >= 90) return { color: "var(--color-danger)", label: "紧急" };
   if (score >= 75) return { color: "var(--color-warning)", label: "高" };
@@ -19,15 +22,27 @@ function priorityTone(score: number): { color: string; label: string } {
   return { color: "var(--color-neutral-500)", label: "低" };
 }
 
-interface PoolCase {
+interface OwnerInfo {
   id: number;
   name: string;
-  building: string;
-  months: number;
-  amount: number;
-  last_contact: string;
-  priority: number;
-  project_name: string;
+  phone_masked: string;
+  building: string | null;
+  room: string | null;
+  do_not_call: boolean;
+}
+
+interface BackendCase {
+  id: number;
+  owner: OwnerInfo;
+  pool_type: string;
+  stage: string;
+  amount_owed: string | null;
+  months_overdue: number | null;
+  priority_score: number;
+  project_id: number | null;
+  project_name: string | null;
+  last_contact_at: string | null;
+  assigned_to: number | null;
 }
 
 interface AgentLoad {
@@ -37,16 +52,8 @@ interface AgentLoad {
   status: "full" | "available";
 }
 
-const MOCK_POOL: PoolCase[] = [
-  { id: 301, name: "梁建国", building: "7-2301", months: 4, amount: 6840, last_contact: "3 天前", priority: 97, project_name: "金桂园 2026 年欠费催收" },
-  { id: 302, name: "吴雪梅", building: "2-1105", months: 3, amount: 4920, last_contact: "5 天前", priority: 91, project_name: "金桂园 2026 年欠费催收" },
-  { id: 303, name: "徐明华", building: "1-0402", months: 6, amount: 9360, last_contact: "7 天前", priority: 88, project_name: "翠湖湾电梯专项整改" },
-  { id: 304, name: "郑丽娟", building: "4-1801", months: 2, amount: 3280, last_contact: "2 天前", priority: 82, project_name: "翠湖湾电梯专项整改" },
-  { id: 305, name: "黄志强", building: "6-0306", months: 5, amount: 8200, last_contact: "10 天前", priority: 78, project_name: "金桂园 2026 年欠费催收" },
-  { id: 306, name: "曹秀英", building: "3-0902", months: 2, amount: 2640, last_contact: "1 天前", priority: 71, project_name: "翠湖湾电梯专项整改" },
-];
-
 const CAPACITY = 60;
+// MOCK_LOAD 暂留：后端无催收员实时工作量 endpoint（下一轮）
 const MOCK_LOAD: AgentLoad[] = [
   { name: "陈明远", current: 55, capacity: CAPACITY, status: "full" },
   { name: "李小红", current: 48, capacity: CAPACITY, status: "available" },
@@ -54,6 +61,17 @@ const MOCK_LOAD: AgentLoad[] = [
   { name: "刘晓娟", current: 32, capacity: CAPACITY, status: "available" },
   { name: "王芳芳", current: 39, capacity: CAPACITY, status: "available" },
 ];
+
+function fmtRelative(iso: string | null): string {
+  if (!iso) return "从未联系";
+  const d = new Date(iso);
+  const ms = Date.now() - d.getTime();
+  const days = Math.floor(ms / (24 * 3600 * 1000));
+  if (days === 0) return "今天";
+  if (days === 1) return "1 天前";
+  if (days < 30) return `${days} 天前`;
+  return d.toISOString().slice(0, 10);
+}
 
 export function SupervisorCasesPage() {
   const navigate = useNavigate();
@@ -64,17 +82,32 @@ export function SupervisorCasesPage() {
   const [page, setPage] = useState(1);
   const debouncedKw = useDebouncedValue(keyword, 300);
 
-  const filteredPool = useMemo(() => {
-    const kw = debouncedKw.trim().toLowerCase();
-    return MOCK_POOL.filter((c) => {
-      if (projectFilter !== "全部项目" && c.project_name !== projectFilter) return false;
-      if (kw && !`${c.name} ${c.building}`.toLowerCase().includes(kw)) return false;
-      return true;
-    });
-  }, [projectFilter, debouncedKw]);
+  // v1.6.10 — 真实后端 GET /supervisor/cases，仅取公海未分配
+  const filters: CrudFilter[] = [
+    { field: "pool_type", operator: "eq", value: "public" },
+  ];
+  if (debouncedKw.trim()) {
+    filters.push({ field: "keyword", operator: "contains", value: debouncedKw.trim() });
+  }
 
-  const total = filteredPool.length;
-  const visiblePool = filteredPool.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const { query } = useList<BackendCase>({
+    resource: "supervisor/cases",
+    pagination: { currentPage: page, pageSize: PAGE_SIZE },
+    filters,
+  });
+  const rawData = query.data?.data;
+  const allItems: BackendCase[] =
+    (rawData as unknown as PaginatedResponse<BackendCase>)?.items ??
+    (rawData as BackendCase[] | undefined) ??
+    [];
+  const totalServer = query.data?.total ?? 0;
+
+  // 项目名前端二次过滤（后端无 project filter param）
+  const items =
+    projectFilter === "全部项目"
+      ? allItems
+      : allItems.filter((c) => c.project_name === projectFilter);
+  const total = projectFilter === "全部项目" ? totalServer : items.length;
 
   function toggle(id: number) {
     setSelected((prev) => {
@@ -142,28 +175,39 @@ export function SupervisorCasesPage() {
             </span>
           </div>
           <div>
-            {visiblePool.length === 0 ? (
+            {query.isLoading ? (
+              <div style={{ padding: 32, textAlign: "center", color: "var(--color-neutral-400)" }}>
+                加载中…
+              </div>
+            ) : items.length === 0 ? (
               <div style={{ padding: 32, textAlign: "center", color: "var(--color-neutral-400)" }}>
                 该项目暂无公海案件
               </div>
-            ) : visiblePool.map((c) => {
-              const tone = priorityTone(c.priority);
+            ) : items.map((c) => {
+              const tone = priorityTone(c.priority_score);
+              const room =
+                c.owner.building && c.owner.room
+                  ? `${c.owner.building}${c.owner.room}`
+                  : c.owner.building ?? c.owner.room ?? "—";
+              const amount = c.amount_owed ? Number(c.amount_owed) : 0;
               return (
                 <div key={c.id} className="case-row">
                   <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} style={{ width: 16, height: 16, cursor: "pointer", flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 600 }}>
-                      {c.name} / {c.building}
-                      <span className="ds-badge ds-badge-blue" style={{ fontSize: 10, marginLeft: 6 }}>
-                        📁 {c.project_name}
-                      </span>
+                      {c.owner.name} / {room}
+                      {c.project_name && (
+                        <span className="ds-badge ds-badge-blue" style={{ fontSize: 10, marginLeft: 6 }}>
+                          📁 {c.project_name}
+                        </span>
+                      )}
                     </div>
                     <div style={{ fontSize: 12, color: "var(--color-neutral-600)" }}>
-                      欠费 {c.months} 个月 ¥{c.amount.toLocaleString("zh-CN")} · 上次联系：{c.last_contact}
+                      欠费 {c.months_overdue ?? 0} 个月 ¥{amount.toLocaleString("zh-CN")} · 上次联系：{fmtRelative(c.last_contact_at)}
                     </div>
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, marginRight: 8 }} title={`优先级分数 ${c.priority}/100 · ${tone.label}`}>
-                    <span className="priority-score" style={{ color: tone.color }}>P {c.priority}</span>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, marginRight: 8 }} title={`优先级分数 ${c.priority_score}/100 · ${tone.label}`}>
+                    <span className="priority-score" style={{ color: tone.color }}>P {c.priority_score}</span>
                     <span style={{ fontSize: 10, color: tone.color, fontWeight: 600 }}>{tone.label}</span>
                   </div>
                   <button

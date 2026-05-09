@@ -546,7 +546,8 @@ async def update_case_stage(
     case_id: int,
     body: CaseStageUpdate,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    # v1.6.10 — supervisor 详情页跟进备注复用此 endpoint
+    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES, "supervisor"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseResponse:
     tenant_id = _require_tenant(payload)

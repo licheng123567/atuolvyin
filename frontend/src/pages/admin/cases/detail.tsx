@@ -2,17 +2,16 @@
 // v1.6.6 — 业主信息 / 项目基本情况 / 活动时间线 抽到 components/case/* 共享给 agent
 import { useCustomMutation, useGetIdentity, useGo, useInvalidate, useList, useOne } from "@refinedev/core";
 import type { AuthUser } from "../../../providers/auth-provider";
-import { ArrowLeft, ClipboardList, CreditCard, Download, Save, Scale, Users } from "lucide-react";
+import { ArrowLeft, ClipboardList, CreditCard, Download, Scale, Users } from "lucide-react";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import type { UserRole } from "../../../types";
 import type { CaseDetailResponse } from "../../../types/case";
 import { ConvertToLegalModal } from "../../../components/legal-conversion/ConvertToLegalModal";
 import { ActivityTimeline } from "../../../components/case/ActivityTimeline";
-import { BillBreakdownCard } from "../../../components/case/BillBreakdownCard";
+import { FollowUpNoteCard } from "../../../components/case/FollowUpNoteCard";
 import { OwnerInfoCard } from "../../../components/case/OwnerInfoCard";
 import { ProjectInfoCard } from "../../../components/case/ProjectInfoCard";
-import { STAGE_LABELS } from "../../../components/case/constants";
 
 interface AdminUser {
   id: number;
@@ -34,8 +33,6 @@ export function AdminCaseDetailPage() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
   const [convertOpen, setConvertOpen] = useState(false);
-  const [followupNote, setFollowupNote] = useState("");
-  const [newStage, setNewStage] = useState("");
 
   const { query } = useOne<CaseDetailResponse>({
     resource: "admin/cases",
@@ -60,7 +57,6 @@ export function AdminCaseDetailPage() {
   const { mutate: assignCase, mutation: assignMutation } = useCustomMutation();
   const assigning = assignMutation.isPending;
   const { mutate: createWorkOrderMutate } = useCustomMutation();
-  const { mutate: patchStage } = useCustomMutation();
 
   const detail = query.data?.data;
   const isLoading = query.isLoading;
@@ -113,28 +109,6 @@ export function AdminCaseDetailPage() {
     );
   };
 
-  const handleSaveFollowup = () => {
-    if (!detail || !newStage) return;
-    patchStage(
-      {
-        url: `admin/cases/${detail.id}/stage`,
-        method: "patch",
-        values: { stage: newStage, note: followupNote },
-      },
-      {
-        onSuccess: () => {
-          setFollowupNote("");
-          setNewStage("");
-          void invalidate({
-            resource: "admin/cases",
-            invalidates: ["detail"],
-            id: detail.id,
-          });
-        },
-      },
-    );
-  };
-
   if (isLoading) {
     return <div className="text-sm text-[var(--color-neutral-400)] p-8">加载中…</div>;
   }
@@ -164,7 +138,6 @@ export function AdminCaseDetailPage() {
         <div>
           <OwnerInfoCard detail={detail} />
           <ProjectInfoCard detail={detail} />
-          <BillBreakdownCard detail={detail} />
 
 
           {/* operation buttons */}
@@ -238,62 +211,11 @@ export function AdminCaseDetailPage() {
 
           {/* Followup form — PM 只读 */}
           {!isPM && (
-          <div className="ds-card">
-            <div className="card-header">
-              <span className="card-title">添加跟进备注</span>
-            </div>
-            <div className="card-body">
-              <textarea
-                className="form-control"
-                placeholder="记录本次跟进情况、业主态度、下一步计划..."
-                style={{ height: 80 }}
-                value={followupNote}
-                onChange={(e) => setFollowupNote(e.target.value)}
-              />
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginTop: 12,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span
-                    style={{
-                      fontSize: 13,
-                      color: "#374151",
-                      fontWeight: 500,
-                    }}
-                  >
-                    更新阶段：
-                  </span>
-                  <select
-                    className="form-control"
-                    style={{ width: 140 }}
-                    value={newStage}
-                    onChange={(e) => setNewStage(e.target.value)}
-                  >
-                    <option value="">— 不变更 —</option>
-                    {Object.entries(STAGE_LABELS).map(([v, l]) => (
-                      <option key={v} value={v}>
-                        {l}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  type="button"
-                  className="ds-btn ds-btn-primary"
-                  disabled={!newStage}
-                  onClick={handleSaveFollowup}
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  保存
-                </button>
-              </div>
-            </div>
-          </div>
+            <FollowUpNoteCard
+              caseId={detail.id}
+              endpoint={`admin/cases/${detail.id}/stage`}
+              invalidateResource="admin/cases"
+            />
           )}
         </div>
       </div>

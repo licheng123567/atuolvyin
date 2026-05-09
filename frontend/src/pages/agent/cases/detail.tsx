@@ -2,15 +2,14 @@
 // v1.6.6 — 催收员案件详情：双栏布局
 // v1.6.8 — 三栏布局：左 业主信息+项目情况 / 中 时间线+跟进备注 / 右 sticky 操作按钮组
 //          操作按钮始终右侧可见，无需滚动
-import { useCustomMutation, useGo, useInvalidate, useOne } from "@refinedev/core";
-import { ArrowLeft, BadgePercent, ClipboardList, CreditCard, Headphones, Phone, Save, Scale } from "lucide-react";
+import { useCustomMutation, useGo, useOne } from "@refinedev/core";
+import { ArrowLeft, BadgePercent, ClipboardList, CreditCard, Headphones, Phone, Scale } from "lucide-react";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { ActivityTimeline } from "../../../components/case/ActivityTimeline";
-import { BillBreakdownCard } from "../../../components/case/BillBreakdownCard";
+import { FollowUpNoteCard } from "../../../components/case/FollowUpNoteCard";
 import { OwnerInfoCard } from "../../../components/case/OwnerInfoCard";
 import { ProjectInfoCard } from "../../../components/case/ProjectInfoCard";
-import { STAGE_LABELS } from "../../../components/case/constants";
 import { DiscountRequestModal } from "../../../components/discount/DiscountRequestModal";
 import { QrDialDialog } from "../../../components/dial/QrDialDialog";
 import type { CaseDetailResponse } from "../../../types/case";
@@ -18,9 +17,6 @@ import type { CaseDetailResponse } from "../../../types/case";
 export function AgentWorkstationPage() {
   const { id } = useParams<{ id: string }>();
   const go = useGo();
-  const invalidate = useInvalidate();
-  const [followupNote, setFollowupNote] = useState("");
-  const [newStage, setNewStage] = useState("");
   const [qrState, setQrState] = useState<{ caseId: number; qrPayload: string; expiresAt: string } | null>(null);
   const [showDiscountModal, setShowDiscountModal] = useState(false);
 
@@ -33,7 +29,6 @@ export function AgentWorkstationPage() {
   const isLoading = query.isLoading;
 
   const { mutate: customMutate } = useCustomMutation();
-  const { mutate: patchStageMutate } = useCustomMutation();
   const { mutate: dialMutate } = useCustomMutation();
 
   function handleDial() {
@@ -101,25 +96,6 @@ export function AgentWorkstationPage() {
     );
   }
 
-  function handleSaveFollowup() {
-    if (!detail || !newStage) return;
-    patchStageMutate(
-      {
-        url: `agent/cases/${detail.id}/stage`,
-        method: "patch",
-        values: { stage: newStage, note: followupNote || undefined },
-      },
-      {
-        onSuccess: () => {
-          setFollowupNote("");
-          setNewStage("");
-          void invalidate({ resource: "agent/cases", invalidates: ["detail"], id: detail.id });
-        },
-        onError: (err) => alert(`保存失败：${err.message}`),
-      },
-    );
-  }
-
   if (isLoading) {
     return <div style={{ padding: 32, color: "var(--color-neutral-400)" }}>加载中…</div>;
   }
@@ -157,7 +133,6 @@ export function AgentWorkstationPage() {
         <div>
           <OwnerInfoCard detail={detail} />
           <ProjectInfoCard detail={detail} />
-          <BillBreakdownCard detail={detail} compact />
         </div>
 
         {/* ── 中：活动时间线 + 添加跟进备注 ── */}
@@ -168,50 +143,11 @@ export function AgentWorkstationPage() {
             createdAt={detail.created_at}
           />
 
-          <div className="ds-card" style={{ marginTop: 16 }}>
-            <div className="card-header">
-              <span className="card-title">添加跟进备注</span>
-            </div>
-            <div className="card-body">
-              <textarea
-                className="form-control"
-                placeholder="记录本次跟进情况、业主态度、下一步计划..."
-                style={{ height: 80 }}
-                value={followupNote}
-                onChange={(e) => setFollowupNote(e.target.value)}
-              />
-              <div style={{
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-                marginTop: 12,
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 13, color: "#374151", fontWeight: 500 }}>
-                    更新阶段：
-                  </span>
-                  <select
-                    className="form-control"
-                    style={{ width: 140 }}
-                    value={newStage}
-                    onChange={(e) => setNewStage(e.target.value)}
-                  >
-                    <option value="">— 不变更 —</option>
-                    {Object.entries(STAGE_LABELS).map(([v, l]) => (
-                      <option key={v} value={v}>{l}</option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  type="button"
-                  className="ds-btn ds-btn-primary"
-                  disabled={!newStage}
-                  onClick={handleSaveFollowup}
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  保存
-                </button>
-              </div>
-            </div>
-          </div>
+          <FollowUpNoteCard
+            caseId={detail.id}
+            endpoint={`agent/cases/${detail.id}/stage`}
+            invalidateResource="agent/cases"
+          />
         </div>
 
         {/* ── 右：sticky 操作按钮组 ── */}

@@ -14,7 +14,7 @@ import {
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ActivityTimeline } from "../../../components/case/ActivityTimeline";
-import { BillBreakdownCard } from "../../../components/case/BillBreakdownCard";
+import { FollowUpNoteCard } from "../../../components/case/FollowUpNoteCard";
 import { OwnerInfoCard } from "../../../components/case/OwnerInfoCard";
 import { ProjectInfoCard } from "../../../components/case/ProjectInfoCard";
 import { DiscountRequestModal } from "../../../components/discount/DiscountRequestModal";
@@ -85,15 +85,20 @@ export function SupervisorCaseDetailPage() {
         <div>
           <OwnerInfoCard detail={detail} />
           <ProjectInfoCard detail={detail} />
-          <BillBreakdownCard detail={detail} />
         </div>
 
-        {/* ── 中：活动时间线 ── */}
+        {/* ── 中：活动时间线 + 添加跟进备注 ── */}
         <div style={{ minWidth: 0 }}>
           <ActivityTimeline
             calls={detail.calls}
             timelineEvents={detail.timeline_events}
             createdAt={detail.created_at}
+          />
+          {/* 督导可改 stage（admin endpoint 已扩充 supervisor 角色） */}
+          <FollowUpNoteCard
+            caseId={detail.id}
+            endpoint={`admin/cases/${detail.id}/stage`}
+            invalidateResource="supervisor/cases"
           />
         </div>
 
