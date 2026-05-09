@@ -1,8 +1,9 @@
 // 1:1 还原 ui/agent-pc.html#my-cases 我的案件
 // v1.6.5 — 加项目过滤 + 统一 SearchInput / PaginationBar
-import { useCustom, useCreate, useList } from "@refinedev/core";
+// v1.6.9 — 公海池抢单：tabs（我的 / 公海）+ 抢单按钮 + 持有上限提示
+import { useCustom, useCreate, useCustomMutation, useInvalidate, useList } from "@refinedev/core";
 import type { CrudFilter } from "@refinedev/core";
-import { Eye, Phone } from "lucide-react";
+import { Eye, Inbox, Phone, RotateCcw } from "lucide-react";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { PaginatedResponse } from "../../../types";
@@ -64,15 +65,26 @@ function formatLast(iso: string | null | undefined): string {
   return d.toISOString().slice(0, 10);
 }
 
+type Tab = "mine" | "pool";
+
+interface PoolQuota {
+  held_open: number;
+  claim_max: number;
+  can_claim_more: boolean;
+  remaining: number;
+}
+
 export function AgentCaseListPage() {
   const navigate = useNavigate();
+  const invalidate = useInvalidate();
+  const [tab, setTab] = useState<Tab>("mine");
   const [page, setPage] = useState(1);
   const [stage, setStage] = useState("");
   const [projectId, setProjectId] = useState<string>("");
   const [keyword, setKeyword] = useState("");
   const [todayMode, setTodayMode] = useState(false);  // v1.6.7
   const debouncedKw = useDebouncedValue(keyword, 300);
-  const [claimingId] = useState<number | null>(null);
+  const [actingId, setActingId] = useState<number | null>(null);
   const [qrState, setQrState] = useState<{
     caseId: number;
     qrPayload: string;
@@ -85,13 +97,64 @@ export function AgentCaseListPage() {
   if (stage) filters.push({ field: "stage", operator: "eq", value: stage });
   if (projectId) filters.push({ field: "project_id", operator: "eq", value: Number(projectId) });
   if (debouncedKw.trim()) filters.push({ field: "q", operator: "contains", value: debouncedKw.trim() });
-  if (todayMode) filters.push({ field: "today", operator: "eq", value: true });
+  if (todayMode && tab === "mine") filters.push({ field: "today", operator: "eq", value: true });
+  // v1.6.9 — 公海 tab 时只看 pool_type=public（后端 _build_visible_case_filter 会自动过滤已分配的）
+  if (tab === "pool") filters.push({ field: "pool_type", operator: "eq", value: "public" });
 
   const { query } = useList<CaseItem>({
     resource: "agent/cases",
     pagination: { currentPage: page, pageSize: PAGE_SIZE },
     filters,
   });
+
+  // v1.6.9 — 持有数量 + 上限
+  const { query: quotaQuery } = useCustom<PoolQuota>({
+    url: "agent/me/pool-quota",
+    method: "get",
+  });
+  const quota = quotaQuery.data?.data;
+
+  const { mutate: claimMutate } = useCustomMutation();
+  const { mutate: releaseMutate } = useCustomMutation();
+
+  function handleClaim(caseId: number) {
+    setActingId(caseId);
+    claimMutate(
+      { url: `agent/cases/${caseId}/claim`, method: "post", values: {} },
+      {
+        onSuccess: () => {
+          setActingId(null);
+          void invalidate({ resource: "agent/cases", invalidates: ["list"] });
+          void quotaQuery.refetch();
+          alert("✓ 抢单成功，已加入「我的案件」");
+        },
+        onError: (err) => {
+          setActingId(null);
+          alert(`抢单失败：${err.message ?? "请重试"}`);
+        },
+      },
+    );
+  }
+
+  function handleRelease(caseId: number) {
+    if (!window.confirm("确认把案件放回公海？放回后其他催收员可抢")) return;
+    setActingId(caseId);
+    releaseMutate(
+      { url: `agent/cases/${caseId}/release`, method: "post", values: {} },
+      {
+        onSuccess: () => {
+          setActingId(null);
+          void invalidate({ resource: "agent/cases", invalidates: ["list"] });
+          void quotaQuery.refetch();
+          alert("✓ 已放回公海");
+        },
+        onError: (err) => {
+          setActingId(null);
+          alert(`释放失败：${err.message ?? "请重试"}`);
+        },
+      },
+    );
+  }
 
   // 项目下拉来自专属端点（distinct project visible to agent）
   const { query: projectsQuery } = useCustom<ProjectOption[]>({
@@ -143,8 +206,12 @@ export function AgentCaseListPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">我的案件</h1>
-          <div className="page-subtitle">共 {total} 件分配案件</div>
+          <h1 className="page-title">{tab === "pool" ? "公海池" : "我的案件"}</h1>
+          <div className="page-subtitle">
+            {tab === "pool"
+              ? `共 ${total} 件可抢，先到先得${quota ? `；你已持有 ${quota.held_open}/${quota.claim_max} 件` : ""}`
+              : `共 ${total} 件分配案件${quota ? `（持有 ${quota.held_open}/${quota.claim_max}）` : ""}`}
+          </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <SearchInput
@@ -163,25 +230,29 @@ export function AgentCaseListPage() {
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
-          <select
-            className="filter-select"
-            value={stage}
-            onChange={(e) => { setStage(e.target.value); setPage(1); }}
-          >
-            <option value="">全部状态</option>
-            {Object.entries(STAGE_LABELS).map(([v, l]) => (
-              <option key={v} value={v}>{l}</option>
-            ))}
-          </select>
-          <button
-            type="button"
-            data-testid="cases-today-toggle"
-            onClick={() => { setTodayMode((v) => !v); setPage(1); }}
-            className={`ds-btn ${todayMode ? "ds-btn-primary" : "ds-btn-ghost"} ds-btn-sm`}
-            title="只显示今日待联系：未结案 + 今天还没拨过 / 上次联系超过 7 天"
-          >
-            {todayMode ? "✓ 今日待联系" : "今日待联系"}
-          </button>
+          {tab === "mine" && (
+            <select
+              className="filter-select"
+              value={stage}
+              onChange={(e) => { setStage(e.target.value); setPage(1); }}
+            >
+              <option value="">全部状态</option>
+              {Object.entries(STAGE_LABELS).map(([v, l]) => (
+                <option key={v} value={v}>{l}</option>
+              ))}
+            </select>
+          )}
+          {tab === "mine" && (
+            <button
+              type="button"
+              data-testid="cases-today-toggle"
+              onClick={() => { setTodayMode((v) => !v); setPage(1); }}
+              className={`ds-btn ${todayMode ? "ds-btn-primary" : "ds-btn-ghost"} ds-btn-sm`}
+              title="只显示今日待联系：未结案 + 今天还没拨过 / 上次联系超过 7 天"
+            >
+              {todayMode ? "✓ 今日待联系" : "今日待联系"}
+            </button>
+          )}
           {(keyword || projectId || stage || todayMode) && (
             <button
               type="button"
@@ -193,6 +264,64 @@ export function AgentCaseListPage() {
           )}
         </div>
       </div>
+
+      {/* v1.6.9 — Tab 切换：我的案件 / 公海池 */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 12, borderBottom: "1px solid var(--color-neutral-200)" }}>
+        <button
+          type="button"
+          data-testid="cases-tab-mine"
+          onClick={() => { setTab("mine"); setPage(1); }}
+          style={{
+            padding: "8px 16px",
+            border: "none",
+            background: "transparent",
+            borderBottom: tab === "mine" ? "2px solid var(--color-primary)" : "2px solid transparent",
+            color: tab === "mine" ? "var(--color-primary)" : "var(--color-neutral-600)",
+            fontWeight: tab === "mine" ? 600 : 500,
+            cursor: "pointer",
+            fontSize: 13,
+          }}
+        >
+          我的案件{quota ? ` (${quota.held_open})` : ""}
+        </button>
+        <button
+          type="button"
+          data-testid="cases-tab-pool"
+          onClick={() => { setTab("pool"); setPage(1); setStage(""); setTodayMode(false); }}
+          style={{
+            padding: "8px 16px",
+            border: "none",
+            background: "transparent",
+            borderBottom: tab === "pool" ? "2px solid var(--color-primary)" : "2px solid transparent",
+            color: tab === "pool" ? "var(--color-primary)" : "var(--color-neutral-600)",
+            fontWeight: tab === "pool" ? 600 : 500,
+            cursor: "pointer",
+            fontSize: 13,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+          title="公海未分配案件，先到先得；按持有上限限制"
+        >
+          <Inbox size={13} /> 公海池
+        </button>
+      </div>
+
+      {tab === "pool" && quota && !quota.can_claim_more && (
+        <div
+          style={{
+            padding: "8px 12px",
+            marginBottom: 12,
+            background: "#fef3c7",
+            border: "1px solid #fde68a",
+            borderRadius: 6,
+            fontSize: 12,
+            color: "#92400e",
+          }}
+        >
+          ⚠ 你已达持有上限 {quota.claim_max} 件，请先处理掉部分案件再来抢单（标记缴清/结案后会自动释放配额）
+        </div>
+      )}
 
       <div className="table-wrap">
         <table>
@@ -219,7 +348,7 @@ export function AgentCaseListPage() {
             {!query.isLoading && visible.length === 0 && (
               <tr>
                 <td colSpan={8} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
-                  暂无分配的案件
+                  {tab === "pool" ? "公海当前没有可抢案件" : "暂无分配的案件"}
                 </td>
               </tr>
             )}
@@ -262,22 +391,64 @@ export function AgentCaseListPage() {
                   <td>{formatLast(c.last_contact_at)}</td>
                   <td>
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                      <button
-                        type="button"
-                        className="ds-btn ds-btn-primary ds-btn-sm"
-                        onClick={() => requestQrPayload(c.id)}
-                        disabled={claimingId === c.id || c.owner.do_not_call}
-                        title={c.owner.do_not_call ? "业主已加入免打扰" : "扫码到 App 拨号"}
-                      >
-                        <Phone className="w-3 h-3" /> 拨号
-                      </button>
-                      <button
-                        type="button"
-                        className="ds-btn ds-btn-ghost ds-btn-sm"
-                        onClick={() => navigate(`/agent/cases/${c.id}`)}
-                      >
-                        <Eye className="w-3 h-3" /> 详情
-                      </button>
+                      {tab === "pool" ? (
+                        <>
+                          <button
+                            type="button"
+                            data-testid="case-claim-btn"
+                            className="ds-btn ds-btn-primary ds-btn-sm"
+                            onClick={() => handleClaim(c.id)}
+                            disabled={actingId === c.id || (quota?.can_claim_more === false)}
+                            title={
+                              quota && !quota.can_claim_more
+                                ? `已达上限 ${quota.claim_max} 件`
+                                : "抢单：加入「我的案件」"
+                            }
+                          >
+                            <Inbox className="w-3 h-3" />
+                            {actingId === c.id ? "抢单中…" : "抢单"}
+                          </button>
+                          <button
+                            type="button"
+                            className="ds-btn ds-btn-ghost ds-btn-sm"
+                            onClick={() => navigate(`/agent/cases/${c.id}`)}
+                          >
+                            <Eye className="w-3 h-3" /> 详情
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className="ds-btn ds-btn-primary ds-btn-sm"
+                            onClick={() => requestQrPayload(c.id)}
+                            disabled={actingId === c.id || c.owner.do_not_call}
+                            title={c.owner.do_not_call ? "业主已加入免打扰" : "扫码到 App 拨号"}
+                          >
+                            <Phone className="w-3 h-3" /> 拨号
+                          </button>
+                          <button
+                            type="button"
+                            className="ds-btn ds-btn-ghost ds-btn-sm"
+                            onClick={() => navigate(`/agent/cases/${c.id}`)}
+                          >
+                            <Eye className="w-3 h-3" /> 详情
+                          </button>
+                          {/* v1.6.9 — 自己持有的未结案案件可放回公海 */}
+                          {c.stage !== "paid" && c.stage !== "closed" && (
+                            <button
+                              type="button"
+                              className="ds-btn ds-btn-ghost ds-btn-sm"
+                              style={{ color: "var(--color-neutral-500)" }}
+                              onClick={() => handleRelease(c.id)}
+                              disabled={actingId === c.id}
+                              title="把案件放回公海（其他催收员可抢；释放后该案件不再属于你）"
+                            >
+                              <RotateCcw className="w-3 h-3" /> 放回公海
+                            </button>
+                          )}
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

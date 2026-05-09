@@ -7,6 +7,7 @@ import { ArrowLeft, BadgePercent, ClipboardList, CreditCard, Headphones, Phone, 
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { ActivityTimeline } from "../../../components/case/ActivityTimeline";
+import { BillBreakdownCard } from "../../../components/case/BillBreakdownCard";
 import { OwnerInfoCard } from "../../../components/case/OwnerInfoCard";
 import { ProjectInfoCard } from "../../../components/case/ProjectInfoCard";
 import { STAGE_LABELS } from "../../../components/case/constants";
@@ -156,6 +157,7 @@ export function AgentWorkstationPage() {
         <div>
           <OwnerInfoCard detail={detail} />
           <ProjectInfoCard detail={detail} />
+          <BillBreakdownCard detail={detail} compact />
         </div>
 
         {/* ── 中：活动时间线 + 添加跟进备注 ── */}

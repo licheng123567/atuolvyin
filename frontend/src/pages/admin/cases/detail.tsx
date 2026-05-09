@@ -9,6 +9,7 @@ import type { UserRole } from "../../../types";
 import type { CaseDetailResponse } from "../../../types/case";
 import { ConvertToLegalModal } from "../../../components/legal-conversion/ConvertToLegalModal";
 import { ActivityTimeline } from "../../../components/case/ActivityTimeline";
+import { BillBreakdownCard } from "../../../components/case/BillBreakdownCard";
 import { OwnerInfoCard } from "../../../components/case/OwnerInfoCard";
 import { ProjectInfoCard } from "../../../components/case/ProjectInfoCard";
 import { STAGE_LABELS } from "../../../components/case/constants";
@@ -163,6 +164,7 @@ export function AdminCaseDetailPage() {
         <div>
           <OwnerInfoCard detail={detail} />
           <ProjectInfoCard detail={detail} />
+          <BillBreakdownCard detail={detail} />
 
 
           {/* operation buttons */}

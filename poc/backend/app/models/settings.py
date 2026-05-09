@@ -69,6 +69,11 @@ class TenantSettings(Base):
         sa.Boolean, nullable=False, default=False, server_default=sa.false()
     )  # true 表示本租户禁用滞纳金减免功能
 
+    # v1.6.9 — 公海池抢单上限：催收员同时持有未结案私海案件不超过此数
+    public_pool_claim_max: Mapped[int] = mapped_column(
+        sa.SmallInteger, nullable=False, default=50, server_default=sa.text("50")
+    )
+
     # Sprint 12.3 — 通知规则 (PRD §L412)
     notify_quota_warning: Mapped[bool] = mapped_column(
         sa.Boolean, nullable=False, default=True, server_default=sa.true()
@@ -135,5 +140,9 @@ class TenantSettings(Base):
         sa.CheckConstraint(
             "late_fee_waive_auto_approve_threshold_pct <= late_fee_waive_supervisor_max_pct",
             name="ck_tenant_settings_late_fee_waive_order",
+        ),
+        sa.CheckConstraint(
+            "public_pool_claim_max BETWEEN 1 AND 1000",
+            name="ck_tenant_settings_pool_claim_max",
         ),
     )

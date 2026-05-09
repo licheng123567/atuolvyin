@@ -505,6 +505,48 @@ def send_payment_link(
     )
 
 
+_OPEN_STAGES = ("new", "in_progress", "promised", "escalated")  # 未结案的 stages（不含 paid/closed）
+
+
+def _claim_quota(db: Session, *, tenant_id: int) -> int:
+    """Return tenant's `public_pool_claim_max` (default 50 if no settings row)."""
+    from app.models.settings import TenantSettings
+    row = db.execute(
+        select(TenantSettings.public_pool_claim_max).where(
+            TenantSettings.tenant_id == tenant_id
+        )
+    ).scalar_one_or_none()
+    return int(row) if row is not None else 50
+
+
+def _agent_open_case_count(db: Session, *, user_id: int, tenant_id: int) -> int:
+    return int(db.execute(
+        select(func.count(CollectionCase.id)).where(
+            CollectionCase.tenant_id == tenant_id,
+            CollectionCase.assigned_to == user_id,
+            CollectionCase.stage.in_(_OPEN_STAGES),
+        )
+    ).scalar_one())
+
+
+@router.get("/me/pool-quota")
+async def get_pool_quota(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    """v1.6.9 — 当前持有未结案案件数 + 抢单上限（让前端公海页展示进度）。"""
+    tenant_id = _require_tenant(payload)
+    held = _agent_open_case_count(db, user_id=user.id, tenant_id=tenant_id)
+    quota = _claim_quota(db, tenant_id=tenant_id)
+    return {
+        "held_open": held,
+        "claim_max": quota,
+        "can_claim_more": held < quota,
+        "remaining": max(0, quota - held),
+    }
+
+
 @router.post("/cases/{case_id}/claim", response_model=CaseResponse)
 async def claim_case(
     case_id: int,
@@ -513,6 +555,20 @@ async def claim_case(
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseResponse:
     tenant_id = _require_tenant(payload)
+    role = str(payload.get("role") or "")
+
+    # v1.6.9 — 持有上限校验（同时持有未结案案件 ≥ max → 409）
+    held = _agent_open_case_count(db, user_id=user.id, tenant_id=tenant_id)
+    quota = _claim_quota(db, tenant_id=tenant_id)
+    if held >= quota:
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail={
+                "code": "ERR_CLAIM_LIMIT",
+                "message": f"已达持有上限 {quota} 件，先处理掉部分案件再抢",
+            },
+        )
+
     case = db.execute(
         select(CollectionCase)
         .where(CollectionCase.id == case_id)
@@ -530,6 +586,65 @@ async def claim_case(
         )
     case.pool_type = "private"
     case.assigned_to = user.id
+
+    log_audit(
+        db,
+        actor_user_id=user.id,
+        actor_role=role,
+        tenant_id=tenant_id,
+        action="case.claimed",
+        target_type="case",
+        target_id=case_id,
+        payload={"from": "public_pool"},
+    )
+    db.commit()
+    db.refresh(case)
+    return case
+
+
+@router.post("/cases/{case_id}/release", response_model=CaseResponse)
+async def release_case(
+    case_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> CaseResponse:
+    """v1.6.9 — 催收员把私海案件主动放回公海（仅自己持有的未结案案件可放回）。"""
+    tenant_id = _require_tenant(payload)
+    role = str(payload.get("role") or "")
+    case = db.execute(
+        select(CollectionCase)
+        .where(CollectionCase.id == case_id)
+        .with_for_update()
+    ).scalar_one_or_none()
+    if not case or case.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
+        )
+    if case.assigned_to != user.id:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_NOT_YOURS", "message": "只能释放自己持有的案件"},
+        )
+    if case.stage in ("paid", "closed"):
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail={"code": "ERR_CLOSED", "message": "已结案案件无需放回公海"},
+        )
+    case.pool_type = "public"
+    case.assigned_to = None
+
+    log_audit(
+        db,
+        actor_user_id=user.id,
+        actor_role=role,
+        tenant_id=tenant_id,
+        action="case.released",
+        target_type="case",
+        target_id=case_id,
+        payload={"to": "public_pool"},
+    )
     db.commit()
     db.refresh(case)
     return case
