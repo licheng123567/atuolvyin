@@ -56,48 +56,50 @@ export function FollowUpNoteCard({
       <div className="card-header">
         <span className="card-title">添加跟进备注</span>
       </div>
-      <div className="card-body">
+      <div
+        className="card-body"
+        style={{ display: "flex", flexDirection: "column", gap: 10 }}
+      >
         <textarea
           className="form-control"
           placeholder="记录本次跟进情况、业主态度、下一步计划..."
-          style={{ height: 80 }}
+          style={{ height: 80, resize: "vertical" }}
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginTop: 12,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 13, color: "#374151", fontWeight: 500 }}>
-              更新阶段：
-            </span>
-            <select
-              className="form-control"
-              style={{ width: 140 }}
-              value={stage}
-              onChange={(e) => setStage(e.target.value)}
-            >
-              <option value="">— 不变更 —</option>
-              {Object.entries(STAGE_LABELS).map(([v, l]) => (
-                <option key={v} value={v}>{l}</option>
-              ))}
-            </select>
-          </div>
-          <button
-            type="button"
-            className="ds-btn ds-btn-primary"
-            disabled={!stage || mutation.isPending}
-            onClick={handleSave}
+        <div>
+          <label
+            style={{
+              display: "block",
+              fontSize: 12,
+              color: "#374151",
+              fontWeight: 500,
+              marginBottom: 4,
+            }}
           >
-            <Save className="w-3.5 h-3.5" />
-            {mutation.isPending ? "保存中…" : "保存"}
-          </button>
+            更新阶段
+          </label>
+          <select
+            className="form-control"
+            value={stage}
+            onChange={(e) => setStage(e.target.value)}
+          >
+            <option value="">— 不变更 —</option>
+            {Object.entries(STAGE_LABELS).map(([v, l]) => (
+              <option key={v} value={v}>{l}</option>
+            ))}
+          </select>
         </div>
+        <button
+          type="button"
+          className="ds-btn ds-btn-primary"
+          style={{ width: "100%", justifyContent: "center" }}
+          disabled={!stage || mutation.isPending}
+          onClick={handleSave}
+        >
+          <Save className="w-3.5 h-3.5" />
+          {mutation.isPending ? "保存中…" : "保存"}
+        </button>
       </div>
     </div>
   );
