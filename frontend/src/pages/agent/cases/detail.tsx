@@ -135,18 +135,12 @@ export function AgentWorkstationPage() {
           <ProjectInfoCard detail={detail} />
         </div>
 
-        {/* ── 中：活动时间线 + 添加跟进备注 ── */}
+        {/* ── 中：活动时间线 ── */}
         <div style={{ minWidth: 0 }}>
           <ActivityTimeline
             calls={detail.calls}
             timelineEvents={detail.timeline_events}
             createdAt={detail.created_at}
-          />
-
-          <FollowUpNoteCard
-            caseId={detail.id}
-            endpoint={`agent/cases/${detail.id}/stage`}
-            invalidateResource="agent/cases"
           />
         </div>
 
@@ -236,6 +230,13 @@ export function AgentWorkstationPage() {
           <div style={{ fontSize: 11, color: "var(--color-neutral-400)", textAlign: "center", lineHeight: 1.6 }}>
             「申请转法务」会提交申请单<br/>督导/admin 审批后才会真正转化
           </div>
+
+          {/* v1.6.11 — 跟进备注移到右栏（操作完直接写） */}
+          <FollowUpNoteCard
+            caseId={detail.id}
+            endpoint={`agent/cases/${detail.id}/stage`}
+            invalidateResource="agent/cases"
+          />
         </div>
       </div>
 

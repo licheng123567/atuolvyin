@@ -581,10 +581,12 @@ export function AgentWorkstationIndexPage() {
 
               {/* v1.6.9 — 拨号按钮统一移到 col-3 顶部 control-bar，col-2 不再重复 */}
 
+              {/* v1.6.11 — 工作台时间线提供「查看完整详情 →」入口跳到案件详情页 */}
               <ActivityTimeline
                 calls={caseDetail.calls}
                 timelineEvents={caseDetail.timeline_events}
                 createdAt={caseDetail.created_at}
+                caseDetailPath={`/agent/cases/${caseDetail.id}`}
               />
             </div>
           )}

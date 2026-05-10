@@ -87,18 +87,12 @@ export function SupervisorCaseDetailPage() {
           <ProjectInfoCard detail={detail} />
         </div>
 
-        {/* ── 中：活动时间线 + 添加跟进备注 ── */}
+        {/* ── 中：活动时间线 ── */}
         <div style={{ minWidth: 0 }}>
           <ActivityTimeline
             calls={detail.calls}
             timelineEvents={detail.timeline_events}
             createdAt={detail.created_at}
-          />
-          {/* 督导可改 stage（admin endpoint 已扩充 supervisor 角色） */}
-          <FollowUpNoteCard
-            caseId={detail.id}
-            endpoint={`admin/cases/${detail.id}/stage`}
-            invalidateResource="supervisor/cases"
           />
         </div>
 
@@ -207,6 +201,15 @@ export function SupervisorCaseDetailPage() {
               当前阶段：<strong>{detail.stage}</strong>
             </div>
           </div>
+
+          {/* v1.6.11 — 跟进备注移到右栏（操作完直接写） */}
+          {canAct && (
+            <FollowUpNoteCard
+              caseId={detail.id}
+              endpoint={`admin/cases/${detail.id}/stage`}
+              invalidateResource="supervisor/cases"
+            />
+          )}
         </div>
       </div>
 

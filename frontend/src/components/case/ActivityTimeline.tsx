@@ -12,6 +12,8 @@ interface Props {
   calls: CaseCallItem[];
   timelineEvents: TimelineEvent[];
   createdAt: string;
+  /** v1.6.11 — 工作台 col-2 用：传入则在卡 header 右侧显示「查看完整详情 →」跳到案件详情页 */
+  caseDetailPath?: string;
 }
 
 function eventMeta(type: string): { cls: string; title: string; icon: React.ReactNode } {
@@ -28,14 +30,32 @@ function eventMeta(type: string): { cls: string; title: string; icon: React.Reac
   }
 }
 
-export function ActivityTimeline({ calls, timelineEvents, createdAt }: Props) {
+export function ActivityTimeline({ calls, timelineEvents, createdAt, caseDetailPath }: Props) {
   const go = useGo();
   const isEmpty = calls.length === 0 && timelineEvents.filter((e) => e.type !== "call").length === 0;
 
   return (
     <div className="ds-card">
-      <div className="card-header">
+      <div
+        className="card-header"
+        style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+      >
         <span className="card-title">活动时间线</span>
+        {caseDetailPath && (
+          <button
+            type="button"
+            onClick={() => go({ to: caseDetailPath })}
+            className="ds-btn ds-btn-ghost ds-btn-sm"
+            style={{
+              fontSize: 12,
+              color: "var(--color-primary)",
+              padding: "2px 8px",
+            }}
+            title="跳转到案件详情页查看完整信息 + 操作按钮"
+          >
+            查看完整详情 →
+          </button>
+        )}
       </div>
       <div className="card-body">
         <div className="timeline">

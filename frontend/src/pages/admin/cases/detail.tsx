@@ -133,65 +133,103 @@ export function AdminCaseDetailPage() {
         <span className="current">CC-{String(detail.id).padStart(4, "0")}</span>
       </div>
 
-      <div className="detail-grid">
-        {/* Left column */}
+      {/* v1.6.11 — 三栏布局，与 agent/supervisor 详情页统一蓝本 */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "320px minmax(0, 1fr) 260px",
+          gap: 16,
+          alignItems: "start",
+        }}
+      >
+        {/* ── 左：业主信息 + 项目情况 ── */}
         <div>
           <OwnerInfoCard detail={detail} />
           <ProjectInfoCard detail={detail} />
+        </div>
 
+        {/* ── 中：活动时间线 ── */}
+        <div style={{ minWidth: 0 }}>
+          <ActivityTimeline
+            calls={detail.calls}
+            timelineEvents={detail.timeline_events}
+            createdAt={detail.created_at}
+          />
+        </div>
 
-          {/* operation buttons */}
+        {/* ── 右：sticky 操作 + 跟进备注 ── */}
+        <div
+          style={{
+            position: "sticky",
+            top: 16,
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
           {!isPM && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <button
-                type="button"
-                className="ds-btn ds-btn-primary"
-                style={{ width: "100%", justifyContent: "center" }}
-              >
-                <CreditCard className="w-3.5 h-3.5" />
-                发送缴费链接
-              </button>
-              <button
-                type="button"
-                onClick={() => setAssignOpen(true)}
-                className="ds-btn ds-btn-secondary"
-                style={{ width: "100%", justifyContent: "center" }}
-              >
-                <Users className="w-3.5 h-3.5" />
-                分配 / 重分配
-              </button>
-              <button
-                type="button"
-                onClick={handleCreateWorkOrder}
-                className="ds-btn ds-btn-secondary"
-                style={{ width: "100%", justifyContent: "center" }}
-              >
-                <ClipboardList className="w-3.5 h-3.5" />
-                创建工单
-              </button>
-              <button
-                type="button"
-                onClick={() => setConvertOpen(true)}
-                className="ds-btn ds-btn-secondary"
+            <div className="ds-card" style={{ padding: 14 }}>
+              <div
                 style={{
-                  width: "100%",
-                  justifyContent: "center",
-                  color: "#7e3af2",
-                  borderColor: "#c4b5fd",
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  color: "#374151",
+                  marginBottom: 10,
                 }}
               >
-                <Scale className="w-3.5 h-3.5" />
-                转交法务处理
-              </button>
+                管理员操作
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <button
+                  type="button"
+                  className="ds-btn ds-btn-primary"
+                  style={{ width: "100%", justifyContent: "center" }}
+                >
+                  <CreditCard className="w-3.5 h-3.5" />
+                  发送缴费链接
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAssignOpen(true)}
+                  className="ds-btn ds-btn-secondary"
+                  style={{ width: "100%", justifyContent: "center" }}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  分配 / 重分配
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateWorkOrder}
+                  className="ds-btn ds-btn-secondary"
+                  style={{ width: "100%", justifyContent: "center" }}
+                >
+                  <ClipboardList className="w-3.5 h-3.5" />
+                  创建工单
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConvertOpen(true)}
+                  className="ds-btn ds-btn-secondary"
+                  style={{
+                    width: "100%",
+                    justifyContent: "center",
+                    color: "#7e3af2",
+                    borderColor: "#c4b5fd",
+                  }}
+                >
+                  <Scale className="w-3.5 h-3.5" />
+                  转交法务处理
+                </button>
+              </div>
             </div>
           )}
           {isPM && (
             <div
+              className="ds-card"
               style={{
                 background: "#f0f9ff",
                 color: "#0369a1",
                 padding: "10px 12px",
-                borderRadius: 6,
                 fontSize: 12,
                 textAlign: "center",
               }}
@@ -199,17 +237,8 @@ export function AdminCaseDetailPage() {
               项目经理为只读视图，分配 / 工单 / 法务转化由物业管理员处理
             </div>
           )}
-        </div>
 
-        {/* Right column */}
-        <div>
-          <ActivityTimeline
-            calls={detail.calls}
-            timelineEvents={detail.timeline_events}
-            createdAt={detail.created_at}
-          />
-
-          {/* Followup form — PM 只读 */}
+          {/* v1.6.11 — 跟进备注移到右栏（操作卡下面，便于操作完直接写） */}
           {!isPM && (
             <FollowUpNoteCard
               caseId={detail.id}
