@@ -17,7 +17,11 @@ from fastapi import status as http_status
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
-from app.core.crypto import mask_phone
+from app.core.phone_visibility import (
+    display_owner_phone,
+    is_provider_contract_active,
+    should_reveal_owner_phone,
+)
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
 from app.models.case import CollectionCase, OwnerProfile, Project
@@ -61,13 +65,17 @@ def _row_to_out(
     project_name: str | None,
     requester_name: str | None,
     reviewer_name: str | None,
+    owner_phone_reveal: bool = False,
 ) -> LegalConversionRequestOut:
     return LegalConversionRequestOut(
         id=request_row.id,
         tenant_id=request_row.tenant_id,
         case_id=request_row.case_id,
         owner_name=owner.name if owner else None,
-        owner_phone_masked=mask_phone(owner.phone_enc) if owner and owner.phone_enc else None,
+        owner_phone_masked=display_owner_phone(
+            owner.phone_enc if owner else None,
+            reveal=owner_phone_reveal,
+        ),
         building=owner.building if owner else None,
         room=owner.room if owner else None,
         project_id=case.project_id if case else None,
@@ -200,6 +208,10 @@ def list_requests(
         ).all():
             reviewer_names[int(uid)] = name
 
+    # v1.7.0 — 列表层一次决策：申请审批流由 supervisor/admin 审，物业内部默认明文
+    role = payload.get("role", "")
+    contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
+    owner_phone_reveal = should_reveal_owner_phone(role=role, contract_active=contract_active)
     items = [
         _row_to_out(
             request_row=r,
@@ -208,6 +220,7 @@ def list_requests(
             project_name=pn,
             requester_name=rn,
             reviewer_name=reviewer_names.get(r.reviewer_user_id) if r.reviewer_user_id else None,
+            owner_phone_reveal=owner_phone_reveal,
         )
         for r, c, o, pn, rn in rows
     ]
@@ -293,6 +306,10 @@ def approve_request(
         project_name=project_name,
         requester_name=requester_name,
         reviewer_name=reviewer_name,
+        owner_phone_reveal=should_reveal_owner_phone(
+            role=role,
+            contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
+        ),
     )
 
 
@@ -352,4 +369,8 @@ def reject_request(
         project_name=project_name,
         requester_name=requester_name,
         reviewer_name=reviewer_name,
+        owner_phone_reveal=should_reveal_owner_phone(
+            role=role,
+            contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
+        ),
     )

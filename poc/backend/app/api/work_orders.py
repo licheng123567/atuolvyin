@@ -17,9 +17,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
+from app.core.phone_visibility import (
+    display_owner_phone,
+    is_provider_contract_active,
+    should_reveal_owner_phone,
+)
 from app.core.security import (
     get_token_payload,
-    mask_phone,
     require_roles,
 )
 from app.models.call import CallRecord
@@ -275,7 +279,15 @@ async def get_work_order(
                 id=cc.id,
                 stage=cc.stage,
                 owner_name=owner.name,
-                owner_phone_masked=mask_phone(owner.phone_enc),
+                owner_phone_masked=display_owner_phone(
+                    owner.phone_enc,
+                    reveal=should_reveal_owner_phone(
+                        role=payload.get("role", ""),
+                        contract_active=is_provider_contract_active(
+                            db, tenant_id, payload.get("provider_id")
+                        ),
+                    ),
+                ) or "",
             )
 
     call_ref: CallRef | None = None

@@ -13,7 +13,11 @@ from fastapi import status as http_status
 from sqlalchemy import desc, select, func
 from sqlalchemy.orm import Session
 
-from app.core.crypto import mask_phone
+from app.core.phone_visibility import (
+    display_owner_phone,
+    is_provider_contract_active,
+    should_reveal_owner_phone,
+)
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
 from app.models.case import CollectionCase, OwnerProfile, Project
@@ -63,6 +67,11 @@ async def list_escalated_cases(
         .limit(page_size)
     ).all()
 
+    # v1.7.0 — supervisor / admin / platform_super 是物业内部 / 平台角色，统一决策
+    role = payload.get("role", "")
+    contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
+    owner_phone_reveal = should_reveal_owner_phone(role=role, contract_active=contract_active)
+
     items = []
     for case, owner, project_name, agent_name in rows:
         amount = float(case.amount_owed) if case.amount_owed is not None else 0.0
@@ -77,7 +86,7 @@ async def list_escalated_cases(
                 "id": case.id,
                 "owner_name": owner.name,
                 "building": (owner.building or "") + (owner.room or ""),
-                "phone_masked": mask_phone(owner.phone_enc) if owner.phone_enc else "—",
+                "phone_masked": display_owner_phone(owner.phone_enc, reveal=owner_phone_reveal) or "—",
                 "amount": amount,
                 "months_overdue": case.months_overdue or 0,
                 "reason": case.notes or case.arrears_reason or "—",

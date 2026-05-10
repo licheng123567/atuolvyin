@@ -13,7 +13,7 @@ from fastapi import status as http_status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.crypto import mask_phone
+from app.core.phone_visibility import display_owner_phone, should_reveal_owner_phone
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
 from app.models.call import AnalysisResult, CallRecord, RiskEvent, Transcript
@@ -41,9 +41,18 @@ def _require_tenant(payload: dict) -> int:
     return int(tenant_id)
 
 
-def _to_review_item(call: CallRecord, analysis: AnalysisResult) -> ReviewItemOut:
-    """Convert ORM rows to ReviewItemOut."""
-    callee_masked = mask_phone(call.callee_phone_enc)
+def _to_review_item(
+    call: CallRecord,
+    analysis: AnalysisResult,
+    *,
+    reveal_phone: bool = False,
+) -> ReviewItemOut:
+    """Convert ORM rows to ReviewItemOut.
+
+    v1.7.0 — reveal_phone 由调用方按角色族决定。质检 endpoint 限定 supervisor/admin
+    （都是物业内部），传 True 即可。
+    """
+    callee_masked = display_owner_phone(call.callee_phone_enc, reveal=reveal_phone) or ""
     ai_intent: str | None = None
     if analysis.key_segments and isinstance(analysis.key_segments, dict):
         ai_intent = analysis.key_segments.get("intent")
@@ -98,7 +107,10 @@ def list_reviews(
     ).all()
 
     return PaginatedResponse(
-        items=[_to_review_item(call, analysis) for call, analysis in rows],
+        items=[
+            _to_review_item(call, analysis, reveal_phone=should_reveal_owner_phone(role=payload.get("role", "")))
+            for call, analysis in rows
+        ],
         total=total,
         page=page,
         page_size=page_size,
@@ -158,7 +170,10 @@ def label_review(
     db.commit()
     db.refresh(analysis)
 
-    return _to_review_item(call, analysis)
+    return _to_review_item(
+        call, analysis,
+        reveal_phone=should_reveal_owner_phone(role=payload.get("role", "")),
+    )
 
 
 @router.get("/reviews/{call_id}", response_model=ReviewDetailOut)
@@ -201,7 +216,10 @@ def get_review_detail(
         .all()
     )
 
-    base = _to_review_item(call, analysis)
+    base = _to_review_item(
+        call, analysis,
+        reveal_phone=should_reveal_owner_phone(role=payload.get("role", "")),
+    )
 
     segments_out: list[TranscriptSegmentOut] = []
     if transcript and transcript.segments:

@@ -152,11 +152,13 @@ def _issue_token(
     tenant_name: str | None = None
     role = "platform_superadmin"
     scope = "platform"
+    provider_id: int | None = None  # v1.7.0
 
     if membership:
         tenant_id = membership.tenant_id
         role = membership.role
         scope = f"tenant:{membership.tenant_id}"
+        provider_id = membership.provider_id
         tenant_name = db.execute(
             select(Tenant.name).where(Tenant.id == membership.tenant_id)
         ).scalar_one_or_none()
@@ -169,6 +171,7 @@ def _issue_token(
             "tenant_id": tenant_id,
             "role": role,
             "scope": scope,
+            "provider_id": provider_id,
         }
     )
     token_hash = hashlib.sha256(token.encode()).hexdigest()
@@ -543,6 +546,7 @@ def select_membership(
     tenant_id = membership.tenant_id
     role = membership.role
     scope = f"tenant:{tenant_id}" if tenant_id else "platform"
+    provider_id = membership.provider_id  # v1.7.0
     tenant_name = None
     if tenant_id:
         tenant_name = db.execute(
@@ -556,6 +560,7 @@ def select_membership(
             "tenant_id": tenant_id,
             "role": role,
             "scope": scope,
+            "provider_id": provider_id,
         }
     )
     # 同步 active_session（按 device_type）

@@ -30,6 +30,11 @@ from app.services.audit import log_audit
 from app.models.case import Project
 from app.models.tenant import UserTenantMembership
 
+from app.core.phone_visibility import (
+    is_provider_contract_active,
+    should_reveal_owner_phone,
+)
+
 from .admin_cases import _case_row_to_response, _require_tenant, build_case_detail_response
 
 
@@ -175,11 +180,17 @@ async def list_my_cases(
         ).all():
             project_name_map[pid] = pname
 
+    # v1.7.0 — agent_internal 永远明文；agent_external 看合同有效性（项目级 plan_end 暂不入列表，
+    # 单条详情页再细查；列表层只看合同总开关）
+    contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
+    owner_phone_reveal = should_reveal_owner_phone(role=role, contract_active=contract_active)
+
     return PaginatedResponse(
         items=[
             _case_row_to_response(
                 case, owner,
                 project_name=project_name_map.get(case.project_id) if case.project_id else None,
+                owner_phone_reveal=owner_phone_reveal,
             )
             for case, owner in rows
         ],
@@ -259,10 +270,13 @@ async def get_case_detail(
         )
 
     # v1.6.6 — 复用 admin 同款 helper；agent_internal 拿到明文手机号用于拨号
+    # v1.7.0 — 传 viewer 角色让 phone_masked 字段动态决定明文 / 脱敏
     return build_case_detail_response(
         db, case, owner,
         tenant_id=tenant_id,
         include_phone_plain=(role == "agent_internal"),
+        viewer_role=role,
+        viewer_provider_id=payload.get("provider_id"),
     )
 
 

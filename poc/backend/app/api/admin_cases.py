@@ -10,9 +10,13 @@ from sqlalchemy.orm import Session
 
 from app.core.crypto import encrypt_phone
 from app.core.db import get_db
+from app.core.phone_visibility import (
+    display_owner_phone,
+    is_provider_contract_active,
+    should_reveal_owner_phone,
+)
 from app.core.security import (
     get_token_payload,
-    mask_phone,
     require_roles,
 )
 from app.models.call import AnalysisResult, CallRecord, Transcript
@@ -68,7 +72,10 @@ def _case_row_to_response(
     provider_id: int | None = None,
     provider_name: str | None = None,
     project_name: str | None = None,
+    *,
+    owner_phone_reveal: bool = False,
 ) -> CaseWithOwnerResponse:
+    """v1.7.0 — owner_phone_reveal 由调用方按角色族 + 合同状态预先决定，避免列表 N+1。"""
     return CaseWithOwnerResponse(
         id=case.id,
         tenant_id=case.tenant_id,
@@ -77,7 +84,7 @@ def _case_row_to_response(
         owner=OwnerInfo(
             id=owner.id,
             name=owner.name,
-            phone_masked=mask_phone(owner.phone_enc),
+            phone_masked=display_owner_phone(owner.phone_enc, reveal=owner_phone_reveal) or "",
             building=owner.building,
             room=owner.room,
             do_not_call=owner.do_not_call,
@@ -106,6 +113,8 @@ def build_case_detail_response(
     *,
     tenant_id: int,
     include_phone_plain: bool = False,
+    viewer_role: str | None = None,
+    viewer_provider_id: int | None = None,
 ) -> CaseDetailResponse:
     """v1.6.6 — 组装案件详情响应（admin / agent 共用）。
 
@@ -113,6 +122,9 @@ def build_case_detail_response(
 
     Args:
         include_phone_plain: 仅 agent_internal 传 True，把手机号明文加入业主信息（用于实际拨号）。
+        viewer_role: v1.7.0 — 当前查看者角色，用于 phone_masked 字段动态决定明文/脱敏。
+            None 时默认脱敏（兼容老调用方）。
+        viewer_provider_id: v1.7.0 — 当前查看者所属服务商 id（仅服务商角色需要），用于查合同状态。
     """
     case_id = case.id
     # 通话列表
@@ -215,6 +227,24 @@ def build_case_detail_response(
         from app.core.crypto import decrypt_phone
         phone_plain = decrypt_phone(owner.phone_enc)
 
+    # v1.7.0 — phone_masked 字段动态：按 viewer 角色族 + 合同 / 项目时效决定明文 / 脱敏
+    if viewer_role is None:
+        owner_phone_reveal = False  # 兼容老调用方
+    else:
+        from datetime import datetime, timezone
+        contract_active = is_provider_contract_active(db, tenant_id, viewer_provider_id)
+        project_active = True
+        if case.project_id is not None:
+            from app.models.case import Project as _Project
+            _proj = db.get(_Project, case.project_id)
+            if _proj is not None and _proj.plan_end is not None:
+                project_active = _proj.plan_end >= datetime.now(timezone.utc)
+        owner_phone_reveal = should_reveal_owner_phone(
+            role=viewer_role,
+            contract_active=contract_active,
+            project_active=project_active,
+        )
+
     return CaseDetailResponse(
         id=case.id,
         tenant_id=case.tenant_id,
@@ -225,7 +255,7 @@ def build_case_detail_response(
             id=owner.id,
             name=owner.name,
             phone=phone_plain,
-            phone_masked=mask_phone(owner.phone_enc),
+            phone_masked=display_owner_phone(owner.phone_enc, reveal=owner_phone_reveal) or "",
             building=owner.building,
             room=owner.room,
             do_not_call=owner.do_not_call,
@@ -416,9 +446,12 @@ async def list_cases(
         .limit(page_size)
     ).all()
 
+    # v1.7.0 — admin/PM/supervisor 都属物业内部，永远明文；列表层一次决策复用
+    owner_phone_reveal = should_reveal_owner_phone(role=role)
+
     return PaginatedResponse(
         items=[
-            _case_row_to_response(case, owner, prov_id, prov_name)
+            _case_row_to_response(case, owner, prov_id, prov_name, owner_phone_reveal=owner_phone_reveal)
             for case, owner, prov_id, prov_name in rows
         ],
         total=total,
@@ -546,7 +579,12 @@ async def get_case(
             detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
         )
     case, owner = row[0], row[1]
-    return build_case_detail_response(db, case, owner, tenant_id=tenant_id)
+    role = payload.get("role", "")
+    return build_case_detail_response(
+        db, case, owner, tenant_id=tenant_id,
+        viewer_role=role,
+        viewer_provider_id=payload.get("provider_id"),
+    )
 
 
 @router.patch("/cases/{case_id}/stage", response_model=CaseResponse)

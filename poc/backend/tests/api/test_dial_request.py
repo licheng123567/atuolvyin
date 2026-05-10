@@ -31,7 +31,8 @@ async def test_dial_request_success(
     assert msg["payload"]["case_id"] == seeded_assigned_case.id
     assert "owner_name" in msg["payload"]
     assert "owner_phone_masked" in msg["payload"]
-    assert "*" in msg["payload"]["owner_phone_masked"]
+    # v1.7.0 — agent_internal 是物业内部角色，dial-request 携带的 phone_masked 字段返回明文
+    assert msg["payload"]["owner_phone_masked"] == "13712345678"
 
 
 @pytest.mark.asyncio

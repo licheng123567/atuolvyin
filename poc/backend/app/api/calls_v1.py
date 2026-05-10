@@ -16,6 +16,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.crypto import decrypt_phone, encrypt_phone, mask_phone
+from app.core.phone_visibility import (
+    display_owner_phone,
+    is_provider_contract_active,
+    should_reveal_owner_phone,
+)
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
 from app.core.storage import storage
@@ -129,7 +134,14 @@ async def dial_request(
 
     owner = db.get(OwnerProfile, case.owner_id) if case.owner_id else None
     owner_name = owner.name if owner else "未知业主"
-    owner_phone_masked = mask_phone(owner.phone_enc) if owner and owner.phone_enc else ""
+    # v1.7.0 — 拨号请求侧：按 agent 角色 + 合同决定 phone_masked 字段是明文还是脱敏
+    _agent_reveal = should_reveal_owner_phone(
+        role=payload.get("role", ""),
+        contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
+    )
+    owner_phone_masked = display_owner_phone(
+        owner.phone_enc if owner else None, reveal=_agent_reveal,
+    ) or ""
 
     # Insert pending_dial CallRecord (shared by push & qr paths)
     call = CallRecord(
@@ -280,6 +292,8 @@ async def _broadcast_call_event(
     caller = db.get(UserAccount, call.caller_user_id) if call.caller_user_id else None
     case = db.get(CollectionCase, call.case_id) if call.case_id else None
     owner = db.get(OwnerProfile, case.owner_id) if case and case.owner_id else None
+    # v1.7.0 — broadcast 到 supervisor（物业内部角色），统一明文
+    _bc_reveal = should_reveal_owner_phone(role="supervisor")
     payload = {
         "type": event_type,  # "call.started" | "call.ended" | "call.aborted"
         "call_id": call.id,
@@ -287,7 +301,9 @@ async def _broadcast_call_event(
         "caller_user_id": call.caller_user_id,
         "caller_name": caller.name if caller else None,
         "owner_name": owner.name if owner else None,
-        "owner_phone_masked": mask_phone(owner.phone_enc) if owner and owner.phone_enc else None,
+        "owner_phone_masked": display_owner_phone(
+            owner.phone_enc if owner else None, reveal=_bc_reveal,
+        ),
         "started_at": call.started_at.isoformat() if call.started_at else None,
         "recording_mode": call.recording_mode,
         "status": call.status,
@@ -797,11 +813,16 @@ def list_calls(
         .all()
     )
 
+    # v1.7.0 — 通话列表按当前查看者角色 + 合同决定 callee_phone_masked 字段值
+    _list_reveal = should_reveal_owner_phone(
+        role=role,
+        contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
+    )
     items = [
         CallListItem(
             id=c.id,
             case_id=c.case_id,
-            callee_phone_masked=mask_phone(c.callee_phone_enc),
+            callee_phone_masked=display_owner_phone(c.callee_phone_enc, reveal=_list_reveal) or "",
             started_at=c.started_at,
             ended_at=c.ended_at,
             duration_sec=c.duration_sec,
@@ -881,10 +902,15 @@ def get_call_detail(
                 needs_review=a.needs_review,
             )
 
+    # v1.7.0 — 通话详情按当前查看者角色 + 合同决定 callee_phone_masked 字段值
+    _detail_reveal = should_reveal_owner_phone(
+        role=role,
+        contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
+    )
     return CallDetailResponse(
         id=call.id,
         case_id=call.case_id,
-        callee_phone_masked=mask_phone(call.callee_phone_enc),
+        callee_phone_masked=display_owner_phone(call.callee_phone_enc, reveal=_detail_reveal) or "",
         started_at=call.started_at,
         ended_at=call.ended_at,
         duration_sec=call.duration_sec,

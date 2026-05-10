@@ -19,7 +19,11 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.crypto import mask_phone
+from app.core.phone_visibility import (
+    display_owner_phone,
+    is_provider_contract_active,
+    should_reveal_owner_phone,
+)
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
 from app.models.call import CallRecord
@@ -75,6 +79,11 @@ def list_live_calls(
         .order_by(CallRecord.started_at.desc().nulls_last())
     ).scalars().all()
 
+    # v1.7.0 — supervisor / admin / project_manager_property 都是物业内部
+    role = payload.get("role", "")
+    contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
+    owner_phone_reveal = should_reveal_owner_phone(role=role, contract_active=contract_active)
+
     now = datetime.now(UTC)
     items: list[LiveCallItem] = []
     for c in rows:
@@ -91,7 +100,10 @@ def list_live_calls(
                 caller_user_id=c.caller_user_id,
                 caller_name=caller.name if caller else "未知坐席",
                 owner_name=owner.name if owner else None,
-                owner_phone_masked=mask_phone(owner.phone_enc) if owner and owner.phone_enc else None,
+                owner_phone_masked=display_owner_phone(
+                    owner.phone_enc if owner else None,
+                    reveal=owner_phone_reveal,
+                ),
                 started_at=c.started_at,
                 last_heartbeat_at=c.last_heartbeat_at,
                 duration_sec=duration,

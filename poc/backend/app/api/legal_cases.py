@@ -23,9 +23,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
+from app.core.phone_visibility import (
+    display_owner_phone,
+    is_provider_contract_active,
+    should_reveal_owner_phone,
+)
 from app.core.security import (
     get_token_payload,
-    mask_phone,
     require_roles,
 )
 from app.core.storage import storage
@@ -59,7 +63,22 @@ def _require_tenant(payload: dict) -> int:
     return tenant_id
 
 
-def _legal_to_out(lc: LegalCase, owner_name: str | None, phone_enc: str | None) -> LegalCaseOut:
+def _legal_to_out(
+    lc: LegalCase,
+    owner_name: str | None,
+    phone_enc: str | None,
+    *,
+    viewer_role: str = "",
+    contract_active: bool = False,
+) -> LegalCaseOut:
+    """v1.7.0 — owner_phone_masked 字段值动态：legal 看 stage 是否在 active 集合，
+    内部物业/admin 永远明文，平台永远脱敏。
+    """
+    reveal = should_reveal_owner_phone(
+        role=viewer_role,
+        contract_active=contract_active,
+        legal_case_stage=lc.stage,
+    )
     return LegalCaseOut(
         id=lc.id,
         tenant_id=lc.tenant_id,
@@ -73,7 +92,7 @@ def _legal_to_out(lc: LegalCase, owner_name: str | None, phone_enc: str | None) 
         created_at=lc.created_at,
         updated_at=lc.updated_at,
         owner_name=owner_name,
-        owner_phone_masked=mask_phone(phone_enc) if phone_enc else None,
+        owner_phone_masked=display_owner_phone(phone_enc, reveal=reveal),
     )
 
 
@@ -106,7 +125,12 @@ async def list_legal_cases(
         stmt.order_by(LegalCase.id.desc()).offset((page - 1) * page_size).limit(page_size)
     ).all()
 
-    items = [_legal_to_out(lc, name, phone_enc) for lc, name, phone_enc in rows]
+    role = payload.get("role", "")
+    contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
+    items = [
+        _legal_to_out(lc, name, phone_enc, viewer_role=role, contract_active=contract_active)
+        for lc, name, phone_enc in rows
+    ]
     return PaginatedResponse(
         items=items,
         total=total,
@@ -155,6 +179,8 @@ async def create_legal_case(
         lc,
         owner.name if owner else None,
         owner.phone_enc if owner else None,
+        viewer_role=payload.get("role", ""),
+        contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
     )
 
 
@@ -177,10 +203,18 @@ async def get_legal_case(
     cc = db.get(CollectionCase, lc.case_id)
     owner = db.get(OwnerProfile, cc.owner_id) if cc else None
 
+    role = payload.get("role", "")
+    contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
+    reveal = should_reveal_owner_phone(
+        role=role, contract_active=contract_active, legal_case_stage=lc.stage,
+    )
+
     base = _legal_to_out(
         lc,
         owner.name if owner else None,
         owner.phone_enc if owner else None,
+        viewer_role=role,
+        contract_active=contract_active,
     )
 
     cc_ref: CollectionCaseRef | None = None
@@ -191,7 +225,7 @@ async def get_legal_case(
             amount_owed=cc.amount_owed,
             months_overdue=cc.months_overdue,
             owner_name=owner.name,
-            owner_phone_masked=mask_phone(owner.phone_enc),
+            owner_phone_masked=display_owner_phone(owner.phone_enc, reveal=reveal) or "",
         )
 
     return LegalCaseDetailOut(**base.model_dump(), collection_case=cc_ref)
@@ -227,6 +261,8 @@ async def patch_legal_case(
         lc,
         owner.name if owner else None,
         owner.phone_enc if owner else None,
+        viewer_role=payload.get("role", ""),
+        contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
     )
 
 
@@ -309,10 +345,15 @@ async def download_evidence_bundle(
                 }
             )
 
-        # case_summary.json
+        # case_summary.json — v1.7.0: 按 legal stage 决定明文 / 脱敏（律师下载时若案件 active 看明文）
+        _zip_reveal = should_reveal_owner_phone(
+            role=payload.get("role", ""),
+            contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
+            legal_case_stage=lc.stage,
+        )
         case_summary = {
             "owner_name": owner.name,
-            "owner_phone_masked": mask_phone(owner.phone_enc),
+            "owner_phone_masked": display_owner_phone(owner.phone_enc, reveal=_zip_reveal),
             "address": " ".join(p for p in (owner.building, owner.room) if p) or None,
             "amount_owed": str(cc.amount_owed) if cc.amount_owed is not None else None,
             "months_overdue": cc.months_overdue,

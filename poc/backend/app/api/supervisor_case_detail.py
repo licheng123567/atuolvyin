@@ -52,7 +52,9 @@ async def get_case_detail(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail={"code": "ERR_NO_OWNER", "message": "案件无业主信息"},
         )
-    # 督导默认看脱敏手机号；详情页拨号需要走 admin endpoint 或后续单独鉴权
+    # v1.7.0 — supervisor 是物业内部角色，phone_masked 字段会返回明文
     return build_case_detail_response(
-        db, case, owner, tenant_id=tenant_id, include_phone_plain=False
+        db, case, owner, tenant_id=tenant_id, include_phone_plain=False,
+        viewer_role=payload.get("role"),
+        viewer_provider_id=payload.get("provider_id"),
     )

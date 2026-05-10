@@ -433,10 +433,17 @@ def get_my_active_call(
     PC 端工作台每 5s 查询一次；命中时自动切到 RealtimeCallShell（接 WS）。
     使用与督导通话墙 (`supervisor/live-calls`) 相同的状态判定。
     """
-    from app.core.crypto import mask_phone
+    from app.core.phone_visibility import (
+        display_owner_phone,
+        is_provider_contract_active,
+        should_reveal_owner_phone,
+    )
 
     user_id = int(payload.get("user_id") or 0)
     tenant_id = int(payload.get("tenant_id") or 0)
+    role = payload.get("role", "")
+    contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
+    owner_phone_reveal = should_reveal_owner_phone(role=role, contract_active=contract_active)
     if not user_id or not tenant_id:
         raise HTTPException(
             status_code=http_status.HTTP_401_UNAUTHORIZED,
@@ -471,7 +478,10 @@ def get_my_active_call(
         started_at=call.started_at,
         status=call.status,
         owner_name=owner.name if owner else None,
-        owner_phone_masked=mask_phone(owner.phone_enc) if owner and owner.phone_enc else None,
+        owner_phone_masked=display_owner_phone(
+            owner.phone_enc if owner else None,
+            reveal=owner_phone_reveal,
+        ),
         building=owner.building if owner else None,
         room=owner.room if owner else None,
         amount_owed=case.amount_owed if case else None,

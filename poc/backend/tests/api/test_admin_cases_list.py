@@ -53,11 +53,13 @@ async def test_list_cases_keyword_filter(
 async def test_list_cases_includes_owner_info(
     client: AsyncClient, admin_auth_headers, seeded_case, seeded_owner
 ):
+    """v1.7.0 — admin 是物业内部角色，phone_masked 字段返回明文（11 位手机号）。"""
     resp = await client.get("/api/v1/admin/cases", headers=admin_auth_headers)
     assert resp.status_code == 200
     item = next(i for i in resp.json()["items"] if i["id"] == seeded_case.id)
     assert item["owner"]["name"] == seeded_owner.name
-    assert "****" in item["owner"]["phone_masked"]
+    assert len(item["owner"]["phone_masked"]) == 11
+    assert item["owner"]["phone_masked"].startswith("1")
 
 
 @pytest.mark.asyncio
