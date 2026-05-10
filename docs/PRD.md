@@ -96,7 +96,7 @@ ASR（DashScope）+ LLM（Qwen-Plus）+ WebSocket 实时推流是系统核心竞
 
 ```sql
 User            -- 全局唯一账号（一人一个）
-UserTenantMembership  -- 用户↔租户多对多
+UserTenantMembership  -- 用户↔租户多对多 + 同一租户内多角色
   ├── user_id
   ├── tenant_id
   ├── source_type    -- INTERNAL（直招）/ PROVIDER（服务商派遣）
@@ -106,6 +106,10 @@ UserTenantMembership  -- 用户↔租户多对多
   ├── expire_at      -- 合约到期日
   └── access_hours   -- 可访问时段
 ```
+
+**v1.6.9 — 同租户内多角色（multi-membership 同租户）**：一个 User 在同一 tenant 下可同时拥有多个 role 行（如督导小李同时是 `supervisor` + `agent_internal`）。Topbar 右上角显示「可切换 N 个角色」下拉，点击调 `POST /auth/select-membership` 颁发新 token，前端 `queryClient.clear()` 后硬刷新到 `/`。
+
+**业务约束**（避免数据查询多结果异常）：所有按 `user_id` 查 membership 的 SQL **必须**附加 `role` 过滤或 `limit(1)`，特别是 `assigned_to` 字段对应的角色查找（应显式 `role IN ('agent_internal','agent_external')`）。
 
 ### 3.3 多租户登录体验
 
@@ -971,6 +975,22 @@ ASR 文本（含 speaker: agent/customer/unknown）
 - 催收员 App 端拨出使用绑定的外呼号，不暴露个人手机号
 
 > **MVP 阶段**：号码管理不做，催收员使用个人手机号外呼；v1.1 引入号码池。
+
+### 13.7 抢单与释放（v1.6.9）
+
+**抢单（claim）**：催收员在「我的案件」页 → 切到「公海池」tab，点行内「抢单」按钮主动认领，无需等管理员分配。
+
+| 端点 | 角色 | 说明 |
+|---|---|---|
+| `GET /agent/me/pool-quota` | agent_internal/external | 返回 `{held_open, claim_max, can_claim_more, remaining}` 用于前端进度条与按钮置灰 |
+| `POST /agent/cases/{id}/claim` | agent_internal/external | 校验持有上限 + 案件仍属 `pool_type=public` AND `assigned_to=null`；成功后写 audit `case.claimed` |
+| `POST /agent/cases/{id}/release` | agent_internal/external | 仅本人持有的未结案（stage NOT IN paid/closed）可放回公海；写 audit `case.released` |
+
+**持有上限配额**（`tenant_settings.public_pool_claim_max`）：默认 50，CHECK 1-1000。达到上限后 `claim` 返回 409 `ERR_CLAIM_LIMIT`。
+
+**与 §13.1 私海上限的区别**：§13.1 的 30/20/10 是按欠费等级分别计的「同时持有该等级案件数」上限（业务侧软规则）；§13.7 的 `public_pool_claim_max` 是按用户的「未结案案件总数」（不区分等级）的硬性配额，由后端在 claim 时强制（防止"快手"催收员把整个公海抢空导致团队负载不均）。两者并行生效。
+
+> **设计思考**：原方案是只允许管理员分配，但实测发现物业体量小、管理员手动分配成为瓶颈；催收员之间能力差异大，"快手"应该被允许多接。引入 claim + 上限组合既释放了催收员主动性，又通过配额避免抢单失控（v1.6.9 决策详见 §22.1）。
 
 ---
 
@@ -2102,6 +2122,32 @@ CRM 案件 → 多次催收无果 → 一键"转法务追诉"
 - 文书模板按 `(tenant_id, package_type)` 二级查找：租户级模板优先 → 平台默认兜底；缺失占位填 `[未填]` 而非崩溃
 - 业务事务与通知发送解耦：通知发送失败做 log，不回滚业务（dispatcher 内 try/except）
 
+#### 20.4.2 v1.6.8 — 两步审批流（催收员申请 → 督导/admin 审批）
+
+v1.5 admin 直接 `POST cases/{id}/convert-to-legal` 一步建单的能力**保留不动**；新增**平行的申请通道**让催收员主动上报。
+
+```
+催收员通话/跟进后 → 点「申请转法务」+ 写理由
+    ↓ POST /agent/cases/{id}/intent action=transfer_legal
+    ↓ INSERT legal_conversion_request(status='pending', reason=...)
+督导/admin 在「法务转化审批」inbox 看到申请
+    ↓ POST /legal-conversion-requests/{id}/approve {package_id, notes}
+    ↓ 复用 build_legal_conversion_order helper → 创建 LegalConversionOrder
+    ↓ 申请单 status='approved' + related_order_id
+    OR
+    ↓ POST /legal-conversion-requests/{id}/reject {reason}  // 必填
+    ↓ status='rejected' + reviewer_note
+```
+
+**新数据模型 `legal_conversion_request`**（迁移 24009v168）：
+- 字段：`tenant_id / case_id / requester_user_id / requester_role / reason / status / reviewer_user_id / reviewer_role / reviewed_at / reviewer_note / related_order_id`
+- 状态：`pending | approved | rejected | cancelled`
+- 同 case 已有 active LegalConversionOrder 或 pending request → 重复申请 409
+
+**审批端点角色**：`supervisor / admin / platform_super`（VIEWER_ROLES 还包含 agent_* 但只能看自己提交的）
+
+**为什么不直接让 admin 一步建单足够**：实测中催收员是最早判断"业主不可能自愿缴"的人，但他们没有合规判断能力（哪些案件适合走法务、买哪个服务包）。两步流程让前线发起 + 后端把关，既不浪费催收员的判断力，又确保法务订单符合公司风控策略（v1.6.8 决策详见 §22.2）。
+
 **单元 / 集成测试覆盖**
 
 - service：推荐分级（金额阶梯）、时间线聚合（通话历史 group_by）、成本预估（含小额诉讼受理费）、模板渲染（占位替换 + 缺省回落 + 租户覆盖）
@@ -2456,6 +2502,156 @@ app.youcuihuicui.com       ← 租户侧所有角色（物业公司管理员/主
 ```
 
 两个入口共用同一套后端 API，通过 JWT 中的 `role` 和 `scope`（`platform` / `tenant:{id}` / `provider:{id}`）做权限隔离。
+
+---
+
+## 22. 决策日志（v1.5.7 - v1.6.10）
+
+> **目的**：记录 v1.5.7 - v1.6.10 期间针对核心业务流程做出的关键产品决策，包含「背景动机 / 决策内容 / 思考过程 / 影响范围」。便于后续团队理解某条规则为何如此设计，避免相同的争论再次发生。每条决策对应一次实测发现的问题或一次产品讨论。
+
+### 22.1 公海池主动抢单 + 持有上限（v1.6.9）
+
+**背景**：MVP 设计是"管理员手动分配 + 催收员被动接单"。实测发现：
+- 物业体量小，admin 每天分配几十条案件成为瓶颈
+- 催收员能力差异大，"快手" 1 天能跟 30 条，"慢手" 跟 5 条都吃力
+- 等管理员分配的延迟让高优先级案件错过最佳追讨窗口
+
+**决定**（已实现，详见 §13.7）：
+- 催收员可在「我的案件 → 公海池」主动抢单（claim）
+- 持有上限由 `tenant_settings.public_pool_claim_max` 控制（默认 50，CHECK 1-1000）
+- 自己持有的未结案案件可主动 release 放回公海
+
+**思考过程**：
+- ❌ 备选方案 A「无上限抢单」：被否决 — 快手会把整个公海抢空，团队负载严重不均
+- ❌ 备选方案 B「保留纯管理员分配」：被否决 — admin 瓶颈未解
+- ✅ 当前方案「抢单 + 上限」：保留管理员分配（仍是主路径），抢单是补充通道；上限确保团队整体负载可控
+- 上限默认 50 是经验值（团队 1 个内勤大约持 30-40 条比较合理，留 10-20 缓冲）；admin 可在系统配置调整
+
+**影响范围**：
+- 后端：`tenant_settings.public_pool_claim_max` 新字段 + 迁移 `24010v169`；3 个新 API（`/agent/me/pool-quota`、`/agent/cases/{id}/claim`、`/agent/cases/{id}/release`）；audit log 新事件 `case.claimed` / `case.released`
+- 前端：「我的案件」加 tab 切换 + 抢单按钮 + 持有数量进度条
+- 测试：4 个新 pytest（quota 默认值 / 上限阻断 / release own / release others 403）
+
+---
+
+### 22.2 法务转化两步审批（v1.6.8）
+
+**背景**：v1.5 `POST /admin/cases/{id}/convert-to-legal` 让 admin 一步建单。但实测发现：
+- 催收员是最早判断"业主不可能自愿缴"的人（直接通话感知）
+- admin 远离一线，对每个案件是否值得走法务缺乏直觉
+- 让催收员直接建法务单 → 风控失控（什么单都转，律所收到一堆低价值单）
+
+**决定**（已实现，详见 §20.4.2）：保留 admin 直接建单 + 平行新增"催收员申请 + 督导/admin 审批"通道。两条路径不互斥。
+
+**思考过程**：
+- ❌ 备选方案 A「让催收员直接建单」：被否决 — 风控失控
+- ❌ 备选方案 B「废弃 admin 一步建单只走审批」：被否决 — admin 在某些场景（如批量历史欠费导入后立即转法务）需要快速建单能力
+- ✅ 当前方案「两条路径」：催收员发起 + 督导把关是常规路径；admin 一步建单是兜底
+
+**为什么用独立 `LegalConversionRequest` 表而不是给 `LegalConversionOrder` 加 `awaiting_approval` 状态**：Order 的状态机本来就是「已建单 → 派发 → 服务 → 完成」的法律业务流；混入"审批中"会让 Order 同时承担"未确定要不要建"和"已建已派单"两种语义，命名/查询/列表渲染都难做。独立表更干净。
+
+**影响范围**：
+- 后端：新表 `legal_conversion_request` + 迁移 `24009v168`；3 个新 API（list/approve/reject）；admin endpoint 抽出 `build_legal_conversion_order` helper 给两个路径共用
+- 前端：督导侧新页 `/supervisor/legal-conversion-approvals`；`ConvertToLegalModal` 加 `mode='approve'`；催收员申请按钮在工作台 + 详情页双入口
+- 测试：9 个新 pytest
+
+---
+
+### 22.3 案件详情页统一蓝本（v1.6.9 - v1.6.10）
+
+**背景**：admin/agent/supervisor 三个角色各有独立的 detail.tsx，维护负担大且 UI 不一致：
+- supervisor 的 detail.tsx 757 行，自建 ProjectInfoCard、BillBreakdownCard、WorkOrdersCard
+- admin/agent 用了部分共享组件但 BillBreakdownCard 重复写
+- 用户实测：「6 个入口（admin 案件列表、agent 我的案件、supervisor 案件分配、升级处理、承诺催付、超期预警）的 详情页 应该统一」
+
+**决定**：
+- **后端**：`build_case_detail_response` helper 三角色共用（admin/agent/supervisor 三个 GET endpoint 同源返回 `CaseDetailResponse`）
+- **前端蓝本**：左栏「业主信息卡（含累计欠费 + 账单期 + 三栏金额拆分 + 欠费理由）」+「项目情况卡」/ 中栏「活动时间线」+「添加跟进备注」/ 右栏 sticky「按角色显示的操作按钮」
+- **共享组件**：`OwnerInfoCard / ProjectInfoCard / ActivityTimeline / FollowUpNoteCard / DiscountRequestModal`
+- **角色差异只在右栏操作面板**：admin 4 按钮 / agent 5-6 按钮 / supervisor 4-5 按钮
+
+**思考过程**：
+- ❌ 备选方案 A「保持三套独立页」：维护负担大，UI 不一致
+- ❌ 备选方案 B「全统一为单组件按 role 显示不同操作」：被采纳的核心思路
+- 关键发现：账单期 + 三栏金额本来就在 `OwnerInfoCard` 里实现了，但又额外写了一个 `BillBreakdownCard` 在底部 → 重复展示。**决策**：删 `BillBreakdownCard` 组件文件，账单一律走业主信息卡内嵌。
+
+**影响范围**：
+- 后端：`supervisor_case_detail.py` 156 行 → 9 行（复用 helper）；admin stage endpoint 角色扩展到 supervisor
+- 前端：supervisor detail 757 行 → ~200 行；admin/agent/supervisor 三页骨架完全统一；删除 `BillBreakdownCard.tsx` + 新建 `FollowUpNoteCard.tsx`
+
+---
+
+### 22.4 时间线节点详情可点击 + 内联听录音（v1.6.9 - v1.6.10）
+
+**背景**：v1.6.7 已经在通话节点加了 `<audio controls>` 内联播放，但只在 `recording_url` 存在且 `status=processed` 时才显示。用户测试时反映：
+- 工单/法务/阶段变更等节点没有任何交互（只是文本）
+- 录音播放控件不够明显（用户找不到）
+
+**决定**：
+- **TimelineEvent schema 加 `target_id` + `target_type`**：让前端按 type 跳详情（workorder→`/workorder/orders/{id}` / legal_order→`/admin/legal-conversion/{id}` / legal_case→`/legal/cases/{id}`）
+- **通话节点加显式「🎧 听录音」按钮**：受控展开 audio（`autoPlay`），无录音时按钮 disabled 灰色
+- **其他系统事件支持 expand**：长 note 点击展开 + 显示操作人 + ID
+
+**思考过程**：交互不显式 → 用户根本不知道有这个能力。同样的功能加一个明确的按钮就解决了。无歧义，直接做。
+
+**影响范围**：
+- 后端：`schemas/case.py` `TimelineEvent` 加 2 字段；`services/case_timeline.py` 工单/法务/法务案件事件填 `target_id`
+- 前端：`ActivityTimeline.tsx` 抽 `CallRow` 子组件，每行独立 `audioOpen` state；系统事件抽 `SystemEventRow`
+
+---
+
+### 22.5 多身份切换 + 督导兼任催收员（v1.6.9 - v1.6.10）
+
+**背景**：原模型已支持「一人多 tenant」，但**未考虑「同一 tenant 内同一 user 多 role」**：
+- 实际业务：督导经常需要直接打几个高优先级案件（教练手 / 救火）
+- 律所代表也是律师本人 — 同一 user 兼任两个 role
+- 用户实测：从督导切到催收员后，工作台业主画像消失、案件详情显示加载中
+
+**决定**（已实现，详见 §3.2）：
+- `UserTenantMembership` 已是 (user_id, tenant_id, role) 复合主键，本就支持多 role
+- Topbar 切换角色时调 `queryClient.clear()` + `window.location.replace("/")` 清缓存
+- demo seed `13000000003` 督导小李同时加 `agent_internal` membership + 分配 2 个案件演示
+
+**重要 bug 与教训**：所有按 `user_id` + `tenant_id` 查 membership 的 SQL 默认假设单结果（`scalar_one_or_none()`），多 membership 后**直接 500**。修复方案是显式加 `role` 过滤 + `limit(1)`。这是数据模型早就支持但代码假设过窄的典型问题。**已在 §3.2 数据模型说明中明确写出该约束**。
+
+**思考过程**：
+- "一人一个角色"是绝大多数 SaaS 的简化假设；当业务真实需要多角色时，前端 + 后端都要审计每一个 membership 查询
+- 切换体验上：原 `window.location.href = "/"` 在某些条件下被 React Router 拦截不真硬刷；改 `replace("/")` + `queryClient.clear()` 双保险
+
+**影响范围**：
+- 后端：`build_case_detail_response` 查 assigned 用户角色加 `role IN agent_*` 过滤 + limit(1)；assign 端点同样修
+- 前端：`Topbar.handleSwitch` 注入 `useQueryClient().clear()`
+- demo seed 演示数据
+
+---
+
+### 22.6 减免申请快捷按钮三角色共用（v1.6.9）
+
+**背景**：减免申请之前埋在「督导 → 案件详情 → 谈判区」深路径，催收员在通话结束后想发起减免要切多个页面。
+
+**决定**：
+- 抽 `DiscountRequestModal` 共享组件（`components/discount/`）
+- 三处入口：催收员案件详情右栏 + 工作台 col-4 quick-actions + 督导案件详情 + 督导升级处理页 ActionRow
+- 后端 `POST /cases/{id}/discount-offers` 已支持催收员/督导双角色发起，按 `discount_pct` 自动判定走督导审批 / admin 审批 / 自动通过
+
+**思考过程**：现成的后端能力前端没暴露。最少改动：写一个 Modal，挂到 5 个入口。
+
+**影响范围**：
+- 前端：新建 `DiscountRequestModal.tsx`；agent/supervisor 详情页 + agent 工作台 + supervisor escalated 页都接入
+
+---
+
+### 22.7 admin stage 端点角色扩展到 supervisor（v1.6.10）
+
+**背景**：v1.6.10 督导详情页加跟进备注卡，需要 `PATCH stage` endpoint。新建 supervisor 专属端点 vs 复用 admin 端点的取舍。
+
+**决定**：复用 `PATCH /admin/cases/{id}/stage`，把 `require_roles(*ADMIN_ROLES, "supervisor")` 加上 supervisor。
+
+**思考过程**：
+- ❌ 备选方案「新建 `PATCH /supervisor/cases/{id}/stage`」：复制粘贴一份 endpoint 代码，违反 DRY
+- ✅ 当前方案：admin 与 supervisor 在租户范围内的 stage 写权限本就一致（督导是租户全权角色），扩 require_roles 是最小改动
+
+**影响范围**：1 行代码改动（`admin_cases.py` `update_case_stage` 的 `require_roles`）；测试覆盖
 
 ---
 
