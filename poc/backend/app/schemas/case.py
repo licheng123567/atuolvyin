@@ -171,6 +171,9 @@ class CaseDetailResponse(BaseModel):
     priority_score: int
     last_contact_at: datetime | None
     monthly_contact_count: int
+    # v1.8.0 — 业主画像 3 统计卡片：联系次数复用 monthly_contact_count
+    promise_count: int = 0
+    workorder_count: int = 0
     status: str
     created_at: datetime
     updated_at: datetime

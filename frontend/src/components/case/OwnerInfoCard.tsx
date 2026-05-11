@@ -1,15 +1,23 @@
 // v1.6.6 — 业主信息卡（admin / agent 详情页 + 催收员工作台 col-2 共用）
-// 1:1 还原图 1：业主信息 / 累计欠费 hero / 物业费/违约金/欠费总额 三栏 / 欠费理由 / 标签
+// v1.8.0 — 信息层级重构：
+//   - 去「所属项目」「负责员工」「累计欠费 hero」（数据冗余）
+//   - 「账单期」→「欠款月份：YYYY-MM 至 YYYY-MM（共 X 个月）」（更直观）
+//   - 加 3 列统计卡片（联系/承诺/工单次数）
+//   - mode="workstation" 时挂「最近通话记录」accordion
 import type { CaseDetailResponse } from "../../types/case";
 import { STAGE_BADGE_CLASS, STAGE_LABELS } from "./constants";
+import { RecentCallsAccordion } from "./RecentCallsAccordion";
 
 interface Props {
   detail: CaseDetailResponse;
-  /** compact = true 用于工作台 240px 列：缩小字号、3 卡片改 2 行布局 */
+  /** v1.8.0 — workstation = 催收员工作台 col-2（紧凑 + 挂最近通话）；detail = 案件详情页 */
+  mode?: "workstation" | "detail";
+  /** @deprecated v1.6 — compact 旧 prop，保留兼容；workstation mode 自带 compact */
   compact?: boolean;
 }
 
-export function OwnerInfoCard({ detail, compact = false }: Props) {
+export function OwnerInfoCard({ detail, mode = "detail", compact: compatCompact = false }: Props) {
+  const compact = mode === "workstation" || compatCompact;
   const room = detail.owner.building && detail.owner.room
     ? `${detail.owner.building}${detail.owner.room}`
     : detail.owner.building ?? detail.owner.room ?? "—";
@@ -17,12 +25,11 @@ export function OwnerInfoCard({ detail, compact = false }: Props) {
   const monthsOverdue = detail.months_overdue ?? 0;
   const principalAmount = detail.principal_amount ? Number(detail.principal_amount) : 0;
   const lateFeeAmount = detail.late_fee_amount ? Number(detail.late_fee_amount) : 0;
-  const hasBillBreakdown = principalAmount > 0 || lateFeeAmount > 0;
+  const hasBillBreakdown = principalAmount > 0 || lateFeeAmount > 0 || amountOwed > 0;
+  const billPeriodLabel = formatBillPeriod(detail.bill_period_start, detail.bill_period_end, monthsOverdue);
 
-  // compact 模式各种字号 / 间距收紧
   const avatarSize = compact ? 40 : 48;
   const nameSize = compact ? 14 : 16;
-  const heroAmountSize = compact ? 24 : 32;
 
   return (
     <div className="ds-card section-gap">
@@ -49,66 +56,36 @@ export function OwnerInfoCard({ detail, compact = false }: Props) {
           </div>
         </div>
 
-        {/* info-grid：手机号 / 项目 / 负责员工 */}
-        <div
-          className="info-grid"
-          style={{
-            marginBottom: compact ? 12 : 16,
-            ...(compact ? { gridTemplateColumns: "1fr 1fr" } : undefined),
-          }}
-        >
-          <div className="info-item">
-            <div className="info-label">手机号</div>
-            <div className="info-value" style={{ fontFamily: "var(--font-mono, monospace)" }}>
-              {detail.owner.phone_masked}
-            </div>
+        {/* 手机号（单独一行，去项目/负责员工） */}
+        <div style={{ marginBottom: compact ? 12 : 16 }}>
+          <div className="info-label">手机号</div>
+          <div className="info-value" style={{ fontFamily: "var(--font-mono, monospace)" }}>
+            {detail.owner.phone_masked}
           </div>
-          <div className="info-item">
-            <div className="info-label">所属项目</div>
-            <div className="info-value">{detail.project_name ?? "—"}</div>
-          </div>
-          {!compact && (
-            <div className="info-item">
-              <div className="info-label">负责员工</div>
-              <div className="info-value">
-                <AssignedBadge assignedTo={detail.assigned_to} role={detail.assigned_role} />
-              </div>
-            </div>
-          )}
         </div>
 
-        {compact && (
-          <div style={{ marginBottom: 12 }}>
-            <div className="info-label" style={{ marginBottom: 4 }}>负责员工</div>
-            <AssignedBadge assignedTo={detail.assigned_to} role={detail.assigned_role} />
-          </div>
-        )}
-
-        {/* 累计欠费 hero */}
-        {amountOwed > 0 && (
-          <div style={{
-            background: "#fef2f2", borderRadius: 8,
-            padding: compact ? 12 : 16, textAlign: "center",
+        {/* v1.8.0 — 3 列统计卡片：联系 / 承诺 / 工单 */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gap: 8,
             marginBottom: compact ? 12 : 16,
-          }}>
-            <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 4 }}>累计欠费</div>
-            <div style={{ fontSize: heroAmountSize, fontWeight: 700, color: "#e02424" }}>
-              ¥{amountOwed.toLocaleString()}
-            </div>
-            {monthsOverdue > 0 && (
-              <div style={{ fontSize: 12, color: "#6b7280" }}>共 {monthsOverdue} 个月</div>
-            )}
-          </div>
-        )}
+          }}
+        >
+          <StatCell label="联系次数" value={detail.monthly_contact_count ?? 0} />
+          <StatCell label="承诺次数" value={detail.promise_count ?? 0} />
+          <StatCell label="工单数量" value={detail.workorder_count ?? 0} />
+        </div>
 
-        {/* 账单期 + 物业费/违约金/欠费总额 三栏 */}
+        {/* 欠款月份 + 物业费/违约金/欠费总额 三栏 */}
         {hasBillBreakdown && (
           <div style={{ marginBottom: compact ? 12 : 16 }}>
-            {(detail.bill_period_start || detail.bill_period_end) && (
+            {billPeriodLabel && (
               <div style={{
                 fontSize: 12, color: "var(--color-neutral-500)", marginBottom: 8,
               }}>
-                账单期：{detail.bill_period_start ?? "—"} ~ {detail.bill_period_end ?? "—"}
+                欠款月份：{billPeriodLabel}
               </div>
             )}
             <div style={{
@@ -149,16 +126,31 @@ export function OwnerInfoCard({ detail, compact = false }: Props) {
             <span className="ds-badge ds-badge-blue">已承诺</span>
           )}
         </div>
+
+        {/* v1.8.0 — workstation mode 挂「最近通话记录」accordion，详情页不挂（中栏 ActivityTimeline 已有） */}
+        {mode === "workstation" && (
+          <div style={{ marginTop: 16 }}>
+            <RecentCallsAccordion calls={detail.calls} />
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function AssignedBadge({ assignedTo, role }: { assignedTo: number | null; role?: string | null }) {
-  if (!assignedTo) return <span className="ds-badge ds-badge-gray">未分配</span>;
-  if (role === "agent_external") return <span className="ds-badge ds-badge-purple">服务商负责</span>;
-  if (role === "agent_internal") return <span className="ds-badge ds-badge-green">内勤负责</span>;
-  return <>员工 #{assignedTo}</>;
+function StatCell({ label, value }: { label: string; value: number }) {
+  return (
+    <div style={{
+      padding: "10px 8px",
+      background: "#f9fafb",
+      borderRadius: 6,
+      textAlign: "center",
+      border: "1px solid var(--color-neutral-200)",
+    }}>
+      <div style={{ fontSize: 18, fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}>{value}</div>
+      <div style={{ fontSize: 11, color: "var(--color-neutral-500)", marginTop: 2 }}>{label}</div>
+    </div>
+  );
 }
 
 function BillCell({ label, value, bg, labelColor, valueColor, bold }: {
@@ -179,4 +171,17 @@ function BillCell({ label, value, bg, labelColor, valueColor, bold }: {
       </div>
     </div>
   );
+}
+
+/** 把 bill_period_start/end + months_overdue 转成「YYYY-MM 至 YYYY-MM（共 X 个月）」 */
+function formatBillPeriod(
+  start: string | null | undefined,
+  end: string | null | undefined,
+  months: number,
+): string | null {
+  if (!start && !end) return months > 0 ? `共 ${months} 个月` : null;
+  const startYM = start ? start.slice(0, 7) : "—";
+  const endYM = end ? end.slice(0, 7) : "—";
+  const monthsText = months > 0 ? `（共 ${months} 个月）` : "";
+  return `${startYM} 至 ${endYM}${monthsText}`;
 }

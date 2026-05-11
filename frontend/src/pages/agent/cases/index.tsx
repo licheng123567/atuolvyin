@@ -3,10 +3,11 @@
 // v1.6.9 — 公海池抢单：tabs（我的 / 公海）+ 抢单按钮 + 持有上限提示
 import { useCustom, useCreate, useCustomMutation, useInvalidate, useList } from "@refinedev/core";
 import type { CrudFilter } from "@refinedev/core";
-import { Eye, Inbox, Phone, RotateCcw } from "lucide-react";
+import { Eye, Inbox, MessageSquarePlus, Phone, RotateCcw } from "lucide-react";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { PaginatedResponse } from "../../../types";
+import { FollowUpNoteModal } from "../../../components/case/FollowUpNoteModal";
 import { QrDialDialog } from "../../../components/dial/QrDialDialog";
 import { PaginationBar } from "../../../components/ui/PaginationBar";
 import { SearchInput } from "../../../components/ui/SearchInput";
@@ -85,6 +86,8 @@ export function AgentCaseListPage() {
   const [todayMode, setTodayMode] = useState(false);  // v1.6.7
   const debouncedKw = useDebouncedValue(keyword, 300);
   const [actingId, setActingId] = useState<number | null>(null);
+  // v1.8.0 — 列表行「记录跟进」快捷入口
+  const [followUpCase, setFollowUpCase] = useState<{ id: number; ownerName: string } | null>(null);
   const [qrState, setQrState] = useState<{
     caseId: number;
     qrPayload: string;
@@ -434,6 +437,15 @@ export function AgentCaseListPage() {
                           >
                             <Eye className="w-3 h-3" /> 详情
                           </button>
+                          {/* v1.8.0 — 列表行「记录跟进」快捷入口 */}
+                          <button
+                            type="button"
+                            className="ds-btn ds-btn-ghost ds-btn-sm"
+                            onClick={() => setFollowUpCase({ id: c.id, ownerName: c.owner.name })}
+                            title="无需进入详情页，直接写本次跟进备注"
+                          >
+                            <MessageSquarePlus className="w-3 h-3" /> 记录跟进
+                          </button>
                           {/* v1.6.9 — 自己持有的未结案案件可放回公海 */}
                           {c.stage !== "paid" && c.stage !== "closed" && (
                             <button
@@ -470,6 +482,17 @@ export function AgentCaseListPage() {
           expiresAt={qrState.expiresAt}
           onClose={() => setQrState(null)}
           onRegenerate={() => requestQrPayload(qrState.caseId)}
+        />
+      )}
+
+      {/* v1.8.0 — 列表行「记录跟进」Modal */}
+      {followUpCase && (
+        <FollowUpNoteModal
+          caseId={followUpCase.id}
+          ownerName={followUpCase.ownerName}
+          endpoint={`agent/cases/${followUpCase.id}/stage`}
+          invalidateResource="agent/cases"
+          onClose={() => setFollowUpCase(null)}
         />
       )}
     </div>

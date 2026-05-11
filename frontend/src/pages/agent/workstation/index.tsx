@@ -6,7 +6,6 @@
 import { useCreate, useCustom, useCustomMutation, useList, useOne } from "@refinedev/core";
 import { Mic, MicOff, PauseCircle, Phone, PhoneOff, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityTimeline } from "../../../components/case/ActivityTimeline";
 import { OwnerInfoCard } from "../../../components/case/OwnerInfoCard";
 import { ProjectInfoCard } from "../../../components/case/ProjectInfoCard";
 import { DiscountRequestModal } from "../../../components/discount/DiscountRequestModal";
@@ -576,18 +575,9 @@ export function AgentWorkstationIndexPage() {
             </div>
           ) : (
             <div style={{ padding: 12 }}>
-              <OwnerInfoCard detail={caseDetail} compact />
+              {/* v1.8.0 — workstation 模式：业主画像内含 3 统计卡片 + 欠款月份 + 最近通话 accordion */}
+              <OwnerInfoCard detail={caseDetail} mode="workstation" />
               <ProjectInfoCard detail={caseDetail} compact />
-
-              {/* v1.6.9 — 拨号按钮统一移到 col-3 顶部 control-bar，col-2 不再重复 */}
-
-              {/* v1.6.11 — 工作台时间线提供「查看完整详情 →」入口跳到案件详情页 */}
-              <ActivityTimeline
-                calls={caseDetail.calls}
-                timelineEvents={caseDetail.timeline_events}
-                createdAt={caseDetail.created_at}
-                caseDetailPath={`/agent/cases/${caseDetail.id}`}
-              />
             </div>
           )}
         </div>

@@ -227,6 +227,22 @@ def build_case_detail_response(
         from app.core.crypto import decrypt_phone
         phone_plain = decrypt_phone(owner.phone_enc)
 
+    # v1.8.0 — 业主画像 3 统计卡：联系次数复用 monthly_contact_count，承诺/工单各 1 条 COUNT
+    from app.models.work import WorkOrder
+    promise_count = db.execute(
+        select(func.count(CallRecord.id)).where(
+            CallRecord.case_id == case_id,
+            CallRecord.tenant_id == tenant_id,
+            CallRecord.result_tag == "承诺缴",
+        )
+    ).scalar_one() or 0
+    workorder_count = db.execute(
+        select(func.count(WorkOrder.id)).where(
+            WorkOrder.case_id == case_id,
+            WorkOrder.tenant_id == tenant_id,
+        )
+    ).scalar_one() or 0
+
     # v1.7.0 — phone_masked 字段动态：按 viewer 角色族 + 合同 / 项目时效决定明文 / 脱敏
     if viewer_role is None:
         owner_phone_reveal = False  # 兼容老调用方
@@ -274,6 +290,8 @@ def build_case_detail_response(
         priority_score=case.priority_score,
         last_contact_at=case.last_contact_at,
         monthly_contact_count=case.monthly_contact_count,
+        promise_count=promise_count,
+        workorder_count=workorder_count,
         status=case.status,
         created_at=case.created_at,
         updated_at=case.updated_at,

@@ -1,9 +1,10 @@
 // 1:1 还原 ui/admin.html#a-cases CRM 案件列表
 import { useCreate, useCustom, useGetIdentity, useGo, useList } from "@refinedev/core";
 import type { CrudFilter } from "@refinedev/core";
-import { CheckSquare, Download, KanbanSquare, List, Plus, Search, UserCheck } from "lucide-react";
+import { CheckSquare, Download, KanbanSquare, List, MessageSquarePlus, Plus, Search, UserCheck } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { FollowUpNoteModal } from "../../../components/case/FollowUpNoteModal";
 import { SearchableSelect } from "../../../components/ui/SearchableSelect";
 import { exportToCsv } from "../../../lib/csv";
 import type { AuthUser } from "../../../providers/auth-provider";
@@ -107,6 +108,8 @@ export function CaseListPage() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
+  // v1.8.0 — 列表行「记录跟进」快捷入口
+  const [followUpCase, setFollowUpCase] = useState<{ id: number; ownerName: string } | null>(null);
   const PAGE_SIZE = 12;
 
   const filters: CrudFilter[] = [];
@@ -593,6 +596,17 @@ export function CaseListPage() {
                     >
                       详情
                     </button>
+                    {!isPM && (
+                      <button
+                        type="button"
+                        className="ds-btn ds-btn-ghost ds-btn-sm"
+                        onClick={() => setFollowUpCase({ id: c.id, ownerName: c.owner.name })}
+                        title="无需进入详情页，直接写本次跟进备注"
+                      >
+                        <MessageSquarePlus className="w-3.5 h-3.5" />
+                        记录跟进
+                      </button>
+                    )}
                     {!isPM && !c.assigned_to && !c.provider_id && (
                       <button
                         type="button"
@@ -691,6 +705,17 @@ export function CaseListPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* v1.8.0 — 列表行「记录跟进」Modal */}
+      {followUpCase && (
+        <FollowUpNoteModal
+          caseId={followUpCase.id}
+          ownerName={followUpCase.ownerName}
+          endpoint={`admin/cases/${followUpCase.id}/stage`}
+          invalidateResource="admin/cases"
+          onClose={() => setFollowUpCase(null)}
+        />
       )}
     </div>
   );

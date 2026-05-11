@@ -61,6 +61,9 @@ export interface CaseDetailResponse {
   priority_score: number;
   last_contact_at: string | null;
   monthly_contact_count: number;
+  // v1.8.0 — 业主画像 3 统计卡片
+  promise_count?: number;
+  workorder_count?: number;
   status: string;
   created_at: string;
   updated_at: string;

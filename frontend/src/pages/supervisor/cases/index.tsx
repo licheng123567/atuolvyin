@@ -4,9 +4,10 @@
 // v1.6.10 — 左侧改用真实后端 GET /supervisor/cases，case.id 与 detail endpoint 对齐（修复 404）
 import type { CrudFilter } from "@refinedev/core";
 import { useList } from "@refinedev/core";
-import { Eye, Info } from "lucide-react";
+import { Eye, Info, MessageSquarePlus } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { FollowUpNoteModal } from "../../../components/case/FollowUpNoteModal";
 import { PaginationBar } from "../../../components/ui/PaginationBar";
 import { SearchInput } from "../../../components/ui/SearchInput";
 import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
@@ -80,6 +81,8 @@ export function SupervisorCasesPage() {
   const [projectFilter, setProjectFilter] = useState<string>("全部项目");
   const [keyword, setKeyword] = useState("");
   const [page, setPage] = useState(1);
+  // v1.8.0 — 列表行「记录跟进」快捷入口
+  const [followUpCase, setFollowUpCase] = useState<{ id: number; ownerName: string } | null>(null);
   const debouncedKw = useDebouncedValue(keyword, 300);
 
   // v1.6.10 — 真实后端 GET /supervisor/cases，仅取公海未分配
@@ -219,6 +222,15 @@ export function SupervisorCasesPage() {
                   >
                     <Eye className="w-3 h-3" /> 详情
                   </button>
+                  <button
+                    type="button"
+                    className="ds-btn ds-btn-ghost ds-btn-sm"
+                    onClick={(e) => { e.stopPropagation(); setFollowUpCase({ id: c.id, ownerName: c.owner.name }); }}
+                    title="无需进入详情页，直接写本次跟进备注"
+                    style={{ flexShrink: 0 }}
+                  >
+                    <MessageSquarePlus className="w-3 h-3" /> 记录跟进
+                  </button>
                 </div>
               );
             })}
@@ -273,6 +285,17 @@ export function SupervisorCasesPage() {
             setSelected(new Set());
             setShowAssign(false);
           }}
+        />
+      )}
+
+      {/* v1.8.0 — 列表行「记录跟进」Modal（supervisor 复用 admin/cases/{id}/stage 端点，v1.6.10 已扩权） */}
+      {followUpCase && (
+        <FollowUpNoteModal
+          caseId={followUpCase.id}
+          ownerName={followUpCase.ownerName}
+          endpoint={`admin/cases/${followUpCase.id}/stage`}
+          invalidateResource="supervisor/cases"
+          onClose={() => setFollowUpCase(null)}
         />
       )}
     </div>

@@ -10,8 +10,8 @@ interface ImportRow {
   building: string;
   room: string;
   // v1.6.3 — 账单字段（不再自动按月推算）
-  bill_period_start: string;  // 账单开始日期 YYYY-MM-DD
-  bill_period_end: string;    // 账单结束日期 YYYY-MM-DD
+  bill_period_start: string;  // 欠费开始日期 YYYY-MM-DD
+  bill_period_end: string;    // 欠费截止日期 YYYY-MM-DD
   principal_amount: string;   // 物业费（本金）
   late_fee_amount: string;    // 违约金 / 滞纳金
   amount_owed: string;        // 欠费总额（= 物业费 + 违约金，可手填或自动算）
@@ -230,7 +230,7 @@ export function CaseImportPage() {
               或 <span style={{ color: "#1A56DB", cursor: "pointer" }}>点击选择文件</span>
             </div>
             <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 8 }}>
-              支持 .xlsx / .csv · 最大 100MB · 必须包含：姓名、手机号、楼栋、账单开始日期、账单结束日期、物业费、违约金、欠费总额（= 物业费 + 违约金）
+              支持 .xlsx / .csv · 最大 100MB · 必须包含：姓名、手机号、楼栋、欠费开始日期、欠费截止日期、物业费、违约金、欠费总额（= 物业费 + 违约金）
             </div>
           </div>
         </div>
@@ -254,8 +254,8 @@ export function CaseImportPage() {
                     <th>手机号*</th>
                     <th>楼栋*</th>
                     <th>房间</th>
-                    <th>账单开始日期</th>
-                    <th>账单结束日期</th>
+                    <th>欠费开始日期</th>
+                    <th>欠费截止日期</th>
                     <th>物业费 ¥</th>
                     <th>违约金 ¥</th>
                     <th>欠费总额 ¥</th>

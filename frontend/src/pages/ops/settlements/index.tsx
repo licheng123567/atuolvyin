@@ -79,7 +79,7 @@ export function OpsSettlementsOverviewPage() {
           <thead className="bg-[var(--color-neutral-50)] border-b border-[var(--color-neutral-200)]">
             <tr>
               <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">租户</th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">账单周期</th>
+              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">欠费月份</th>
               <th className="px-4 py-3 text-right font-medium text-[var(--color-neutral-600)]">金额</th>
               <th className="px-4 py-3 text-center font-medium text-[var(--color-neutral-600)]">状态</th>
               <th className="px-4 py-3 text-right font-medium text-[var(--color-neutral-600)]">逾期天数</th>
