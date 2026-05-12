@@ -25,7 +25,9 @@ from .admin_cases import build_case_detail_response
 
 router = APIRouter()
 
-SUPERVISOR_ROLES = ("supervisor", "admin", "legal")
+SUPERVISOR_ROLES = ("supervisor", "admin", "legal", "coordinator", "workorder")
+# v1.6 — legal 角色（物业法务对接人）可只读案件全貌（限本租户）；律所/律师不在内
+# v1.9.6 — coordinator / workorder（物业协调员）处理工单时需读案件全貌（业主画像 + 时间线）
 # v1.6 — legal 角色（物业法务对接人）可只读案件全貌（限本租户）；律所/律师不在内
 
 

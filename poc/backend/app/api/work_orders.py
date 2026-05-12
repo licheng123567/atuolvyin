@@ -38,6 +38,7 @@ from app.schemas.work_order import (
     CaseRef,
     WorkOrderCreate,
     WorkOrderDetailOut,
+    WorkOrderKpi,
     WorkOrderOut,
     WorkOrderPatch,
 )
@@ -82,6 +83,57 @@ def _resolve_assignee_name(db: Session, user_id: int | None) -> str | None:
         return None
     user = db.get(UserAccount, user_id)
     return user.name if user else None
+
+
+@router.get("/kpi", response_model=WorkOrderKpi)
+def get_work_orders_kpi(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*WORKORDER_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> WorkOrderKpi:
+    """v1.9.6 — 协调员工作台顶部 4 张 KPI 卡。"""
+    from datetime import UTC
+
+    tenant_id = _require_tenant(payload)
+    now = datetime.now(UTC)
+    month_start = datetime(now.year, now.month, 1, tzinfo=UTC)
+
+    open_count = db.execute(
+        select(func.count(WorkOrder.id))
+        .where(WorkOrder.tenant_id == tenant_id)
+        .where(WorkOrder.status == "open")
+    ).scalar_one() or 0
+
+    in_progress_count = db.execute(
+        select(func.count(WorkOrder.id))
+        .where(WorkOrder.tenant_id == tenant_id)
+        .where(WorkOrder.status == "in_progress")
+    ).scalar_one() or 0
+
+    closed_statuses = ("resolved", "closed")
+    closed_this_month = db.execute(
+        select(func.count(WorkOrder.id))
+        .where(WorkOrder.tenant_id == tenant_id)
+        .where(WorkOrder.status.in_(closed_statuses))
+        .where(WorkOrder.updated_at >= month_start)
+    ).scalar_one() or 0
+
+    avg_seconds = db.execute(
+        select(
+            func.avg(func.extract("epoch", WorkOrder.updated_at - WorkOrder.created_at))
+        )
+        .where(WorkOrder.tenant_id == tenant_id)
+        .where(WorkOrder.status.in_(closed_statuses))
+        .where(WorkOrder.updated_at >= month_start)
+    ).scalar()
+    avg_days = round(float(avg_seconds) / 86400.0, 1) if avg_seconds is not None else None
+
+    return WorkOrderKpi(
+        open_count=int(open_count),
+        in_progress_count=int(in_progress_count),
+        closed_this_month=int(closed_this_month),
+        avg_processing_days=avg_days,
+    )
 
 
 @router.get("", response_model=PaginatedResponse[WorkOrderOut])

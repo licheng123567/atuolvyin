@@ -77,3 +77,11 @@ class CallRef(BaseModel):
 class WorkOrderDetailOut(WorkOrderOut):
     case: CaseRef | None = None
     call: CallRef | None = None
+
+
+class WorkOrderKpi(BaseModel):
+    """v1.9.6 — 工单工作台顶部 4 张 KPI 卡数据。"""
+    open_count: int = 0
+    in_progress_count: int = 0
+    closed_this_month: int = 0  # resolved + closed 本月数量
+    avg_processing_days: float | None = None
