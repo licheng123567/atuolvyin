@@ -11,6 +11,7 @@ from app.api import (
     admin_compliance,
     admin_dashboard,
     admin_legal_conversion,
+    admin_legal_internal_config,
     admin_project_members,
     admin_projects,
     admin_provider_recommendation,
@@ -36,6 +37,7 @@ from app.api import (
     legal_cases,
     legal_conversion_requests,
     legal_documents,
+    legal_internal_orders,
     legal_workstation,
     tenant_legal_orders,
     notifications as notifications_api,
@@ -161,7 +163,9 @@ app.include_router(legal_workstation.router, prefix="/api/v1/legal-workstation",
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 app.include_router(admin_cases.router, prefix="/api/v1/admin", tags=["admin-cases"])
 app.include_router(admin_legal_conversion.router, prefix="/api/v1/admin", tags=["admin-legal-conversion"])
+app.include_router(admin_legal_internal_config.router, prefix="/api/v1/admin", tags=["admin-legal-internal-config"])
 app.include_router(legal_conversion_requests.router, prefix="/api/v1", tags=["legal-conversion-requests"])
+app.include_router(legal_internal_orders.router, prefix="/api/v1/legal", tags=["legal-internal-orders"])
 app.include_router(admin_projects.router, prefix="/api/v1/admin", tags=["admin-projects"])
 app.include_router(
     admin_project_members.router,

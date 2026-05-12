@@ -12,9 +12,23 @@ from sqlalchemy.orm import Session
 from app.models.audit import AuditLog
 from app.models.call import CallRecord
 from app.models.legal_conversion import LegalConversionOrder
+from app.models.legal_internal import (
+    InternalLegalLetterTemplate,
+    LegalInternalAction,
+    PartnerLawFirm,
+)
 from app.models.user import UserAccount
 from app.models.work import LegalCase, WorkOrder
 from app.schemas.case import TimelineEvent
+
+# v1.9.0 — 物业内部法务 action_type → timeline event type 映射
+_INTERNAL_ACTION_TYPE_MAP = {
+    "contact_owner": "legal.internal.contact_owner",
+    "send_lawyer_letter": "legal.internal.send_lawyer_letter",
+    "send_notice": "legal.internal.send_notice",
+    "mediation": "legal.internal.mediation",
+    "other": "legal.internal.other",
+}
 
 
 def build_case_timeline(
@@ -93,6 +107,82 @@ def build_case_timeline(
                 target_type="legal_order",
             )
         )
+
+    # ── v1.9.0 物业法务内部处理 actions ────────────────────────
+    internal_action_rows = db.execute(
+        select(
+            LegalInternalAction,
+            UserAccount.name,
+            InternalLegalLetterTemplate.name,
+            PartnerLawFirm.name,
+        )
+        .join(UserAccount, UserAccount.id == LegalInternalAction.actor_user_id, isouter=True)
+        .join(
+            InternalLegalLetterTemplate,
+            InternalLegalLetterTemplate.id == LegalInternalAction.letter_template_id,
+            isouter=True,
+        )
+        .join(
+            PartnerLawFirm,
+            PartnerLawFirm.id == LegalInternalAction.partner_law_firm_id,
+            isouter=True,
+        )
+        .where(
+            LegalInternalAction.case_id == case_id,
+            LegalInternalAction.tenant_id == tenant_id,
+        )
+    ).all()
+    for action, actor_name, tpl_name, firm_name in internal_action_rows:
+        event_type = _INTERNAL_ACTION_TYPE_MAP.get(
+            action.action_type, "legal.internal.other"
+        )
+        # 文案：法务沟通备注；律师函/催告函含模板+律所
+        if action.action_type in ("send_lawyer_letter", "send_notice"):
+            parts = []
+            if tpl_name:
+                parts.append(f"模板：{tpl_name}")
+            if firm_name:
+                parts.append(f"律所：{firm_name}")
+            if action.note:
+                parts.append(action.note)
+            note = " · ".join(parts) if parts else "已出具"
+        else:
+            note = action.note or ""
+        events.append(
+            TimelineEvent(
+                type=event_type,
+                ts=action.occurred_at,
+                actor=actor_name,
+                note=note,
+                target_id=action.legal_order_id,
+                target_type="legal_order",
+            )
+        )
+
+    # ── 法务订单关闭事件（基于 internal_closed_at + close_reason）
+    for lc in lc_rows:
+        if lc.internal_closed_at and lc.internal_close_reason:
+            close_label = {
+                "paid": "已缴清",
+                "promised": "达成承诺",
+                "uncollectible": "无法催收",
+                "escalated": "升级到律所",
+            }.get(lc.internal_close_reason, lc.internal_close_reason)
+            event_type = (
+                "legal.internal.escalated"
+                if lc.internal_close_reason == "escalated"
+                else "legal.internal.closed"
+            )
+            events.append(
+                TimelineEvent(
+                    type=event_type,
+                    ts=lc.internal_closed_at,
+                    actor=None,
+                    note=f"法务订单关闭 · {close_label}",
+                    target_id=lc.id,
+                    target_type="legal_order",
+                )
+            )
 
     # ── 法务案件状态 ────────────────────────────────────────────
     legal_cases = db.execute(

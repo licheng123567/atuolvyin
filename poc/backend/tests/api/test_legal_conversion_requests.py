@@ -260,7 +260,8 @@ async def test_supervisor_approve_creates_order(
     assert order is not None
     assert order.case_id == case.id
     assert order.package_id == pkg.id
-    assert order.status == "pending"
+    # v1.9.0 — supervisor 审批通过后订单进物业法务内部处理（不再直接 pending 等 admin 撮合律所）
+    assert order.status == "internal_processing"
 
 
 @pytest.mark.asyncio

@@ -98,11 +98,25 @@ class LegalConversionOrder(Base, TimestampMixin):
     )
     dispatched_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    # v1.9.0 — 物业内部法务处理环节字段
+    internal_close_reason: Mapped[str | None] = mapped_column(sa.String(32))
+    internal_closed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    internal_closed_by: Mapped[int | None] = mapped_column(
+        sa.BigInteger, sa.ForeignKey("user_account.id", ondelete="SET NULL")
+    )
 
     __table_args__ = (
         sa.CheckConstraint(
-            "status IN ('pending','dispatched','in_service','completed','cancelled')",
+            # v1.9.0 — 加 internal_processing + 4 closed_* + escalated_to_lawfirm
+            "status IN ('pending','dispatched','in_service','completed','cancelled',"
+            "'internal_processing','closed_paid','closed_promised',"
+            "'closed_uncollectible','escalated_to_lawfirm')",
             name="ck_legal_conv_status",
+        ),
+        sa.CheckConstraint(
+            "internal_close_reason IS NULL OR internal_close_reason IN "
+            "('paid','promised','uncollectible','escalated')",
+            name="ck_legal_conv_close_reason",
         ),
         sa.Index("ix_legal_conv_tenant_status", "tenant_id", "status"),
     )

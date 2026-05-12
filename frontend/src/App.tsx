@@ -89,6 +89,10 @@ import { RiskKeywordCreatePage } from "./pages/admin/risk-keywords/create";
 import { RiskKeywordEditPage } from "./pages/admin/risk-keywords/edit";
 import { LegalCaseListPage } from "./pages/legal/cases/index";
 import { LegalCaseDetailPage } from "./pages/legal/cases/[id]";
+import { LegalInternalOrdersPage } from "./pages/legal/internal-orders/index";
+import { LegalInternalOrderDetailPage } from "./pages/legal/internal-orders/[id]";
+import { AdminPartnerLawFirmsPage } from "./pages/admin/partner-law-firms/index";
+import { AdminInternalLetterTemplatesPage } from "./pages/admin/internal-letter-templates/index";
 import { WorkOrderListPage } from "./pages/workorder/orders/index";
 import { WorkOrderNewPage } from "./pages/workorder/orders/new";
 import { WorkOrderDetailPage } from "./pages/workorder/orders/[id]";
@@ -279,6 +283,16 @@ function App() {
             meta: { label: "话术库" },
           },
           {
+            name: "admin/partner-law-firms",
+            list: "/admin/partner-law-firms",
+            meta: { label: "合作律所" },
+          },
+          {
+            name: "admin/internal-letter-templates",
+            list: "/admin/internal-letter-templates",
+            meta: { label: "律师函模板" },
+          },
+          {
             name: "admin/pool",
             list: "/admin/pool",
             meta: { label: "公海管理" },
@@ -304,6 +318,12 @@ function App() {
             name: "supervisor/reviews",
             list: "/supervisor/reviews",
             meta: { label: "质检复核" },
+          },
+          {
+            name: "legal/internal-orders",
+            list: "/legal/internal-orders",
+            show: "/legal/internal-orders/:id",
+            meta: { label: "待内部处理" },
           },
           {
             name: "legal/cases",
@@ -467,6 +487,10 @@ function App() {
             {/* Legal - Cases */}
             <Route path="/legal/cases" element={<LegalCaseListPage />} />
             <Route path="/legal/cases/:id" element={<LegalCaseDetailPage />} />
+            <Route path="/legal/internal-orders" element={<LegalInternalOrdersPage />} />
+            <Route path="/legal/internal-orders/:id" element={<LegalInternalOrderDetailPage />} />
+            <Route path="/admin/partner-law-firms" element={<AdminPartnerLawFirmsPage />} />
+            <Route path="/admin/internal-letter-templates" element={<AdminInternalLetterTemplatesPage />} />
             {/* v1.5.7 — 法务转化订单三视图 */}
             <Route path="/legal/orders" element={<TenantLegalOrdersPage />} />
             <Route path="/legal/orders/:id" element={<TenantLegalOrderDetailPage />} />

@@ -3,7 +3,7 @@
 // v1.6.10 — 通话节点加显式「🎧 听录音」按钮，受控展开 audio
 // 1:1 还原图 2 右上：通话 + 工单 + 法务转化 + 阶段变更 + 案件创建 等所有沟通事件
 import { useGo } from "@refinedev/core";
-import { ChevronDown, ChevronRight, ExternalLink, FileText, Headphones, Phone, PhoneOff, Scale, Upload, Users, Wrench } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, FileText, Gavel, Handshake, Headphones, Mail, MessageCircle, Phone, PhoneOff, Scale, ShieldAlert, Upload, Users, Wrench } from "lucide-react";
 import { useState } from "react";
 import type { CaseCallItem, TimelineEvent } from "../../types/case";
 import { RESULT_TAG_BADGE_CLASS, formatDateTime, formatDuration } from "./constants";
@@ -22,6 +22,14 @@ function eventMeta(type: string): { cls: string; title: string; icon: React.Reac
     case "workorder.resolved": return { cls: "tl-system", title: "工单处理完成", icon: <Wrench size={11} stroke="white" /> };
     case "legal.converted":    return { cls: "tl-system", title: "转化为法务",   icon: <Scale  size={11} stroke="white" /> };
     case "legal.case":         return { cls: "tl-system", title: "法务跟进",     icon: <Scale  size={11} stroke="white" /> };
+    // v1.9.0 — 物业内部法务处理 7 种 event type
+    case "legal.internal.contact_owner":      return { cls: "tl-system", title: "法务沟通业主", icon: <MessageCircle size={11} stroke="white" /> };
+    case "legal.internal.send_lawyer_letter": return { cls: "tl-system", title: "出具律师函",   icon: <Mail size={11} stroke="white" /> };
+    case "legal.internal.send_notice":        return { cls: "tl-system", title: "出具催告函",   icon: <Mail size={11} stroke="white" /> };
+    case "legal.internal.mediation":          return { cls: "tl-system", title: "调解会议",     icon: <Handshake size={11} stroke="white" /> };
+    case "legal.internal.other":              return { cls: "tl-system", title: "法务备注",     icon: <FileText size={11} stroke="white" /> };
+    case "legal.internal.closed":             return { cls: "tl-system", title: "法务订单关闭", icon: <Gavel size={11} stroke="white" /> };
+    case "legal.internal.escalated":          return { cls: "tl-system", title: "升级到律所",   icon: <ShieldAlert size={11} stroke="white" /> };
     case "case.assigned":      return { cls: "tl-system", title: "案件分配",     icon: <Users  size={11} stroke="white" /> };
     case "case.stage_changed": return { cls: "tl-system", title: "阶段更新",     icon: <FileText size={11} stroke="white" /> };
     case "case.escalated":     return { cls: "tl-system", title: "升级处理",     icon: <FileText size={11} stroke="white" /> };

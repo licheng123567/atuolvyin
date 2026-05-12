@@ -262,13 +262,14 @@ def approve_request(
             detail={"code": "ERR_CASE_GONE", "message": "关联案件已不存在"},
         )
 
-    # 复用 build_legal_conversion_order：会校验 package 有效 + 去重已 active 订单
+    # v1.9.0 — supervisor 审批通过后订单进物业法务内部处理（不直接派律所）
     order = build_legal_conversion_order(
         db,
         case=case,
         package_id=body.package_id,
         notes=body.notes,
         created_by_user_id=user_id,
+        initial_status="internal_processing",
     )
 
     now = datetime.now(UTC)

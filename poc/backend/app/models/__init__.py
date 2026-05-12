@@ -39,6 +39,11 @@ from .legal_document_template import (  # noqa: F401
     LegalDocumentRender,
     LegalDocumentTemplate,
 )
+from .legal_internal import (  # noqa: F401
+    InternalLegalLetterTemplate,
+    LegalInternalAction,
+    PartnerLawFirm,
+)
 from .legal_platform_invoice import LegalPlatformInvoice  # noqa: F401
 
 __all__ = [

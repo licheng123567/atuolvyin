@@ -165,12 +165,17 @@ def build_legal_conversion_order(
     package_id: int,
     notes: str | None,
     created_by_user_id: int | None,
+    initial_status: str = "pending",
 ) -> LegalConversionOrder:
     """v1.6.8 — 共享 helper：校验 package + 去重已有 active 订单 + 创建 Order（不 commit）。
 
     被两处复用：
-      1. `POST /admin/cases/{case_id}/convert-to-legal`（admin 直接建单）
-      2. `POST /legal-conversion-requests/{id}/approve`（督导/admin 审批申请通过 → 建单）
+      1. `POST /admin/cases/{case_id}/convert-to-legal`（admin 直接建单 → status=pending → admin 撮合）
+      2. `POST /legal-conversion-requests/{id}/approve`（督导审批通过 → status=internal_processing → 物业法务内部处理）
+
+    v1.9.0 — initial_status 控制初始状态：
+      - "pending" 走 admin 撮合律所链路（兼容老逻辑）
+      - "internal_processing" 走物业法务内部处理链路（方案 B 新增）
 
     抛 HTTPException：400 服务包无效 / 409 已有 active 订单
     """
@@ -189,7 +194,10 @@ def build_legal_conversion_order(
     existing = db.execute(
         select(LegalConversionOrder).where(
             LegalConversionOrder.case_id == case.id,
-            LegalConversionOrder.status.in_(("pending", "dispatched", "in_service")),
+            # v1.9.0 — internal_processing 也算 active
+            LegalConversionOrder.status.in_(
+                ("pending", "dispatched", "in_service", "internal_processing")
+            ),
         )
     ).scalar_one_or_none()
     if existing is not None:
@@ -214,7 +222,7 @@ def build_legal_conversion_order(
         tenant_id=tenant_id,
         case_id=case.id,
         package_id=package.id,
-        status="pending",
+        status=initial_status,
         price_quoted=package.price,
         platform_fee_amount=platform_fee,
         timeline_summary=timeline,
