@@ -47,8 +47,9 @@ from app.schemas.work_order import (
 router = APIRouter()
 
 WORKORDER_ROLES = ("workorder", "coordinator", "admin", "supervisor")
-# 创建工单允许坐席（PRD §10.1：通话现场起单），读取/分配等仍限管理角色
-WORKORDER_CREATE_ROLES = WORKORDER_ROLES + ("agent_internal",)
+# v1.9.8 — 协调员/督导/admin 只处理工单，不再允许创建；建工单必须从案件发起（agent_internal）
+# 工单必须关联案件（case_id 强制非空）
+WORKORDER_CREATE_ROLES = ("agent_internal", "admin")  # admin 保留兜底建单能力（运维）
 
 
 def _require_tenant(payload: dict) -> int:
@@ -238,13 +239,18 @@ async def create_work_order(
 ) -> WorkOrderOut:
     tenant_id = _require_tenant(payload)
 
-    if body.case_id is not None:
-        cc = db.get(CollectionCase, body.case_id)
-        if cc is None or cc.tenant_id != tenant_id:
-            raise HTTPException(
-                status_code=http_status.HTTP_404_NOT_FOUND,
-                detail={"code": "ERR_CASE_NOT_FOUND", "message": "案件不存在"},
-            )
+    # v1.9.8 — 工单必须关联案件（不允许独立工单）
+    if body.case_id is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail={"code": "ERR_CASE_REQUIRED", "message": "工单必须关联案件"},
+        )
+    cc = db.get(CollectionCase, body.case_id)
+    if cc is None or cc.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_CASE_NOT_FOUND", "message": "案件不存在"},
+        )
     if body.call_id is not None:
         call = db.get(CallRecord, body.call_id)
         if call is None or call.tenant_id != tenant_id:

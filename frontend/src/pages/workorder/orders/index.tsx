@@ -2,7 +2,7 @@
 //   page-header + KPI 卡 + ds-tabs（状态）+ table-toolbar（搜索/类型/优先级）+ table-wrap
 import { useCustom, useGo, useList } from "@refinedev/core";
 import type { CrudFilter } from "@refinedev/core";
-import { Eye, Inbox, Plus, RotateCcw } from "lucide-react";
+import { Eye, Inbox, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { SearchInput } from "../../../components/ui/SearchInput";
 import type { PaginatedResponse } from "../../../types";
@@ -119,20 +119,11 @@ export function WorkOrderListPage() {
 
   return (
     <div>
-      <div className="page-header" style={{ marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <h1 className="page-title">工单管理</h1>
-          <p className="page-subtitle">
-            通话现场起单 / 案件分配 → 协调员跟进处理（服务质量 / 减免申请 / 业主纠纷 等）。
-          </p>
-        </div>
-        <button
-          type="button"
-          className="ds-btn ds-btn-primary"
-          onClick={() => go({ to: "/workorder/orders/new" })}
-        >
-          <Plus className="w-3.5 h-3.5" /> 新建工单
-        </button>
+      <div className="page-header" style={{ marginBottom: 16 }}>
+        <h1 className="page-title">工单管理</h1>
+        <p className="page-subtitle">
+          催收员从案件发起工单（含工单原因）→ 协调员在此处理（添加跟进 / 解决方案 / 关闭）。处理过程同步到案件活动时间线。
+        </p>
       </div>
 
       {/* KPI 卡 */}
