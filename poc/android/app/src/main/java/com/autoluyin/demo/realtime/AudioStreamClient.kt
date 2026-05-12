@@ -30,8 +30,13 @@ class AudioStreamClient(
     private val onForceHangup: (reason: String, triggeredBy: String) -> Unit = { _, _ -> },
     private val onTakeoverRequest: (supervisorName: String, reason: String) -> Unit = { _, _ -> },
     private val context: Context? = null,
-    private val baseUrl: String = "ws://10.0.2.2:8000",  // emulator → host loopback
+    // v1.9.9 — 默认从 AppConfig.backendUrl 派生（http→ws, https→wss）；
+    // 仅当 context 为 null 且未显式传入时才走 emulator loopback 兜底
+    baseUrl: String? = null,
 ) {
+    private val baseUrl: String = baseUrl
+        ?: context?.let { deriveWsBaseFromBackend(it) }
+        ?: "ws://10.0.2.2:8000"
     enum class State { NORMAL, DEGRADED, FALLBACK_LOCAL }
 
     data class TagPayload(
@@ -295,4 +300,18 @@ class AudioStreamClient(
     private fun shortToBytesLe(v: Int) = byteArrayOf(
         (v and 0xff).toByte(), ((v shr 8) and 0xff).toByte(),
     )
+}
+
+// v1.9.9 — 从用户配置的 backend HTTP URL 派生 WS base
+//   http://192.168.1.10:18000  → ws://192.168.1.10:18000
+//   https://api.example.com    → wss://api.example.com
+//   返回 null 表示未配置后端地址
+private fun deriveWsBaseFromBackend(ctx: Context): String? {
+    val backend = com.autoluyin.demo.AppConfig.backendUrl(ctx) ?: return null
+    val trimmed = backend.trimEnd('/')
+    return when {
+        trimmed.startsWith("https://") -> "wss://" + trimmed.removePrefix("https://")
+        trimmed.startsWith("http://")  -> "ws://"  + trimmed.removePrefix("http://")
+        else -> null
+    }
 }

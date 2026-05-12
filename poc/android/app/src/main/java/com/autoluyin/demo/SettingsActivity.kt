@@ -48,7 +48,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun showBackendUrlDialog() {
         val input = EditText(this).apply {
             inputType = InputType.TYPE_TEXT_VARIATION_URI
-            hint = "例如 http://192.168.1.10:8000"
+            hint = "例如 http://192.168.1.10:18000"
             setText(AppConfig.backendUrl(this@SettingsActivity).orEmpty())
         }
         AlertDialog.Builder(this)

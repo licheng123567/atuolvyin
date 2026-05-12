@@ -111,7 +111,7 @@ class MainActivity : AppCompatActivity() {
     private fun showBackendUrlDialog(onSaved: (() -> Unit)? = null) {
         val input = EditText(this).apply {
             inputType = InputType.TYPE_TEXT_VARIATION_URI
-            hint = "例如 http://192.168.1.10:8000 或 https://api.your-domain.com"
+            hint = "例如 http://192.168.1.10:18000 或 https://api.your-domain.com"
             setText(AppConfig.backendUrl(this@MainActivity).orEmpty())
         }
         AlertDialog.Builder(this)
@@ -173,6 +173,9 @@ class MainActivity : AppCompatActivity() {
             Manifest.permission.CALL_PHONE,
             Manifest.permission.READ_PHONE_STATE,
             Manifest.permission.READ_CALL_LOG,
+            // v1.9.9 — 实时通话流式上传必需（AudioRecord）；扫码必需（相机）
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.CAMERA,
         )
         if (Build.VERSION.SDK_INT >= 33) {
             needed += Manifest.permission.READ_MEDIA_AUDIO
