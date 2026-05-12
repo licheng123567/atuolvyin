@@ -13,9 +13,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi import status as http_status
 from sqlalchemy.orm import Session
 
+from sqlalchemy import select
+
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
 from app.models.case import CollectionCase, OwnerProfile
+from app.models.legal_conversion import LegalConversionOrder
 from app.schemas.case import CaseDetailResponse
 
 from .admin_cases import build_case_detail_response
@@ -53,8 +56,27 @@ async def get_case_detail(
             detail={"code": "ERR_NO_OWNER", "message": "案件无业主信息"},
         )
     # v1.7.0 — supervisor 是物业内部角色，phone_masked 字段会返回明文
+    # v1.9.4 — legal 角色处理本租户内部法务订单时（订单存在且非 cancelled/pending）
+    #          直接给明文，便于打电话/发律师函
+    role = payload.get("role")
+    force_phone_reveal = False
+    if role == "legal":
+        legal_order_status = db.execute(
+            select(LegalConversionOrder.status)
+            .where(LegalConversionOrder.tenant_id == tenant_id)
+            .where(LegalConversionOrder.case_id == case_id)
+            .order_by(LegalConversionOrder.created_at.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+        if legal_order_status in {
+            "internal_processing", "closed_paid", "closed_promised",
+            "closed_uncollectible", "escalated_to_lawfirm",
+        }:
+            force_phone_reveal = True
+
     return build_case_detail_response(
         db, case, owner, tenant_id=tenant_id, include_phone_plain=False,
-        viewer_role=payload.get("role"),
+        viewer_role=role,
         viewer_provider_id=payload.get("provider_id"),
+        force_owner_phone_reveal=force_phone_reveal,
     )

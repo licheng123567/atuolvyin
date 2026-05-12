@@ -1,13 +1,17 @@
-// v1.9.0 + v1.9.1 — 法务订单内部处理详情页
-// 三栏：左 业主信息 / 中 actions 时间线 + 附件 / 右 sticky 操作按钮组
-// v1.9.1 — 律师函起草 Wizard / 承诺到期重新打开 / 盖章版 PDF 上传
-import { useCustom, useCustomMutation } from "@refinedev/core";
+// v1.9.0 + v1.9.1 + v1.9.4 — 法务订单内部处理详情页
+// 三栏：左 完整业主画像 + 项目信息 / 中 全案活动时间线（与其他角色一致）
+//       右 法务专属操作（建议 / 处理动作 / 关闭 / 律师函附件管理）
+import { useCustom, useCustomMutation, useOne } from "@refinedev/core";
 import {
   AlertCircle, ArrowLeft, CheckCircle2, FileText, Gavel, Handshake, Lightbulb,
   Mail, MessageCircle, Paperclip, Printer, RotateCcw, ShieldAlert, Upload,
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { ActivityTimeline } from "../../../components/case/ActivityTimeline";
+import { OwnerInfoCard } from "../../../components/case/OwnerInfoCard";
+import { ProjectInfoCard } from "../../../components/case/ProjectInfoCard";
+import type { CaseDetailResponse } from "../../../types/case";
 
 interface ActionOut {
   id: number;
@@ -106,6 +110,14 @@ export function LegalInternalOrderDetailPage() {
   const isClosedPromised = order?.status === "closed_promised";
   const overdue = isClosedPromised && isOverdue(order?.promise_due_date ?? null);
 
+  // v1.9.4 — 复用 supervisor/cases/{case_id} 拿全案数据：业主画像 / 项目情况 / 通话记录 / 活动时间线
+  const { query: caseQuery } = useOne<CaseDetailResponse>({
+    resource: "supervisor/cases",
+    id: order?.case_id ?? "",
+    queryOptions: { enabled: !!order?.case_id },
+  });
+  const caseDetail = caseQuery.data?.data;
+
   const { mutate: createAction } = useCustomMutation();
   const { mutate: closeOrder } = useCustomMutation();
   const { mutate: escalate } = useCustomMutation();
@@ -177,9 +189,6 @@ export function LegalInternalOrderDetailPage() {
 
   if (isLoading) return <div style={{ padding: 32, color: "var(--color-neutral-400)" }}>加载中…</div>;
   if (!order) return <div style={{ padding: 32, color: "var(--color-danger)" }}>订单不存在</div>;
-
-  const room = (order.building || "") + (order.room || "") || "—";
-  const amount = order.amount_owed != null ? Number(order.amount_owed).toLocaleString("zh-CN") : "—";
 
   function resetSimple() { setSimpleType(null); setSimpleNote(""); }
   function resetWizard() {
@@ -358,105 +367,37 @@ export function LegalInternalOrderDetailPage() {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "320px minmax(0, 1fr) 280px", gap: 16, alignItems: "start" }}>
-        {/* ── 左：业主信息 ── */}
-        <div className="ds-card section-gap">
-          <div className="card-header"><span className="card-title">业主信息</span></div>
-          <div className="card-body">
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 16, fontWeight: 700 }}>{order.owner_name}</div>
-              <div style={{ fontSize: 13, color: "#6b7280" }}>{room}</div>
-            </div>
-            <div style={{ marginBottom: 12 }}>
-              <div className="info-label">手机号</div>
-              <div className="info-value" style={{ fontFamily: "var(--font-mono, monospace)" }}>
-                {order.owner_phone_masked || "—"}
+        {/* ── 左：业主画像 + 项目情况（与 admin/agent/supervisor 一致）── */}
+        <div>
+          {caseDetail ? (
+            <>
+              <OwnerInfoCard detail={caseDetail} />
+              <ProjectInfoCard detail={caseDetail} />
+            </>
+          ) : (
+            <div className="ds-card">
+              <div className="card-body" style={{ color: "var(--color-neutral-400)", padding: 24, textAlign: "center" }}>
+                加载业主画像…
               </div>
             </div>
-            <div style={{ marginBottom: 12 }}>
-              <div className="info-label">所属项目</div>
-              <div className="info-value">{order.project_name || "—"}</div>
-            </div>
-            <div style={{ background: "#fef2f2", borderRadius: 8, padding: 14, textAlign: "center", marginBottom: 12 }}>
-              <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 4 }}>欠费金额</div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: "#e02424" }}>¥{amount}</div>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>共 {order.months_overdue ?? 0} 个月</div>
-            </div>
-            {order.arrears_reason && (
-              <div style={{ padding: "10px 12px", background: "#fffbeb", borderRadius: 6, border: "1px solid #fde68a" }}>
-                <div style={{ fontSize: 11, color: "#92400e", marginBottom: 2 }}>欠费理由</div>
-                <div style={{ fontSize: 13, color: "#78350f" }}>{order.arrears_reason}</div>
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
-        {/* ── 中：actions 时间线 ── */}
+        {/* ── 中：全案活动时间线（含通话 + 工单 + 法务事件聚合）── */}
         <div style={{ minWidth: 0 }}>
-          <div className="ds-card">
-            <div className="card-header"><span className="card-title">处理记录（{order.actions.length}）</span></div>
-            <div className="card-body">
-              {order.actions.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-title">暂无处理记录</div>
-                  <div className="empty-desc">使用右侧操作栏开始内部处理流程</div>
-                </div>
-              ) : (
-                <div className="timeline">
-                  {order.actions.map((a: ActionOut) => {
-                    const meta = ACTION_META[a.action_type] ?? ACTION_META.other;
-                    const canAttach = a.action_type === "send_lawyer_letter" || a.action_type === "send_notice";
-                    return (
-                      <div key={a.id} className="tl-item">
-                        <div className="tl-spine">
-                          <div className={`tl-node ${meta.cls}`}>{meta.icon}</div>
-                        </div>
-                        <div className="tl-body">
-                          <div className="tl-head">
-                            <span className="tl-title">{meta.label}</span>
-                            <span className="tl-meta">
-                              {new Date(a.occurred_at).toLocaleString("zh-CN")}
-                              {a.actor_name && ` · ${a.actor_name}`}
-                            </span>
-                          </div>
-                          {a.letter_template_name && (
-                            <div style={{ fontSize: 12, color: "var(--color-neutral-600)" }}>
-                              📄 模板：{a.letter_template_name}
-                              {a.partner_law_firm_name && ` · 律所：${a.partner_law_firm_name}`}
-                            </div>
-                          )}
-                          {a.note && <div className="tl-text">{a.note}</div>}
-                          {/* 附件区：已有附件显示链接，未有附件显示「上传盖章版」按钮（仅 send_lawyer_letter / send_notice）*/}
-                          {canAttach && (
-                            <div style={{ marginTop: 6, display: "flex", gap: 8, alignItems: "center" }}>
-                              {a.attachment_filename ? (
-                                <button
-                                  type="button"
-                                  onClick={() => downloadAttachment(a.id)}
-                                  className="ds-btn ds-btn-ghost ds-btn-sm"
-                                  style={{ color: "var(--color-primary)", padding: 0 }}
-                                >
-                                  <Paperclip className="w-3 h-3" /> {a.attachment_filename}
-                                </button>
-                              ) : !isClosed ? (
-                                <button
-                                  type="button"
-                                  onClick={() => triggerUpload(a.id)}
-                                  className="ds-btn ds-btn-ghost ds-btn-sm"
-                                  style={{ color: "var(--color-neutral-500)", borderStyle: "dashed", border: "1px dashed var(--color-neutral-300)", padding: "4px 10px" }}
-                                >
-                                  <Upload className="w-3 h-3" /> 上传盖章版（PDF/JPG）
-                                </button>
-                              ) : null}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+          {caseDetail ? (
+            <ActivityTimeline
+              calls={caseDetail.calls ?? []}
+              timelineEvents={caseDetail.timeline_events ?? []}
+              createdAt={caseDetail.created_at}
+            />
+          ) : (
+            <div className="ds-card">
+              <div className="card-body" style={{ color: "var(--color-neutral-400)", padding: 24, textAlign: "center" }}>
+                加载活动时间线…
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* ── 右：sticky 操作栏 ── */}
@@ -605,6 +546,58 @@ export function LegalInternalOrderDetailPage() {
               )}
             </>
           )}
+
+          {/* v1.9.4 — 律师函附件管理（不论是否关闭都显示，便于追溯）*/}
+          {(() => {
+            const letterActions = order.actions.filter(
+              (a) => a.action_type === "send_lawyer_letter" || a.action_type === "send_notice",
+            );
+            if (letterActions.length === 0) return null;
+            return (
+              <div className="ds-card">
+                <div className="card-header"><span className="card-title">律师函 / 催告函附件</span></div>
+                <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {letterActions.map((a) => (
+                    <div key={a.id} style={{ borderBottom: "1px solid var(--color-neutral-100)", paddingBottom: 8 }}>
+                      <div style={{ fontSize: 12, color: "var(--color-neutral-700)", marginBottom: 4 }}>
+                        {a.action_type === "send_lawyer_letter" ? "📨 律师函" : "📄 催告函"}
+                        <span style={{ marginLeft: 6, fontSize: 11, color: "var(--color-neutral-400)" }}>
+                          {new Date(a.occurred_at).toLocaleDateString("zh-CN")}
+                        </span>
+                      </div>
+                      {a.letter_template_name && (
+                        <div style={{ fontSize: 11, color: "var(--color-neutral-500)", marginBottom: 4 }}>
+                          {a.letter_template_name}
+                          {a.partner_law_firm_name && ` · ${a.partner_law_firm_name}`}
+                        </div>
+                      )}
+                      {a.attachment_filename ? (
+                        <button
+                          type="button"
+                          onClick={() => downloadAttachment(a.id)}
+                          className="ds-btn ds-btn-ghost ds-btn-sm"
+                          style={{ color: "var(--color-primary)", padding: 0 }}
+                        >
+                          <Paperclip className="w-3 h-3" /> {a.attachment_filename}
+                        </button>
+                      ) : !isClosed ? (
+                        <button
+                          type="button"
+                          onClick={() => triggerUpload(a.id)}
+                          className="ds-btn ds-btn-ghost ds-btn-sm"
+                          style={{ color: "var(--color-neutral-500)", border: "1px dashed var(--color-neutral-300)", padding: "4px 10px", width: "100%", justifyContent: "center" }}
+                        >
+                          <Upload className="w-3 h-3" /> 上传盖章版（PDF/JPG）
+                        </button>
+                      ) : (
+                        <div style={{ fontSize: 11, color: "var(--color-neutral-400)" }}>未上传盖章版</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 

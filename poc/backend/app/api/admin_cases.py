@@ -115,6 +115,7 @@ def build_case_detail_response(
     include_phone_plain: bool = False,
     viewer_role: str | None = None,
     viewer_provider_id: int | None = None,
+    force_owner_phone_reveal: bool = False,
 ) -> CaseDetailResponse:
     """v1.6.6 — 组装案件详情响应（admin / agent 共用）。
 
@@ -125,6 +126,8 @@ def build_case_detail_response(
         viewer_role: v1.7.0 — 当前查看者角色，用于 phone_masked 字段动态决定明文/脱敏。
             None 时默认脱敏（兼容老调用方）。
         viewer_provider_id: v1.7.0 — 当前查看者所属服务商 id（仅服务商角色需要），用于查合同状态。
+        force_owner_phone_reveal: v1.9.4 — 调用方已自行判定可看明文（如 legal 处理内部订单时），
+            跳过 should_reveal_owner_phone 的 stage 校验。
     """
     case_id = case.id
     # 通话列表
@@ -244,7 +247,10 @@ def build_case_detail_response(
     ).scalar_one() or 0
 
     # v1.7.0 — phone_masked 字段动态：按 viewer 角色族 + 合同 / 项目时效决定明文 / 脱敏
-    if viewer_role is None:
+    # v1.9.4 — force_owner_phone_reveal 优先，用于调用方已自行判定的场景
+    if force_owner_phone_reveal:
+        owner_phone_reveal = True
+    elif viewer_role is None:
         owner_phone_reveal = False  # 兼容老调用方
     else:
         from datetime import datetime, timezone
