@@ -1,9 +1,10 @@
 // 1:1 还原 ui/agent-pc.html#call-history 通话记录
 // v1.6.5 — 接真实后端 GET /api/v1/agent/me/call-history
 // 「查看转写 / 详情」跳到 /calls/:id（CallDetailPage）；「回到工作台」跳到 /agent/workstation/:id
+// v1.9.9 — 顶部「今日实时」区，5s 轮询 active-call，进行中通话醒目展示
 import { useCustom } from "@refinedev/core";
-import { Download } from "lucide-react";
-import { useState } from "react";
+import { Download, PhoneCall, Radio } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PaginationBar } from "../../../components/ui/PaginationBar";
 import { SearchInput } from "../../../components/ui/SearchInput";
@@ -29,6 +30,18 @@ interface CallHistoryItem {
 }
 
 interface ProjectOption { id: number; name: string }
+
+interface ActiveCallResp {
+  active_call_id: number | null;
+  case_id: number | null;
+  started_at: string | null;
+  status: string | null;
+  owner_name: string | null;
+  owner_phone_masked: string | null;
+  building: string | null;
+  room: string | null;
+  project_name: string | null;
+}
 
 interface ListResp {
   items: CallHistoryItem[];
@@ -86,6 +99,27 @@ export function AgentCallHistoryPage() {
   });
   const projectOptions: ProjectOption[] = projectsQuery.data?.data ?? [];
 
+  // v1.9.9 — 5s 轮询 active-call，仅当筛选包含今日时才显示
+  const { query: activeCallQuery } = useCustom<ActiveCallResp>({
+    url: "agent/me/active-call",
+    method: "get",
+    queryOptions: { refetchInterval: 5000 },
+  });
+  const activeCall = activeCallQuery.data?.data;
+  const hasActive = !!activeCall?.active_call_id && activeCall.active_call_id > 0;
+  const showRealtimeBanner = dateTo === todayStr();
+
+  // 通话中计时
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!hasActive || !activeCall?.started_at) { setElapsed(0); return; }
+    const start = new Date(activeCall.started_at).getTime();
+    const tick = () => setElapsed(Math.max(0, Math.floor((Date.now() - start) / 1000)));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [hasActive, activeCall?.started_at]);
+
   const query: Record<string, string | number> = {
     page,
     page_size: PAGE_SIZE,
@@ -120,6 +154,16 @@ export function AgentCallHistoryPage() {
           </div>
         </div>
       </div>
+
+      {/* v1.9.9 — 今日实时 banner */}
+      {showRealtimeBanner && (
+        <RealtimeBanner
+          hasActive={hasActive}
+          activeCall={activeCall ?? null}
+          elapsed={elapsed}
+          onJump={() => activeCall?.active_call_id && navigate(`/agent/workstation/${activeCall.active_call_id}`)}
+        />
+      )}
 
       {/* 筛选条 */}
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
@@ -188,6 +232,12 @@ export function AgentCallHistoryPage() {
       </div>
 
       <div className="table-wrap">
+        {showRealtimeBanner && (
+          <div style={{ padding: "8px 16px", borderBottom: "1px solid var(--color-neutral-200)", background: "var(--color-neutral-50)", fontSize: 12, color: "var(--color-neutral-600)", display: "flex", alignItems: "center", gap: 6 }}>
+            <Radio className="w-3.5 h-3.5" style={{ color: "#16a34a" }} />
+            今日实时 · 每 5 秒自动刷新进行中通话
+          </div>
+        )}
         <table>
           <thead>
             <tr>
@@ -292,6 +342,88 @@ export function AgentCallHistoryPage() {
           onPageChange={setPage}
         />
       </div>
+    </div>
+  );
+}
+
+function fmtElapsed(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+}
+
+function RealtimeBanner({
+  hasActive, activeCall, elapsed, onJump,
+}: {
+  hasActive: boolean;
+  activeCall: ActiveCallResp | null;
+  elapsed: number;
+  onJump: () => void;
+}) {
+  if (!hasActive || !activeCall) {
+    return (
+      <div
+        style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "10px 14px", marginBottom: 12,
+          background: "var(--color-neutral-50)",
+          border: "1px solid var(--color-neutral-200)",
+          borderRadius: 6, fontSize: 13, color: "var(--color-neutral-500)",
+        }}
+      >
+        <PhoneCall className="w-4 h-4" style={{ color: "var(--color-neutral-400)" }} />
+        当前无进行中通话 · App 接通后此处会显示「通话中」实时卡片
+      </div>
+    );
+  }
+  const room = activeCall.building && activeCall.room
+    ? `${activeCall.building}${activeCall.room}` : (activeCall.building ?? activeCall.room ?? "—");
+  return (
+    <div
+      style={{
+        display: "flex", alignItems: "center", gap: 14,
+        padding: "12px 16px", marginBottom: 12,
+        background: "linear-gradient(90deg, #fef2f2 0%, #fff7ed 100%)",
+        border: "1px solid #fecaca", borderRadius: 6,
+        boxShadow: "0 0 0 4px rgba(220,38,38,0.08)",
+      }}
+    >
+      <span
+        className="animate-pulse"
+        style={{
+          width: 10, height: 10, borderRadius: "50%",
+          background: "#dc2626",
+          boxShadow: "0 0 0 4px rgba(220,38,38,0.25)",
+          flexShrink: 0,
+        }}
+      />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#dc2626" }}>🔴 通话中</span>
+          <span style={{
+            fontFamily: "var(--font-mono, monospace)", fontSize: 13, fontWeight: 700, color: "#dc2626",
+          }}>{fmtElapsed(elapsed)}</span>
+          {activeCall.project_name && (
+            <span style={{ fontSize: 12, color: "var(--color-neutral-600)" }}>· 📁 {activeCall.project_name}</span>
+          )}
+        </div>
+        <div style={{ fontSize: 13, color: "var(--color-neutral-700)" }}>
+          <strong>{activeCall.owner_name ?? "—"}</strong>
+          <span style={{ marginLeft: 8, color: "var(--color-neutral-500)" }}>{room}</span>
+          {activeCall.owner_phone_masked && (
+            <span style={{ marginLeft: 8, fontFamily: "var(--font-mono, monospace)", fontSize: 12, color: "var(--color-neutral-500)" }}>
+              {activeCall.owner_phone_masked}
+            </span>
+          )}
+        </div>
+      </div>
+      <button
+        type="button"
+        className="ds-btn ds-btn-primary ds-btn-sm"
+        onClick={onJump}
+      >
+        跳转工作台 →
+      </button>
     </div>
   );
 }

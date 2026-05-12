@@ -183,6 +183,43 @@ export function AgentWorkstationIndexPage() {
     u(); const id = setInterval(u, 1000); return () => clearInterval(id);
   }, [hasActiveCall, activeCall?.started_at]);
 
+  // v1.9.9 — App 接通瞬间播提示音 + tab title 闪烁
+  const prevActiveCallIdRef = useRef<number | null>(null);
+  const origTitleRef = useRef<string>(document.title);
+  useEffect(() => {
+    const prev = prevActiveCallIdRef.current;
+    if (!prev && activeCallId) {
+      // 0/null → 有 active call：接通瞬间，播提示音
+      try {
+        const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        const ctx = new AC();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.frequency.value = 880;
+        osc.connect(gain).connect(ctx.destination);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.25);
+      } catch { /* 浏览器不支持 / 用户没交互过：静默忽略 */ }
+    }
+    prevActiveCallIdRef.current = activeCallId;
+  }, [activeCallId]);
+
+  // tab title 闪烁
+  useEffect(() => {
+    const orig = origTitleRef.current;
+    if (!hasActiveCall) { document.title = orig; return; }
+    const titles = ["🔴 通话中", orig];
+    let i = 0;
+    document.title = titles[0];
+    const id = setInterval(() => {
+      i = (i + 1) % 2;
+      document.title = titles[i];
+    }, 1500);
+    return () => { clearInterval(id); document.title = orig; };
+  }, [hasActiveCall]);
+
   const selectedCase = useMemo(
     () => selectedCaseId ? caseItems.find((c) => c.id === selectedCaseId) ?? null : null,
     [selectedCaseId, caseItems],
@@ -612,16 +649,20 @@ export function AgentWorkstationIndexPage() {
 
             {/* duration pill (animated dot) */}
             <div style={{
-              background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe",
-              borderRadius: 20, fontSize: 13, fontWeight: 600,
+              background: hasActiveCall ? "#fef2f2" : "#eff6ff",
+              color: hasActiveCall ? "#dc2626" : "#1d4ed8",
+              border: `1px solid ${hasActiveCall ? "#fca5a5" : "#bfdbfe"}`,
+              borderRadius: 20, fontSize: 14, fontWeight: 700,
               fontFamily: "var(--font-mono, monospace)",
-              padding: "3px 10px", display: "flex", alignItems: "center", gap: 5,
+              padding: "3px 12px", display: "flex", alignItems: "center", gap: 6,
+              boxShadow: hasActiveCall ? "0 0 0 4px rgba(220, 38, 38, 0.12)" : "none",
+              transition: "box-shadow 0.3s",
             }}>
               <span className={hasActiveCall ? "ws-blink-dot" : ""} style={{
-                width: 7, height: 7, borderRadius: "50%",
-                background: hasActiveCall ? "#3b82f6" : "#cbd5e1", display: "inline-block",
+                width: 8, height: 8, borderRadius: "50%",
+                background: hasActiveCall ? "#dc2626" : "#cbd5e1", display: "inline-block",
               }} />
-              {hasActiveCall ? fmtDuration(elapsed) : "00:00"}
+              {hasActiveCall ? `通话中 ${fmtDuration(elapsed)}` : "待机 00:00"}
             </div>
 
             {/* recording mode badge */}
