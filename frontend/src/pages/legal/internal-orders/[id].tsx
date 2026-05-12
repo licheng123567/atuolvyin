@@ -465,12 +465,14 @@ export function LegalInternalOrderDetailPage() {
           {!isClosed && (() => {
             const sug = getProcessingSuggestion(order.amount_owed != null ? Number(order.amount_owed) : null);
             return sug ? (
-              <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "10px 12px" }}>
-                <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
-                  <Lightbulb size={14} style={{ color: sug.color, flexShrink: 0, marginTop: 2 }} />
-                  <div>
-                    <div style={{ fontSize: 11, color: "#92400e", marginBottom: 2, fontWeight: 600 }}>处理建议</div>
-                    <div style={{ fontSize: 12, color: "#78350f", lineHeight: 1.55 }}>{sug.text}</div>
+              <div className="ds-card" style={{ background: "#fffbeb", borderColor: "#fde68a" }}>
+                <div className="card-body" style={{ padding: 12 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    <Lightbulb size={16} style={{ color: sug.color, flexShrink: 0, marginTop: 2 }} />
+                    <div>
+                      <div style={{ fontSize: 12, color: "#92400e", marginBottom: 2, fontWeight: 600 }}>处理建议</div>
+                      <div style={{ fontSize: 12.5, color: "#78350f", lineHeight: 1.6 }}>{sug.text}</div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -478,50 +480,56 @@ export function LegalInternalOrderDetailPage() {
           })()}
 
           {isClosed ? (
-            <div className="ds-card" style={{ padding: 14 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>订单已关闭</div>
-              <div style={{ fontSize: 13 }}>
-                关闭原因：<strong>{CLOSE_REASON_LABEL[order.internal_close_reason || ""] || "—"}</strong>
+            <div className="ds-card">
+              <div className="card-header"><span className="card-title">订单已关闭</span></div>
+              <div className="card-body">
+                <div className="info-label">关闭原因</div>
+                <div className="info-value" style={{ marginBottom: 10 }}>
+                  <strong>{CLOSE_REASON_LABEL[order.internal_close_reason || ""] || "—"}</strong>
+                </div>
+                <div className="info-label">关闭时间</div>
+                <div className="info-value" style={{ fontSize: 12, color: "var(--color-neutral-600)" }}>
+                  {order.internal_closed_at && new Date(order.internal_closed_at).toLocaleString("zh-CN")}
+                </div>
+                {/* v1.9.1 — closed_promised 时显示承诺到期日；过期标红 + 重新打开按钮 */}
+                {isClosedPromised && order.promise_due_date && (
+                  <>
+                    <hr style={{ margin: "12px 0", border: "none", borderTop: "1px solid var(--color-neutral-200)" }} />
+                    <div className="info-label">业主承诺缴清日</div>
+                    <div className="info-value" style={{ marginBottom: 8 }}>
+                      <strong style={{ color: overdue ? "#dc2626" : "var(--color-neutral-900)" }}>{order.promise_due_date}</strong>
+                      {overdue && <span className="ds-badge ds-badge-red" style={{ marginLeft: 8 }}>已过期</span>}
+                    </div>
+                    {overdue && (
+                      <button
+                        type="button" className="ds-btn ds-btn-secondary"
+                        style={{ width: "100%", justifyContent: "center", color: "#dc2626", borderColor: "#fca5a5" }}
+                        onClick={submitReopen}
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" /> 重新打开订单
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
-              <div style={{ fontSize: 12, color: "var(--color-neutral-500)", marginTop: 4 }}>
-                {order.internal_closed_at && new Date(order.internal_closed_at).toLocaleString("zh-CN")}
-              </div>
-              {/* v1.9.1 — closed_promised 时显示承诺到期日；过期标红 + 重新打开按钮 */}
-              {isClosedPromised && order.promise_due_date && (
-                <>
-                  <hr style={{ margin: "10px 0", border: "none", borderTop: "1px solid var(--color-neutral-200)" }} />
-                  <div style={{ fontSize: 12, marginBottom: 6 }}>
-                    业主承诺缴清日：<strong style={{ color: overdue ? "#dc2626" : "var(--color-neutral-900)" }}>{order.promise_due_date}</strong>
-                    {overdue && <span className="ds-badge ds-badge-red" style={{ marginLeft: 6 }}>已过期</span>}
-                  </div>
-                  {overdue && (
-                    <button
-                      type="button" className="ds-btn ds-btn-secondary"
-                      style={{ width: "100%", justifyContent: "center", color: "#dc2626", borderColor: "#fca5a5", marginTop: 6 }}
-                      onClick={submitReopen}
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" /> 重新打开订单
-                    </button>
-                  )}
-                </>
-              )}
             </div>
           ) : (
             <>
               {/* 操作按钮组（默认）*/}
               {simpleType === null && wizardType === null && closeReason === null && (
-                <div className="ds-card" style={{ padding: 14 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 10 }}>处理动作</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div className="ds-card">
+                  <div className="card-header"><span className="card-title">处理动作</span></div>
+                  <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     <ActionBtn icon={<MessageCircle className="w-3.5 h-3.5" />} label="记录沟通" onClick={() => setSimpleType("contact_owner")} />
                     <ActionBtn icon={<Mail className="w-3.5 h-3.5" />} label="起草律师函" onClick={() => { setWizardType("send_lawyer_letter"); setWizardStep(0); }} />
                     <ActionBtn icon={<Mail className="w-3.5 h-3.5" />} label="起草催告函" onClick={() => { setWizardType("send_notice"); setWizardStep(0); }} />
                     <ActionBtn icon={<Handshake className="w-3.5 h-3.5" />} label="记录调解" onClick={() => setSimpleType("mediation")} />
                     <ActionBtn icon={<FileText className="w-3.5 h-3.5" />} label="其他备注" onClick={() => setSimpleType("other")} />
                   </div>
-                  <hr style={{ margin: "12px 0", border: "none", borderTop: "1px solid var(--color-neutral-200)" }} />
-                  <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 10 }}>关闭订单</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div className="card-header" style={{ borderTop: "1px solid var(--color-neutral-200)", borderBottom: "none" }}>
+                    <span className="card-title">关闭订单</span>
+                  </div>
+                  <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     <CloseBtn icon={<CheckCircle2 className="w-3.5 h-3.5" />} label="✓ 已缴清" reason="paid" color="#16a34a" onClick={setCloseReason} />
                     <CloseBtn icon={<Gavel className="w-3.5 h-3.5" />} label="📝 已承诺" reason="promised" color="#ea580c" onClick={setCloseReason} />
                     <CloseBtn icon={<AlertCircle className="w-3.5 h-3.5" />} label="❌ 无法催收" reason="uncollectible" color="#6b7280" onClick={setCloseReason} />
@@ -540,57 +548,58 @@ export function LegalInternalOrderDetailPage() {
 
               {/* 普通 action 表单（沟通 / 调解 / 备注）*/}
               {simpleType !== null && (
-                <div className="ds-card" style={{ padding: 14 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 10 }}>
-                    {ACTION_META[simpleType]?.label ?? "操作"}
-                  </div>
-                  <textarea
-                    className="form-control"
-                    placeholder="备注 / 沟通内容 / 调解结果..."
-                    style={{ height: 100 }}
-                    value={simpleNote}
-                    onChange={(e) => setSimpleNote(e.target.value)}
-                  />
-                  <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                    <button type="button" className="ds-btn ds-btn-secondary" style={{ flex: 1 }} onClick={resetSimple}>取消</button>
-                    <button type="button" className="ds-btn ds-btn-primary" style={{ flex: 2 }} onClick={submitSimple}>保存记录</button>
+                <div className="ds-card">
+                  <div className="card-header"><span className="card-title">{ACTION_META[simpleType]?.label ?? "操作"}</span></div>
+                  <div className="card-body">
+                    <textarea
+                      className="form-control"
+                      placeholder="备注 / 沟通内容 / 调解结果..."
+                      style={{ height: 100 }}
+                      value={simpleNote}
+                      onChange={(e) => setSimpleNote(e.target.value)}
+                    />
+                    <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                      <button type="button" className="ds-btn ds-btn-secondary" style={{ flex: 1 }} onClick={resetSimple}>取消</button>
+                      <button type="button" className="ds-btn ds-btn-primary" style={{ flex: 2 }} onClick={submitSimple}>保存记录</button>
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* 关闭表单 */}
               {closeReason !== null && (
-                <div className="ds-card" style={{ padding: 14 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 10 }}>
-                    确认关闭：{CLOSE_REASON_LABEL[closeReason]}
-                  </div>
-                  {closeReason === "promised" && (
-                    <div style={{ marginBottom: 10 }}>
-                      <label style={{ fontSize: 12, fontWeight: 500, color: "#374151", display: "block", marginBottom: 4 }}>
-                        业主承诺缴清日 *
-                      </label>
-                      <input
-                        type="date"
-                        className="form-control"
-                        value={promiseDate}
-                        min={todayISO()}
-                        onChange={(e) => setPromiseDate(e.target.value)}
-                      />
-                      <div style={{ fontSize: 11, color: "var(--color-neutral-500)", marginTop: 4 }}>
-                        到期未付时列表会标红 + 一键「重新打开」
+                <div className="ds-card">
+                  <div className="card-header"><span className="card-title">确认关闭：{CLOSE_REASON_LABEL[closeReason]}</span></div>
+                  <div className="card-body">
+                    {closeReason === "promised" && (
+                      <div className="form-group">
+                        <label className="form-label">业主承诺缴清日 <span className="req">*</span></label>
+                        <input
+                          type="date"
+                          className="form-control"
+                          value={promiseDate}
+                          min={todayISO()}
+                          onChange={(e) => setPromiseDate(e.target.value)}
+                        />
+                        <div style={{ fontSize: 11, color: "var(--color-neutral-500)", marginTop: 4 }}>
+                          到期未付时列表会标红 + 一键「重新打开」
+                        </div>
                       </div>
+                    )}
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label">关闭备注</label>
+                      <textarea
+                        className="form-control"
+                        placeholder="可选"
+                        style={{ height: 80 }}
+                        value={closeNote}
+                        onChange={(e) => setCloseNote(e.target.value)}
+                      />
                     </div>
-                  )}
-                  <textarea
-                    className="form-control"
-                    placeholder="关闭备注（可选）"
-                    style={{ height: 80 }}
-                    value={closeNote}
-                    onChange={(e) => setCloseNote(e.target.value)}
-                  />
-                  <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                    <button type="button" className="ds-btn ds-btn-secondary" style={{ flex: 1 }} onClick={resetClose}>取消</button>
-                    <button type="button" className="ds-btn ds-btn-primary" style={{ flex: 2 }} onClick={submitClose}>确认关闭</button>
+                    <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                      <button type="button" className="ds-btn ds-btn-secondary" style={{ flex: 1 }} onClick={resetClose}>取消</button>
+                      <button type="button" className="ds-btn ds-btn-primary" style={{ flex: 2 }} onClick={submitClose}>确认关闭</button>
+                    </div>
                   </div>
                 </div>
               )}

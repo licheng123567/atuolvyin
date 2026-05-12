@@ -1,7 +1,8 @@
-// v1.9.0 — 物业内部法务待处理列表（13000000006 法务老周等 legal 角色）
-// 三 tab：待处理（internal_processing）/ 已关闭（closed_*）/ 全部
+// v1.9.0 + v1.9.3 — 物业内部法务待处理列表（13000000006 法务老周等 legal 角色）
+// 4 tab：待处理（internal_processing）/ 已关闭（closed_*）/ 已升级律所 / 全部
+// v1.9.3 — UI 统一：参 admin/partner-law-firms 的 page-header + table-wrap + ds-tabs 范式
 import { useCustom } from "@refinedev/core";
-import { Eye, MessageSquarePlus } from "lucide-react";
+import { Eye, Inbox, MessageSquarePlus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PaginationBar } from "../../../components/ui/PaginationBar";
@@ -24,8 +25,6 @@ interface InternalOrderItem {
   promise_due_date: string | null;
 }
 
-function todayISO(): string { return new Date().toISOString().slice(0, 10); }
-
 interface KpiData {
   pending_count: number;
   closed_this_month: number;
@@ -33,11 +32,13 @@ interface KpiData {
   escalation_rate_pct: number | null;
 }
 
+function todayISO(): string { return new Date().toISOString().slice(0, 10); }
+
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  internal_processing:    { label: "处理中",   cls: "ds-badge ds-badge-blue" },
-  closed_paid:            { label: "已缴清",   cls: "ds-badge ds-badge-green" },
-  closed_promised:        { label: "已承诺",   cls: "ds-badge ds-badge-orange" },
-  closed_uncollectible:   { label: "已核销",   cls: "ds-badge ds-badge-gray" },
+  internal_processing:    { label: "处理中",     cls: "ds-badge ds-badge-blue" },
+  closed_paid:            { label: "已缴清",     cls: "ds-badge ds-badge-green" },
+  closed_promised:        { label: "已承诺",     cls: "ds-badge ds-badge-orange" },
+  closed_uncollectible:   { label: "已核销",     cls: "ds-badge ds-badge-gray" },
   escalated_to_lawfirm:   { label: "已升级律所", cls: "ds-badge ds-badge-red" },
 };
 
@@ -45,10 +46,16 @@ const PAGE_SIZE = 20;
 
 type TabValue = "pending" | "closed" | "escalated" | "all";
 
+const TABS: { v: TabValue; label: string }[] = [
+  { v: "pending", label: "待处理" },
+  { v: "closed", label: "已关闭" },
+  { v: "escalated", label: "已升级律所" },
+  { v: "all", label: "全部" },
+];
+
 export function LegalInternalOrdersPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  // v1.9.1 — 「升级律所追踪」侧边栏入口通过 ?tab=escalated 直达
   const initialTab = (searchParams.get("tab") as TabValue) || "pending";
   const [tab, setTab] = useState<TabValue>(initialTab);
   const [page, setPage] = useState(1);
@@ -65,7 +72,6 @@ export function LegalInternalOrdersPage() {
     config: { query: { tab, page, page_size: PAGE_SIZE } },
   });
 
-  // v1.9.2 — 顶部 4 张 KPI 卡数据
   const { query: kpiQuery } = useCustom<KpiData>({
     url: "legal/internal-orders/kpi",
     method: "get",
@@ -85,7 +91,7 @@ export function LegalInternalOrdersPage() {
         </p>
       </div>
 
-      {/* v1.9.2 — KPI 卡 */}
+      {/* KPI 卡 */}
       {kpi && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
           <KpiCard label="待处理" value={kpi.pending_count} suffix="单" tone="primary" />
@@ -106,102 +112,108 @@ export function LegalInternalOrdersPage() {
       )}
 
       {/* tabs */}
-      <div className="ds-card section-gap">
-        <div className="card-header" style={{ display: "flex", gap: 0, padding: 0, borderBottom: "1px solid var(--color-neutral-200)" }}>
-          {([
-            { v: "pending", label: "待处理" },
-            { v: "closed", label: "已关闭" },
-            { v: "escalated", label: "已升级律所" },
-            { v: "all", label: "全部" },
-          ] as const).map((t) => (
-            <button
-              key={t.v}
-              type="button"
-              onClick={() => { setTab(t.v); setPage(1); }}
-              style={{
-                padding: "12px 20px", border: "none", background: "transparent", cursor: "pointer",
-                fontSize: 13.5, fontWeight: 500,
-                color: tab === t.v ? "var(--color-primary)" : "var(--color-neutral-600)",
-                borderBottom: tab === t.v ? "2px solid var(--color-primary)" : "2px solid transparent",
-                marginBottom: -1,
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-        <div className="card-body" style={{ padding: 0 }}>
-          {isLoading ? (
-            <div style={{ padding: 32, textAlign: "center", color: "var(--color-neutral-400)" }}>加载中…</div>
-          ) : items.length === 0 ? (
-            <div style={{ padding: 32, textAlign: "center", color: "var(--color-neutral-400)" }}>
-              {tab === "pending" ? "暂无待处理订单" : tab === "escalated" ? "暂无升级到律所的订单" : "暂无数据"}
-            </div>
-          ) : (
-            <table className="ds-table" style={{ width: "100%" }}>
-              <thead>
-                <tr>
-                  <th>业主</th>
-                  <th>房号</th>
-                  <th>欠费金额</th>
-                  <th>欠费月数</th>
-                  <th>状态</th>
-                  <th>申请人</th>
-                  <th>处理次数</th>
-                  <th>最后操作</th>
-                  <th>操作</th>
+      <div className="ds-tabs" style={{ marginBottom: 16 }}>
+        {TABS.map((t) => (
+          <button
+            key={t.v}
+            type="button"
+            className={`ds-tab ${tab === t.v ? "active" : ""}`}
+            onClick={() => { setTab(t.v); setPage(1); }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 表格 */}
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>业主</th>
+              <th>房号</th>
+              <th style={{ textAlign: "right" }}>欠费金额</th>
+              <th style={{ textAlign: "right" }}>欠费月数</th>
+              <th>状态</th>
+              <th>申请人</th>
+              <th style={{ textAlign: "right" }}>处理次数</th>
+              <th>最后操作</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading && (
+              <tr>
+                <td colSpan={9} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                  加载中…
+                </td>
+              </tr>
+            )}
+            {!isLoading && items.length === 0 && (
+              <tr>
+                <td colSpan={9} style={{ textAlign: "center", padding: 40, color: "var(--color-neutral-400)" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                    <Inbox className="w-8 h-8" style={{ color: "var(--color-neutral-300)" }} />
+                    <span>
+                      {tab === "pending" ? "暂无待处理订单"
+                        : tab === "escalated" ? "暂无升级到律所的订单"
+                        : "暂无数据"}
+                    </span>
+                  </div>
+                </td>
+              </tr>
+            )}
+            {!isLoading && items.map((o) => {
+              const room = (o.building || "") + (o.room || "") || "—";
+              const amount = o.amount_owed != null ? Number(o.amount_owed).toLocaleString("zh-CN") : "—";
+              const sb = STATUS_BADGE[o.status] ?? { label: o.status, cls: "ds-badge ds-badge-gray" };
+              const overdue = o.status === "closed_promised" && o.promise_due_date && o.promise_due_date < todayISO();
+              return (
+                <tr key={o.id}>
+                  <td>
+                    <div style={{ fontWeight: 600 }}>{o.owner_name}</div>
+                    <div style={{ fontSize: 11, color: "var(--color-neutral-500)", fontFamily: "var(--font-mono, monospace)" }}>{o.owner_phone_masked}</div>
+                  </td>
+                  <td>{room}</td>
+                  <td style={{ textAlign: "right", fontWeight: 600, color: "#dc2626" }}>¥{amount}</td>
+                  <td style={{ textAlign: "right" }}>{o.months_overdue ?? "—"} 个月</td>
+                  <td>
+                    <span className={sb.cls}>{sb.label}</span>
+                    {o.status === "closed_promised" && o.promise_due_date && (
+                      <div style={{ fontSize: 11, marginTop: 4, color: overdue ? "#dc2626" : "var(--color-neutral-500)" }}>
+                        {overdue ? "🔴 " : ""}承诺：{o.promise_due_date}
+                      </div>
+                    )}
+                  </td>
+                  <td>{o.requester_name ?? "—"}</td>
+                  <td style={{ textAlign: "right" }}>
+                    <span style={{ fontWeight: 600 }}>{o.action_count}</span>
+                    <span style={{ fontSize: 11, color: "var(--color-neutral-500)", marginLeft: 2 }}>次</span>
+                  </td>
+                  <td style={{ fontSize: 11, color: "var(--color-neutral-500)" }}>
+                    {o.last_action_at ? new Date(o.last_action_at).toLocaleString("zh-CN") : "—"}
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="ds-btn ds-btn-ghost ds-btn-sm"
+                      onClick={() => navigate(`/legal/internal-orders/${o.id}`)}
+                    >
+                      {o.status === "internal_processing"
+                        ? <><MessageSquarePlus className="w-3 h-3" /> 处理</>
+                        : <><Eye className="w-3 h-3" /> 详情</>}
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {items.map((o) => {
-                  const room = (o.building || "") + (o.room || "") || "—";
-                  const amount = o.amount_owed != null ? Number(o.amount_owed).toLocaleString("zh-CN") : "—";
-                  const sb = STATUS_BADGE[o.status] ?? { label: o.status, cls: "ds-badge ds-badge-gray" };
-                  const overdue = o.status === "closed_promised" && o.promise_due_date && o.promise_due_date < todayISO();
-                  return (
-                    <tr key={o.id}>
-                      <td>
-                        <div style={{ fontWeight: 600 }}>{o.owner_name}</div>
-                        <div style={{ fontSize: 11, color: "var(--color-neutral-500)" }}>{o.owner_phone_masked}</div>
-                      </td>
-                      <td>{room}</td>
-                      <td>¥{amount}</td>
-                      <td>{o.months_overdue ?? "—"} 个月</td>
-                      <td>
-                        <span className={sb.cls}>{sb.label}</span>
-                        {o.status === "closed_promised" && o.promise_due_date && (
-                          <div style={{ fontSize: 11, marginTop: 2, color: overdue ? "#dc2626" : "var(--color-neutral-500)" }}>
-                            {overdue ? "🔴 " : ""}承诺：{o.promise_due_date}
-                          </div>
-                        )}
-                      </td>
-                      <td>{o.requester_name ?? "—"}</td>
-                      <td>
-                        <span style={{ fontWeight: 600 }}>{o.action_count}</span>
-                        <span style={{ fontSize: 11, color: "var(--color-neutral-500)", marginLeft: 4 }}>次</span>
-                      </td>
-                      <td style={{ fontSize: 11, color: "var(--color-neutral-500)" }}>
-                        {o.last_action_at ? new Date(o.last_action_at).toLocaleString("zh-CN") : "—"}
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          className="ds-btn ds-btn-ghost ds-btn-sm"
-                          onClick={() => navigate(`/legal/internal-orders/${o.id}`)}
-                        >
-                          {o.status === "internal_processing"
-                            ? <><MessageSquarePlus className="w-3 h-3" /> 处理</>
-                            : <><Eye className="w-3 h-3" /> 详情</>}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-          <PaginationBar page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
-        </div>
+              );
+            })}
+          </tbody>
+        </table>
+        {total > 0 && (
+          <div style={{ padding: "10px 16px", borderTop: "1px solid var(--color-neutral-200)" }}>
+            <PaginationBar page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
+          </div>
+        )}
       </div>
     </div>
   );
