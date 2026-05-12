@@ -1,7 +1,7 @@
 """v1.9.0 — 物业内部法务处理环节 schemas。"""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
 
@@ -133,6 +133,8 @@ class LegalInternalOrderListItem(BaseModel):
     requester_name: str | None = None
     last_action_at: datetime | None = None
     action_count: int = 0
+    # v1.9.1 — closed_promised 时业主承诺缴清的日期；过期未付前端会标红
+    promise_due_date: date | None = None
 
 
 class LegalInternalOrderDetailOut(BaseModel):
@@ -153,8 +155,16 @@ class LegalInternalOrderDetailOut(BaseModel):
     actions: list[LegalInternalActionOut]
     internal_close_reason: str | None = None
     internal_closed_at: datetime | None = None
+    promise_due_date: date | None = None
 
 
 class LegalInternalOrderCloseRequest(BaseModel):
     close_reason: CloseReason
+    note: str | None = Field(None, max_length=2000)
+    # v1.9.1 — close_reason='promised' 时填写业主承诺缴清的日期（必填）
+    promise_due_date: date | None = None
+
+
+class LegalInternalOrderReopenRequest(BaseModel):
+    """v1.9.1 — 承诺到期未付时重新打开订单。"""
     note: str | None = Field(None, max_length=2000)

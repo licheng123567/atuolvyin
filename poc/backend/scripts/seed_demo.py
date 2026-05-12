@@ -21,9 +21,14 @@ from app.models.case import CollectionCase, OwnerProfile
 from app.models.discount_offer import DiscountOffer
 from app.models.law_firm import LawFirm, LawFirmLawyer
 from app.models.law_firm_membership import LawFirmMembership
-from app.models.legal_conversion import LegalConversionOrder, LegalServicePackage
+from app.models.legal_conversion import (
+    LegalConversionOrder,
+    LegalConversionRequest,
+    LegalServicePackage,
+)
 from app.models.legal_internal import (
     InternalLegalLetterTemplate,
+    LegalInternalAction,
     PartnerLawFirm,
 )
 from app.models.risk import RiskKeyword
@@ -553,6 +558,94 @@ def _upsert_internal_letter_template(
     return t
 
 
+def _upsert_internal_order(
+    db, tenant: Tenant, case: CollectionCase, package: LegalServicePackage,
+    creator: UserAccount, status: str,
+    actions: list[dict] | None = None,
+    requester: UserAccount | None = None,
+    close_reason: str | None = None,
+    closed_at: datetime | None = None,
+    closed_by: UserAccount | None = None,
+    promise_due_date: date | None = None,
+) -> LegalConversionOrder | None:
+    """v1.9.0 — 创建一个 internal_processing/closed_*/escalated_to_lawfirm 状态的法务订单。
+
+    actions: [{"type": "contact_owner"|"send_lawyer_letter"|...,
+               "actor": UserAccount,
+               "note": str,
+               "letter_template_id": int | None,  # 可选
+               "partner_law_firm_id": int | None,  # 可选
+               "occurred_offset_min": int,  # 距离 created_at 的分钟数
+              }, ...]
+    """
+    existing = db.execute(
+        select(LegalConversionOrder)
+        .where(LegalConversionOrder.tenant_id == tenant.id)
+        .where(LegalConversionOrder.case_id == case.id)
+        .where(LegalConversionOrder.package_id == package.id)
+        .where(LegalConversionOrder.status.in_(
+            ("internal_processing", "closed_paid", "closed_promised",
+             "closed_uncollectible", "escalated_to_lawfirm")
+        ))
+    ).scalar_one_or_none()
+    if existing:
+        return existing
+    fee = (package.price * package.platform_fee_rate).quantize(Decimal("0.01"))
+    now = datetime.now(timezone.utc)
+    # 从 14 天前开始倒推创建时间，让时间线有梯度
+    base_created = now - timedelta(days=14, hours=2)
+    order = LegalConversionOrder(
+        tenant_id=tenant.id,
+        case_id=case.id,
+        package_id=package.id,
+        status=status,
+        price_quoted=package.price,
+        platform_fee_amount=fee,
+        notes=f"v1.9.0 demo · {status}",
+        created_by=creator.id,
+        created_at=base_created,
+        updated_at=base_created,
+        internal_close_reason=close_reason,
+        internal_closed_at=closed_at,
+        internal_closed_by=closed_by.id if closed_by else None,
+        promise_due_date=promise_due_date,
+    )
+    db.add(order)
+    db.flush()
+    # 配套写一条 LegalConversionRequest（让列表「申请人」列有值）
+    if requester:
+        req = LegalConversionRequest(
+            tenant_id=tenant.id,
+            case_id=case.id,
+            requester_user_id=requester.id,
+            requester_role="agent_internal",
+            status="approved",
+            related_order_id=order.id,
+            reviewer_user_id=creator.id,
+            reviewer_role="supervisor",
+            reviewed_at=base_created,
+            reviewer_note="同意转法务",
+        )
+        db.add(req)
+    # 写 actions
+    for a in (actions or []):
+        action = LegalInternalAction(
+            tenant_id=tenant.id,
+            legal_order_id=order.id,
+            case_id=case.id,
+            action_type=a["type"],
+            actor_user_id=a["actor"].id,
+            occurred_at=base_created + timedelta(minutes=a.get("occurred_offset_min", 60)),
+            note=a.get("note"),
+            letter_template_id=a.get("letter_template_id"),
+            partner_law_firm_id=a.get("partner_law_firm_id"),
+        )
+        db.add(action)
+    db.flush()
+    print(f"[created] LegalConversionOrder (internal): case={case.id} status={status} actions={len(actions or [])}")
+    return order
+
+
 def _upsert_legal_package(db, slug: str, package_type: str, name: str, price: Decimal) -> LegalServicePackage:
     existing = db.execute(
         select(LegalServicePackage)
@@ -904,6 +997,14 @@ def main() -> None:
             contact_phone="13900002222",
             notes="备用律所，复杂案件可对接。",
         )
+        _upsert_partner_law_firm(
+            db, tenant,
+            name="北京中伦律师事务所",
+            contact_name="周合伙人",
+            contact_phone="13700003333",
+            contact_email="zhou@zhonglun.cn",
+            notes="高净值案件首选，按时计费 800 元/小时。",
+        )
         _upsert_internal_letter_template(
             db, tenant,
             name="物业费追缴律师函（标准版）",
@@ -929,6 +1030,26 @@ def main() -> None:
                 {"name": "property_company", "label": "物业公司全称", "type": "string", "required": True},
                 {"name": "lawyer_name", "label": "签发律师", "type": "string", "required": True},
                 {"name": "law_firm_name", "label": "签发律所", "type": "string", "required": True},
+            ],
+        )
+        _upsert_internal_letter_template(
+            db, tenant,
+            name="物业费二次催告函（升级版）",
+            category="notice",
+            body=(
+                "尊敬的 {{owner_name}} 业主：\n\n"
+                "上次催告函发出后，您仍未联系物业处理 {{building}}{{room}} 房产的物业费欠款"
+                " ¥{{amount_owed}}（截至 {{notice_date}}）。\n\n"
+                "本次为最后催告，请您于 7 日内一次性结清，逾期我方将启动律师函流程并保留诉讼权利。\n\n"
+                "{{property_company}} 法务\n{{notice_date}}"
+            ),
+            variables=[
+                {"name": "owner_name", "label": "业主姓名", "type": "string", "required": True},
+                {"name": "building", "label": "楼栋", "type": "string", "required": True},
+                {"name": "room", "label": "房号", "type": "string", "required": True},
+                {"name": "notice_date", "label": "发函日期", "type": "date", "required": True},
+                {"name": "amount_owed", "label": "欠费金额", "type": "string", "required": True},
+                {"name": "property_company", "label": "物业公司", "type": "string", "required": True},
             ],
         )
         _upsert_internal_letter_template(
@@ -970,6 +1091,134 @@ def main() -> None:
                                 firm=firm, lawyer=lawyer_li, notes="恶意拖欠，全代理")
             _upsert_legal_order(db, tenant, all_cases[3], pkg_small, supervisor_user, "completed",
                                 firm=firm, lawyer=lawyer_chen, notes="立案后业主主动缴清，撤诉")
+
+        # 11b. v1.9.0 — Demo internal_processing 订单（物业法务工作台数据）
+        # 拿律所 + 模板用于 send_lawyer_letter action 关联
+        partner_demo = db.execute(
+            select(PartnerLawFirm).where(
+                PartnerLawFirm.tenant_id == tenant.id,
+                PartnerLawFirm.name == "Demo 法务公司",
+            )
+        ).scalar_one_or_none()
+        tpl_letter = db.execute(
+            select(InternalLegalLetterTemplate).where(
+                InternalLegalLetterTemplate.tenant_id == tenant.id,
+                InternalLegalLetterTemplate.category == "lawyer_letter",
+            )
+        ).scalars().first()
+        tpl_notice = db.execute(
+            select(InternalLegalLetterTemplate).where(
+                InternalLegalLetterTemplate.tenant_id == tenant.id,
+                InternalLegalLetterTemplate.category == "notice",
+            )
+        ).scalars().first()
+        partner_id = partner_demo.id if partner_demo else None
+        tpl_letter_id = tpl_letter.id if tpl_letter else None
+        tpl_notice_id = tpl_notice.id if tpl_notice else None
+
+        # 取后 5 个案件给 v1.9.0 用，避开 v1.6 的 cases[0..3]
+        if len(all_cases) >= 9:
+            now_utc = datetime.now(timezone.utc)
+            # ① 待处理 #1 — 刚转入，0 actions
+            _upsert_internal_order(
+                db, tenant, all_cases[4], pkg_letter, supervisor_user,
+                status="internal_processing",
+                requester=agent_internal_user,
+                actions=[],
+            )
+            # ② 待处理 #2 — 1 条沟通记录
+            _upsert_internal_order(
+                db, tenant, all_cases[5], pkg_letter, supervisor_user,
+                status="internal_processing",
+                requester=agent_internal_user,
+                actions=[
+                    {"type": "contact_owner", "actor": legal_user,
+                     "note": "已联系业主，业主在外地出差，约定 5/20 之前回电讨论。",
+                     "occurred_offset_min": 60},
+                ],
+            )
+            # ③ 待处理 #3 — 2 条记录（沟通 + 催告函）
+            _upsert_internal_order(
+                db, tenant, all_cases[6], pkg_letter, supervisor_user,
+                status="internal_processing",
+                requester=agent_internal_user,
+                actions=[
+                    {"type": "contact_owner", "actor": legal_user,
+                     "note": "业主称对部分服务有异议，已记录并安排现场核实。",
+                     "occurred_offset_min": 120},
+                    {"type": "send_notice", "actor": legal_user,
+                     "note": "出具催告函（普通版），要求 15 日内联系。",
+                     "letter_template_id": tpl_notice_id,
+                     "occurred_offset_min": 60 * 24 * 3},  # 3 天后
+                ],
+            )
+            # ④ 已关闭 — closed_promised（业主承诺已过期，列表应红标 + 可重新打开）
+            today = date.today()
+            _upsert_internal_order(
+                db, tenant, all_cases[8], pkg_letter, supervisor_user,
+                status="closed_promised",
+                requester=agent_internal_user,
+                close_reason="promised",
+                closed_at=now_utc - timedelta(days=10),
+                closed_by=legal_user,
+                promise_due_date=today - timedelta(days=3),  # 3 天前到期 → 红标
+                actions=[
+                    {"type": "contact_owner", "actor": legal_user,
+                     "note": "首次电话沟通，业主称资金紧张但有还款意愿。",
+                     "occurred_offset_min": 60},
+                    {"type": "send_lawyer_letter", "actor": legal_user,
+                     "note": "出具标准版律师函，要求 7 日内回款。",
+                     "letter_template_id": tpl_letter_id,
+                     "partner_law_firm_id": partner_id,
+                     "occurred_offset_min": 60 * 24 * 2},
+                    {"type": "mediation", "actor": legal_user,
+                     "note": "二次电话调解，业主承诺一周内一次性缴清。",
+                     "occurred_offset_min": 60 * 24 * 5},
+                ],
+            )
+            # ⑤ 已关闭 — closed_paid（律师函发出后业主主动缴清）
+            _upsert_internal_order(
+                db, tenant, all_cases[7], pkg_letter, supervisor_user,
+                status="closed_paid",
+                requester=agent_internal_user,
+                close_reason="paid",
+                closed_at=now_utc - timedelta(days=5),
+                closed_by=legal_user,
+                actions=[
+                    {"type": "contact_owner", "actor": legal_user,
+                     "note": "电话不接，准备出律师函震慑。",
+                     "occurred_offset_min": 30},
+                    {"type": "send_lawyer_letter", "actor": legal_user,
+                     "note": "标准版律师函已挂号寄出。",
+                     "letter_template_id": tpl_letter_id,
+                     "partner_law_firm_id": partner_id,
+                     "occurred_offset_min": 60 * 24},
+                    {"type": "other", "actor": legal_user,
+                     "note": "律师函送达 3 天后业主主动到物业缴清全部欠款（共 ¥21000）。",
+                     "occurred_offset_min": 60 * 24 * 4},
+                ],
+            )
+            # ⑥ 升级律所 — escalated_to_lawfirm（金额大 / 多次催告无效）
+            _upsert_internal_order(
+                db, tenant, all_cases[2], pkg_full, supervisor_user,
+                status="escalated_to_lawfirm",
+                requester=agent_internal_user,
+                actions=[
+                    {"type": "contact_owner", "actor": legal_user,
+                     "note": "电话联系 3 次未果，业主拒绝沟通。",
+                     "occurred_offset_min": 60},
+                    {"type": "send_lawyer_letter", "actor": legal_user,
+                     "note": "首次律师函，无回应。",
+                     "letter_template_id": tpl_letter_id,
+                     "partner_law_firm_id": partner_id,
+                     "occurred_offset_min": 60 * 24 * 3},
+                    {"type": "send_lawyer_letter", "actor": legal_user,
+                     "note": "二次律师函，仍无回应。建议升级到律所走诉讼。",
+                     "letter_template_id": tpl_letter_id,
+                     "partner_law_firm_id": partner_id,
+                     "occurred_offset_min": 60 * 24 * 10},
+                ],
+            )
 
         # 12. v1.6 — Demo discount offers 跨多个状态
         if len(all_cases) >= 3:

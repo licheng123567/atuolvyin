@@ -8,7 +8,7 @@
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -104,6 +104,8 @@ class LegalConversionOrder(Base, TimestampMixin):
     internal_closed_by: Mapped[int | None] = mapped_column(
         sa.BigInteger, sa.ForeignKey("user_account.id", ondelete="SET NULL")
     )
+    # v1.9.1 — closed_promised 时记业主承诺缴清日期，到期未付列表显示红标 + 可重新打开
+    promise_due_date: Mapped[date | None] = mapped_column(sa.Date)
 
     __table_args__ = (
         sa.CheckConstraint(

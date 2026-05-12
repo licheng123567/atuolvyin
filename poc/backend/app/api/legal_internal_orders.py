@@ -12,12 +12,14 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi import status as http_status
+from fastapi.responses import Response
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
+from app.core.storage import storage
 from app.core.phone_visibility import (
     display_owner_phone,
     is_provider_contract_active,
@@ -39,6 +41,7 @@ from app.schemas.legal_internal import (
     LegalInternalOrderCloseRequest,
     LegalInternalOrderDetailOut,
     LegalInternalOrderListItem,
+    LegalInternalOrderReopenRequest,
 )
 from app.services.audit import log_audit
 
@@ -101,7 +104,7 @@ def list_internal_orders(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
-    tab: str = Query("pending", pattern="^(pending|closed|all)$"),
+    tab: str = Query("pending", pattern="^(pending|closed|escalated|all)$"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[LegalInternalOrderListItem]:
@@ -126,10 +129,12 @@ def list_internal_orders(
     elif tab == "closed":
         stmt = stmt.where(
             LegalConversionOrder.status.in_(
-                ("closed_paid", "closed_promised", "closed_uncollectible",
-                 "escalated_to_lawfirm")
+                ("closed_paid", "closed_promised", "closed_uncollectible")
             )
         )
+    elif tab == "escalated":
+        # v1.9.1 — 升级律所追踪页：单独过滤 escalated_to_lawfirm 订单（方案 C 派单前法务可加跟进备注）
+        stmt = stmt.where(LegalConversionOrder.status == "escalated_to_lawfirm")
     # tab == 'all' 不过滤
 
     total: int = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
@@ -181,6 +186,7 @@ def list_internal_orders(
             requester_name=requester_map.get(o.id),
             last_action_at=action_stats.get(o.id, (None, 0))[0],
             action_count=action_stats.get(o.id, (None, 0))[1],
+            promise_due_date=o.promise_due_date,
         )
         for o, owner in rows
     ]
@@ -278,6 +284,7 @@ def get_internal_order(
         ],
         internal_close_reason=order.internal_close_reason,
         internal_closed_at=order.internal_closed_at,
+        promise_due_date=order.promise_due_date,
     )
 
 
@@ -400,11 +407,18 @@ def close_internal_order(
         "uncollectible": "closed_uncollectible",
         "escalated": "escalated_to_lawfirm",
     }[body.close_reason]
+    # v1.9.1 — promised 必须填承诺到期日
+    if body.close_reason == "promised" and body.promise_due_date is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail={"code": "ERR_PROMISE_DATE_REQUIRED", "message": "已承诺关闭必须填写承诺到期日"},
+        )
     now = datetime.now(UTC)
     order.status = new_status
     order.internal_close_reason = body.close_reason
     order.internal_closed_at = now
     order.internal_closed_by = user_id
+    order.promise_due_date = body.promise_due_date if body.close_reason == "promised" else None
     if body.close_reason != "escalated":
         order.completed_at = now
 
@@ -457,4 +471,215 @@ def escalate_to_lawfirm(
         order_id,
         LegalInternalOrderCloseRequest(close_reason="escalated", note="升级到律所，待律所撮合"),
         payload, _user, db,
+    )
+
+
+# ── Reopen ────────────────────────────────────────────────────
+@router.post(
+    "/internal-orders/{order_id}/reopen",
+    response_model=LegalInternalOrderDetailOut,
+)
+def reopen_internal_order(
+    order_id: int,
+    body: LegalInternalOrderReopenRequest,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> LegalInternalOrderDetailOut:
+    """v1.9.1 — closed_promised 但承诺到期未付，重新打开订单回 internal_processing。
+
+    仅允许 closed_promised → internal_processing；其他状态返回 409。
+    """
+    tenant_id = _require_tenant(payload)
+    user_id = int(payload.get("user_id") or 0)
+    role = payload.get("role", "")
+    order = db.get(LegalConversionOrder, order_id)
+    if order is None or order.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "法务订单不存在"},
+        )
+    if order.status != "closed_promised":
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail={
+                "code": "ERR_NOT_REOPENABLE",
+                "message": f"仅 closed_promised 状态可重新打开（当前 {order.status}）",
+            },
+        )
+
+    order.status = "internal_processing"
+    order.internal_close_reason = None
+    order.internal_closed_at = None
+    order.internal_closed_by = None
+    order.completed_at = None
+
+    # 联动 case.stage 回 legal（v1.9.1：close_promised 时是 promised → 重开回 legal）
+    case = db.get(CollectionCase, order.case_id)
+    if case is not None:
+        case.stage = "legal"
+
+    # 写一条 reopen action 留痕
+    reopen_action = LegalInternalAction(
+        tenant_id=tenant_id,
+        legal_order_id=order_id,
+        case_id=order.case_id,
+        action_type="other",
+        actor_user_id=user_id,
+        occurred_at=datetime.now(UTC),
+        note=body.note or f"承诺到期未付，重新打开订单（原承诺到期：{order.promise_due_date}）",
+    )
+    db.add(reopen_action)
+    log_audit(
+        db,
+        actor_user_id=user_id,
+        actor_role=role,
+        tenant_id=tenant_id,
+        action="legal_internal_order.reopened",
+        target_type="legal_conversion_order",
+        target_id=order_id,
+        payload={"original_promise_due_date": str(order.promise_due_date) if order.promise_due_date else None},
+    )
+    # promise_due_date 保留作为审计；如果再次 close_promised 时会被新值覆盖
+    db.commit()
+
+    return get_internal_order(order_id, payload, _user, db)
+
+
+# ── Attachment upload / download ──────────────────────────────
+# v1.9.1 — 律师函 / 催告函盖章版 PDF 上传，绑定到对应 send_lawyer_letter / send_notice action
+
+# 单文件最大 10 MB（律师函 PDF 通常几百 KB 到 1-2 MB）
+ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
+ATTACHMENT_ALLOWED_TYPES = {"application/pdf", "image/png", "image/jpeg"}
+ATTACHMENT_ELIGIBLE_ACTIONS = {"send_lawyer_letter", "send_notice"}
+
+
+@router.post(
+    "/internal-orders/{order_id}/actions/{action_id}/attachment",
+    response_model=LegalInternalActionOut,
+)
+def upload_action_attachment(
+    order_id: int,
+    action_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+    file: UploadFile = File(...),
+) -> LegalInternalActionOut:
+    tenant_id = _require_tenant(payload)
+    user_id = int(payload.get("user_id") or 0)
+    role = payload.get("role", "")
+
+    action = db.get(LegalInternalAction, action_id)
+    if action is None or action.tenant_id != tenant_id or action.legal_order_id != order_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_ACTION_NOT_FOUND", "message": "处理记录不存在"},
+        )
+    if action.action_type not in ATTACHMENT_ELIGIBLE_ACTIONS:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "ERR_ACTION_TYPE",
+                "message": "仅律师函 / 催告函记录可上传盖章版附件",
+            },
+        )
+    content_type = (file.content_type or "").lower()
+    if content_type not in ATTACHMENT_ALLOWED_TYPES:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "ERR_FILE_TYPE",
+                "message": "仅支持 PDF / PNG / JPG 格式",
+            },
+        )
+    data = file.file.read(ATTACHMENT_MAX_BYTES + 1)
+    if len(data) > ATTACHMENT_MAX_BYTES:
+        raise HTTPException(
+            status_code=http_status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail={"code": "ERR_FILE_TOO_LARGE", "message": "文件超过 10 MB 上限"},
+        )
+
+    safe_name = (file.filename or "letter").replace("/", "_").replace("\\", "_")[:200]
+    object_key = f"legal-letters/{tenant_id}/{order_id}/{action_id}/{safe_name}"
+    storage.put_object(object_key, data, content_type)
+
+    action.attachment_key = object_key
+    action.attachment_filename = safe_name
+    log_audit(
+        db,
+        actor_user_id=user_id,
+        actor_role=role,
+        tenant_id=tenant_id,
+        action="legal_internal_action.attachment_uploaded",
+        target_type="legal_internal_action",
+        target_id=action_id,
+        payload={"order_id": order_id, "filename": safe_name, "size": len(data)},
+    )
+    db.commit()
+    db.refresh(action)
+
+    actor_name = db.execute(
+        select(UserAccount.name).where(UserAccount.id == action.actor_user_id)
+    ).scalar_one_or_none()
+    template_name = None
+    if action.letter_template_id:
+        template_name = db.execute(
+            select(InternalLegalLetterTemplate.name).where(
+                InternalLegalLetterTemplate.id == action.letter_template_id
+            )
+        ).scalar_one_or_none()
+    firm_name = None
+    if action.partner_law_firm_id:
+        firm_name = db.execute(
+            select(PartnerLawFirm.name).where(
+                PartnerLawFirm.id == action.partner_law_firm_id
+            )
+        ).scalar_one_or_none()
+    return _action_to_out(
+        action, actor_name=actor_name, template_name=template_name, law_firm_name=firm_name,
+    )
+
+
+@router.get(
+    "/internal-orders/{order_id}/actions/{action_id}/attachment",
+)
+def download_action_attachment(
+    order_id: int,
+    action_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> Response:
+    tenant_id = _require_tenant(payload)
+    action = db.get(LegalInternalAction, action_id)
+    if action is None or action.tenant_id != tenant_id or action.legal_order_id != order_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_ACTION_NOT_FOUND", "message": "处理记录不存在"},
+        )
+    if not action.attachment_key:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NO_ATTACHMENT", "message": "该记录未上传附件"},
+        )
+    try:
+        data = storage.get_bytes(action.attachment_key)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_FILE_GONE", "message": f"附件文件不可读：{exc!s}"},
+        ) from exc
+    filename = action.attachment_filename or "attachment"
+    # Content-Type 推断：根据文件名后缀
+    ct = "application/pdf"
+    if filename.lower().endswith((".png",)):
+        ct = "image/png"
+    elif filename.lower().endswith((".jpg", ".jpeg")):
+        ct = "image/jpeg"
+    return Response(
+        content=data,
+        media_type=ct,
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
     )
