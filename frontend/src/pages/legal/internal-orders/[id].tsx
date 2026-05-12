@@ -4,7 +4,7 @@
 import { useCustom, useCustomMutation, useOne } from "@refinedev/core";
 import {
   AlertCircle, ArrowLeft, CheckCircle2, FileText, Gavel, Handshake, Lightbulb,
-  Mail, MessageCircle, Paperclip, Printer, RotateCcw, ShieldAlert, Upload,
+  Mail, MessageCircle, Package, Paperclip, Printer, RotateCcw, ShieldAlert, Upload,
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -339,6 +339,32 @@ export function LegalInternalOrderDetailPage() {
     }
   }
 
+  function downloadEvidenceBundle() {
+    const token = localStorage.getItem("token") ?? "";
+    const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:18000/api/v1";
+    fetch(`${apiBase}/legal/internal-orders/${id}/evidence-bundle`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (r) => {
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.detail?.message ?? `HTTP ${r.status}`);
+        }
+        const filename = (r.headers.get("Content-Disposition")?.match(/filename="?([^";]+)"?/)?.[1])
+          ?? `evidence_order_${id}.zip`;
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+      })
+      .catch((err: Error) => alert(`证据包下载失败：${err.message}`));
+  }
+
   function downloadAttachment(actionId: number) {
     const token = localStorage.getItem("token") ?? "";
     const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:18000/api/v1";
@@ -598,6 +624,24 @@ export function LegalInternalOrderDetailPage() {
               </div>
             );
           })()}
+
+          {/* v1.9.5 — 证据包下载（含本案录音/转写/AI/区块链 + 法务处理流水 + 律师函附件 PDF）*/}
+          <div className="ds-card">
+            <div className="card-header"><span className="card-title">证据包</span></div>
+            <div className="card-body">
+              <div style={{ fontSize: 11.5, color: "var(--color-neutral-600)", marginBottom: 10, lineHeight: 1.6 }}>
+                按案件聚合录音 / 转写 / AI 分析 / 区块链上链 SHA256 + 法务处理流水 + 律师函盖章版，导出 ZIP 给律所或法庭。
+              </div>
+              <button
+                type="button"
+                className="ds-btn ds-btn-secondary"
+                style={{ width: "100%", justifyContent: "center" }}
+                onClick={downloadEvidenceBundle}
+              >
+                <Package className="w-3.5 h-3.5" /> 下载证据包（ZIP）
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
