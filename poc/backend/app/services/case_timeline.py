@@ -77,17 +77,55 @@ def build_case_timeline(
                 target_type="workorder",
             )
         )
-        if wo.status in ("resolved", "closed") and wo.updated_at != wo.created_at:
+        if wo.status == "resolved" and wo.updated_at != wo.created_at:
             events.append(
                 TimelineEvent(
                     type="workorder.resolved",
                     ts=wo.updated_at,
                     actor=assignee_name,
-                    note=f"工单已处理 · {wo.resolution[:80] if wo.resolution else wo.status}",
+                    note=f"工单已解决 · {wo.resolution[:80] if wo.resolution else '已完成'}",
                     target_id=wo.id,
                     target_type="workorder",
                 )
             )
+        elif wo.status == "closed" and wo.updated_at != wo.created_at:
+            events.append(
+                TimelineEvent(
+                    type="workorder.closed",
+                    ts=wo.updated_at,
+                    actor=assignee_name,
+                    note=f"工单已关闭 · {wo.resolution[:80] if wo.resolution else '关闭'}",
+                    target_id=wo.id,
+                    target_type="workorder",
+                )
+            )
+
+    # ── v1.9.7 工单跟进记录（聚合到案件时间线，让 admin/agent/supervisor 共享处理进度）──
+    from app.models.work_order_follow_up import WorkOrderFollowUp
+    follow_rows = db.execute(
+        select(WorkOrderFollowUp, UserAccount.name)
+        .join(UserAccount, UserAccount.id == WorkOrderFollowUp.actor_user_id, isouter=True)
+        .where(
+            WorkOrderFollowUp.case_id == case_id,
+            WorkOrderFollowUp.tenant_id == tenant_id,
+        )
+    ).all()
+    for f, actor_name in follow_rows:
+        kind_prefix = {
+            "note": "工单跟进",
+            "resolution_proposed": "工单方案建议",
+            "escalation": "工单升级",
+        }.get(f.kind, "工单跟进")
+        events.append(
+            TimelineEvent(
+                type="workorder.followup",
+                ts=f.occurred_at,
+                actor=actor_name,
+                note=f"{kind_prefix} · {f.note[:120]}",
+                target_id=f.work_order_id,
+                target_type="workorder",
+            )
+        )
 
     # ── 法务转化 ─────────────────────────────────────────────────
     lc_rows = db.execute(

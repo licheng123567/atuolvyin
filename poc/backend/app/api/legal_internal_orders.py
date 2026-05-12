@@ -172,6 +172,8 @@ def list_internal_orders(
     _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     tab: str = Query("pending", pattern="^(pending|closed|escalated|all)$"),
+    project_id: int | None = Query(None, description="按所属项目过滤"),
+    q: str | None = Query(None, max_length=100, description="搜索业主姓名/房号"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[LegalInternalOrderListItem]:
@@ -186,11 +188,22 @@ def list_internal_orders(
     )
 
     stmt = (
-        select(LegalConversionOrder, OwnerProfile)
+        select(LegalConversionOrder, OwnerProfile, CollectionCase, Project)
         .join(CollectionCase, CollectionCase.id == LegalConversionOrder.case_id)
         .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
+        .outerjoin(Project, Project.id == CollectionCase.project_id)
         .where(LegalConversionOrder.tenant_id == tenant_id)
     )
+    if project_id is not None:
+        stmt = stmt.where(CollectionCase.project_id == project_id)
+    if q:
+        from sqlalchemy import or_ as sa_or_
+        stmt = stmt.where(
+            sa_or_(
+                OwnerProfile.name.ilike(f"%{q}%"),
+                OwnerProfile.room.ilike(f"%{q}%"),
+            )
+        )
     if tab == "pending":
         stmt = stmt.where(LegalConversionOrder.status == "internal_processing")
     elif tab == "closed":
@@ -212,7 +225,7 @@ def list_internal_orders(
     ).all()
 
     # 批量补充 last_action_at + action_count + requester_name
-    order_ids = [o.id for o, _ in rows]
+    order_ids = [o.id for o, _owner, _case, _proj in rows]
     action_stats: dict[int, tuple[datetime | None, int]] = {}
     if order_ids:
         for oid, last_at, cnt in db.execute(
@@ -246,16 +259,18 @@ def list_internal_orders(
             owner_phone_masked=display_owner_phone(owner.phone_enc, reveal=reveal),
             building=owner.building,
             room=owner.room,
-            amount_owed=db.get(CollectionCase, o.case_id).amount_owed,  # type: ignore[union-attr]
-            months_overdue=db.get(CollectionCase, o.case_id).months_overdue,  # type: ignore[union-attr]
+            amount_owed=case.amount_owed if case else None,
+            months_overdue=case.months_overdue if case else None,
             status=o.status,
             created_at=o.created_at,
             requester_name=requester_map.get(o.id),
             last_action_at=action_stats.get(o.id, (None, 0))[0],
             action_count=action_stats.get(o.id, (None, 0))[1],
             promise_due_date=o.promise_due_date,
+            project_id=case.project_id if case else None,
+            project_name=proj.name if proj else None,
         )
-        for o, owner in rows
+        for o, owner, case, proj in rows
     ]
     return PaginatedResponse(
         items=items, total=total, page=page, page_size=page_size,

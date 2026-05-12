@@ -14,6 +14,7 @@ from .tenant import (
 )
 from .user import PlatformOpsAssignment, UserAccount
 from .work import LegalCase, WorkOrder
+from .work_order_follow_up import WorkOrderFollowUp  # noqa: F401
 from .legal_document import LegalDocument  # noqa: F401
 from .script import ScriptTemplate, ScriptTemplateVersion, TenantSuggestionConfig
 from .settings import TenantSettings

@@ -27,6 +27,8 @@ from app.services.audit import log_audit
 router = APIRouter()
 
 ADMIN_ROLES = ("admin", "platform_superadmin")
+# v1.9.7 — 法务 / 协调员 / 督导也可读项目列表（用于「按项目过滤」下拉框）
+PROJECT_LIST_ROLES = ADMIN_ROLES + ("legal", "coordinator", "workorder", "supervisor")
 
 
 def _require_tenant(payload: dict) -> int:
@@ -141,7 +143,7 @@ def _enrich(db: Session, p: Project) -> ProjectOut:
 @router.get("/projects", response_model=PaginatedResponse[ProjectOut])
 def list_projects(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*PROJECT_LIST_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),

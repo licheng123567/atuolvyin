@@ -135,6 +135,9 @@ class LegalInternalOrderListItem(BaseModel):
     action_count: int = 0
     # v1.9.1 — closed_promised 时业主承诺缴清的日期；过期未付前端会标红
     promise_due_date: date | None = None
+    # v1.9.7 — 列表行内项目上下文（用于「项目」列 + 按项目过滤）
+    project_id: int | None = None
+    project_name: str | None = None
 
 
 class LegalInternalOrderDetailOut(BaseModel):

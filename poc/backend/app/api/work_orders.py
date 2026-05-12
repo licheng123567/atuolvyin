@@ -13,7 +13,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_ as sa_or_, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -38,6 +38,7 @@ from app.schemas.work_order import (
     CaseRef,
     WorkOrderCreate,
     WorkOrderDetailOut,
+    WorkOrderFollowUpCreate,
     WorkOrderKpi,
     WorkOrderOut,
     WorkOrderPatch,
@@ -60,7 +61,14 @@ def _require_tenant(payload: dict) -> int:
     return tenant_id
 
 
-def _wo_to_out(wo: WorkOrder, assignee_name: str | None) -> WorkOrderOut:
+def _wo_to_out(
+    wo: WorkOrder,
+    assignee_name: str | None,
+    *,
+    owner: "OwnerProfile | None" = None,
+    case: "CollectionCase | None" = None,
+    project: "Project | None" = None,
+) -> WorkOrderOut:
     return WorkOrderOut(
         id=wo.id,
         tenant_id=wo.tenant_id,
@@ -75,6 +83,11 @@ def _wo_to_out(wo: WorkOrder, assignee_name: str | None) -> WorkOrderOut:
         created_at=wo.created_at,
         updated_at=wo.updated_at,
         assignee_name=assignee_name,
+        owner_name=owner.name if owner else None,
+        owner_room=(f"{owner.building or ''}{owner.room or ''}" or None) if owner else None,
+        project_id=case.project_id if case else None,
+        project_name=project.name if project else None,
+        amount_owed=str(case.amount_owed) if case and case.amount_owed is not None else None,
     )
 
 
@@ -145,48 +158,65 @@ async def list_work_orders(
     status: str | None = Query(None, max_length=50),
     order_type: str | None = Query(None, max_length=50),
     priority: str | None = Query(None, max_length=20),
+    project_id: int | None = Query(None, description="按所属项目过滤"),
     since: datetime | None = Query(None, description="filter created_at >= since"),
     until: datetime | None = Query(None, description="filter created_at < until"),
     room: str | None = Query(None, max_length=20, description="filter by owner.room"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[WorkOrderOut]:
+    from app.models.case import CollectionCase, OwnerProfile, Project
+
     tenant_id = _require_tenant(payload)
 
-    stmt = select(WorkOrder).where(WorkOrder.tenant_id == tenant_id)
+    # v1.9.7 — 始终 join case + owner + project，使得列表可返回业主/房号/项目/欠费上下文
+    stmt = (
+        select(WorkOrder, OwnerProfile, CollectionCase, Project)
+        .outerjoin(CollectionCase, CollectionCase.id == WorkOrder.case_id)
+        .outerjoin(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
+        .outerjoin(Project, Project.id == CollectionCase.project_id)
+        .where(WorkOrder.tenant_id == tenant_id)
+    )
     if status:
         stmt = stmt.where(WorkOrder.status == status)
     if order_type:
         stmt = stmt.where(WorkOrder.order_type == order_type)
     if priority:
         stmt = stmt.where(WorkOrder.priority == priority)
+    if project_id is not None:
+        stmt = stmt.where(CollectionCase.project_id == project_id)
     if q:
-        stmt = stmt.where(WorkOrder.description.ilike(f"%{q}%"))
+        # v1.9.7 — q 扩展到业主姓名/房号
+        stmt = stmt.where(
+            sa_or_(
+                WorkOrder.description.ilike(f"%{q}%"),
+                OwnerProfile.name.ilike(f"%{q}%"),
+                OwnerProfile.room.ilike(f"%{q}%"),
+            )
+        )
     if since:
         stmt = stmt.where(WorkOrder.created_at >= since)
     if until:
         stmt = stmt.where(WorkOrder.created_at < until)
     if room:
-        # Sprint 11.7 — filter by owner room via case join
-        from app.models.case import CollectionCase, OwnerProfile
-
-        stmt = (
-            stmt.join(CollectionCase, CollectionCase.id == WorkOrder.case_id)
-            .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
-            .where(OwnerProfile.room == room)
-        )
+        stmt = stmt.where(OwnerProfile.room == room)
 
     total: int = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
 
-    rows = (
-        db.execute(
-            stmt.order_by(WorkOrder.id.desc()).offset((page - 1) * page_size).limit(page_size)
-        )
-        .scalars()
-        .all()
-    )
+    rows = db.execute(
+        stmt.order_by(WorkOrder.id.desc()).offset((page - 1) * page_size).limit(page_size)
+    ).all()
 
-    items = [_wo_to_out(wo, _resolve_assignee_name(db, wo.assigned_to)) for wo in rows]
+    items = [
+        _wo_to_out(
+            wo,
+            _resolve_assignee_name(db, wo.assigned_to),
+            owner=owner,
+            case=case,
+            project=project,
+        )
+        for wo, owner, case, project in rows
+    ]
     return PaginatedResponse(
         items=items,
         total=total,
@@ -307,6 +337,9 @@ async def get_work_order(
     _user: Annotated[UserAccount, Depends(require_roles(*WORKORDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> WorkOrderDetailOut:
+    from app.models.case import Project
+    from app.models.work_order_follow_up import WorkOrderFollowUp
+
     tenant_id = _require_tenant(payload)
 
     wo = db.get(WorkOrder, order_id)
@@ -316,31 +349,37 @@ async def get_work_order(
             detail={"code": "ERR_NOT_FOUND", "message": "工单不存在"},
         )
 
-    base = _wo_to_out(wo, _resolve_assignee_name(db, wo.assigned_to))
+    owner: OwnerProfile | None = None
+    case: CollectionCase | None = None
+    project: Project | None = None
+    if wo.case_id is not None:
+        case = db.get(CollectionCase, wo.case_id)
+        if case is not None:
+            owner = db.get(OwnerProfile, case.owner_id)
+            if case.project_id:
+                project = db.get(Project, case.project_id)
+
+    base = _wo_to_out(
+        wo, _resolve_assignee_name(db, wo.assigned_to),
+        owner=owner, case=case, project=project,
+    )
 
     case_ref: CaseRef | None = None
-    if wo.case_id is not None:
-        row = db.execute(
-            select(CollectionCase, OwnerProfile)
-            .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
-            .where(CollectionCase.id == wo.case_id)
-        ).one_or_none()
-        if row is not None:
-            cc, owner = row[0], row[1]
-            case_ref = CaseRef(
-                id=cc.id,
-                stage=cc.stage,
-                owner_name=owner.name,
-                owner_phone_masked=display_owner_phone(
-                    owner.phone_enc,
-                    reveal=should_reveal_owner_phone(
-                        role=payload.get("role", ""),
-                        contract_active=is_provider_contract_active(
-                            db, tenant_id, payload.get("provider_id")
-                        ),
+    if case is not None and owner is not None:
+        case_ref = CaseRef(
+            id=case.id,
+            stage=case.stage,
+            owner_name=owner.name,
+            owner_phone_masked=display_owner_phone(
+                owner.phone_enc,
+                reveal=should_reveal_owner_phone(
+                    role=payload.get("role", ""),
+                    contract_active=is_provider_contract_active(
+                        db, tenant_id, payload.get("provider_id")
                     ),
-                ) or "",
-            )
+                ),
+            ) or "",
+        )
 
     call_ref: CallRef | None = None
     if wo.call_id is not None:
@@ -353,11 +392,88 @@ async def get_work_order(
                 result_tag=call.result_tag,
             )
 
+    # v1.9.7 — follow-ups（按时间升序）
+    follow_rows = db.execute(
+        select(WorkOrderFollowUp)
+        .where(WorkOrderFollowUp.work_order_id == order_id)
+        .where(WorkOrderFollowUp.tenant_id == tenant_id)
+        .order_by(WorkOrderFollowUp.occurred_at.asc())
+    ).scalars().all()
+    actor_ids = {f.actor_user_id for f in follow_rows if f.actor_user_id}
+    actor_map = dict(db.execute(
+        select(UserAccount.id, UserAccount.name).where(UserAccount.id.in_(actor_ids))
+    ).all()) if actor_ids else {}
+    follow_ups = [
+        {
+            "id": f.id,
+            "work_order_id": f.work_order_id,
+            "case_id": f.case_id,
+            "actor_user_id": f.actor_user_id,
+            "actor_name": actor_map.get(f.actor_user_id),
+            "occurred_at": f.occurred_at,
+            "kind": f.kind,
+            "note": f.note,
+        }
+        for f in follow_rows
+    ]
+
     return WorkOrderDetailOut(
         **base.model_dump(),
         case=case_ref,
         call=call_ref,
+        follow_ups=follow_ups,  # type: ignore[arg-type]
     )
+
+
+@router.post(
+    "/{order_id}/follow-ups",
+    response_model=WorkOrderDetailOut,
+    status_code=http_status.HTTP_201_CREATED,
+)
+async def add_follow_up(
+    order_id: int,
+    body: WorkOrderFollowUpCreate,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*WORKORDER_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> WorkOrderDetailOut:
+    """v1.9.7 — 协调员/admin 给工单加跟进记录。"""
+    from datetime import UTC
+    from app.models.work_order_follow_up import WorkOrderFollowUp
+
+    tenant_id = _require_tenant(payload)
+    user_id = int(payload.get("user_id") or 0)
+
+    wo = db.get(WorkOrder, order_id)
+    if wo is None or wo.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "工单不存在"},
+        )
+
+    follow = WorkOrderFollowUp(
+        tenant_id=tenant_id,
+        work_order_id=order_id,
+        case_id=wo.case_id,
+        actor_user_id=user_id,
+        occurred_at=datetime.now(UTC),
+        kind=body.kind,
+        note=body.note,
+    )
+    db.add(follow)
+    log_audit(
+        db,
+        actor_user_id=user_id,
+        actor_role=payload.get("role"),
+        tenant_id=tenant_id,
+        action="workorder.follow_up_added",
+        target_type="work_order",
+        target_id=order_id,
+        payload={"kind": body.kind},
+    )
+    db.commit()
+
+    return await get_work_order(order_id, payload, _user, db)
 
 
 @router.patch("/{order_id}", response_model=WorkOrderOut)
