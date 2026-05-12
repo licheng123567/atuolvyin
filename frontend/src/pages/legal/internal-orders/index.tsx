@@ -2,10 +2,11 @@
 // 4 tab：待处理（internal_processing）/ 已关闭（closed_*）/ 已升级律所 / 全部
 // v1.9.3 — UI 统一：参 admin/partner-law-firms 的 page-header + table-wrap + ds-tabs 范式
 import { useCustom } from "@refinedev/core";
-import { Eye, Inbox, MessageSquarePlus } from "lucide-react";
+import { Eye, Inbox, MessageSquarePlus, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PaginationBar } from "../../../components/ui/PaginationBar";
+import { SearchInput } from "../../../components/ui/SearchInput";
 import type { PaginatedResponse } from "../../../types";
 
 interface InternalOrderItem {
@@ -23,7 +24,11 @@ interface InternalOrderItem {
   last_action_at: string | null;
   action_count: number;
   promise_due_date: string | null;
+  project_id: number | null;
+  project_name: string | null;
 }
+
+interface ProjectOption { id: number; name: string; }
 
 interface KpiData {
   pending_count: number;
@@ -59,6 +64,8 @@ export function LegalInternalOrdersPage() {
   const initialTab = (searchParams.get("tab") as TabValue) || "pending";
   const [tab, setTab] = useState<TabValue>(initialTab);
   const [page, setPage] = useState(1);
+  const [keyword, setKeyword] = useState("");
+  const [projectFilter, setProjectFilter] = useState("");
 
   useEffect(() => {
     const t = (searchParams.get("tab") as TabValue) || "pending";
@@ -69,8 +76,21 @@ export function LegalInternalOrdersPage() {
   const { query } = useCustom<PaginatedResponse<InternalOrderItem>>({
     url: "legal/internal-orders",
     method: "get",
-    config: { query: { tab, page, page_size: PAGE_SIZE } },
+    config: {
+      query: {
+        tab, page, page_size: PAGE_SIZE,
+        ...(keyword ? { q: keyword } : {}),
+        ...(projectFilter ? { project_id: projectFilter } : {}),
+      },
+    },
   });
+
+  const { query: projectsQuery } = useCustom<{ items: ProjectOption[] }>({
+    url: "admin/projects",
+    method: "get",
+    config: { query: { page_size: 200 } },
+  });
+  const projectOptions = projectsQuery.data?.data?.items ?? [];
 
   const { query: kpiQuery } = useCustom<KpiData>({
     url: "legal/internal-orders/kpi",
@@ -127,11 +147,40 @@ export function LegalInternalOrdersPage() {
 
       {/* 表格 */}
       <div className="table-wrap">
+        <div className="table-toolbar">
+          <SearchInput
+            value={keyword}
+            onChange={(v) => { setKeyword(v); setPage(1); }}
+            placeholder="搜索业主 / 房号"
+            width={240}
+          />
+          <select
+            className="form-control"
+            style={{ width: 180 }}
+            value={projectFilter}
+            onChange={(e) => { setProjectFilter(e.target.value); setPage(1); }}
+          >
+            <option value="">全部项目</option>
+            {projectOptions.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="ds-btn ds-btn-ghost ds-btn-sm"
+            onClick={() => { setKeyword(""); setProjectFilter(""); setPage(1); }}
+            disabled={!keyword && !projectFilter}
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> 重置
+          </button>
+        </div>
+
         <table>
           <thead>
             <tr>
               <th>业主</th>
               <th>房号</th>
+              <th>项目</th>
               <th style={{ textAlign: "right" }}>欠费金额</th>
               <th style={{ textAlign: "right" }}>欠费月数</th>
               <th>状态</th>
@@ -144,14 +193,14 @@ export function LegalInternalOrdersPage() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={9} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                <td colSpan={10} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
                   加载中…
                 </td>
               </tr>
             )}
             {!isLoading && items.length === 0 && (
               <tr>
-                <td colSpan={9} style={{ textAlign: "center", padding: 40, color: "var(--color-neutral-400)" }}>
+                <td colSpan={10} style={{ textAlign: "center", padding: 40, color: "var(--color-neutral-400)" }}>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
                     <Inbox className="w-8 h-8" style={{ color: "var(--color-neutral-300)" }} />
                     <span>
@@ -175,6 +224,9 @@ export function LegalInternalOrdersPage() {
                     <div style={{ fontSize: 11, color: "var(--color-neutral-500)", fontFamily: "var(--font-mono, monospace)" }}>{o.owner_phone_masked}</div>
                   </td>
                   <td>{room}</td>
+                  <td style={{ fontSize: 12, color: "var(--color-neutral-600)", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={o.project_name ?? undefined}>
+                    {o.project_name ?? <span style={{ color: "var(--color-neutral-400)" }}>—</span>}
+                  </td>
                   <td style={{ textAlign: "right", fontWeight: 600, color: "#dc2626" }}>¥{amount}</td>
                   <td style={{ textAlign: "right" }}>{o.months_overdue ?? "—"} 个月</td>
                   <td>

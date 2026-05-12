@@ -28,6 +28,17 @@ interface WorkOrderItem {
   resolution: string | null;
   assignee_name: string | null;
   created_at: string;
+  // v1.9.7 — 列表行内案件上下文
+  owner_name: string | null;
+  owner_room: string | null;
+  project_id: number | null;
+  project_name: string | null;
+  amount_owed: string | null;
+}
+
+interface ProjectOption {
+  id: number;
+  name: string;
 }
 
 interface KpiData {
@@ -54,6 +65,7 @@ export function WorkOrderListPage() {
   const [keyword, setKeyword] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("");
+  const [projectFilter, setProjectFilter] = useState("");
   const [page, setPage] = useState(1);
 
   const currentTab = TABS.find((t) => t.v === tab) ?? TABS[0];
@@ -66,6 +78,7 @@ export function WorkOrderListPage() {
   }
   if (typeFilter) filters.push({ field: "order_type", operator: "eq", value: typeFilter });
   if (priorityFilter) filters.push({ field: "priority", operator: "eq", value: priorityFilter });
+  if (projectFilter) filters.push({ field: "project_id", operator: "eq", value: projectFilter });
 
   const { query } = useList<WorkOrderItem>({
     resource: "workorders",
@@ -79,6 +92,14 @@ export function WorkOrderListPage() {
   });
   const kpi = kpiQuery.data?.data;
 
+  // v1.9.7 — 拉项目列表用于「按项目过滤」下拉
+  const { query: projectsQuery } = useCustom<{ items: ProjectOption[] }>({
+    url: "admin/projects",
+    method: "get",
+    config: { query: { page_size: 200 } },
+  });
+  const projectOptions = projectsQuery.data?.data?.items ?? [];
+
   const rawData = query.data?.data;
   let items: WorkOrderItem[] =
     (rawData as unknown as PaginatedResponse<WorkOrderItem>)?.items ??
@@ -91,9 +112,9 @@ export function WorkOrderListPage() {
   const total = query.data?.total ?? items.length;
   const isLoading = query.isLoading;
 
-  const filtersDirty = !!keyword || !!typeFilter || !!priorityFilter;
+  const filtersDirty = !!keyword || !!typeFilter || !!priorityFilter || !!projectFilter;
   function resetFilters() {
-    setKeyword(""); setTypeFilter(""); setPriorityFilter(""); setPage(1);
+    setKeyword(""); setTypeFilter(""); setPriorityFilter(""); setProjectFilter(""); setPage(1);
   }
 
   return (
@@ -149,9 +170,20 @@ export function WorkOrderListPage() {
           <SearchInput
             value={keyword}
             onChange={(v) => { setKeyword(v); setPage(1); }}
-            placeholder="搜索描述 / 处理结果"
+            placeholder="搜索业主 / 房号 / 工单原因"
             width={240}
           />
+          <select
+            className="form-control"
+            style={{ width: 180 }}
+            value={projectFilter}
+            onChange={(e) => { setProjectFilter(e.target.value); setPage(1); }}
+          >
+            <option value="">全部项目</option>
+            {projectOptions.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
           <select
             className="form-control"
             style={{ width: 130 }}
@@ -188,22 +220,25 @@ export function WorkOrderListPage() {
           <thead>
             <tr>
               <th>工单号</th>
-              <th>优先级</th>
+              <th>业主</th>
+              <th>房号</th>
+              <th>项目</th>
               <th>类型</th>
-              <th>描述</th>
+              <th>工单原因</th>
+              <th style={{ textAlign: "right" }}>欠费</th>
               <th>状态</th>
+              <th>优先级</th>
               <th>负责人</th>
-              <th>关联案件</th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={8} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>加载中…</td></tr>
+              <tr><td colSpan={11} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>加载中…</td></tr>
             )}
             {!isLoading && items.length === 0 && (
               <tr>
-                <td colSpan={8} style={{ textAlign: "center", padding: 40, color: "var(--color-neutral-400)" }}>
+                <td colSpan={11} style={{ textAlign: "center", padding: 40, color: "var(--color-neutral-400)" }}>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
                     <Inbox className="w-8 h-8" style={{ color: "var(--color-neutral-300)" }} />
                     <span>暂无工单</span>
@@ -217,30 +252,37 @@ export function WorkOrderListPage() {
                   #{wo.id}
                 </td>
                 <td>
-                  <span style={{ ...getPriorityColor(wo.priority), padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 500 }}>
-                    {formatPriority(wo.priority)}
-                  </span>
+                  {wo.owner_name ?? <span style={{ color: "var(--color-neutral-400)" }}>—</span>}
+                </td>
+                <td>{wo.owner_room ?? <span style={{ color: "var(--color-neutral-400)" }}>—</span>}</td>
+                <td style={{ fontSize: 12, color: "var(--color-neutral-600)", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={wo.project_name ?? undefined}>
+                  {wo.project_name ?? <span style={{ color: "var(--color-neutral-400)" }}>—</span>}
                 </td>
                 <td>{formatType(wo.order_type)}</td>
-                <td style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={wo.description}>
+                <td style={{ maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={wo.description}>
                   {wo.description}
+                </td>
+                <td style={{ textAlign: "right", fontWeight: 600, color: wo.amount_owed ? "#dc2626" : "var(--color-neutral-400)" }}>
+                  {wo.amount_owed ? `¥${Number(wo.amount_owed).toLocaleString("zh-CN")}` : "—"}
                 </td>
                 <td>
                   <span style={{ ...getStatusColor(wo.status), padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 500 }}>
                     {formatStatus(wo.status)}
                   </span>
                 </td>
-                <td>{wo.assignee_name ?? <span style={{ color: "var(--color-neutral-400)" }}>未分配</span>}</td>
-                <td style={{ color: "var(--color-neutral-600)", fontSize: 12 }}>
-                  {wo.case_id ? `#${wo.case_id}` : <span style={{ color: "var(--color-neutral-400)" }}>—</span>}
+                <td>
+                  <span style={{ ...getPriorityColor(wo.priority), padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 500 }}>
+                    {formatPriority(wo.priority)}
+                  </span>
                 </td>
+                <td>{wo.assignee_name ?? <span style={{ color: "var(--color-neutral-400)" }}>未分配</span>}</td>
                 <td>
                   <button
                     type="button"
                     className="ds-btn ds-btn-ghost ds-btn-sm"
                     onClick={() => go({ to: `/workorder/orders/${wo.id}` })}
                   >
-                    <Eye className="w-3 h-3" /> 详情
+                    <Eye className="w-3 h-3" /> 处理
                   </button>
                 </td>
               </tr>

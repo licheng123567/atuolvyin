@@ -19,7 +19,9 @@ interface Props {
 function eventMeta(type: string): { cls: string; title: string; icon: React.ReactNode } {
   switch (type) {
     case "workorder.opened":   return { cls: "tl-system", title: "工单创建",     icon: <Wrench size={11} stroke="white" /> };
-    case "workorder.resolved": return { cls: "tl-system", title: "工单处理完成", icon: <Wrench size={11} stroke="white" /> };
+    case "workorder.followup": return { cls: "tl-system", title: "工单跟进",     icon: <Wrench size={11} stroke="white" /> };
+    case "workorder.resolved": return { cls: "tl-system", title: "工单已解决",   icon: <Wrench size={11} stroke="white" /> };
+    case "workorder.closed":   return { cls: "tl-system", title: "工单已关闭",   icon: <Wrench size={11} stroke="white" /> };
     case "legal.converted":    return { cls: "tl-system", title: "转化为法务",   icon: <Scale  size={11} stroke="white" /> };
     case "legal.case":         return { cls: "tl-system", title: "法务跟进",     icon: <Scale  size={11} stroke="white" /> };
     // v1.9.0 — 物业内部法务处理 7 种 event type

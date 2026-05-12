@@ -19,6 +19,11 @@ export function AgentWorkstationPage() {
   const go = useGo();
   const [qrState, setQrState] = useState<{ caseId: number; qrPayload: string; expiresAt: string } | null>(null);
   const [showDiscountModal, setShowDiscountModal] = useState(false);
+  // v1.9.7 — 建工单 Modal（替换 window.prompt）
+  const [woModalOpen, setWoModalOpen] = useState(false);
+  const [woType, setWoType] = useState<"quality" | "reduction" | "dispute" | "other">("quality");
+  const [woPriority, setWoPriority] = useState<"urgent_critical" | "urgent" | "normal" | "low">("normal");
+  const [woReason, setWoReason] = useState("");
 
   const { query } = useOne<CaseDetailResponse>({
     resource: "agent/cases",
@@ -50,22 +55,31 @@ export function AgentWorkstationPage() {
   }
 
   function handleCreateWorkOrder() {
+    setWoModalOpen(true);
+  }
+
+  function submitNewWorkOrder() {
     if (!detail) return;
-    const description = window.prompt("工单内容（必填）：");
-    if (!description?.trim()) return;
+    if (!woReason.trim()) { alert("请填写工单原因"); return; }
     customMutate(
       {
         url: "workorders",
         method: "post",
         values: {
           case_id: detail.id,
-          order_type: "case_followup",
-          description: description.trim(),
-          priority: "normal",
+          order_type: woType,
+          description: woReason.trim(),
+          priority: woPriority,
         },
       },
       {
-        onSuccess: (resp) => alert(`✓ 工单 #${(resp.data as { id?: number }).id ?? "?"} 已创建`),
+        onSuccess: (resp) => {
+          alert(`✓ 工单 #${(resp.data as { id?: number }).id ?? "?"} 已创建`);
+          setWoModalOpen(false);
+          setWoType("quality");
+          setWoPriority("normal");
+          setWoReason("");
+        },
         onError: (err) => alert(`建工单失败：${err.message}`),
       },
     );
@@ -260,6 +274,70 @@ export function AgentWorkstationPage() {
             alert(`✓ 减免申请 #${offerId} 已提交，等待审批`);
           }}
         />
+      )}
+
+      {/* v1.9.7 — 建工单 Modal（替换 window.prompt） */}
+      {woModalOpen && (
+        <div className="modal-overlay" onClick={() => setWoModalOpen(false)}>
+          <div className="ds-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
+            <div className="modal-header">
+              <span className="modal-title">新建工单 · {detail.owner.name}</span>
+              <button type="button" className="modal-close" onClick={() => setWoModalOpen(false)}>×</button>
+            </div>
+            <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">工单类型 <span className="req">*</span></label>
+                  <select
+                    className="form-control"
+                    value={woType}
+                    onChange={(e) => setWoType(e.target.value as "quality" | "reduction" | "dispute" | "other")}
+                  >
+                    <option value="quality">服务质量</option>
+                    <option value="reduction">减免申请</option>
+                    <option value="dispute">业主纠纷</option>
+                    <option value="other">其他</option>
+                  </select>
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">优先级</label>
+                  <select
+                    className="form-control"
+                    value={woPriority}
+                    onChange={(e) => setWoPriority(e.target.value as "urgent_critical" | "urgent" | "normal" | "low")}
+                  >
+                    <option value="urgent_critical">紧急-严重</option>
+                    <option value="urgent">紧急</option>
+                    <option value="normal">普通</option>
+                    <option value="low">低</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">工单原因 <span className="req">*</span></label>
+                <textarea
+                  className="form-control"
+                  style={{ height: 110 }}
+                  placeholder="例：业主反映 5 楼电梯已停运 3 天，多次催修未果，已联系维保但无人响应…"
+                  value={woReason}
+                  onChange={(e) => setWoReason(e.target.value)}
+                />
+                <div style={{ fontSize: 11, color: "var(--color-neutral-500)", marginTop: 4 }}>
+                  提交后此内容将作为工单原因记录，<strong>创建后不可修改</strong>（用于审计基线）；协调员处理过程在「跟进记录」补充。
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="ds-btn ds-btn-secondary" onClick={() => setWoModalOpen(false)}>取消</button>
+              <button
+                type="button"
+                className="ds-btn ds-btn-primary"
+                onClick={submitNewWorkOrder}
+                disabled={!woReason.trim()}
+              >提交工单</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
