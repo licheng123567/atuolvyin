@@ -26,7 +26,12 @@ class CallWatcherService : Service() {
                 putExtra(EXTRA_CASE_ID, caseId)
                 putExtra(EXTRA_CALLEE, callee)
             }
-            ctx.startForegroundService(i)
+            // v1.9.9 — startForegroundService 是 API 26 引入；Android 6/7 退回 startService
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                ctx.startForegroundService(i)
+            } else {
+                ctx.startService(i)
+            }
         }
     }
 
@@ -176,6 +181,8 @@ class CallWatcherService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun ensureChannel() {
+        // v1.9.9 — NotificationChannel 是 API 26 引入；Android 6/7 不需要 channel
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) return
         val nm = getSystemService(NotificationManager::class.java)
         if (nm.getNotificationChannel(CHANNEL) == null) {
             nm.createNotificationChannel(

@@ -567,6 +567,84 @@ v1.1 支持管理员为特定角色或特定用户覆盖租户默认策略，例
 - 外部兼职催收员统一强制「事后上传」（网络环境不可控）
 - 内部核心催收员强制「实时推流」（确保 AI 辅助质量）
 
+### 8.4 Android 设备与录音兼容性矩阵（v1.9.9）
+
+#### 8.4.1 核心原则
+
+App **自己不直接录通话音频**：Android 9 起 Google 在系统层封禁了 `AudioSource.VOICE_CALL` 通道，第三方应用无法获取对方语音。本系统的方案是：
+
+> **依赖手机 ROM 内置的"通话自动录音"功能** → 通话挂断后 App `RecordingScanner` 扫描系统录音目录 → 按号码 + 时间窗口 + 文件大小三层匹配 → 上传后端 ASR
+
+因此"App 录音可用性"等价于"手机 ROM 是否保留了系统通话录音功能 + 录音文件是否对第三方应用可读"。
+
+#### 8.4.2 兼容性矩阵
+
+| Android 版本 | 原生 (Pixel / AOSP) | MIUI / HyperOS（国行） | EMUI / HarmonyOS（国行） | ColorOS / OriginOS（国行） | 海外版（任意品牌） |
+|---|---|---|---|---|---|
+| **6 / 7** | ✅ 完全可用 | ✅ | ✅ | ✅ | ✅ |
+| **8 / 9** | ❌ 系统封禁 | ✅ MIUI 9/10/11 | ✅ EMUI 8/9/10 | ✅ ColorOS 5/6/7 | ❌ |
+| **10** | ❌ | ✅ MIUI 12 | ✅ | ✅ | ❌ |
+| **11** | ❌ | ⚠️ MIUI 12.5（需用户手动开启"通话录音"开关 + 给 App"所有文件访问权限"） | ⚠️ | ⚠️ | ❌ |
+| **12** | ❌ | 🟡 MIUI 13（部分机型砍除） | 🟡 | 🟡 | ❌ |
+| **13 / 14 / 15** | ❌ | 🟡 HyperOS（按机型，多数继续保留） | 🟡 | 🟡 | ❌ |
+
+✅ = 默认开箱可用 / ⚠️ = 可用但需额外配置 / 🟡 = 部分机型可用 / ❌ = 系统级封禁
+
+#### 8.4.3 选机指引（采购建议）
+
+| 等级 | 组合 | 适用 |
+|---|---|---|
+| **A. 最稳** | Android 6/7 + 任何国行 ROM | 内部测试机、低预算客户 |
+| **B. 推荐** | Android 8/9 + MIUI 10/11 | 生产环境主力，最贴近实际坐席用机 |
+| **C. 可用** | Android 10/11 + MIUI 12/12.5 | 较新设备，但需培训坐席开启录音开关 |
+| **D. 谨慎** | Android 12+ + 国行 MIUI 13/HyperOS | 上架前必须**单机实测**录音可用 |
+| **E. 拒绝** | Pixel、海外版任何品牌、Android 10+ AOSP | **明确不支持**，合同里写明 |
+
+#### 8.4.4 APK 构建参数
+
+| 字段 | 取值 | 说明 |
+|---|---|---|
+| `minSdk` | 23（Android 6.0） | 覆盖最低端测试机；正式上线根据客户机型分布可上调到 26/28 |
+| `targetSdk` | 29（Android 10） | 避免 MIUI 老版本 PackageParser "匹配度不够"误报 |
+| `compileSdk` | 35（Android 15） | AGP 8.5.x 要求；不影响安装兼容性 |
+| 签名方案 | v1 + v2 双签 | MIUI 10 / Android 8 era 部分机型只识别 v1，须双签 |
+
+清单中**禁止**出现以下 API 29+ 才存在的属性（老 PackageParser 会拒绝解析）：
+- `<service ... android:foregroundServiceType="..." />` — API 29 引入
+- `<application ... android:requestLegacyExternalStorage="true">` — API 29 引入
+- `<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />` — API 34 引入
+
+如未来需支持 Android 14+，应通过 manifest merger 按 SDK 分层注入（`tools:targetApi`）。
+
+#### 8.4.5 录音文件候选目录
+
+`RecordingScanner.defaultCandidateDirs` 维护各 ROM 录音落盘路径：
+
+| ROM | 录音目录 | 文件后缀 |
+|---|---|---|
+| MIUI 8/9/10 | `/storage/emulated/0/MIUI/sound_recorder/call_rec/` | `.m4a` / `.mp3` |
+| MIUI 11/12+ | `/storage/emulated/0/MIUI/sound_recorder/call/` | `.m4a` |
+| EMUI 8/9/10 | `/storage/emulated/0/Sounds/CallRecord/` | `.m4a` / `.amr` |
+| ColorOS | `/storage/emulated/0/Recordings/Call/` | `.m4a` |
+| AOSP（早期） | `/storage/emulated/0/Recordings/` | `.amr` |
+
+候选目录可由 `/api/v1/devices/{id}/config` 下发（运行时配置 L2），不需要重打 APK 即可适配新机型。
+
+#### 8.4.6 上线前选机与合同条款建议
+
+- **测试机最低覆盖**：至少 2 台 — Android 6 + MIUI 10（最宽松）+ Android 9 + MIUI 11（贴近生产）
+- **合同明文**：列出"支持机型 ROM 矩阵"作为附件，客户买不在矩阵内的机器导致录音抓不到，不承担售后责任
+- **租户层兼容性策略**（v2.0 规划）：在 `tenant_config` 增加 `device_compatibility_policy` 字段（`strict_whitelist` / `warn_only` / `disabled`），App 自检时上报机型+ROM，后端按策略判断是否允许该设备入网
+
+#### 8.4.7 风险与缓解
+
+| 风险 | 严重度 | 缓解 |
+|---|---|---|
+| 客户购入 Android 12+ HyperOS 机型，部分子机型砍录音 | 高 | 上述 §8.4.6 device_compatibility_policy；坐席入职流程加入"录音自检"步骤 |
+| Google 进一步收紧 Android 16+ 录音权限 | 中 | 提前调研 VoIP 桥接方案（接 SIP 网关 / 第三方语音中继）作为方案 B |
+| 海外版手机走私进入国内市场 | 低 | 自检通过 `Build.MANUFACTURER` + `Build.BRAND` + ROM 字符串识别后拒绝 |
+| 录音目录用户手动改路径 | 低 | 候选目录走运行时配置，客服可远程下发新路径 |
+
 ---
 
 ## 9. 用户故事

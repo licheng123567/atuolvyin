@@ -20,7 +20,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- v1.9.9 — FOREGROUND_SERVICE_DATA_SYNC 是 Android 14 (API 34) 引入；
+         本 App 目标 MIUI 10 (Android 8.1/9) — 老平台 PackageParser 见此未知 perm 可能解析失败。
+         如果未来支持 Android 14+ 再加回，配合 tools:targetApi="34"。 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -33,9 +35,11 @@
     <application
         android:allowBackup="false"
         android:label="autoluyin-demo"
-        android:requestLegacyExternalStorage="true"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
         android:usesCleartextTraffic="true">
+        <!-- v1.9.9 — requestLegacyExternalStorage 是 Android 10 (API 29) 引入；
+             目标 MIUI 10 (Android 8.1/9) 本身没有 scoped storage，此属性无意义且会被
+             老 PackageParser 视为未知属性导致解析失败。 -->
 
         <activity
             android:name=".MainActivity"
@@ -46,10 +50,13 @@
             </intent-filter>
         </activity>
 
+        <!-- v1.9.9 — foregroundServiceType 是 Android 10 (API 29) 引入的属性。
+             目标平台 MIUI 10 (Android 8.1/9) 的 PackageParser 不认识此属性 → 解析失败。
+             Android 8/9 上普通 foreground service 不需要 type；Android 10+ 才需要在调用
+             startForeground 时配合 ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC。 -->
         <service
             android:name=".CallWatcherService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:exported="false" />
 
         <!-- 静态注册，服务被杀后仍能收到 PHONE_STATE，确保挂机后唤醒上传 -->
         <receiver
