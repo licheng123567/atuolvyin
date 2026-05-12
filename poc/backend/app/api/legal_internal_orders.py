@@ -14,12 +14,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi import status as http_status
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.storage import storage
+from app.services.evidence_bundle import build_evidence_bundle_zip
 from app.core.phone_visibility import (
     display_owner_phone,
     is_provider_contract_active,
@@ -748,4 +749,76 @@ def download_action_attachment(
         content=data,
         media_type=ct,
         headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
+# ── Evidence bundle (v1.9.5) ──────────────────────────────
+@router.get("/internal-orders/{order_id}/evidence-bundle")
+def download_internal_order_evidence_bundle(
+    order_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> StreamingResponse:
+    """v1.9.5 — 按法务订单的关联案件打包证据（录音/转写/AI/区块链 + 法务处理流水 + 律师函附件）。"""
+    tenant_id = _require_tenant(payload)
+    user_id = int(payload.get("user_id") or 0)
+    role = payload.get("role", "")
+
+    order = db.get(LegalConversionOrder, order_id)
+    if order is None or order.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "法务订单不存在"},
+        )
+    case = db.get(CollectionCase, order.case_id)
+    owner = db.get(OwnerProfile, case.owner_id) if case else None
+    if not case or not owner:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_CASE_GONE", "message": "案件或业主信息缺失"},
+        )
+
+    # 法务处理订单上下文 → 永远展示明文电话（与详情页一致）
+    reveal = role == "legal" or should_reveal_owner_phone(
+        role=role,
+        contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
+    )
+
+    buffer, filename = build_evidence_bundle_zip(
+        db,
+        tenant_id=tenant_id,
+        case=case,
+        owner=owner,
+        owner_phone_display=display_owner_phone(owner.phone_enc, reveal=reveal),
+        case_summary_extra={
+            "internal_order_id": order.id,
+            "internal_order_status": order.status,
+            "internal_close_reason": order.internal_close_reason,
+            "internal_closed_at": order.internal_closed_at.isoformat() if order.internal_closed_at else None,
+            "promise_due_date": order.promise_due_date.isoformat() if order.promise_due_date else None,
+        },
+        user_id=user_id or None,
+        legal_order_id=order.id,
+    )
+
+    log_audit(
+        db,
+        actor_user_id=user_id,
+        actor_role=role,
+        tenant_id=tenant_id,
+        action="legal_internal_order.evidence_bundle_downloaded",
+        target_type="legal_conversion_order",
+        target_id=order_id,
+        payload={"case_id": order.case_id, "filename": filename},
+    )
+    db.commit()
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
     )
