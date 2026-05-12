@@ -132,7 +132,7 @@ const ROLE_HOME: Record<string, string> = {
   supervisor: "/supervisor/workspace",
   agent_internal: "/agent/cases",
   agent_external: "/agent/cases",
-  legal: "/legal/cases",
+  legal: "/legal/internal-orders",
   workorder: "/workorder/orders",
   project_manager_property: "/pm/dashboard",
   project_manager_provider: "/pm/dashboard",
