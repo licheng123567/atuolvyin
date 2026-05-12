@@ -2,8 +2,8 @@
 // 三 tab：待处理（internal_processing）/ 已关闭（closed_*）/ 全部
 import { useCustom } from "@refinedev/core";
 import { Eye, MessageSquarePlus } from "lucide-react";
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { PaginationBar } from "../../../components/ui/PaginationBar";
 import type { PaginatedResponse } from "../../../types";
 
@@ -21,7 +21,10 @@ interface InternalOrderItem {
   requester_name: string | null;
   last_action_at: string | null;
   action_count: number;
+  promise_due_date: string | null;
 }
+
+function todayISO(): string { return new Date().toISOString().slice(0, 10); }
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   internal_processing:    { label: "处理中",   cls: "ds-badge ds-badge-blue" },
@@ -33,10 +36,21 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
 
 const PAGE_SIZE = 20;
 
+type TabValue = "pending" | "closed" | "escalated" | "all";
+
 export function LegalInternalOrdersPage() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<"pending" | "closed" | "all">("pending");
+  const [searchParams] = useSearchParams();
+  // v1.9.1 — 「升级律所追踪」侧边栏入口通过 ?tab=escalated 直达
+  const initialTab = (searchParams.get("tab") as TabValue) || "pending";
+  const [tab, setTab] = useState<TabValue>(initialTab);
   const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    const t = (searchParams.get("tab") as TabValue) || "pending";
+    setTab(t);
+    setPage(1);
+  }, [searchParams]);
 
   const { query } = useCustom<PaginatedResponse<InternalOrderItem>>({
     url: "legal/internal-orders",
@@ -63,6 +77,7 @@ export function LegalInternalOrdersPage() {
           {([
             { v: "pending", label: "待处理" },
             { v: "closed", label: "已关闭" },
+            { v: "escalated", label: "已升级律所" },
             { v: "all", label: "全部" },
           ] as const).map((t) => (
             <button
@@ -86,7 +101,7 @@ export function LegalInternalOrdersPage() {
             <div style={{ padding: 32, textAlign: "center", color: "var(--color-neutral-400)" }}>加载中…</div>
           ) : items.length === 0 ? (
             <div style={{ padding: 32, textAlign: "center", color: "var(--color-neutral-400)" }}>
-              {tab === "pending" ? "暂无待处理订单" : "暂无数据"}
+              {tab === "pending" ? "暂无待处理订单" : tab === "escalated" ? "暂无升级到律所的订单" : "暂无数据"}
             </div>
           ) : (
             <table className="ds-table" style={{ width: "100%" }}>
@@ -108,6 +123,7 @@ export function LegalInternalOrdersPage() {
                   const room = (o.building || "") + (o.room || "") || "—";
                   const amount = o.amount_owed != null ? Number(o.amount_owed).toLocaleString("zh-CN") : "—";
                   const sb = STATUS_BADGE[o.status] ?? { label: o.status, cls: "ds-badge ds-badge-gray" };
+                  const overdue = o.status === "closed_promised" && o.promise_due_date && o.promise_due_date < todayISO();
                   return (
                     <tr key={o.id}>
                       <td>
@@ -117,7 +133,14 @@ export function LegalInternalOrdersPage() {
                       <td>{room}</td>
                       <td>¥{amount}</td>
                       <td>{o.months_overdue ?? "—"} 个月</td>
-                      <td><span className={sb.cls}>{sb.label}</span></td>
+                      <td>
+                        <span className={sb.cls}>{sb.label}</span>
+                        {o.status === "closed_promised" && o.promise_due_date && (
+                          <div style={{ fontSize: 11, marginTop: 2, color: overdue ? "#dc2626" : "var(--color-neutral-500)" }}>
+                            {overdue ? "🔴 " : ""}承诺：{o.promise_due_date}
+                          </div>
+                        )}
+                      </td>
                       <td>{o.requester_name ?? "—"}</td>
                       <td>
                         <span style={{ fontWeight: 600 }}>{o.action_count}</span>

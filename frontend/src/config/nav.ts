@@ -145,17 +145,10 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
     {
       title: "我的工作",
       items: [
-        // v1.9.0 — 物业法务内部处理新工作台（默认入口）
+        // v1.9.0 — 物业法务内部处理新工作台（主入口）
         { label: "待内部处理", path: "/legal/internal-orders", icon: "Gavel" },
-        { label: "法务订单（物业视角）", path: "/legal/orders", icon: "Briefcase" },
-        { label: "律所工作台", path: "/lawfirm/orders", icon: "Building2" },
-        { label: "律师工作台", path: "/lawyer/orders", icon: "Scale" },
-      ],
-    },
-    {
-      title: "历史",
-      items: [
-        { label: "法务案件（旧版）", path: "/legal/cases", icon: "List" },
+        // v1.9.1 — 升级律所追踪：status=escalated_to_lawfirm 的订单，可加跟进记录（方案 C 之前先只读派单状态）
+        { label: "升级律所追踪", path: "/legal/internal-orders?tab=escalated", icon: "ExternalLink" },
       ],
     },
   ],
