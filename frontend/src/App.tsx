@@ -134,6 +134,7 @@ const ROLE_HOME: Record<string, string> = {
   agent_external: "/agent/cases",
   legal: "/legal/internal-orders",
   workorder: "/workorder/orders",
+  coordinator: "/workorder/orders",
   project_manager_property: "/pm/dashboard",
   project_manager_provider: "/pm/dashboard",
   provider_admin: "/provider/dashboard",
