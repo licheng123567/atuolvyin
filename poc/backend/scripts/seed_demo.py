@@ -22,6 +22,10 @@ from app.models.discount_offer import DiscountOffer
 from app.models.law_firm import LawFirm, LawFirmLawyer
 from app.models.law_firm_membership import LawFirmMembership
 from app.models.legal_conversion import LegalConversionOrder, LegalServicePackage
+from app.models.legal_internal import (
+    InternalLegalLetterTemplate,
+    PartnerLawFirm,
+)
 from app.models.risk import RiskKeyword
 from app.models.script import ScriptTemplate
 from app.models.settlement import SettlementStatement
@@ -488,6 +492,67 @@ def _upsert_law_firm_membership(
     return m
 
 
+def _upsert_partner_law_firm(
+    db, tenant: Tenant, *,
+    name: str,
+    contact_name: str | None = None,
+    contact_phone: str | None = None,
+    contact_email: str | None = None,
+    notes: str | None = None,
+) -> PartnerLawFirm:
+    existing = db.execute(
+        select(PartnerLawFirm).where(
+            PartnerLawFirm.tenant_id == tenant.id,
+            PartnerLawFirm.name == name,
+        )
+    ).scalar_one_or_none()
+    if existing:
+        return existing
+    from app.core.crypto import encrypt_phone as _enc
+    f = PartnerLawFirm(
+        tenant_id=tenant.id,
+        name=name,
+        contact_name=contact_name,
+        contact_phone_enc=_enc(contact_phone) if contact_phone else None,
+        contact_email=contact_email,
+        notes=notes,
+        is_active=True,
+    )
+    db.add(f)
+    db.flush()
+    print(f"[created] PartnerLawFirm: {name}  id={f.id}")
+    return f
+
+
+def _upsert_internal_letter_template(
+    db, tenant: Tenant, *,
+    name: str,
+    category: str,
+    body: str,
+    variables: list[dict] | None = None,
+) -> InternalLegalLetterTemplate:
+    existing = db.execute(
+        select(InternalLegalLetterTemplate).where(
+            InternalLegalLetterTemplate.tenant_id == tenant.id,
+            InternalLegalLetterTemplate.name == name,
+        )
+    ).scalar_one_or_none()
+    if existing:
+        return existing
+    t = InternalLegalLetterTemplate(
+        tenant_id=tenant.id,
+        name=name,
+        category=category,
+        body_md=body,
+        variables=variables,
+        is_active=True,
+    )
+    db.add(t)
+    db.flush()
+    print(f"[created] InternalLegalLetterTemplate: {name}  id={t.id}")
+    return t
+
+
 def _upsert_legal_package(db, slug: str, package_type: str, name: str, price: Decimal) -> LegalServicePackage:
     existing = db.execute(
         select(LegalServicePackage)
@@ -822,6 +887,69 @@ def main() -> None:
         # legal_user 同时挂为律所代表 + 兼任「李律师」（演示多 membership）
         _upsert_law_firm_membership(db, legal_user, firm, "admin")
         _upsert_law_firm_membership(db, legal_user, firm, "lawyer", lawyer=lawyer_li)
+
+        # 9b. v1.9.0 — 物业法务内部处理：合作律所 + 律师函模板 demo
+        _upsert_partner_law_firm(
+            db, tenant,
+            name="Demo 法务公司",
+            contact_name="王律师",
+            contact_phone="13800001111",
+            contact_email="wang@demolaw.cn",
+            notes="长期合作律所，律师函按 200 元/份计费。",
+        )
+        _upsert_partner_law_firm(
+            db, tenant,
+            name="北京华信律师事务所",
+            contact_name="李主任",
+            contact_phone="13900002222",
+            notes="备用律所，复杂案件可对接。",
+        )
+        _upsert_internal_letter_template(
+            db, tenant,
+            name="物业费追缴律师函（标准版）",
+            category="lawyer_letter",
+            body=(
+                "致 {{owner_name}} 先生/女士：\n\n"
+                "您所有的房产位于 {{building}}{{room}}，截至 {{notice_date}} 累计欠物业费"
+                " ¥{{amount_owed}}（共 {{months}} 个月）。\n\n"
+                "现以本所代理 {{property_company}} 名义，正式催告您于本函送达之日起 7 日内"
+                "一次性结清上述欠款。如逾期未付，我方将依法向人民法院提起诉讼，"
+                "由此产生的诉讼费、律师代理费、保全费等一切费用均由您承担。\n\n"
+                "签发律师：{{lawyer_name}}\n"
+                "签发律所：{{law_firm_name}}\n"
+                "日期：{{notice_date}}"
+            ),
+            variables=[
+                {"name": "owner_name", "label": "业主姓名", "type": "string", "required": True},
+                {"name": "building", "label": "楼栋", "type": "string", "required": True},
+                {"name": "room", "label": "房号", "type": "string", "required": True},
+                {"name": "notice_date", "label": "发函日期", "type": "date", "required": True},
+                {"name": "amount_owed", "label": "欠费金额", "type": "string", "required": True},
+                {"name": "months", "label": "欠费月数", "type": "string", "required": True},
+                {"name": "property_company", "label": "物业公司全称", "type": "string", "required": True},
+                {"name": "lawyer_name", "label": "签发律师", "type": "string", "required": True},
+                {"name": "law_firm_name", "label": "签发律所", "type": "string", "required": True},
+            ],
+        )
+        _upsert_internal_letter_template(
+            db, tenant,
+            name="物业费催告函（普通版）",
+            category="notice",
+            body=(
+                "{{owner_name}} 业主您好：\n\n"
+                "您位于 {{building}}{{room}} 的房产截至 {{notice_date}} 累计欠物业费"
+                " ¥{{amount_owed}}。请在 15 日内联系物业完成缴费，否则我方将进一步采取法律手段。\n\n"
+                "{{property_company}}\n{{notice_date}}"
+            ),
+            variables=[
+                {"name": "owner_name", "label": "业主姓名", "type": "string", "required": True},
+                {"name": "building", "label": "楼栋", "type": "string", "required": True},
+                {"name": "room", "label": "房号", "type": "string", "required": True},
+                {"name": "notice_date", "label": "发函日期", "type": "date", "required": True},
+                {"name": "amount_owed", "label": "欠费金额", "type": "string", "required": True},
+                {"name": "property_company", "label": "物业公司", "type": "string", "required": True},
+            ],
+        )
 
         # 10. v1.6 — Legal service packages
         pkg_letter = _upsert_legal_package(db, "lawyer-letter-std", "lawyer_letter", "律师函（标准）", Decimal("800.00"))

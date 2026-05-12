@@ -108,7 +108,12 @@ def list_internal_orders(
     tenant_id = _require_tenant(payload)
     role = payload.get("role", "")
     contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
-    reveal = should_reveal_owner_phone(role=role, contract_active=contract_active)
+    # v1.9.0 — legal 角色处理内部订单时（无论是 internal_processing 进行中还是已关闭/升级）
+    # 都需要明文电话用于发律师函/电话沟通；其他角色按 v1.7.0 决策
+    reveal = (
+        True if role == "legal"
+        else should_reveal_owner_phone(role=role, contract_active=contract_active)
+    )
 
     stmt = (
         select(LegalConversionOrder, OwnerProfile)
@@ -214,7 +219,12 @@ def get_internal_order(
 
     role = payload.get("role", "")
     contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
-    reveal = should_reveal_owner_phone(role=role, contract_active=contract_active)
+    # v1.9.0 — legal 角色处理内部订单时（无论是 internal_processing 进行中还是已关闭/升级）
+    # 都需要明文电话用于发律师函/电话沟通；其他角色按 v1.7.0 决策
+    reveal = (
+        True if role == "legal"
+        else should_reveal_owner_phone(role=role, contract_active=contract_active)
+    )
 
     action_rows = db.execute(
         select(LegalInternalAction)

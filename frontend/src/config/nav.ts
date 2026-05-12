@@ -67,6 +67,9 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
         { label: "法务转化", path: "/admin/legal-conversion", icon: "Scale" },
         // v1.6.8 — 法务转化两步审批 inbox（催收员申请 → admin 也可代督导审批）
         { label: "法务转化审批", path: "/admin/legal-conversion-approvals", icon: "ClipboardList" },
+        // v1.9.0 — 法务内部处理配套：合作律所 + 律师函模板（物业法务起草律师函时选用）
+        { label: "合作律所", path: "/admin/partner-law-firms", icon: "Building2" },
+        { label: "律师函模板", path: "/admin/internal-letter-templates", icon: "FileText" },
         { label: "减免大额审批", path: "/admin/discount-approvals", icon: "BadgePercent" },
         { label: "审计日志", path: "/admin/audit-logs", icon: "ScrollText" },
         { label: "系统配置", path: "/admin/settings", icon: "Settings" },
@@ -142,6 +145,8 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
     {
       title: "我的工作",
       items: [
+        // v1.9.0 — 物业法务内部处理新工作台（默认入口）
+        { label: "待内部处理", path: "/legal/internal-orders", icon: "Gavel" },
         { label: "法务订单（物业视角）", path: "/legal/orders", icon: "Briefcase" },
         { label: "律所工作台", path: "/lawfirm/orders", icon: "Building2" },
         { label: "律师工作台", path: "/lawyer/orders", icon: "Scale" },
