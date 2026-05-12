@@ -40,6 +40,7 @@ from app.schemas.legal_internal import (
     LegalInternalActionOut,
     LegalInternalOrderCloseRequest,
     LegalInternalOrderDetailOut,
+    LegalInternalOrderKpi,
     LegalInternalOrderListItem,
     LegalInternalOrderReopenRequest,
 )
@@ -93,6 +94,71 @@ def _legal_stage_for_close_reason(reason: str) -> str | None:
         "uncollectible": "closed",
         "escalated": None,  # 升级律所不联动 case.stage
     }.get(reason)
+
+
+# ── KPI ───────────────────────────────────────────────────────
+# v1.9.2 — 法务工作台顶部 4 张 KPI 卡
+@router.get("/internal-orders/kpi", response_model=LegalInternalOrderKpi)
+def get_internal_orders_kpi(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> LegalInternalOrderKpi:
+    tenant_id = _require_tenant(payload)
+    now = datetime.now(UTC)
+    month_start = datetime(now.year, now.month, 1, tzinfo=UTC)
+
+    pending_count = db.execute(
+        select(func.count(LegalConversionOrder.id))
+        .where(LegalConversionOrder.tenant_id == tenant_id)
+        .where(LegalConversionOrder.status == "internal_processing")
+    ).scalar_one() or 0
+
+    closed_statuses = ("closed_paid", "closed_promised", "closed_uncollectible")
+    closed_this_month = db.execute(
+        select(func.count(LegalConversionOrder.id))
+        .where(LegalConversionOrder.tenant_id == tenant_id)
+        .where(LegalConversionOrder.status.in_(closed_statuses))
+        .where(LegalConversionOrder.internal_closed_at.is_not(None))
+        .where(LegalConversionOrder.internal_closed_at >= month_start)
+    ).scalar_one() or 0
+
+    escalated_this_month = db.execute(
+        select(func.count(LegalConversionOrder.id))
+        .where(LegalConversionOrder.tenant_id == tenant_id)
+        .where(LegalConversionOrder.status == "escalated_to_lawfirm")
+        .where(LegalConversionOrder.internal_closed_at.is_not(None))
+        .where(LegalConversionOrder.internal_closed_at >= month_start)
+    ).scalar_one() or 0
+
+    # 平均处理时长（天）：本月所有已关闭/升级的订单 (closed_at - created_at) 平均
+    avg_seconds = db.execute(
+        select(
+            func.avg(
+                func.extract(
+                    "epoch",
+                    LegalConversionOrder.internal_closed_at - LegalConversionOrder.created_at,
+                )
+            )
+        )
+        .where(LegalConversionOrder.tenant_id == tenant_id)
+        .where(LegalConversionOrder.internal_closed_at.is_not(None))
+        .where(LegalConversionOrder.internal_closed_at >= month_start)
+    ).scalar()
+    avg_days = round(float(avg_seconds) / 86400.0, 1) if avg_seconds is not None else None
+
+    total_finalized = closed_this_month + escalated_this_month
+    escalation_rate = (
+        round(escalated_this_month / total_finalized * 100, 1)
+        if total_finalized > 0 else None
+    )
+
+    return LegalInternalOrderKpi(
+        pending_count=int(pending_count),
+        closed_this_month=int(closed_this_month),
+        avg_processing_days=avg_days,
+        escalation_rate_pct=escalation_rate,
+    )
 
 
 # ── List ──────────────────────────────────────────────────────

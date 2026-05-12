@@ -3,7 +3,7 @@
 // v1.9.1 — 律师函起草 Wizard / 承诺到期重新打开 / 盖章版 PDF 上传
 import { useCustom, useCustomMutation } from "@refinedev/core";
 import {
-  AlertCircle, ArrowLeft, CheckCircle2, FileText, Gavel, Handshake,
+  AlertCircle, ArrowLeft, CheckCircle2, FileText, Gavel, Handshake, Lightbulb,
   Mail, MessageCircle, Paperclip, Printer, RotateCcw, ShieldAlert, Upload,
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
@@ -77,6 +77,18 @@ function todayISO(): string {
 function isOverdue(dueDate: string | null): boolean {
   if (!dueDate) return false;
   return dueDate < todayISO();
+}
+
+// v1.9.2 — 欠费分级处理建议（< 3k 催告 / 3k-1万 律师函 / > 1万 升级律所）
+function getProcessingSuggestion(amount: number | null): { tier: "notice" | "letter" | "escalate"; text: string; color: string } | null {
+  if (amount == null || amount <= 0) return null;
+  if (amount < 3000) {
+    return { tier: "notice", text: `本案欠费 ¥${amount.toLocaleString("zh-CN")}（< ¥3,000），建议先出催告函 + 电话沟通，避免过度施压`, color: "#16a34a" };
+  }
+  if (amount <= 10000) {
+    return { tier: "letter", text: `本案欠费 ¥${amount.toLocaleString("zh-CN")}（¥3k-1万），建议出律师函 + 调解，多数案件可在内部解决`, color: "#ea580c" };
+  }
+  return { tier: "escalate", text: `本案欠费 ¥${amount.toLocaleString("zh-CN")}（> ¥10,000），建议律师函震慑后若 7 日无响应直接升级律所走诉讼`, color: "#dc2626" };
 }
 
 export function LegalInternalOrderDetailPage() {
@@ -449,6 +461,22 @@ export function LegalInternalOrderDetailPage() {
 
         {/* ── 右：sticky 操作栏 ── */}
         <div style={{ position: "sticky", top: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+          {/* v1.9.2 — 欠费分级处理建议（仅未关闭时显示）*/}
+          {!isClosed && (() => {
+            const sug = getProcessingSuggestion(order.amount_owed != null ? Number(order.amount_owed) : null);
+            return sug ? (
+              <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "10px 12px" }}>
+                <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+                  <Lightbulb size={14} style={{ color: sug.color, flexShrink: 0, marginTop: 2 }} />
+                  <div>
+                    <div style={{ fontSize: 11, color: "#92400e", marginBottom: 2, fontWeight: 600 }}>处理建议</div>
+                    <div style={{ fontSize: 12, color: "#78350f", lineHeight: 1.55 }}>{sug.text}</div>
+                  </div>
+                </div>
+              </div>
+            ) : null;
+          })()}
+
           {isClosed ? (
             <div className="ds-card" style={{ padding: 14 }}>
               <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>订单已关闭</div>

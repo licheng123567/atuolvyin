@@ -26,6 +26,13 @@ interface InternalOrderItem {
 
 function todayISO(): string { return new Date().toISOString().slice(0, 10); }
 
+interface KpiData {
+  pending_count: number;
+  closed_this_month: number;
+  avg_processing_days: number | null;
+  escalation_rate_pct: number | null;
+}
+
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   internal_processing:    { label: "处理中",   cls: "ds-badge ds-badge-blue" },
   closed_paid:            { label: "已缴清",   cls: "ds-badge ds-badge-green" },
@@ -58,6 +65,13 @@ export function LegalInternalOrdersPage() {
     config: { query: { tab, page, page_size: PAGE_SIZE } },
   });
 
+  // v1.9.2 — 顶部 4 张 KPI 卡数据
+  const { query: kpiQuery } = useCustom<KpiData>({
+    url: "legal/internal-orders/kpi",
+    method: "get",
+  });
+  const kpi = kpiQuery.data?.data;
+
   const isLoading = query.isLoading;
   const items: InternalOrderItem[] = query.data?.data?.items ?? [];
   const total = query.data?.data?.total ?? 0;
@@ -70,6 +84,26 @@ export function LegalInternalOrdersPage() {
           催收员申请转法务 → 督导审批通过的案件，物业法务在此处理（沟通业主 / 出律师函 / 调解 / 关闭）。
         </p>
       </div>
+
+      {/* v1.9.2 — KPI 卡 */}
+      {kpi && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
+          <KpiCard label="待处理" value={kpi.pending_count} suffix="单" tone="primary" />
+          <KpiCard label="本月关闭" value={kpi.closed_this_month} suffix="单" tone="green" />
+          <KpiCard
+            label="本月平均处理时长"
+            value={kpi.avg_processing_days ?? "—"}
+            suffix={kpi.avg_processing_days != null ? "天" : ""}
+            tone="neutral"
+          />
+          <KpiCard
+            label="本月升级律所率"
+            value={kpi.escalation_rate_pct ?? "—"}
+            suffix={kpi.escalation_rate_pct != null ? "%" : ""}
+            tone={(kpi.escalation_rate_pct ?? 0) >= 30 ? "red" : "orange"}
+          />
+        </div>
+      )}
 
       {/* tabs */}
       <div className="ds-card section-gap">
@@ -168,6 +202,30 @@ export function LegalInternalOrdersPage() {
           )}
           <PaginationBar page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
         </div>
+      </div>
+    </div>
+  );
+}
+
+function KpiCard({ label, value, suffix, tone }: {
+  label: string;
+  value: number | string;
+  suffix?: string;
+  tone: "primary" | "green" | "orange" | "red" | "neutral";
+}) {
+  const COLOR: Record<typeof tone, string> = {
+    primary: "var(--color-primary)",
+    green: "#16a34a",
+    orange: "#ea580c",
+    red: "#dc2626",
+    neutral: "var(--color-neutral-700)",
+  };
+  return (
+    <div className="ds-card" style={{ padding: "14px 16px" }}>
+      <div style={{ fontSize: 12, color: "var(--color-neutral-500)", marginBottom: 6 }}>{label}</div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+        <span style={{ fontSize: 24, fontWeight: 700, color: COLOR[tone], lineHeight: 1 }}>{value}</span>
+        {suffix && <span style={{ fontSize: 12, color: "var(--color-neutral-500)" }}>{suffix}</span>}
       </div>
     </div>
   );

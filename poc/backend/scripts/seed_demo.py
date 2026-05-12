@@ -1203,6 +1203,9 @@ def main() -> None:
                 db, tenant, all_cases[2], pkg_full, supervisor_user,
                 status="escalated_to_lawfirm",
                 requester=agent_internal_user,
+                close_reason="escalated",
+                closed_at=now_utc - timedelta(days=1),  # KPI 升级率统计要这个时间戳
+                closed_by=legal_user,
                 actions=[
                     {"type": "contact_owner", "actor": legal_user,
                      "note": "电话联系 3 次未果，业主拒绝沟通。",
