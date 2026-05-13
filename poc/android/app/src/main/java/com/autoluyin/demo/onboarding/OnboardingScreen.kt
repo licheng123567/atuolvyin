@@ -1,5 +1,10 @@
 package com.autoluyin.demo.onboarding
 
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronLeft
@@ -515,7 +521,35 @@ private fun StepRecordingSetupScreen(
     onOpenSettings: () -> Unit,
     onConfirmedChange: (Boolean) -> Unit,
 ) {
+    val ctx = LocalContext.current
     val scroll = rememberScrollState()
+
+    // v2.2 Module A — SAF 手选录音目录。
+    // 静态候选目录在某些 ROM / 厂商定制版本上覆盖不到，给用户兜底入口。
+    var savedDirLabel by remember {
+        mutableStateOf(
+            AppConfig.getUserRecordingDirUri(ctx)
+                ?.let { Uri.parse(it).lastPathSegment }
+                .orEmpty(),
+        )
+    }
+    val pickDirLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree(),
+    ) { uri: Uri? ->
+        if (uri != null) {
+            runCatching {
+                ctx.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+                AppConfig.saveUserRecordingDirUri(ctx, uri.toString())
+                savedDirLabel = uri.lastPathSegment.orEmpty()
+                Toast.makeText(ctx, "已保存：${uri.lastPathSegment}", Toast.LENGTH_LONG).show()
+            }.onFailure {
+                Toast.makeText(ctx, "保存目录失败：${it.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -611,6 +645,41 @@ private fun StepRecordingSetupScreen(
                 color = Neutral900,
                 fontSize = 14.sp,
                 modifier = Modifier.weight(1f),
+            )
+        }
+
+        // v2.2 Module A — SAF 兜底入口：自动扫描找不到目录时让用户手选。
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedButton(
+            onClick = { pickDirLauncher.launch(null) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+            shape = RoundedCornerShape(12.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Neutral400),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.FolderOpen,
+                contentDescription = null,
+                tint = Neutral700,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "找不到？手动选择录音目录",
+                color = Neutral700,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        if (savedDirLabel.isNotBlank()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "已保存目录：$savedDirLabel",
+                color = Success,
+                fontSize = 12.sp,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
             )
         }
     }

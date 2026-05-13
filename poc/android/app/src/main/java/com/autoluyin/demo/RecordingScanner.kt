@@ -21,24 +21,42 @@ object RecordingScanner {
 
     private const val TAG = "RecordingScanner"
 
-    /** 默认候选目录；运行时以 AppConfig.runtime.candidateDirs 为准（可被后台下发覆盖）。*/
+    /** 默认候选目录；运行时以 AppConfig.runtime.candidateDirs 为准（可被后台下发覆盖）。
+     *
+     *  v2.2 Module A — 扩展真实 ROM 目录矩阵。各 ROM 在不同版本上路径有差异，
+     *  全部列出来逐一探测；命中即认为系统通话录音已开启。
+     *  所有路径都相对 Environment.getExternalStorageDirectory()（即 /sdcard/）。
+     */
     val defaultCandidateDirs: List<String> = listOf(
         // 小米 / Redmi（HyperOS / MIUI）
         "MIUI/sound_recorder/call_rec",
         "MIUI/sound_recorder/call_recordings",
-        "Recordings/call",
-        "Recordings/Call",
-        "Recordings/CallRecordings",
-        // 华为 / 荣耀
+        "MIUI/sound_recorder/call",
+        // 华为 / 荣耀（EMUI / HarmonyOS / MagicOS）
         "Sounds/CallRecord",
+        "Music/Recordings",
         "record/Call",
-        // OPPO / 一加
+        // OPPO ColorOS / realme / 一加 OnePlus（OxygenOS）
+        "Recordings/Call",
+        "Recordings/call",
         "Recordings/Call Recordings",
-        // vivo / iQOO
-        "记录/通话录音",
+        "Recordings/CallRecordings",
+        "Music/Recordings/Call",
         "Music/Recordings/Call Recordings",
-        // 魅族
+        // vivo / iQOO（OriginOS / Funtouch）
+        "Record/Call",
+        "记录/通话录音",
+        // 魅族（Flyme）
         "Recorder/call",
+        // 三星 One UI
+        "Sounds/Voice Recorder",
+        "Call",
+        "CallRecordings",
+        // 锤子 / 坚果（SmartisanOS）
+        "SmartisanOS/CallRecord",
+        // AOSP 通用
+        "Movies/Call recording",
+        "Phone/Recordings",
     )
 
     private fun candidateDirs(): List<String> = AppConfig.runtime.candidateDirs

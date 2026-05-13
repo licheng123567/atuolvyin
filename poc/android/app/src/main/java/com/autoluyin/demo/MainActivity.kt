@@ -235,8 +235,24 @@ class MainActivity : AppCompatActivity() {
     private fun doSelfCheck() {
         renderHeader()
         val recDirs = RecordingScanner.listDirsExisting()
-        val dirOk = recDirs.isNotEmpty() && (Build.VERSION.SDK_INT < Build.VERSION_CODES.R
-                || Environment.isExternalStorageManager())
+
+        // v2.2 Module A — 优先使用用户手选目录（SAF 持久化 URI）；
+        // 命中即视为录音目录可用，不再依赖静态候选清单。
+        val userUri = AppConfig.getUserRecordingDirUri(this)
+        val userDirAccessible = if (userUri != null) {
+            runCatching {
+                val docFile = androidx.documentfile.provider.DocumentFile
+                    .fromTreeUri(this, Uri.parse(userUri))
+                docFile != null && docFile.exists() && docFile.canRead()
+            }.getOrDefault(false)
+        } else {
+            false
+        }
+
+        val dirsExist = userDirAccessible || recDirs.isNotEmpty()
+        val dirOk = dirsExist && (Build.VERSION.SDK_INT < Build.VERSION_CODES.R
+                || Environment.isExternalStorageManager()
+                || userDirAccessible)
 
         // v2.1 — 设备能力探测：采集 ROM/Android 字段 + 上次扫描失败标志
         val deviceInfo = DeviceCapabilityProbe.collect()
@@ -249,7 +265,7 @@ class MainActivity : AppCompatActivity() {
                 val resp = api.selfCheck(SelfCheckReq(
                     device_id = DeviceId.get(this@MainActivity),
                     recording_dir_ok = dirOk,
-                    recording_toggle_on = recDirs.isNotEmpty(),
+                    recording_toggle_on = dirsExist,
                     permissions_ok = true,
                     manufacturer = deviceInfo.manufacturer.takeIf { it.isNotBlank() },
                     model = deviceInfo.model.takeIf { it.isNotBlank() },

@@ -150,4 +150,20 @@ object AppConfig {
     fun markOnboardingDone(ctx: Context) {
         prefs(ctx).edit().putBoolean(KEY_ONBOARDING_DONE, true).apply()
     }
+
+    // -------- v2.2 Module A — 用户手选录音目录（SAF 持久化 URI） --------
+    // 当静态候选目录扫描失败时，用户可通过 SAF (Storage Access Framework)
+    // 手动定位录音目录；持久化 URI 后 self-check / 录音匹配优先使用此目录。
+    private const val KEY_USER_RECORDING_DIR_URI = "user_recording_dir_uri"
+
+    fun saveUserRecordingDirUri(context: Context, uri: String) {
+        prefs(context).edit().putString(KEY_USER_RECORDING_DIR_URI, uri).apply()
+    }
+
+    fun getUserRecordingDirUri(context: Context): String? =
+        prefs(context).getString(KEY_USER_RECORDING_DIR_URI, null)?.takeIf { it.isNotBlank() }
+
+    fun clearUserRecordingDirUri(context: Context) {
+        prefs(context).edit().remove(KEY_USER_RECORDING_DIR_URI).apply()
+    }
 }
