@@ -5,6 +5,9 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import MobileLayout from "../pages/app/_layout";
 import MobileHomePage from "../pages/app/home";
 import MobileProfilePage from "../pages/app/profile";
+import MobileCasesPage from "../pages/app/cases";
+import MobileCaseDetailPage from "../pages/app/cases/[id]";
+import MobileCallHistoryPage from "../pages/app/call-history";
 
 export function AppMobileRoutes() {
   return (
@@ -12,8 +15,10 @@ export function AppMobileRoutes() {
       <Route element={<MobileLayout />}>
         <Route index element={<Navigate to="home" replace />} />
         <Route path="home" element={<MobileHomePage />} />
+        <Route path="cases" element={<MobileCasesPage />} />
+        <Route path="cases/:id" element={<MobileCaseDetailPage />} />
+        <Route path="call-history" element={<MobileCallHistoryPage />} />
         <Route path="profile" element={<MobileProfilePage />} />
-        {/* TODO Task 4: cases / cases/:id / call-history */}
         <Route path="*" element={<Navigate to="home" replace />} />
       </Route>
     </Routes>

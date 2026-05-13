@@ -9,6 +9,7 @@ import { useNavigate } from "react-router-dom";
 import { Bell } from "lucide-react";
 import type { AuthUser } from "../../../providers/auth-provider";
 import { Bridge } from "../../../lib/jsBridge";
+import { stageBadgeClass, stageLabel } from "../../../lib/caseStage";
 
 // Backend schema mirror（手抄自 poc/backend/app/api/agent_me.py / agent_cases.py）
 interface TodayKpi {
@@ -52,24 +53,6 @@ interface CaseItem {
   amount_owed: string | null;
   months_overdue: number | null;
 }
-
-const STAGE_LABEL: Record<string, string> = {
-  new: "待跟进",
-  in_progress: "跟进中",
-  promised: "承诺缴费",
-  paid: "已缴费",
-  escalated: "升级",
-  closed: "已关闭",
-};
-
-const STAGE_BADGE: Record<string, string> = {
-  new: "mobile-badge mobile-badge-orange",
-  in_progress: "mobile-badge mobile-badge-orange",
-  promised: "mobile-badge mobile-badge-green",
-  paid: "mobile-badge mobile-badge-green",
-  escalated: "mobile-badge mobile-badge-blue",
-  closed: "mobile-badge mobile-badge-gray",
-};
 
 function formatGreetingDate(d: Date): string {
   const weekday = new Intl.DateTimeFormat("zh-CN", { weekday: "long" }).format(d);
@@ -260,8 +243,8 @@ export function MobileHomePage() {
             </div>
             <div style={{ textAlign: "right" }}>
               <div className="case-list-amount">{formatYuan(c.amount_owed)}</div>
-              <span className={STAGE_BADGE[c.stage] ?? "mobile-badge mobile-badge-gray"}>
-                {STAGE_LABEL[c.stage] ?? c.stage}
+              <span className={stageBadgeClass(c.stage)} style={{ fontSize: 11 }}>
+                {stageLabel(c.stage)}
               </span>
             </div>
           </div>

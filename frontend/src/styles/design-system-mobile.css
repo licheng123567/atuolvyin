@@ -280,3 +280,197 @@
 .mobile-badge-green { background: #f0fdf4; color: #15803d; }
 .mobile-badge-gray { background: #f3f4f6; color: #4b5563; }
 .mobile-badge-blue { background: #eff6ff; color: #1d4ed8; }
+
+/* ─────────────────────────────────────────────
+   v2.0 Task 4 — Screen 5/6/7 (case list / detail / call history)
+   1:1 from ui/app-agent.html <style> block (line 601-738)
+   ───────────────────────────────────────────── */
+
+/* ── Screen 5：搜索栏 + tab pill + 案件卡 ── */
+.search-bar-mobile {
+  position: relative;
+  margin: 12px 16px 0;
+}
+.search-bar-mobile input {
+  width: 100%;
+  padding: 10px 12px 10px 36px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  font-size: 14px;
+  background: white;
+  font-family: var(--font-sans);
+  outline: none;
+}
+.search-bar-mobile svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+}
+.filter-tabs-mobile {
+  display: flex;
+  padding: 12px 16px 0;
+  gap: 8px;
+}
+.filter-tab-m {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  background: white;
+  border: 1px solid #d1d5db;
+  color: #6b7280;
+  cursor: pointer;
+}
+.filter-tab-m.active {
+  background: #EBF5FF;
+  border-color: #1A56DB;
+  color: #1A56DB;
+  font-weight: 600;
+}
+
+.case-card-full {
+  background: white;
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
+}
+.case-card-row1 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.case-card-name { font-size: 15px; font-weight: 700; }
+.case-card-amount { font-size: 16px; font-weight: 700; color: #E02424; }
+.case-card-row2 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.case-card-sub { font-size: 12px; color: #6b7280; }
+
+/* ── Screen 6：案件详情 ── */
+.detail-screen {
+  background: #f3f4f6;
+  min-height: 100vh;
+}
+.detail-top-bar {
+  background: white;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.back-btn {
+  font-size: 20px;
+  cursor: pointer;
+  color: #1A56DB;
+  display: inline-flex;
+  align-items: center;
+}
+.detail-owner-name { font-size: 16px; font-weight: 700; }
+
+.detail-info-cards {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px 0;
+}
+.detail-info-card {
+  flex: 1;
+  background: white;
+  border-radius: 10px;
+  padding: 12px 10px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.detail-info-card-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #E02424;
+}
+.detail-info-card-label {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.timeline-wrap { padding: 12px 16px 0; }
+.timeline-card {
+  background: white;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.timeline-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.timeline-card-date { font-size: 12px; color: #6b7280; }
+.timeline-card-duration { font-size: 12px; color: #374151; font-weight: 600; }
+.timeline-card-ai {
+  font-size: 12px;
+  color: #374151;
+  line-height: 1.5;
+}
+.timeline-card-ai::before {
+  content: "AI: ";
+  font-weight: 600;
+  color: #1A56DB;
+}
+
+/* ── Screen 7：通话记录卡（可点击展开） ── */
+.call-history-item {
+  background: white;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.call-history-row1 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.call-history-name { font-size: 14px; font-weight: 600; }
+.call-history-date { font-size: 12px; color: #6b7280; }
+.call-history-row2 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+}
+.call-history-duration { font-size: 12px; color: #374151; }
+.call-history-expand {
+  background: #f3f4f6;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #374151;
+  line-height: 1.5;
+  display: none;
+}
+.call-history-item.expanded .call-history-expand { display: block; }
+
+/* ── 设计稿用的 .badge / .badge-{color} 系列（移动端独立配色，
+       不依赖 design-system.css 的 ds-badge token；与 app-agent.html 一致）
+       注意：design-system.css 全局已有 .badge 定义；为避免污染 PC 页面，
+       这里全部 scope 到 .mobile-shell（移动壳）内。 ── */
+.mobile-shell .badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+  font-family: var(--font-sans);
+}
+.mobile-shell .badge-orange { background: #fff7ed; color: #c2410c; }
+.mobile-shell .badge-green { background: #f0fdf4; color: #15803d; }
+.mobile-shell .badge-blue { background: #eff6ff; color: #1d4ed8; }
+.mobile-shell .badge-gray { background: #f3f4f6; color: #4b5563; }
+.mobile-shell .badge-red { background: #fef2f2; color: #b91c1c; }
