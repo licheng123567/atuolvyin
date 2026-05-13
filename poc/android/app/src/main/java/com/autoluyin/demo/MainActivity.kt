@@ -46,6 +46,23 @@ class MainActivity : AppCompatActivity() {
             ensureBackendUrlThen { doSelfCheck() }
         }
 
+    // v2.2 — Android < 11 (R) 没有 MANAGE_EXTERNAL_STORAGE，用 SAF 手选录音目录兜底
+    private val pickRecordingDirLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri != null) {
+                runCatching {
+                    contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                    )
+                    AppConfig.saveUserRecordingDirUri(this, uri.toString())
+                    toast("已保存录音目录：${uri.lastPathSegment ?: uri}")
+                    // 立刻重跑自检
+                    doSelfCheck()
+                }.onFailure { toast("保存失败：${it.message}") }
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -355,10 +372,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openManageAllFiles() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                Uri.parse("package:$packageName")))
+        // v2.2 — 提供两种路径让用户选：
+        //   1. 系统级 MANAGE_EXTERNAL_STORAGE（仅 Android 11+ / R 可用）
+        //   2. SAF 手选目录（< R 唯一可用的方式，> R 也可作备选）
+        // 弹一个 dialog 让用户选；如果是 Android < R 直接走 SAF（系统选项不可用）。
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            pickRecordingDirLauncher.launch(null)
+            return
         }
+        AlertDialog.Builder(this)
+            .setTitle("授权录音文件访问")
+            .setMessage("Android 11+ 推荐先授予「所有文件访问」让 App 自动扫描；如果系统不允许或自动扫描找不到，再用「手动选择目录」指定录音文件夹。")
+            .setPositiveButton("授予所有文件") { _, _ ->
+                startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                    Uri.parse("package:$packageName")))
+            }
+            .setNeutralButton("手动选择目录") { _, _ -> pickRecordingDirLauncher.launch(null) }
+            .setNegativeButton("取消", null)
+            .show()
     }
 
     // ---------- 自检 + 拉运行时配置 ----------
@@ -445,18 +476,15 @@ class MainActivity : AppCompatActivity() {
                 binding.btnRefresh.isEnabled = resp.can_call
                 adapter.setCanCall(resp.can_call)
                 renderHeader()
-                if (resp.can_call) {
-                    // v2.0 Task 2 — happy path：跳转到 Compose Hybrid Shell。
-                    // 旧 RecyclerView / loadTasks() / CaseAdapter 仍保留作为
-                    // 过渡期 fallback（v2.1 后清理）。如果未来 HomeActivity 出现严重
-                    // 故障，可临时把这两行注释掉、放开 loadTasks() 即可回退。
-                    startActivity(Intent(this@MainActivity, HomeActivity::class.java))
-                    finish()
-                } else {
-                    val why = resp.fail_reasons.joinToString("、") { reasonLabel(it) }
-                        .ifBlank { "未知原因" }
-                    toast("自检未通过（$why），呼叫已禁用")
+                // v2.2 — 自检失败也跳 HomeActivity（WebView 内的 home 屏会显示 capability banner，
+                // 用户至少能看见正常 UI、点拨号会有"录音不可用，仍要拨吗"的 confirm）。
+                // 此前 self-check 失败把用户卡在 MainActivity 看 toast，体验断裂。
+                val why = resp.fail_reasons.joinToString("、") { reasonLabel(it) }
+                if (!resp.can_call && why.isNotBlank()) {
+                    toast("提示：$why；拨号前会再次确认")
                 }
+                startActivity(Intent(this@MainActivity, HomeActivity::class.java))
+                finish()
             } catch (t: Throwable) {
                 if (t.message?.contains("401") == true || t.message?.contains("403") == true) {
                     AppConfig.clearJwtToken(this@MainActivity)
