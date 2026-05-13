@@ -1,0 +1,288 @@
+/* ─────────────────────────────────────────────────────────────
+   有证慧催 — 移动端 Design System 增量
+   增量于 design-system.css，专门覆盖 Android 6 / MIUI WebView
+   场景下的 App 内嵌页面（/app/*）。
+   组件 class 与 ui/app-agent.html 完全一致。
+   ───────────────────────────────────────────────────────────── */
+
+@import url("./design-system.css");
+
+:root {
+  --mobile-tap-target-min: 44px;
+  --mobile-page-bg: var(--color-neutral-100);
+  --mobile-page-padding-x: 16px;
+  --mobile-radius: 12px;
+}
+
+/* 移动壳布局（页面级根容器） */
+.mobile-shell {
+  background: var(--mobile-page-bg);
+  min-height: 100vh;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* 移动列表项最小可触控目标 ≥ 44 */
+.mobile-list-item { min-height: var(--mobile-tap-target-min); }
+
+/* WebView 内禁止文本选择 / 长按弹菜单（保留 input/textarea 例外） */
+.mobile-no-select {
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* ── App 头部问候 ──────────────────────────── */
+.app-header {
+  background: white;
+  padding: 16px 20px 12px;
+}
+.greeting { font-size: 20px; font-weight: 700; color: #111827; }
+.greeting-date { font-size: 13px; color: #6b7280; margin-top: 2px; }
+
+/* ── 顶部 summary 卡片（蓝色渐变） ────────── */
+.summary-card {
+  margin: 12px 16px 0;
+  background: linear-gradient(135deg, #1A56DB 0%, #1E429F 100%);
+  border-radius: 16px;
+  padding: 20px;
+  color: white;
+}
+.summary-card-title { font-size: 13px; opacity: 0.85; margin-bottom: 14px; }
+.summary-stats { display: flex; gap: 0; }
+.summary-stat { flex: 1; text-align: center; }
+.summary-stat + .summary-stat { border-left: 1px solid rgba(255,255,255,0.2); }
+.summary-stat-value { font-size: 28px; font-weight: 700; }
+.summary-stat-label { font-size: 11px; opacity: 0.8; margin-top: 2px; }
+
+/* ── App section 通用 ─────────────────────── */
+.app-section { padding: 16px 16px 0; }
+.app-section-title { font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 10px; }
+
+/* ── 大按钮（"立即开始外呼"） ─────────────── */
+.big-btn {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 16px 16px 0;
+  padding: 15px;
+  background: #1A56DB;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  min-height: var(--mobile-tap-target-min);
+}
+.big-btn:hover { background: #1E429F; }
+.big-btn:active { background: #1E429F; }
+
+/* ── 拨打请求卡 ───────────────────────────── */
+.request-card {
+  margin: 12px 16px 0;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #DBEAFE;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(26,86,219,0.1);
+}
+.request-card-top {
+  background: #EBF5FF;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #1A56DB;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.request-card-body { padding: 12px 14px; }
+.request-card-name { font-size: 15px; font-weight: 600; }
+.request-card-amount { font-size: 20px; font-weight: 700; color: #E02424; margin: 4px 0; }
+.request-card-actions { display: flex; gap: 8px; margin-top: 12px; }
+.request-card-actions button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  font-family: var(--font-sans);
+  min-height: var(--mobile-tap-target-min);
+}
+.btn-call-now { background: #1A56DB; color: white; }
+.btn-call-later { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db !important; }
+
+/* ── 案件 list item ───────────────────────── */
+.case-list-item {
+  background: white;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  cursor: pointer;
+  min-height: var(--mobile-tap-target-min);
+}
+.case-list-name { font-size: 14px; font-weight: 600; color: #111827; }
+.case-list-sub { font-size: 12px; color: #6b7280; margin-top: 2px; }
+.case-list-amount { font-size: 14px; font-weight: 700; color: #E02424; }
+
+/* ── Profile 头部 ─────────────────────────── */
+.profile-header {
+  background: linear-gradient(135deg, #1A56DB, #1E429F);
+  padding: 32px 20px 24px;
+  text-align: center;
+  color: white;
+}
+.profile-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 700;
+  border: 3px solid rgba(255,255,255,0.4);
+}
+.profile-name { font-size: 20px; font-weight: 700; }
+.profile-role {
+  display: inline-block;
+  background: rgba(255,255,255,0.2);
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+/* ── Profile stats 三列 ───────────────────── */
+.profile-stats {
+  display: flex;
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+}
+.profile-stat { flex: 1; padding: 16px 8px; text-align: center; }
+.profile-stat + .profile-stat { border-left: 1px solid #e5e7eb; }
+.profile-stat-value { font-size: 22px; font-weight: 700; color: #111827; }
+.profile-stat-label { font-size: 11px; color: #6b7280; margin-top: 2px; }
+
+/* ── 设置项列表 ───────────────────────────── */
+.settings-list { background: white; }
+.settings-item {
+  display: flex;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  cursor: pointer;
+  min-height: var(--mobile-tap-target-min);
+  background: white;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  width: 100%;
+  font-family: var(--font-sans);
+  text-align: left;
+}
+.settings-item-icon { width: 28px; display: flex; align-items: center; }
+.settings-item-icon svg { width: 16px; height: 16px; stroke-width: 1.5; color: #9CA3AF; }
+.settings-item-label { flex: 1; font-size: 14px; color: #111827; }
+.settings-item-arrow { color: #9ca3af; font-size: 16px; }
+
+/* ── 退出登录 ─────────────────────────────── */
+.logout-btn-wrap { padding: 16px; }
+.logout-btn {
+  width: 100%;
+  padding: 14px;
+  background: #FDF2F2;
+  border: 1px solid #fca5a5;
+  color: #E02424;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  min-height: var(--mobile-tap-target-min);
+}
+
+/* ── 灰色分隔条 ───────────────────────────── */
+.mobile-section-divider {
+  height: 8px;
+  background: #f3f4f6;
+}
+
+/* ── 本月分钟卡（橙底） ───────────────────── */
+.minute-quota-card {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin: 12px 16px 0;
+}
+.minute-quota-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.minute-quota-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #92400e;
+}
+.minute-quota-meta {
+  font-size: 12px;
+  color: #92400e;
+}
+.minute-quota-numrow {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.minute-quota-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #d97706;
+}
+.minute-quota-unit {
+  font-size: 13px;
+  color: #92400e;
+}
+.minute-quota-remaining {
+  font-size: 12px;
+  color: var(--color-success);
+  font-weight: 600;
+}
+.minute-quota-bar-bg {
+  background: #fde68a;
+  border-radius: 4px;
+  height: 6px;
+  overflow: hidden;
+}
+.minute-quota-bar-fg {
+  background: #d97706;
+  height: 100%;
+  border-radius: 4px;
+}
+
+/* ── 简易 badge（移动版小尺寸） ──────────── */
+.mobile-badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+  margin-top: 3px;
+}
+.mobile-badge-orange { background: #fff7ed; color: #c2410c; }
+.mobile-badge-green { background: #f0fdf4; color: #15803d; }
+.mobile-badge-gray { background: #f3f4f6; color: #4b5563; }
+.mobile-badge-blue { background: #eff6ff; color: #1d4ed8; }

@@ -81,6 +81,7 @@ import { ProviderMemberCommissionPage } from "./pages/provider/commission";
 import { OpsCustomerFollowupsPage } from "./pages/ops/customer-followups";
 import { authProvider, getToken } from "./providers/auth-provider";
 import { dataProvider } from "./providers";
+import { AppMobileRoutes } from "./router/appRoutes";
 import { useSupervisorAlerts } from "./hooks/useSupervisorAlerts";
 import { SupervisorAlertsPage } from "./pages/supervisor/alerts";
 import { SupervisorLiveWallPage } from "./pages/supervisor/live-wall";
@@ -364,6 +365,9 @@ function App() {
           <Route path="/verify" element={<VerifyPage />} />
           <Route path="/verify/:tx_hash" element={<VerifyPage />} />
           <Route path="/help/app" element={<HelpAppPage />} />
+
+          {/* v2.0 — Android WebView 移动路由（独立布局，无 PC 侧边栏） */}
+          <Route path="/app/*" element={<AppMobileRoutes />} />
 
           {/* Protected — wrapped in layout shell */}
           <Route
