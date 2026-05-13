@@ -250,7 +250,12 @@ class MainActivity : AppCompatActivity() {
                 adapter.setCanCall(resp.can_call)
                 renderHeader()
                 if (resp.can_call) {
-                    loadTasks()
+                    // v2.0 Task 2 — happy path：跳转到 Compose Hybrid Shell。
+                    // 旧 RecyclerView / loadTasks() / CaseAdapter 仍保留作为
+                    // 过渡期 fallback（v2.1 后清理）。如果未来 HomeActivity 出现严重
+                    // 故障，可临时把这两行注释掉、放开 loadTasks() 即可回退。
+                    startActivity(Intent(this@MainActivity, HomeActivity::class.java))
+                    finish()
                 } else {
                     val why = resp.fail_reasons.joinToString("、") { reasonLabel(it) }
                         .ifBlank { "未知原因" }

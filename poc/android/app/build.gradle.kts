@@ -79,8 +79,12 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended") // v2.0 Task 2 — 4 tab 图标
     implementation("androidx.activity:activity-compose:1.9.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    // v2.0 Task 2 — Navigation for Compose（4 tab 切换）
+    implementation("androidx.navigation:navigation-compose:2.7.7")
 
     // CardView for SuggestionCardView
     implementation("androidx.cardview:cardview:1.0.0")
