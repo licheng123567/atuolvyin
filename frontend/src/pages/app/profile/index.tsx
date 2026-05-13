@@ -8,7 +8,47 @@ import { useState } from "react";
 import { useCustom, useGetIdentity } from "@refinedev/core";
 import { Bell, Info, Lock, Mic } from "lucide-react";
 import type { AuthUser } from "../../../providers/auth-provider";
-import { Bridge } from "../../../lib/jsBridge";
+import { Bridge, type CapabilityState } from "../../../lib/jsBridge";
+
+/**
+ * v2.1 Task 6 — 个人页"录音能力" section
+ * 展示当前能力等级 + ROM 标识 + guidance + 上次检测时间
+ */
+function CapabilitySection() {
+  const state: CapabilityState = Bridge.getCapability();
+  const variant =
+    state.capability === "realtime"
+      ? "green"
+      : state.capability === "post_upload"
+        ? "orange"
+        : state.capability === "incompatible"
+          ? "red"
+          : "gray";
+  const label =
+    state.capability === "realtime"
+      ? "实时可用"
+      : state.capability === "post_upload"
+        ? "事后上传"
+        : state.capability === "incompatible"
+          ? "不可用"
+          : "未检测";
+
+  return (
+    <div className="profile-section-card">
+      <div className="profile-section-title">录音能力</div>
+      <div className={`cap-status cap-status-${variant}`}>
+        <strong>{label}</strong>
+        {state.rom && <span className="cap-rom">{state.rom}</span>}
+      </div>
+      {state.guidance && <p className="cap-guidance">{state.guidance}</p>}
+      {state.checkedAtMs > 0 && (
+        <p className="cap-checked-at">
+          上次检测：{new Date(state.checkedAtMs).toLocaleString("zh-CN")}
+        </p>
+      )}
+    </div>
+  );
+}
 
 interface AgentPerformance {
   user_id: number;
@@ -151,6 +191,11 @@ export function MobileProfilePage() {
           </button>
         ))}
       </div>
+
+      <div className="mobile-section-divider" />
+
+      {/* ── v2.1 — 录音能力 section ── */}
+      <CapabilitySection />
 
       <div className="mobile-section-divider" />
 

@@ -5,6 +5,7 @@ import android.util.Log
 import android.webkit.JavascriptInterface
 import com.autoluyin.demo.AppConfig
 import com.autoluyin.demo.auth.AuthEventBus
+import org.json.JSONObject
 
 /**
  * v2.0 Task 2 — WebView ↔ Native 桥接器骨架。
@@ -27,6 +28,26 @@ class JsBridge(private val ctx: Context) {
 
     @JavascriptInterface
     fun getBackendUrl(): String = AppConfig.backendUrl(ctx).orEmpty()
+
+    /**
+     * v2.1 Task 6 — 暴露设备录音能力给 WebView。
+     *
+     * 返回 JSON string：{capability, guidance, rom, checkedAtMs}
+     *   - capability: "realtime" / "post_upload" / "incompatible" / "unknown"
+     *   - guidance:   人类可读的提示（来自 DeviceCapabilityProbe）
+     *   - rom:        设备识别 (e.g. "MIUI 14 (Android 13)")
+     *   - checkedAtMs: 上次检测时间 epoch ms；0 表示从未检测
+     */
+    @JavascriptInterface
+    fun getCapability(): String {
+        val state = AppConfig.getCapability(ctx)
+        val json = JSONObject()
+        json.put("capability", state?.capability ?: "unknown")
+        json.put("guidance", state?.guidance ?: "")
+        json.put("rom", state?.rom ?: "")
+        json.put("checkedAtMs", state?.checkedAtMs ?: 0L)
+        return json.toString()
+    }
 
     @JavascriptInterface
     fun dialCase(caseIdJson: String) {

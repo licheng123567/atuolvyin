@@ -4,12 +4,65 @@
 //   GET /api/v1/agent/me/today-kpi    — summary card 三列
 //   GET /api/v1/agent/me/performance  — 本月通话分钟卡 + 配额
 //   GET /api/v1/agent/cases           — 最近跟进案件（前 3 条）
+import { useState } from "react";
 import { useCustom, useGetIdentity, useList } from "@refinedev/core";
 import { useNavigate } from "react-router-dom";
 import { Bell } from "lucide-react";
 import type { AuthUser } from "../../../providers/auth-provider";
-import { Bridge } from "../../../lib/jsBridge";
+import { Bridge, type CapabilityState } from "../../../lib/jsBridge";
 import { stageBadgeClass, stageLabel } from "../../../lib/caseStage";
+
+/**
+ * v2.1 Task 6 — 顶部录音能力 banner
+ * - realtime: 绿色，可关闭（不打扰已就绪用户）
+ * - post_upload: 橙色，不可关闭（提醒事后上传模式）
+ * - incompatible: 红色，不可关闭（强提示风险）
+ * - unknown: 不展示（避免冷启动时干扰）
+ */
+function CapabilityBanner() {
+  const [dismissed, setDismissed] = useState(false);
+  const state: CapabilityState = Bridge.getCapability();
+
+  if (state.capability === "unknown") return null;
+  if (state.capability === "realtime" && dismissed) return null;
+
+  const variant =
+    state.capability === "realtime"
+      ? "green"
+      : state.capability === "post_upload"
+        ? "orange"
+        : "red";
+
+  const text =
+    state.capability === "realtime"
+      ? `🟢 实时通话分析已就绪 — ${state.rom}`
+      : state.capability === "post_upload"
+        ? `🟡 事后上传模式 — ${state.rom}`
+        : `🔴 录音不可用 — ${state.rom}`;
+
+  const showClose = state.capability === "realtime";
+
+  return (
+    <div className={`cap-banner cap-banner-${variant}`}>
+      <span>{text}</span>
+      {state.capability !== "realtime" && (
+        <a href="/app/profile" className="cap-banner-link">
+          详情
+        </a>
+      )}
+      {showClose && (
+        <button
+          type="button"
+          className="cap-banner-close"
+          onClick={() => setDismissed(true)}
+          aria-label="关闭提示"
+        >
+          ×
+        </button>
+      )}
+    </div>
+  );
+}
 
 // Backend schema mirror（手抄自 poc/backend/app/api/agent_me.py / agent_cases.py）
 interface TodayKpi {
@@ -127,6 +180,9 @@ export function MobileHomePage() {
 
   return (
     <div>
+      {/* ── v2.1 — 顶部录音能力 banner ── */}
+      <CapabilityBanner />
+
       {/* ── 顶部 greeting ── */}
       <div className="app-header">
         <div className="greeting">
