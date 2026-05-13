@@ -103,6 +103,11 @@
                   android:exported="false"
                   android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
 
+        <!-- v2.0 Task 7 — Screen 4 通话结束标记全屏页 -->
+        <activity android:name=".screens.postcall.CallEndMarkActivity"
+                  android:exported="false"
+                  android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
+
         <!-- Sprint 11.2 — 本月绩效小结 -->
         <activity android:name=".MyPerformanceActivity" android:exported="false" />
 

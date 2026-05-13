@@ -2,6 +2,7 @@ package com.autoluyin.demo.realtime
 
 import android.Manifest
 import android.app.KeyguardManager
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -21,6 +22,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import com.autoluyin.demo.ApiClient
 import com.autoluyin.demo.AppConfig
+import com.autoluyin.demo.screens.postcall.CallEndMarkActivity
 import com.autoluyin.demo.screens.realtime.RealtimeCallScreen
 import com.autoluyin.demo.screens.realtime.RealtimeCallState
 import com.autoluyin.demo.screens.realtime.RealtimeCallViewModel
@@ -37,12 +39,13 @@ import java.io.File
  * v2.0 Task 6 — Compose 全屏 Screen 3 (通话中)。
  *
  * 重写要点：
- *  - 改 [ComponentActivity]（FragmentActivity 子类，PostCallTagDialog 可继续 show）
+ *  - 改 [androidx.fragment.app.FragmentActivity] 子类（保留 supportFragmentManager 兼容性）
  *  - 不再 setContentView XML；UI 全部由 [RealtimeCallScreen] 渲染
  *  - 状态来自 [RealtimeCallViewModel]，旋转 / 进程恢复保留 transcript
  *  - 锁屏唤起 + 沉浸式与 [com.autoluyin.demo.screens.dial.DialRequestActivity] 一致
  *  - 旧 TranscriptAdapter / SuggestionCardView / RiskBannerView 不再被引用，但保留作过渡
- *  - PostCallTagDialog 仍是 DialogFragment，由 LaunchedEffect 监听 tagPayload 触发
+ *  - v2.0 Task 7 起，挂机 / tagPayload 就绪改为 startActivity(CallEndMarkActivity)；
+ *    [com.autoluyin.demo.realtime.PostCallTagDialog] 文件保留作过渡，二期清理
  */
 class RealtimeCallActivity : FragmentActivity() {
 
@@ -115,13 +118,11 @@ class RealtimeCallActivity : FragmentActivity() {
                     }
                 }
 
-                // ---- tag dialog 触发 ----
+                // ---- tag 全屏 Activity 触发 (v2.0 Task 7) ----
                 LaunchedEffect(tagPayload) {
                     val payload = tagPayload ?: return@LaunchedEffect
-                    PostCallTagDialog
-                        .newInstance(callId, payload)
-                        .show(supportFragmentManager, "tag")
                     viewModel.consumeTagPayload()
+                    launchCallEndMark(payload)
                 }
 
                 // ---- toast (RiskAlertController L1 toast) ----
@@ -191,12 +192,38 @@ class RealtimeCallActivity : FragmentActivity() {
         if (wav != null) {
             uploadFallback(wav)
         }
-        // 服务端没下发 tag.ready 时强制弹空 dialog 让用户人工标记
+        // 服务端没下发 tag.ready 时强制弹标记页让用户人工填写 (v2.0 Task 7)
         if (!viewModel.hadServerTag()) {
-            PostCallTagDialog
-                .newInstance(callId, AudioStreamClient.TagPayload(null, null, null, null))
-                .show(supportFragmentManager, "tag")
+            launchCallEndMark(AudioStreamClient.TagPayload(null, null, null, null))
         }
+    }
+
+    /**
+     * v2.0 Task 7 — 启动 [CallEndMarkActivity] 全屏标记页，并 finish 当前通话页。
+     * AI 字段 (intent / promise_date / promise_amount / summary) 通过 extras 预填。
+     */
+    private fun launchCallEndMark(payload: AudioStreamClient.TagPayload) {
+        val started = viewModel.startedAt()
+        val durationSec = if (started > 0L) {
+            ((System.currentTimeMillis() - started) / 1000L).toInt()
+        } else {
+            0
+        }
+        val markIntent = Intent(this, CallEndMarkActivity::class.java).apply {
+            putExtra(CallEndMarkActivity.EXTRA_CALL_ID, callId)
+            putExtra(CallEndMarkActivity.EXTRA_OWNER_NAME, ownerName)
+            putExtra(CallEndMarkActivity.EXTRA_DURATION_SEC, durationSec)
+            putExtra(CallEndMarkActivity.EXTRA_STARTED_AT_MS, started)
+            payload.intent?.let { putExtra(CallEndMarkActivity.EXTRA_AI_INTENT, it) }
+            payload.promiseDate?.let { putExtra(CallEndMarkActivity.EXTRA_AI_PROMISE_DATE, it) }
+            payload.promiseAmount?.let { putExtra(CallEndMarkActivity.EXTRA_AI_PROMISE_AMOUNT, it) }
+            payload.summary?.let { putExtra(CallEndMarkActivity.EXTRA_AI_SUMMARY, it) }
+        }
+        runCatching { startActivity(markIntent) }
+            .onFailure {
+                Toast.makeText(this, "无法打开标记页：${it.message}", Toast.LENGTH_LONG).show()
+            }
+        finish()
     }
 
     private fun uploadFallback(wav: File) {
