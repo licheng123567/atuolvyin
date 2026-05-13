@@ -2,8 +2,8 @@
 // 1:1 对齐 ui/app-agent.html#app-cases
 // 数据源：GET /api/v1/agent/cases
 import { useList } from "@refinedev/core";
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
 import { Bridge } from "../../../lib/jsBridge";
 import { stageBadgeClass, stageLabel } from "../../../lib/caseStage";
@@ -67,9 +67,18 @@ function ownerLocation(o: OwnerInfo): string {
 
 export function MobileCasesPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>("all");
   const [keyword, setKeyword] = useState("");
   const [page, setPage] = useState(1);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  // v2.2 Module B3 — 从 home 搜索图标进入时 (?focus=search) 自动 focus 搜索框
+  useEffect(() => {
+    if (searchParams.get("focus") === "search" && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [searchParams]);
 
   // ── 三个 tab 的 total（用最小代价 page_size:1 各拉一次） ─────
   const { query: totalAllQ } = useList<CaseItem>({
@@ -178,6 +187,7 @@ export function MobileCasesPage() {
       <div className="search-bar-mobile">
         <Search size={16} strokeWidth={2} aria-hidden />
         <input
+          ref={searchInputRef}
           type="text"
           placeholder="搜索业主姓名或房号..."
           value={keyword}
