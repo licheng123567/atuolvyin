@@ -23,7 +23,7 @@
 import { useState } from "react";
 import { useCustom, useGetIdentity, useList } from "@refinedev/core";
 import { useNavigate } from "react-router-dom";
-import { Bell, ChevronRight, Search } from "lucide-react";
+import { ChevronRight, Search } from "lucide-react";
 import type { AuthUser } from "../../../providers/auth-provider";
 import { Bridge, type CapabilityState } from "../../../lib/jsBridge";
 import { stageBadgeClass, stageLabel } from "../../../lib/caseStage";
@@ -275,31 +275,6 @@ interface CaseItem {
   months_overdue: number | null;
 }
 
-// v2.2 Module E3 — Supervisor 拨打请求 mock
-// TODO(v2.3+): 后端目前只有 POST /agent/calls/dial-request（创建），没有
-// GET 列出"分配给我但还没处理的"待办。Module E 先用 mock 数据 1:1 还原原型。
-// 等后端补 GET /agent/me/pending-dispatch 之后切到真实数据。
-interface SupervisorRequest {
-  id: string;
-  owner_name: string;
-  address: string; // "3栋2单元1201"
-  amount: string; // "¥3,200"
-  months_overdue: number;
-  supervisor_name: string;
-  case_id?: number; // 真实 case 才能拨号
-  phone?: string;
-}
-const MOCK_SUPERVISOR_REQUESTS: SupervisorRequest[] = [
-  {
-    id: "mock-1",
-    owner_name: "张建国",
-    address: "3栋2单元1201",
-    amount: "¥3,200",
-    months_overdue: 8,
-    supervisor_name: "王主管",
-  },
-];
-
 function formatGreetingDate(d: Date): string {
   const weekday = new Intl.DateTimeFormat("zh-CN", { weekday: "long" }).format(d);
   return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${weekday}`;
@@ -332,11 +307,6 @@ export function MobileHomePage() {
 
   // v2.2 Module E1 — downgrade banner 本地关闭状态
   const [downgradeDismissed, setDowngradeDismissed] = useState(false);
-
-  // v2.2 Module E3 — 主管请求本地"已忽略"状态（mock 数据用本地即可）
-  const [dismissedRequestIds, setDismissedRequestIds] = useState<Set<string>>(
-    new Set(),
-  );
 
   const { query: kpiQ } = useCustom<TodayKpi>({
     url: "agent/me/today-kpi",
@@ -382,11 +352,6 @@ export function MobileHomePage() {
       ? Math.min(100, (minutesUsed / minutesQuota) * 100)
       : 0;
 
-  // 过滤未被忽略的主管请求
-  const visibleRequests = MOCK_SUPERVISOR_REQUESTS.filter(
-    (r) => !dismissedRequestIds.has(r.id),
-  );
-
   const handleStartDial = () => {
     // Task 5 之前先在 WebView 内部跳到案件列表
     navigate("/app/cases");
@@ -414,29 +379,6 @@ export function MobileHomePage() {
       case_id: c.id,
       phone,
       owner_name: c.owner.name,
-    });
-  };
-
-  // v2.2 Module E3 — 主管请求"立即拨打"
-  const handleRequestDial = (req: SupervisorRequest) => {
-    if (req.case_id && req.phone) {
-      Bridge.dialCase({
-        case_id: req.case_id,
-        phone: req.phone,
-        owner_name: req.owner_name,
-      });
-    } else {
-      // mock 数据：暂时只能提示
-      window.alert("拨打请求（mock 数据）— 真实数据接入后会直接拨号。");
-    }
-  };
-
-  // v2.2 Module E3 — 主管请求"稍后处理"
-  const handleRequestDismiss = (req: SupervisorRequest) => {
-    setDismissedRequestIds((prev) => {
-      const next = new Set(prev);
-      next.add(req.id);
-      return next;
     });
   };
 
@@ -550,46 +492,6 @@ export function MobileHomePage() {
       <button type="button" className="big-btn" onClick={handleStartDial}>
         📞 立即开始外呼
       </button>
-
-      {/* ── v2.2 E3 — 主管发来拨打请求卡（条件渲染） ── */}
-      {visibleRequests.map((req) => (
-        <div className="request-card" key={req.id}>
-          <div className="request-card-top">
-            <Bell
-              size={16}
-              strokeWidth={1.75}
-              color="#D97706"
-              style={{ verticalAlign: "middle" }}
-            />
-            <span>主管发来拨打请求</span>
-          </div>
-          <div className="request-card-body">
-            <div className="request-card-name">
-              {req.owner_name} · {req.address}
-            </div>
-            <div className="request-card-amount">{req.amount}</div>
-            <div style={{ fontSize: 12, color: "#6b7280" }}>
-              欠缴{req.months_overdue}个月 · {req.supervisor_name}指派
-            </div>
-            <div className="request-card-actions">
-              <button
-                type="button"
-                className="btn-call-now"
-                onClick={() => handleRequestDial(req)}
-              >
-                立即拨打
-              </button>
-              <button
-                type="button"
-                className="btn-call-later"
-                onClick={() => handleRequestDismiss(req)}
-              >
-                稍后处理
-              </button>
-            </div>
-          </div>
-        </div>
-      ))}
 
       {/* ── v2.2 B2 — 今日待拨案件 Top 5（点击直接拨号） ── */}
       <div className="app-section">
