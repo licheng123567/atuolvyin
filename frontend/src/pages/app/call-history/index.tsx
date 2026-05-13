@@ -80,18 +80,17 @@ export function MobileCallHistoryPage() {
 
   return (
     <div>
-      {/* ── 顶部标题 + 副标题 ── */}
+      {/* ── 顶部标题 + 副标题（对齐 ui/app-agent.html#app-call-history） ── */}
       <div
         style={{
           background: "white",
           padding: "12px 16px",
           borderBottom: "1px solid #e5e7eb",
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
         }}
       >
-        <div style={{ fontSize: 16, fontWeight: 700 }}>通话记录</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>
+          通话记录
+        </div>
         <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
           本月共 {monthCalls} 通，累计 {formatTotalMinutes(minutesUsed)}
         </div>

@@ -13,7 +13,7 @@
 import { useState } from "react";
 import { useCustom, useGetIdentity, useList } from "@refinedev/core";
 import { useNavigate } from "react-router-dom";
-import { Bell, Search } from "lucide-react";
+import { Bell, ChevronRight, Search } from "lucide-react";
 import type { AuthUser } from "../../../providers/auth-provider";
 import { Bridge, type CapabilityState } from "../../../lib/jsBridge";
 import { stageBadgeClass, stageLabel } from "../../../lib/caseStage";
@@ -418,17 +418,22 @@ export function MobileHomePage() {
           }}
         >
           <span>今日待拨案件</span>
-          <a
+          <button
+            type="button"
             onClick={() => navigate("/app/cases")}
             style={{
               fontSize: 12,
               color: "#1A56DB",
               fontWeight: 500,
               cursor: "pointer",
+              background: "transparent",
+              border: "none",
+              padding: 0,
+              fontFamily: "inherit",
             }}
           >
             查看全部 ›
-          </a>
+          </button>
         </div>
         {todayCasesQ.isLoading && (
           <div
@@ -497,18 +502,20 @@ export function MobileHomePage() {
               }}
               aria-label="查看详情"
               style={{
-                marginLeft: 8,
-                width: 28,
-                height: 28,
-                border: "1px solid #e5e7eb",
-                background: "white",
-                borderRadius: 6,
-                color: "#6b7280",
-                fontSize: 12,
+                marginLeft: 6,
+                width: 24,
+                height: 24,
+                border: "none",
+                background: "transparent",
+                color: "#9ca3af",
                 cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 0,
               }}
             >
-              …
+              <ChevronRight size={18} strokeWidth={1.75} />
             </button>
           </div>
         ))}

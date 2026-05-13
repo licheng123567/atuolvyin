@@ -168,17 +168,21 @@ export function MobileCasesPage() {
 
   return (
     <div>
-      {/* ── 顶部标题（白底 sticky） ── */}
+      {/* ── 顶部标题（白底，对齐 ui/app-agent.html#app-cases） ── */}
       <div
         style={{
           background: "white",
           padding: "12px 16px 0",
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
         }}
       >
-        <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>
+        <div
+          style={{
+            fontSize: 16,
+            fontWeight: 700,
+            marginBottom: 10,
+            color: "#111827",
+          }}
+        >
           我的案件
         </div>
       </div>
