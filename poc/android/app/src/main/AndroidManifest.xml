@@ -57,6 +57,15 @@
             android:exported="false"
             android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
 
+        <!-- v2.1 Task 5 — 首次安装 Onboarding Wizard（4 步 Compose 全屏向导）。
+             MainActivity 在 onCreate 中检测 isOnboardingDone == false && 未登录 → 跳入此处。
+             完成后回到 MainActivity，进入正常 preflight（已配后端 URL → 直接弹 login dialog）。 -->
+        <activity
+            android:name=".onboarding.OnboardingActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
+
         <!-- v1.9.9 — foregroundServiceType 是 Android 10 (API 29) 引入的属性。
              目标平台 MIUI 10 (Android 8.1/9) 的 PackageParser 不认识此属性 → 解析失败。
              Android 8/9 上普通 foreground service 不需要 type；Android 10+ 才需要在调用

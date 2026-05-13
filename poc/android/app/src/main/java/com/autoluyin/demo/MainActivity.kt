@@ -48,6 +48,16 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // v2.1 Task 5 — 首次安装跳转到 Onboarding Wizard。
+        // 条件：onboarding 未完成 AND 未登录（避免老用户升级后误触）。
+        // Onboarding 完成后会 markOnboardingDone + 重新启动 MainActivity，进入 preflight 流程。
+        if (!AppConfig.isOnboardingDone(this) && AppConfig.jwtToken(this) == null) {
+            com.autoluyin.demo.onboarding.OnboardingActivity.start(this)
+            finish()
+            return
+        }
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 

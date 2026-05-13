@@ -140,4 +140,14 @@ object AppConfig {
         if (!prefs(ctx).contains(KEY_LAST_RECORDING_SCAN_FAILED)) return null  // 从未设置过
         return prefs(ctx).getBoolean(KEY_LAST_RECORDING_SCAN_FAILED, false)
     }
+
+    // -------- v2.1 Task 5 — Onboarding Wizard 完成标志 --------
+    private const val KEY_ONBOARDING_DONE = "onboarding_done"
+
+    fun isOnboardingDone(ctx: Context): Boolean =
+        prefs(ctx).getBoolean(KEY_ONBOARDING_DONE, false)
+
+    fun markOnboardingDone(ctx: Context) {
+        prefs(ctx).edit().putBoolean(KEY_ONBOARDING_DONE, true).apply()
+    }
 }
