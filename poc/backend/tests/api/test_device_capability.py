@@ -164,3 +164,119 @@ async def test_self_check_writes_log_row(client, agent_auth_headers, db_session)
     assert rows[0].capability == "realtime"
     assert rows[0].source == "static_matrix"
     assert rows[0].actual_recording_works is None
+
+
+# ---------- 6. admin 看自己租户的所有坐席设备 ----------
+@pytest.mark.asyncio
+async def test_admin_lists_agent_devices(
+    client, db_session, admin_auth_headers, agent_auth_headers
+):
+    """admin 角色能看到本租户 agent 设备的 latest capability。"""
+    db_session.execute(text("DELETE FROM device_capability_log"))
+    db_session.flush()
+    # agent 先注册 + 自检产生 log
+    await client.post(
+        "/api/v1/devices/register",
+        json={"device_id": "android-list-test-1"},
+        headers=agent_auth_headers,
+    )
+    await client.post(
+        "/api/v1/devices/self-check",
+        headers=agent_auth_headers,
+        json={
+            "device_id": "android-list-test-1",
+            "recording_dir_ok": True,
+            "recording_toggle_on": True,
+            "permissions_ok": True,
+            "manufacturer": "Xiaomi",
+            "model": "Mi 9",
+            "android_version": "9",
+        },
+    )
+    resp = await client.get(
+        "/api/v1/admin/agent-devices", headers=admin_auth_headers
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "items" in data and "total" in data
+    assert data["page"] == 1
+    assert data["page_size"] == 20
+    # 至少一行匹配
+    assert any(
+        item["device_id"] == "android-list-test-1" for item in data["items"]
+    )
+    item = next(
+        i for i in data["items"] if i["device_id"] == "android-list-test-1"
+    )
+    assert item["latest_capability"] == "realtime"
+    assert item["status_label"] == "实时可用"
+    assert item["role"] == "agent_internal"
+    assert item["user_name"]  # 非空
+
+
+# ---------- 7. capability 筛选 ----------
+@pytest.mark.asyncio
+async def test_admin_filter_by_capability(
+    client, db_session, admin_auth_headers, agent_auth_headers
+):
+    """筛选 capability=incompatible 只返回 incompatible 行。"""
+    db_session.execute(text("DELETE FROM device_capability_log"))
+    db_session.flush()
+    # 一台 incompatible（Pixel 14）
+    await client.post(
+        "/api/v1/devices/register",
+        json={"device_id": "incompat-1"},
+        headers=agent_auth_headers,
+    )
+    await client.post(
+        "/api/v1/devices/self-check",
+        headers=agent_auth_headers,
+        json={
+            "device_id": "incompat-1",
+            "recording_dir_ok": True,
+            "recording_toggle_on": True,
+            "permissions_ok": True,
+            "manufacturer": "Google",
+            "model": "Pixel 8",
+            "android_version": "14",
+        },
+    )
+    # 一台 realtime（Xiaomi Android 10）
+    await client.post(
+        "/api/v1/devices/register",
+        json={"device_id": "realtime-1"},
+        headers=agent_auth_headers,
+    )
+    await client.post(
+        "/api/v1/devices/self-check",
+        headers=agent_auth_headers,
+        json={
+            "device_id": "realtime-1",
+            "recording_dir_ok": True,
+            "recording_toggle_on": True,
+            "permissions_ok": True,
+            "manufacturer": "Xiaomi",
+            "model": "Mi 10",
+            "android_version": "10",
+        },
+    )
+    resp = await client.get(
+        "/api/v1/admin/agent-devices?capability=incompatible",
+        headers=admin_auth_headers,
+    )
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    assert len(items) >= 1
+    assert all(i["latest_capability"] == "incompatible" for i in items)
+    assert any(i["device_id"] == "incompat-1" for i in items)
+    assert not any(i["device_id"] == "realtime-1" for i in items)
+
+
+# ---------- 8. 非授权角色 403 ----------
+@pytest.mark.asyncio
+async def test_agent_cannot_list_agent_devices(client, agent_auth_headers):
+    """agent_internal 拉这个列表应该被拒（仅 admin/supervisor/superadmin）。"""
+    resp = await client.get(
+        "/api/v1/admin/agent-devices", headers=agent_auth_headers
+    )
+    assert resp.status_code == 403

@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app.api import (
     admin,
+    admin_agent_devices,
     admin_cases,
     admin_compliance,
     admin_dashboard,
@@ -191,6 +192,11 @@ app.include_router(ws_calls.router)  # no prefix — /ws/calls/{id} stays as-is
 app.include_router(ws_supervisor.router)  # /ws/supervisor
 app.include_router(admin_scripts.router, prefix="/api/v1/admin", tags=["admin-scripts"])
 app.include_router(admin_dashboard.router, prefix="/api/v1/admin", tags=["admin-dashboard"])
+app.include_router(
+    admin_agent_devices.router,
+    prefix="/api/v1/admin",
+    tags=["admin-agent-devices"],
+)
 app.include_router(supervisor_labels.router, prefix="/api/v1/supervisor", tags=["supervisor-labels"])
 app.include_router(supervisor_review.router, prefix="/api/v1/supervisor", tags=["supervisor-review"])
 app.include_router(supervisor_live.router, prefix="/api/v1/supervisor", tags=["supervisor-live"])
