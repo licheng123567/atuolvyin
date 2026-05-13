@@ -81,6 +81,10 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended") // v2.0 Task 2 — 4 tab 图标
     implementation("androidx.activity:activity-compose:1.9.0")
+    // v2.0 Task 6 — RealtimeCallViewModel 用 viewModels() + AndroidViewModel
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    // v2.0 Task 6 — ComponentActivity.supportFragmentManager（PostCallTagDialog 仍是 DialogFragment）
+    implementation("androidx.fragment:fragment-ktx:1.8.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     // v2.0 Task 2 — Navigation for Compose（4 tab 切换）
