@@ -645,9 +645,112 @@ App **自己不直接录通话音频**：Android 9 起 Google 在系统层封禁
 | 海外版手机走私进入国内市场 | 低 | 自检通过 `Build.MANUFACTURER` + `Build.BRAND` + ROM 字符串识别后拒绝 |
 | 录音目录用户手动改路径 | 低 | 候选目录走运行时配置，客服可远程下发新路径 |
 
----
+#### 8.4.8 客户端能力探测与降级流程（v2.1）
 
-## 9. 用户故事
+v2.1 sprint 解决"新机型坐席默默失败"问题：通过 **探测 + 表态 + 留痕** 三段式，让坐席与管理员都明确知道每台设备的真实录音能力，并在不可用时主动降级而非默默丢数据。
+
+##### 状态机
+
+```
+首次启动 → Onboarding 4 步 Wizard
+              ├─ 1. 权限授予（CALL_PHONE / RECORD_AUDIO / READ_PHONE_STATE / READ_CALL_LOG /
+              │      READ_CONTACTS / READ_MEDIA_AUDIO / POST_NOTIFICATIONS 等 7 项）
+              ├─ 2. 后端地址配置 +「测试连接」
+              ├─ 3. 录音设置 — 显示本机 ROM 厂商标签（"MIUI 设备"/"EMUI 设备"/"海外/AOSP"）
+              │      + 文案"请到系统设置开启通话自动录音" + checkbox 强制勾选
+              ├─ 4. 完成清单 → markOnboardingDone
+              └─ 跳 MainActivity → 登录 → doSelfCheck
+
+doSelfCheck → POST /api/v1/devices/self-check {
+                  manufacturer, model, android_version,
+                  recording_toggle_self_reported,   // Onboarding step 3 勾选值
+                  last_recording_scan_failed         // 上次通话扫描结果
+              }
+            → 后端 derive_capability(rom, android_major) 走静态矩阵
+              + last_scan_failed=True 强制降级 incompatible
+              ↓
+            → 持久化 SharedPreferences (KEY_CAPABILITY / KEY_GUIDANCE / KEY_ROM_LABEL)
+            → 写一行 device_capability_log（留痕 + PC 管理员可查历史）
+            → 响应 capability + guidance_text → App 持久化
+
+通话挂断 → CallWatcherService.matchAndUpload
+            ├─ RecordingScanner 找不到录音文件 → AppConfig.markRecordingScanFailed(true)
+            │      下次 self-check 触发 capability=incompatible
+            └─ 找到文件 + 上传成功 → markRecordingScanFailed(false) 清标志
+                  下次 self-check 回到矩阵判定（单向收紧，不反向自动升级）
+
+WebView 端
+- JsBridge.getCapability() 同步返回 JSON
+- /app/home   顶部 banner（绿可关 / 橙不可关含详情链接 / 红粗体不可关）
+- /app/profile "录音能力" section（含 ROM + guidance + 上次检测时间）
+- /app/cases/:id 拨号前 incompatible 弹 confirm
+
+PC 管理员
+- /admin/agent-devices 坐席设备列表（capability 筛选 + 模糊搜索 + 自检历史 Drawer）
+- /supervisor/live-wall 坐席卡片右上 cap-badge（绿 / 橙 / 红 / 灰）
+```
+
+##### capability 四档定义
+
+| 档位 | 触发条件 | UI 表现 | 业务行为 |
+|---|---|---|---|
+| `realtime` | 静态矩阵命中 ✅ + 未实测失败 | 绿色 banner（可关闭）| AI 实时分析 + 风控 L1/L2/L3 |
+| `post_upload` | 静态矩阵命中 ⚠️/🟡 + 未实测失败 | 橙色 banner（不可关 + 详情链接） | 通话挂断后上传，事后分析 |
+| `incompatible` | 矩阵命中 ❌ **或** `last_recording_scan_failed=True` | 红色 banner（粗体不可关）| 可拨号但无 AI 分析，拨号前弹 confirm |
+| `unknown` | 从未自检过（新设备未登录）| 不展示 banner（profile 显示"未检测"灰标签）| 等待首次自检 |
+
+##### 静态矩阵优先级
+
+1. 客户端上报 `manufacturer` + `android_version` + `model`
+2. 后端 `services/device_capability.py:CAPABILITY_MATRIX` 静态判定（与 §8.4.2 表格一致）
+3. 客户端上报 `last_recording_scan_failed=True` **覆盖矩阵** → 强制 `incompatible`
+4. 客户端上报 `last_recording_scan_failed=False` → 维持矩阵结果（不反向自动升级，避免抖动骚扰用户）
+5. 后端按规则写 `device_capability_log.source`：
+   - `static_matrix` — 纯矩阵判定
+   - `runtime_verified` — 被 last_scan_failed 覆盖到 incompatible
+   - `manual_override`（预留）— v2.x 管理员后台强制覆盖
+
+##### 与 § 8.3 TenantSettings.recording_mode 的关系
+
+`TenantSettings.recording_mode` (`live` / `post` / `auto`) 是 **租户偏好**，
+`device.capability` (`realtime` / `post_upload` / `incompatible`) 是 **设备实际能力**。
+
+冲突时 **设备能力为准**：
+- 即使租户偏好 `live`，capability=incompatible 的设备仍走"无录音模式"（拨号前 confirm 提醒）
+- 即使租户偏好 `post`，capability=realtime 的设备可被管理员强制 live（v2.x 预留 manual_override）
+- capability=post_upload 与 recording_mode=live 冲突时，UI 提示用户"该设备不支持实时分析，已自动切换为事后上传"
+
+UI 区分：
+- "实时/事后"badge 显示 `TenantSettings.recording_mode`
+- "实时可用/事后上传/录音不可用"显示 `device.capability`
+
+##### device_capability_log 数据留痕
+
+| 字段 | 用途 |
+|---|---|
+| `tenant_id` + `agent_user_id` + `device_id` | 多租户隔离 + 坐席粒度 |
+| `manufacturer` / `model` / `android_version` / `rom_label` | 客户端上报原始值（便于回头扩矩阵）|
+| `capability` | 本次自检判定结果（4 档之一）|
+| `recording_toggle_self_reported` | Onboarding 勾选值 |
+| `last_recording_scan_failed` | 是否覆盖矩阵 |
+| `source` | static_matrix / runtime_verified / manual_override |
+| `created_at` | 时间戳，PC 管理员可查每次自检历史 |
+
+每次 self-check 写一行（不去重），管理员 Drawer 看时间倒序列表。便于：
+- 漂移分析（同一设备 capability 跳变追溯）
+- 矩阵迭代（统计被 runtime_verified 覆盖的机型 → v2.2 调矩阵）
+- 客户支持（坐席投诉时回查"该设备到底走的哪档"）
+
+##### 风险与缓解
+
+| 风险 | 缓解 |
+|---|---|
+| 用户无脑勾 Onboarding step 3 checkbox（自报录音已开，实际未开）| RecordingScanner 通话后运行时验证兜底，扫不到文件即 markFailed → 下次自检降级 |
+| 静态矩阵漂移（新机型 / 新 Android 上市）| `runtime_verified` 优先级高于矩阵；device_capability_log 留痕便于 v2.2 调矩阵 |
+| 老 App 升级（不传新字段 recording_toggle_self_reported / last_recording_scan_failed）| 后端 schema 字段全 nullable + 默认走纯矩阵；capability 默认 "realtime" 不破坏老 UI |
+| 偶发录音漏抓导致误降级 | v2.x 加 "连续 N 次失败再降级" 阈值（当前单次失败即降级，保守起见接受误判）|
+| 离线场景 banner 长期停留旧 capability | profile 显示"上次检测时间"，超 24h 加灰标签提示"数据可能过期"（待 v2.x）|
+
 
 ### 管理员
 
