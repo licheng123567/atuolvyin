@@ -95,6 +95,14 @@
                   android:turnScreenOn="true"
                   android:exported="false" />
 
+        <!-- v2.0 Task 5 — Screen 2 拨号请求全屏页（push 触发）-->
+        <activity android:name=".screens.dial.DialRequestActivity"
+                  android:launchMode="singleTask"
+                  android:showWhenLocked="true"
+                  android:turnScreenOn="true"
+                  android:exported="false"
+                  android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
+
         <!-- Sprint 11.2 — 本月绩效小结 -->
         <activity android:name=".MyPerformanceActivity" android:exported="false" />
 

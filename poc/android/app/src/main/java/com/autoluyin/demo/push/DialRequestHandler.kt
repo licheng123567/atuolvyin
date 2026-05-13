@@ -6,6 +6,7 @@ import android.util.Log
 import com.autoluyin.demo.ApiClient
 import com.autoluyin.demo.AppConfig
 import com.autoluyin.demo.PushRegPatchRequest
+import com.autoluyin.demo.screens.dial.DialRequestPayload
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -13,29 +14,55 @@ import org.json.JSONObject
 
 object DialRequestHandler {
 
-    // Extra key constants — mirrors RealtimeCallActivity.EXTRA_* to avoid circular dependency
-    private const val EXTRA_CALL_ID = "call_id"
-    private const val EXTRA_CASE_ID = "case_id"
-    private const val EXTRA_OWNER_NAME = "owner_name"
-    private const val EXTRA_OWNER_PHONE_MASKED = "owner_phone_masked"
-    private const val REALTIME_ACTIVITY_CLASS = "com.autoluyin.demo.realtime.RealtimeCallActivity"
+    /**
+     * v2.0 Task 5 — 改为路由到 DialRequestActivity（Screen 2 全屏蓝渐变请求页）。
+     *
+     * 之前直接拉 RealtimeCallActivity 的旧路径已被替换；通话中页面将由
+     * DialRequestActivity → ACTION_CALL → PhoneStateReceiver/CallWatcher 接管。
+     *
+     * Activity 类名用反射加载，避免 push 模块编译期硬依赖 screens/ 模块；
+     * 即便后续把 screens/ 抽成子模块也不破坏。
+     */
+    private const val DIAL_REQUEST_ACTIVITY_CLASS =
+        "com.autoluyin.demo.screens.dial.DialRequestActivity"
 
     fun handle(ctx: Context, payload: JSONObject) {
         val callId = payload.optLong("call_id", -1L).takeIf { it > 0 } ?: return
         val caseId = payload.optLong("case_id", -1L).takeIf { it > 0 } ?: return
+
         val ownerName = payload.optString("owner_name", "")
         val ownerPhoneMasked = payload.optString("owner_phone_masked", "")
+        // owner_phone：明文（agent 角色有权看），后端待补；不存在时取 null
+        val ownerPhone = payload.optString("owner_phone").takeIf { it.isNotBlank() }
+        val building = payload.optString("building").takeIf { it.isNotBlank() }
+        val room = payload.optString("room").takeIf { it.isNotBlank() }
+        val amountOwed = payload.optString("amount_owed").takeIf { it.isNotBlank() }
+        val monthsOverdue = payload.optInt("months_overdue", -1).takeIf { it > 0 }
+        val lastContactAt = payload.optString("last_contact_at").takeIf { it.isNotBlank() }
+        val lastOutcome = payload.optString("last_outcome").takeIf { it.isNotBlank() }
+        val expiresAt = payload.optString("expires_at").takeIf { it.isNotBlank() }
 
         val activityClass = try {
-            Class.forName(REALTIME_ACTIVITY_CLASS)
-        } catch (_: ClassNotFoundException) { return }
+            Class.forName(DIAL_REQUEST_ACTIVITY_CLASS)
+        } catch (e: ClassNotFoundException) {
+            Log.e("DialRequestHandler", "DialRequestActivity not found on classpath", e)
+            return
+        }
 
         val intent = Intent(ctx, activityClass).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            putExtra(EXTRA_CALL_ID, callId)
-            putExtra(EXTRA_CASE_ID, caseId)
-            putExtra(EXTRA_OWNER_NAME, ownerName)
-            putExtra(EXTRA_OWNER_PHONE_MASKED, ownerPhoneMasked)
+            putExtra(DialRequestPayload.EXTRA_CALL_ID, callId)
+            putExtra(DialRequestPayload.EXTRA_CASE_ID, caseId)
+            putExtra(DialRequestPayload.EXTRA_OWNER_NAME, ownerName)
+            putExtra(DialRequestPayload.EXTRA_OWNER_PHONE_MASKED, ownerPhoneMasked)
+            ownerPhone?.let { putExtra(DialRequestPayload.EXTRA_OWNER_PHONE, it) }
+            building?.let { putExtra(DialRequestPayload.EXTRA_BUILDING, it) }
+            room?.let { putExtra(DialRequestPayload.EXTRA_ROOM, it) }
+            amountOwed?.let { putExtra(DialRequestPayload.EXTRA_AMOUNT_OWED, it) }
+            monthsOverdue?.let { putExtra(DialRequestPayload.EXTRA_MONTHS_OVERDUE, it) }
+            lastContactAt?.let { putExtra(DialRequestPayload.EXTRA_LAST_CONTACT_AT, it) }
+            lastOutcome?.let { putExtra(DialRequestPayload.EXTRA_LAST_OUTCOME, it) }
+            expiresAt?.let { putExtra(DialRequestPayload.EXTRA_EXPIRES_AT, it) }
         }
         ctx.startActivity(intent)
     }
