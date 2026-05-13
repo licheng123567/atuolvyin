@@ -1,12 +1,12 @@
 """Sprint 10 — Admin Settlement schemas."""
+
 from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 SettlementStatus = Literal["DRAFT", "CONFIRMED", "PAID", "DISPUTED"]
 DisputeStatus = Literal["open", "resolved", "rejected"]
@@ -19,17 +19,17 @@ class SettlementOut(BaseModel):
 
     id: int
     contract_id: int
-    provider_id: Optional[int] = None
-    provider_name: Optional[str] = None
+    provider_id: int | None = None
+    provider_name: str | None = None
     period_start: datetime
     period_end: datetime
     total_amount: Decimal
     status: SettlementStatus
-    payment_proof_url: Optional[str] = None
-    confirmed_at: Optional[datetime] = None
-    paid_at: Optional[datetime] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    payment_proof_url: str | None = None
+    confirmed_at: datetime | None = None
+    paid_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class DisputeOut(BaseModel):
@@ -41,10 +41,10 @@ class DisputeOut(BaseModel):
     statement_id: int
     reason: str
     status: DisputeStatus
-    resolution: Optional[str] = None
+    resolution: str | None = None
     submitted_by: int
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class SettlementDetailOut(SettlementOut):
@@ -56,7 +56,7 @@ class SettlementDetailOut(SettlementOut):
 class PayIn(BaseModel):
     """Body for PATCH /settlements/{id}/pay."""
 
-    payment_proof_url: Optional[str] = Field(None, max_length=2048)
+    payment_proof_url: str | None = Field(None, max_length=2048)
 
 
 class DisputeIn(BaseModel):

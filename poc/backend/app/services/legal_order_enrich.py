@@ -1,4 +1,5 @@
 """v1.6 — LegalConversionOrder 富化 helper：joins case/owner/project/tenant/docs。"""
+
 from __future__ import annotations
 
 from sqlalchemy import select
@@ -38,23 +39,29 @@ def enrich_order(db: Session, order: LegalConversionOrder) -> dict:
     lawyer = db.get(LawFirmLawyer, order.lawyer_id) if order.lawyer_id else None
     creator = db.get(UserAccount, order.created_by) if order.created_by else None
 
-    docs_rows = db.execute(
-        select(LegalDocument)
-        .where(LegalDocument.case_id == order.case_id)
-        .order_by(LegalDocument.id)
-    ).scalars().all()
+    docs_rows = (
+        db.execute(
+            select(LegalDocument)
+            .where(LegalDocument.case_id == order.case_id)
+            .order_by(LegalDocument.id)
+        )
+        .scalars()
+        .all()
+    )
     docs = []
     for d in docs_rows:
         uploader = db.get(UserAccount, d.uploaded_by) if d.uploaded_by else None
-        docs.append({
-            "id": d.id,
-            "doc_type": d.doc_type,
-            "doc_label": DOC_TYPE_LABELS.get(d.doc_type, d.doc_type),
-            "filename": d.filename,
-            "uploaded_by": uploader.name if uploader else None,
-            "uploaded_at": d.created_at.isoformat() if d.created_at else None,
-            "url": f"/api/v1/legal-documents/{d.id}/download",
-        })
+        docs.append(
+            {
+                "id": d.id,
+                "doc_type": d.doc_type,
+                "doc_label": DOC_TYPE_LABELS.get(d.doc_type, d.doc_type),
+                "filename": d.filename,
+                "uploaded_by": uploader.name if uploader else None,
+                "uploaded_at": d.created_at.isoformat() if d.created_at else None,
+                "url": f"/api/v1/legal-documents/{d.id}/download",
+            }
+        )
 
     package_type = package.package_type if package else None
     package_label = (

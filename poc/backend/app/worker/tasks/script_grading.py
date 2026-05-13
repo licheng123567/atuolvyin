@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator
+from datetime import UTC
 
 from sqlalchemy import Integer, create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -43,11 +44,12 @@ def _get_db() -> Generator[Session, None, None]:
 
 @celery_app.task(name="tasks.compute_script_grades")
 def compute_script_grades() -> None:
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
+
     from app.models.call import SuggestionFeedback
     from app.models.script import ScriptTemplate
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    cutoff = datetime.now(UTC) - timedelta(days=30)
 
     with _get_db() as db:
         scripts = db.execute(select(ScriptTemplate)).scalars().all()
@@ -55,13 +57,11 @@ def compute_script_grades() -> None:
             stats = db.execute(
                 select(
                     func.count(SuggestionFeedback.id).label("total"),
-                    func.sum(
-                        (SuggestionFeedback.action == "adopt").cast(Integer)
-                    ).label("adopted"),
+                    func.sum((SuggestionFeedback.action == "adopt").cast(Integer)).label("adopted"),
                     func.count(func.distinct(SuggestionFeedback.call_id)).label("calls"),
-                    func.sum(
-                        (SuggestionFeedback.inferred_signal == 1).cast(Integer)
-                    ).label("positive"),
+                    func.sum((SuggestionFeedback.inferred_signal == 1).cast(Integer)).label(
+                        "positive"
+                    ),
                 ).where(
                     SuggestionFeedback.script_template_id == script.id,
                     SuggestionFeedback.created_at >= cutoff,
@@ -96,5 +96,6 @@ def compute_script_grades() -> None:
                 script.is_active = False
                 logger.info(
                     "script %d auto-disabled (grade=D, usage_count=%d)",
-                    script.id, script.usage_count,
+                    script.id,
+                    script.usage_count,
                 )

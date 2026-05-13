@@ -1,4 +1,5 @@
 """Sprint 8.5 / 12.3 — Tenant settings schemas (PRD §3.14 / §L412)."""
+
 from __future__ import annotations
 
 from typing import Literal
@@ -50,7 +51,7 @@ class TenantSettingsUpdate(BaseModel):
     notify_channels: list[NotifyChannel] | None = None
 
     @model_validator(mode="after")
-    def _check_thresholds(self) -> "TenantSettingsUpdate":
+    def _check_thresholds(self) -> TenantSettingsUpdate:
         a = self.discount_auto_approve_threshold_pct
         s = self.discount_supervisor_max_pct
         if a is not None and s is not None and a > s:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC
 from decimal import Decimal
 from typing import Annotated
 
@@ -23,7 +24,6 @@ from app.models.call import AnalysisResult, CallRecord, Transcript
 from app.models.case import CollectionCase, OwnerProfile
 from app.models.tenant import UserTenantMembership
 from app.models.user import UserAccount
-from app.services.case_timeline import build_case_timeline
 from app.schemas.case import (
     CaseAssignRequest,
     CaseAssignResponse,
@@ -37,6 +37,7 @@ from app.schemas.case import (
     OwnerInfo,
 )
 from app.schemas.common import PaginatedResponse
+from app.services.case_timeline import build_case_timeline
 
 router = APIRouter()
 
@@ -60,9 +61,7 @@ def _require_tenant(payload: dict) -> int:
     return tenant_id
 
 
-def _calc_priority(
-    amount_owed: Decimal | None, months_overdue: int | None
-) -> int:
+def _calc_priority(amount_owed: Decimal | None, months_overdue: int | None) -> int:
     return int(float(amount_owed or 0) * 0.4 + float(months_overdue or 0) * 0.3)
 
 
@@ -151,17 +150,19 @@ def build_case_detail_response(
         if analysis and analysis.key_segments:
             confidence = analysis.key_segments.get("confidence")
         preview = transcript.full_text[:100] if transcript and transcript.full_text else None
-        call_items.append(CaseCallItem(
-            id=call.id,
-            started_at=call.started_at,
-            duration_sec=call.duration_sec,
-            status=call.status,
-            transcript_preview=preview,
-            result_tag=call.result_tag,
-            confidence=confidence,
-            agent_name=agent_name,
-            recording_url=call.recording_url,  # v1.6.7 — E5
-        ))
+        call_items.append(
+            CaseCallItem(
+                id=call.id,
+                started_at=call.started_at,
+                duration_sec=call.duration_sec,
+                status=call.status,
+                transcript_preview=preview,
+                result_tag=call.result_tag,
+                confidence=confidence,
+                agent_name=agent_name,
+                recording_url=call.recording_url,  # v1.6.7 — E5
+            )
+        )
 
     # 项目 + 收费 + 合同 + 电话团队
     project_name: str | None = None
@@ -171,6 +172,7 @@ def build_case_detail_response(
     if case.project_id is not None:
         from app.models.case import Project
         from app.models.tenant import ServiceProvider
+
         proj = db.get(Project, case.project_id)
         if proj is not None:
             project_name = proj.name
@@ -211,14 +213,19 @@ def build_case_detail_response(
     legal_lawyer_name: str | None = None
     legal_order_status: str | None = None
     from app.models.legal_conversion import LegalConversionOrder
-    legal_order = db.execute(
-        select(LegalConversionOrder)
-        .where(
-            LegalConversionOrder.case_id == case_id,
-            LegalConversionOrder.status != "cancelled",
+
+    legal_order = (
+        db.execute(
+            select(LegalConversionOrder)
+            .where(
+                LegalConversionOrder.case_id == case_id,
+                LegalConversionOrder.status != "cancelled",
+            )
+            .order_by(LegalConversionOrder.created_at.desc())
         )
-        .order_by(LegalConversionOrder.created_at.desc())
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if legal_order is not None:
         legal_law_firm_name = legal_order.assigned_law_firm
         legal_lawyer_name = legal_order.assigned_lawyer_name
@@ -228,23 +235,31 @@ def build_case_detail_response(
     phone_plain = None
     if include_phone_plain:
         from app.core.crypto import decrypt_phone
+
         phone_plain = decrypt_phone(owner.phone_enc)
 
     # v1.8.0 — 业主画像 3 统计卡：联系次数复用 monthly_contact_count，承诺/工单各 1 条 COUNT
     from app.models.work import WorkOrder
-    promise_count = db.execute(
-        select(func.count(CallRecord.id)).where(
-            CallRecord.case_id == case_id,
-            CallRecord.tenant_id == tenant_id,
-            CallRecord.result_tag == "承诺缴",
-        )
-    ).scalar_one() or 0
-    workorder_count = db.execute(
-        select(func.count(WorkOrder.id)).where(
-            WorkOrder.case_id == case_id,
-            WorkOrder.tenant_id == tenant_id,
-        )
-    ).scalar_one() or 0
+
+    promise_count = (
+        db.execute(
+            select(func.count(CallRecord.id)).where(
+                CallRecord.case_id == case_id,
+                CallRecord.tenant_id == tenant_id,
+                CallRecord.result_tag == "承诺缴",
+            )
+        ).scalar_one()
+        or 0
+    )
+    workorder_count = (
+        db.execute(
+            select(func.count(WorkOrder.id)).where(
+                WorkOrder.case_id == case_id,
+                WorkOrder.tenant_id == tenant_id,
+            )
+        ).scalar_one()
+        or 0
+    )
 
     # v1.7.0 — phone_masked 字段动态：按 viewer 角色族 + 合同 / 项目时效决定明文 / 脱敏
     # v1.9.4 — force_owner_phone_reveal 优先，用于调用方已自行判定的场景
@@ -253,14 +268,16 @@ def build_case_detail_response(
     elif viewer_role is None:
         owner_phone_reveal = False  # 兼容老调用方
     else:
-        from datetime import datetime, timezone
+        from datetime import datetime
+
         contract_active = is_provider_contract_active(db, tenant_id, viewer_provider_id)
         project_active = True
         if case.project_id is not None:
             from app.models.case import Project as _Project
+
             _proj = db.get(_Project, case.project_id)
             if _proj is not None and _proj.plan_end is not None:
-                project_active = _proj.plan_end >= datetime.now(timezone.utc)
+                project_active = _proj.plan_end >= datetime.now(UTC)
         owner_phone_reveal = should_reveal_owner_phone(
             role=viewer_role,
             contract_active=contract_active,
@@ -325,6 +342,7 @@ async def import_cases(
     if body.project_id is not None:
         from app.models.case import Project
         from app.models.project_member import ProjectMember
+
         project = db.execute(
             select(Project).where(
                 Project.id == body.project_id,
@@ -337,13 +355,19 @@ async def import_cases(
                 detail={"code": "ERR_INVALID_PROJECT", "message": "项目不存在或不属本租户"},
             )
         # v1.5 S18.5 — 取项目的默认催收员，导入时 round-robin 分配
-        project_agent_ids = list(db.execute(
-            select(ProjectMember.user_id).where(
-                ProjectMember.project_id == body.project_id,
-                ProjectMember.role_in_project == "agent",
-                ProjectMember.is_active.is_(True),
-            ).order_by(ProjectMember.id)
-        ).scalars().all())
+        project_agent_ids = list(
+            db.execute(
+                select(ProjectMember.user_id)
+                .where(
+                    ProjectMember.project_id == body.project_id,
+                    ProjectMember.role_in_project == "agent",
+                    ProjectMember.is_active.is_(True),
+                )
+                .order_by(ProjectMember.id)
+            )
+            .scalars()
+            .all()
+        )
 
     imported = 0
     for idx, row in enumerate(body.rows):
@@ -433,13 +457,18 @@ async def list_cases(
     # v1.5 S18.5 — 督导只看自己被加入项目的案件
     if role == "supervisor":
         from app.models.project_member import ProjectMember
-        visible_project_ids = list(db.execute(
-            select(ProjectMember.project_id).where(
-                ProjectMember.user_id == user_id,
-                ProjectMember.role_in_project == "supervisor",
-                ProjectMember.is_active.is_(True),
+
+        visible_project_ids = list(
+            db.execute(
+                select(ProjectMember.project_id).where(
+                    ProjectMember.user_id == user_id,
+                    ProjectMember.role_in_project == "supervisor",
+                    ProjectMember.is_active.is_(True),
+                )
             )
-        ).scalars().all())
+            .scalars()
+            .all()
+        )
         if not visible_project_ids:
             # 无项目归属 — 返回空集
             stmt = stmt.where(CollectionCase.id == -1)
@@ -475,7 +504,9 @@ async def list_cases(
 
     return PaginatedResponse(
         items=[
-            _case_row_to_response(case, owner, prov_id, prov_name, owner_phone_reveal=owner_phone_reveal)
+            _case_row_to_response(
+                case, owner, prov_id, prov_name, owner_phone_reveal=owner_phone_reveal
+            )
             for case, owner, prov_id, prov_name in rows
         ],
         total=total,
@@ -547,6 +578,7 @@ async def assign_cases(
     # v1.5.6 收尾 — 组织边界硬约束：外包项目（有 provider_id）一律由服务商内部分配
     # 砍掉 allow_internal_assist 例外（项目要么自办要么外包，二选一）
     from app.models.case import Project
+
     bad_cases = db.execute(
         select(CollectionCase.id)
         .join(Project, Project.id == CollectionCase.project_id, isouter=True)
@@ -605,7 +637,10 @@ async def get_case(
     case, owner = row[0], row[1]
     role = payload.get("role", "")
     return build_case_detail_response(
-        db, case, owner, tenant_id=tenant_id,
+        db,
+        case,
+        owner,
+        tenant_id=tenant_id,
         viewer_role=role,
         viewer_provider_id=payload.get("provider_id"),
     )
@@ -633,6 +668,7 @@ async def update_case_stage(
     db.refresh(case)
     # v1.6.6 — 阶段变更写 audit log（含跟进备注）
     from app.services.audit import log_audit
+
     log_audit(
         db,
         actor_user_id=int(payload.get("user_id") or 0),
@@ -641,18 +677,17 @@ async def update_case_stage(
         action="case.stage_changed",
         target_type="collection_case",
         target_id=case_id,
-        payload={"from": prev_stage, "to": body.stage, "note": body.note} if body.note
-              else {"from": prev_stage, "to": body.stage},
+        payload={"from": prev_stage, "to": body.stage, "note": body.note}
+        if body.note
+        else {"from": prev_stage, "to": body.stage},
     )
     db.commit()
     # Sprint 15.4b — case_escalated 通知：进入 escalated/legal 阶段时触发
     _ESCALATED_STAGES = {"escalated", "legal", "litigation"}
-    if (
-        body.stage in _ESCALATED_STAGES
-        and prev_stage not in _ESCALATED_STAGES
-    ):
+    if body.stage in _ESCALATED_STAGES and prev_stage not in _ESCALATED_STAGES:
         from app.models.case import OwnerProfile
         from app.services.notifications.event_subscribers import notify_case_escalated
+
         owner = db.get(OwnerProfile, case.owner_id) if case.owner_id else None
         notify_case_escalated(
             db,

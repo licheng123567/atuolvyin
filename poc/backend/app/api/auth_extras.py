@@ -9,6 +9,7 @@
     POST /api/v1/auth/password-reset/request — 发送密码重置 OTP
     POST /api/v1/auth/password-reset/confirm — 用 OTP 重设密码
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -46,6 +47,7 @@ ADMIN_LIKE_ROLES = {"admin", "platform_superadmin"}
 
 def _phone_validator(v: str) -> str:
     import re
+
     if not re.match(r"^1[3-9]\d{9}$", v):
         raise ValueError("手机号格式无效")
     return v
@@ -54,6 +56,7 @@ def _phone_validator(v: str) -> str:
 def _credit_code_validator(v: str) -> str:
     # 18 位统一社会信用代码（数字 + 大写字母 0-9 A-Z 但不含 I/O/Z/S/V，简化为字母数字）
     import re
+
     if not re.match(r"^[0-9A-Z]{18}$", v):
         raise ValueError("社会信用代码格式无效（应为 18 位大写字母数字）")
     return v
@@ -136,9 +139,7 @@ class PasswordResetConfirmIn(BaseModel):
 # ─── Helpers ──────────────────────────────────────────────────
 
 
-def _issue_token(
-    db: Session, user: UserAccount, device_type: str
-) -> TokenResponse:
+def _issue_token(db: Session, user: UserAccount, device_type: str) -> TokenResponse:
     membership = db.execute(
         select(UserTenantMembership)
         .where(
@@ -330,9 +331,7 @@ def _consume_otp_email(db: Session, email: str, code: str, purpose: str) -> bool
 
 
 @router.post("/login-universal", response_model=TokenResponse)
-def login_universal(
-    body: UniversalLoginIn, db: Session = Depends(get_db)
-) -> TokenResponse:
+def login_universal(body: UniversalLoginIn, db: Session = Depends(get_db)) -> TokenResponse:
     """统一账号登录入口（v1.4）。account 自动识别为手机号/信用代码/邮箱。"""
     import re
 
@@ -351,9 +350,7 @@ def login_universal(
         # 统一社会信用代码 → 找该 tenant 的 admin
         cc = account.upper()
         tenant = db.execute(
-            select(Tenant).where(
-                Tenant.credit_code == cc, Tenant.is_active.is_(True)
-            )
+            select(Tenant).where(Tenant.credit_code == cc, Tenant.is_active.is_(True))
         ).scalar_one_or_none()
         if not tenant:
             raise HTTPException(
@@ -363,13 +360,17 @@ def login_universal(
                     "message": "账号或密码错误",
                 },
             )
-        membership = db.execute(
-            select(UserTenantMembership).where(
-                UserTenantMembership.tenant_id == tenant.id,
-                UserTenantMembership.role.in_(ADMIN_LIKE_ROLES),
-                UserTenantMembership.is_active.is_(True),
+        membership = (
+            db.execute(
+                select(UserTenantMembership).where(
+                    UserTenantMembership.tenant_id == tenant.id,
+                    UserTenantMembership.role.in_(ADMIN_LIKE_ROLES),
+                    UserTenantMembership.is_active.is_(True),
+                )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if membership:
             user = db.get(UserAccount, membership.user_id)
     elif "@" in account:
@@ -390,14 +391,10 @@ def login_universal(
 
 
 @router.post("/login-by-credit-code", response_model=TokenResponse)
-def login_by_credit_code(
-    body: CreditCodeLoginIn, db: Session = Depends(get_db)
-) -> TokenResponse:
+def login_by_credit_code(body: CreditCodeLoginIn, db: Session = Depends(get_db)) -> TokenResponse:
     """组织 admin 用社会信用代码登录（先查 tenant，再找该 tenant 的 admin 用户）。"""
     tenant = db.execute(
-        select(Tenant).where(
-            Tenant.credit_code == body.credit_code, Tenant.is_active.is_(True)
-        )
+        select(Tenant).where(Tenant.credit_code == body.credit_code, Tenant.is_active.is_(True))
     ).scalar_one_or_none()
     if not tenant:
         raise HTTPException(
@@ -408,13 +405,17 @@ def login_by_credit_code(
             },
         )
     # 找 tenant 下的第一个 admin 用户（MVP 假设 1 admin / tenant）
-    membership = db.execute(
-        select(UserTenantMembership).where(
-            UserTenantMembership.tenant_id == tenant.id,
-            UserTenantMembership.role.in_(ADMIN_LIKE_ROLES),
-            UserTenantMembership.is_active.is_(True),
+    membership = (
+        db.execute(
+            select(UserTenantMembership).where(
+                UserTenantMembership.tenant_id == tenant.id,
+                UserTenantMembership.role.in_(ADMIN_LIKE_ROLES),
+                UserTenantMembership.is_active.is_(True),
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if not membership:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -567,14 +568,19 @@ def select_membership(
     import hashlib
 
     from sqlalchemy.dialects.postgresql import insert as pg_insert
+
     token_hash = hashlib.sha256(token.encode()).hexdigest()
-    stmt = pg_insert(ActiveSession).values(
-        user_id=user.id,
-        device_type=body.device_type,
-        token_hash=token_hash,
-    ).on_conflict_do_update(
-        index_elements=["user_id", "device_type"],
-        set_={"token_hash": token_hash, "updated_at": datetime.now(UTC)},
+    stmt = (
+        pg_insert(ActiveSession)
+        .values(
+            user_id=user.id,
+            device_type=body.device_type,
+            token_hash=token_hash,
+        )
+        .on_conflict_do_update(
+            index_elements=["user_id", "device_type"],
+            set_={"token_hash": token_hash, "updated_at": datetime.now(UTC)},
+        )
     )
     db.execute(stmt)
     db.commit()

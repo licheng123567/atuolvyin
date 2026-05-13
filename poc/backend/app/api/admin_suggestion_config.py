@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -50,7 +50,7 @@ def put_config(
 
     cfg.sensitivity = body.sensitivity
     cfg.max_per_push = body.max_per_push
-    cfg.updated_at = datetime.now(timezone.utc)
+    cfg.updated_at = datetime.now(UTC)
     db.commit()
     db.refresh(cfg)
     return SuggestionConfigOut(sensitivity=cfg.sensitivity, max_per_push=cfg.max_per_push)

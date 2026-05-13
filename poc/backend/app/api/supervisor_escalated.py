@@ -4,21 +4,22 @@ GET /api/v1/supervisor/escalated-cases?page=&page_size=
 
 返回本租户内 stage=escalated 的案件分页列表，督导用于「升级案件处理」页。
 """
+
 from __future__ import annotations
 
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
-from sqlalchemy import desc, select, func
+from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
+from app.core.db import get_db
 from app.core.phone_visibility import (
     display_owner_phone,
     is_provider_contract_active,
     should_reveal_owner_phone,
 )
-from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
 from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.user import UserAccount
@@ -45,7 +46,12 @@ async def list_escalated_cases(
     tenant_id = int(tenant_id)
 
     base = (
-        select(CollectionCase, OwnerProfile, Project.name.label("project_name"), UserAccount.name.label("agent_name"))
+        select(
+            CollectionCase,
+            OwnerProfile,
+            Project.name.label("project_name"),
+            UserAccount.name.label("agent_name"),
+        )
         .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
         .join(Project, Project.id == CollectionCase.project_id, isouter=True)
         .join(UserAccount, UserAccount.id == CollectionCase.assigned_to, isouter=True)
@@ -76,17 +82,14 @@ async def list_escalated_cases(
     for case, owner, project_name, agent_name in rows:
         amount = float(case.amount_owed) if case.amount_owed is not None else 0.0
         # 简易优先级判定：欠费 > 1.5w 或欠 > 12 月 → high
-        priority = (
-            "high"
-            if amount > 15000 or (case.months_overdue or 0) > 12
-            else "medium"
-        )
+        priority = "high" if amount > 15000 or (case.months_overdue or 0) > 12 else "medium"
         items.append(
             {
                 "id": case.id,
                 "owner_name": owner.name,
                 "building": (owner.building or "") + (owner.room or ""),
-                "phone_masked": display_owner_phone(owner.phone_enc, reveal=owner_phone_reveal) or "—",
+                "phone_masked": display_owner_phone(owner.phone_enc, reveal=owner_phone_reveal)
+                or "—",
                 "amount": amount,
                 "months_overdue": case.months_overdue or 0,
                 "reason": case.notes or case.arrears_reason or "—",

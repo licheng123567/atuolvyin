@@ -8,6 +8,7 @@ GET    /api/v1/legal/orders/{id}            订单详情
   - 物业法务：看本租户全部订单（含 pending / dispatched / in_service / completed）
   - 律所代表：应改用 /api/v1/lawfirm/orders（按 LawFirmMembership 过滤）
 """
+
 from __future__ import annotations
 
 from typing import Annotated

@@ -12,6 +12,7 @@ Sprint 12.3 — 通知规则（PRD §L412）：5 个具体事件 × 渠道数组
 
 每个租户最多一条；未配置时回退到 default。
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -36,15 +37,9 @@ class TenantSettings(Base):
     recording_mode: Mapped[str] = mapped_column(
         sa.String(16), nullable=False, default="auto"
     )  # live / post / auto
-    l3_hangup_enabled: Mapped[bool] = mapped_column(
-        sa.Boolean, nullable=False, default=False
-    )
-    contact_freq_max: Mapped[int] = mapped_column(
-        sa.SmallInteger, nullable=False, default=3
-    )
-    retention_days: Mapped[int] = mapped_column(
-        sa.Integer, nullable=False, default=365
-    )
+    l3_hangup_enabled: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=False)
+    contact_freq_max: Mapped[int] = mapped_column(sa.SmallInteger, nullable=False, default=3)
+    retention_days: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=365)
 
     # v1.6 — 协商打折 / 减免审批策略（admin 配置）
     # v1.6.2 — 拆分为「本金打折」+「滞纳金减免」两类（多数物业愿意减免滞纳金，但本金打折更严格）

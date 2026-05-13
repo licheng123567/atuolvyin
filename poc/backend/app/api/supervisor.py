@@ -60,6 +60,7 @@ async def list_cases(
 
     # v1.7.0 — supervisor 是物业内部角色，列表内电话明文
     from app.core.phone_visibility import should_reveal_owner_phone
+
     owner_phone_reveal = should_reveal_owner_phone(role=payload.get("role", ""))
 
     return PaginatedResponse(

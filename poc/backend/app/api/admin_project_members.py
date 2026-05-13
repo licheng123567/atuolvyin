@@ -5,6 +5,7 @@
     POST   /api/v1/admin/projects/{id}/members      — 批量加入
     DELETE /api/v1/admin/projects/{id}/members/{user_id}
 """
+
 from __future__ import annotations
 
 from typing import Annotated, Literal
@@ -37,7 +38,7 @@ class ProjectMemberItem(BaseModel):
 
 
 class AddMembersIn(BaseModel):
-    members: list["AddMemberItem"] = Field(..., min_length=1)
+    members: list[AddMemberItem] = Field(..., min_length=1)
 
 
 class AddMemberItem(BaseModel):
@@ -48,9 +49,7 @@ class AddMemberItem(BaseModel):
 AddMembersIn.model_rebuild()
 
 
-def _require_tenant_project(
-    db: Session, payload: dict, project_id: int
-) -> Project:
+def _require_tenant_project(db: Session, payload: dict, project_id: int) -> Project:
     tid = payload.get("tenant_id")
     if not tid:
         raise HTTPException(
@@ -58,9 +57,7 @@ def _require_tenant_project(
             detail={"code": "ERR_NO_TENANT", "message": "需要租户上下文"},
         )
     p = db.execute(
-        select(Project).where(
-            Project.id == project_id, Project.tenant_id == int(tid)
-        )
+        select(Project).where(Project.id == project_id, Project.tenant_id == int(tid))
     ).scalar_one_or_none()
     if p is None:
         raise HTTPException(
@@ -143,11 +140,13 @@ def add_members(
                 },
             )
         try:
-            db.add(ProjectMember(
-                project_id=project_id,
-                user_id=item.user_id,
-                role_in_project=item.role_in_project,
-            ))
+            db.add(
+                ProjectMember(
+                    project_id=project_id,
+                    user_id=item.user_id,
+                    role_in_project=item.role_in_project,
+                )
+            )
             db.flush()
             added += 1
         except IntegrityError:

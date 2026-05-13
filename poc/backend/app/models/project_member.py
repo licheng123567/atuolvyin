@@ -1,7 +1,6 @@
 """v1.5 S18.5 — Project team membership (supervisor / agent)."""
-from __future__ import annotations
 
-from datetime import datetime
+from __future__ import annotations
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column
@@ -22,13 +21,13 @@ class ProjectMember(Base, TimestampMixin):
     role_in_project: Mapped[str] = mapped_column(
         sa.String(32), nullable=False
     )  # supervisor | agent | coordinator | legal (v1.5.6 — 协调员/法务对接人按项目绑定)
-    is_active: Mapped[bool] = mapped_column(
-        sa.Boolean, nullable=False, default=True
-    )
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=True)
 
     __table_args__ = (
         sa.UniqueConstraint(
-            "project_id", "user_id", "role_in_project",
+            "project_id",
+            "user_id",
+            "role_in_project",
             name="uq_project_member_pid_uid_role",
         ),
         sa.CheckConstraint(

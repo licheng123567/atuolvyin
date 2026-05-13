@@ -8,6 +8,7 @@ Per spec: real DB ping is mandatory; ASR/LLM/MiPush surface the configured backe
 placeholder until Sprint 4 ws hub exposes a counter — UI labels these as
 "本期暂用模拟数据".
 """
+
 from __future__ import annotations
 
 import time
@@ -24,7 +25,6 @@ from app.core.db import get_db
 from app.core.security import require_roles
 from app.models.call import CallRecord
 from app.models.user import UserAccount
-from app.ws.connection_manager import get_connection_manager
 from app.schemas.health import (
     BackendHealth,
     DBHealth,
@@ -32,6 +32,7 @@ from app.schemas.health import (
     ServiceMetricsOut,
     WebSocketHealth,
 )
+from app.ws.connection_manager import get_connection_manager
 
 router = APIRouter()
 
@@ -118,11 +119,7 @@ async def get_service_metrics(
     p90_sec = 0.0
     try:
         row = db.execute(
-            select(
-                func.percentile_cont(0.9).within_group(
-                    CallRecord.duration_sec.asc()
-                )
-            ).where(
+            select(func.percentile_cont(0.9).within_group(CallRecord.duration_sec.asc())).where(
                 CallRecord.started_at >= since,
                 CallRecord.duration_sec.is_not(None),
             )
@@ -133,17 +130,23 @@ async def get_service_metrics(
         p90_sec = 0.0
 
     # ── ASR error rate (failed / total over 24h) ──────────────
-    total = db.execute(
-        select(func.count(CallRecord.id)).where(
-            CallRecord.started_at >= since,
-        )
-    ).scalar() or 0
-    failed = db.execute(
-        select(func.count(CallRecord.id)).where(
-            CallRecord.started_at >= since,
-            CallRecord.status == "failed",
-        )
-    ).scalar() or 0
+    total = (
+        db.execute(
+            select(func.count(CallRecord.id)).where(
+                CallRecord.started_at >= since,
+            )
+        ).scalar()
+        or 0
+    )
+    failed = (
+        db.execute(
+            select(func.count(CallRecord.id)).where(
+                CallRecord.started_at >= since,
+                CallRecord.status == "failed",
+            )
+        ).scalar()
+        or 0
+    )
     error_rate = round(failed / total, 4) if total > 0 else 0.0
 
     # ── LLM avg latency: stub 0 until per-call timing recorded ─

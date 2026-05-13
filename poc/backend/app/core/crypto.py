@@ -15,6 +15,7 @@ def _get_key() -> bytes:
     global _KEY
     if _KEY is None:
         from app.core.config import settings  # 延迟导入避免循环依赖
+
         hex_key = settings.autoluyin_aes_key
         if len(hex_key) != 64:
             raise RuntimeError(

@@ -1,4 +1,5 @@
 """v1.6.8 — 法务转化申请审批 schema."""
+
 from __future__ import annotations
 
 from datetime import datetime

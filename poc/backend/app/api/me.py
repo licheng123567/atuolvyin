@@ -9,9 +9,10 @@
     POST /api/v1/me/email/bind               — 首次绑定邮箱（dev 模式直通）
     GET  /api/v1/me/login-history            — 最近登录记录（active_session）
 """
+
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -184,18 +185,17 @@ def set_password(
 ) -> OkOut:
     """已有密码 → 必须验证当前密码；未设置（login_method='otp'）→ 直接设置。"""
     user = _current_user(db, payload)
-    if user.login_method != "otp":
-        # 已有密码，强制二次验证
-        if not body.current_password or not verify_password(
-            body.current_password, user.password_hash
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={
-                    "code": "ERR_WRONG_CURRENT_PASSWORD",
-                    "message": "当前密码错误",
-                },
-            )
+    # 已有密码，强制二次验证
+    if user.login_method != "otp" and (
+        not body.current_password or not verify_password(body.current_password, user.password_hash)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "ERR_WRONG_CURRENT_PASSWORD",
+                "message": "当前密码错误",
+            },
+        )
     user.password_hash = get_password_hash(body.new_password)
     user.login_method = "phone"  # 设置后偏好转 phone
     db.commit()
@@ -417,12 +417,16 @@ def login_history(
 ) -> list[LoginHistoryItem]:
     """最近 10 条登录会话记录（per-device-type，多设备踢出语义）。"""
     user = _current_user(db, payload)
-    rows = db.execute(
-        select(ActiveSession)
-        .where(ActiveSession.user_id == user.id)
-        .order_by(desc(ActiveSession.updated_at))
-        .limit(10)
-    ).scalars().all()
+    rows = (
+        db.execute(
+            select(ActiveSession)
+            .where(ActiveSession.user_id == user.id)
+            .order_by(desc(ActiveSession.updated_at))
+            .limit(10)
+        )
+        .scalars()
+        .all()
+    )
     return [
         LoginHistoryItem(
             device_type=r.device_type,
@@ -442,12 +446,18 @@ def list_my_memberships(
     user = _current_user(db, payload)
     current_tenant_id = payload.get("tenant_id")
     current_role = payload.get("role")
-    rows = db.execute(
-        select(UserTenantMembership).where(
-            UserTenantMembership.user_id == user.id,
-            UserTenantMembership.is_active.is_(True),
-        ).order_by(UserTenantMembership.id.asc())
-    ).scalars().all()
+    rows = (
+        db.execute(
+            select(UserTenantMembership)
+            .where(
+                UserTenantMembership.user_id == user.id,
+                UserTenantMembership.is_active.is_(True),
+            )
+            .order_by(UserTenantMembership.id.asc())
+        )
+        .scalars()
+        .all()
+    )
     items: list[MembershipItem] = []
     for m in rows:
         tenant_name = None
@@ -458,19 +468,22 @@ def list_my_memberships(
         provider_name = None
         if m.provider_id:
             from app.models.tenant import ServiceProvider
+
             provider_name = db.execute(
                 select(ServiceProvider.name).where(ServiceProvider.id == m.provider_id)
             ).scalar_one_or_none()
-        items.append(MembershipItem(
-            membership_id=m.id,
-            tenant_id=m.tenant_id,
-            tenant_name=tenant_name,
-            provider_id=m.provider_id,
-            provider_name=provider_name,
-            role=m.role,
-            is_current=(
-                m.tenant_id == (int(current_tenant_id) if current_tenant_id else None)
-                and m.role == current_role
-            ),
-        ))
+        items.append(
+            MembershipItem(
+                membership_id=m.id,
+                tenant_id=m.tenant_id,
+                tenant_name=tenant_name,
+                provider_id=m.provider_id,
+                provider_name=provider_name,
+                role=m.role,
+                is_current=(
+                    m.tenant_id == (int(current_tenant_id) if current_tenant_id else None)
+                    and m.role == current_role
+                ),
+            )
+        )
     return items

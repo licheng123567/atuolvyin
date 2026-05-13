@@ -5,15 +5,15 @@ GET /api/v1/supervisor/cases/{case_id}
 v1.6.9 — 改为复用 admin/agent 同款 build_case_detail_response，返回标准
 CaseDetailResponse；督导/admin/legal 三个角色看相同字段。前端用同款共享组件。
 """
+
 from __future__ import annotations
 
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi import status as http_status
-from sqlalchemy.orm import Session
-
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
@@ -71,13 +71,20 @@ async def get_case_detail(
             .limit(1)
         ).scalar_one_or_none()
         if legal_order_status in {
-            "internal_processing", "closed_paid", "closed_promised",
-            "closed_uncollectible", "escalated_to_lawfirm",
+            "internal_processing",
+            "closed_paid",
+            "closed_promised",
+            "closed_uncollectible",
+            "escalated_to_lawfirm",
         }:
             force_phone_reveal = True
 
     return build_case_detail_response(
-        db, case, owner, tenant_id=tenant_id, include_phone_plain=False,
+        db,
+        case,
+        owner,
+        tenant_id=tenant_id,
+        include_phone_plain=False,
         viewer_role=role,
         viewer_provider_id=payload.get("provider_id"),
         force_owner_phone_reveal=force_phone_reveal,

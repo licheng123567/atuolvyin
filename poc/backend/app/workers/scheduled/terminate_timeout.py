@@ -6,6 +6,7 @@ did not confirm a termination request within 7 days (D2).
 
 部署时由 systemd timer / Kubernetes CronJob / n8n 每日触发一次。
 """
+
 from __future__ import annotations
 
 import logging
@@ -29,14 +30,18 @@ def run() -> int:
     cutoff = datetime.now(UTC) - timedelta(days=CONFIRM_TIMEOUT_DAYS)
     count = 0
     with SessionLocal() as db:
-        rows = db.execute(
-            select(ProviderTenantContract).where(
-                ProviderTenantContract.termination_requested_at.is_not(None),
-                ProviderTenantContract.termination_requested_at < cutoff,
-                ProviderTenantContract.termination_confirmed_at.is_(None),
-                ProviderTenantContract.status != "terminated",
+        rows = (
+            db.execute(
+                select(ProviderTenantContract).where(
+                    ProviderTenantContract.termination_requested_at.is_not(None),
+                    ProviderTenantContract.termination_requested_at < cutoff,
+                    ProviderTenantContract.termination_confirmed_at.is_(None),
+                    ProviderTenantContract.status != "terminated",
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         now = datetime.now(UTC)
         for c in rows:
             c.status = "terminated"

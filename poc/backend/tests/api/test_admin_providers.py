@@ -302,27 +302,27 @@ async def test_patch_contract_updates_expires_and_service_types(
 
 
 @pytest.mark.asyncio
-async def test_patch_contract_can_terminate(
+async def test_patch_contract_terminate_now_rejected_schema(
     client: AsyncClient,
     signed_contract,
     approved_provider,
     admin_auth_headers,
 ):
+    """v1.4 S16.4 — 直接 PATCH status='terminated' 被 schema 屏蔽（必须走 /terminate-request）。"""
     body = {"status": "terminated"}
     resp = await client.patch(
         f"/api/v1/admin/providers/{approved_provider.id}/contract",
         json=body,
         headers=admin_auth_headers,
     )
-    assert resp.status_code == 200
-    assert resp.json()["status"] == "terminated"
+    assert resp.status_code == 422
 
 
 @pytest.mark.asyncio
 async def test_patch_contract_unknown_provider_404(
     client: AsyncClient, admin_auth_headers
 ):
-    body = {"status": "terminated"}
+    body = {"status": "paused"}
     resp = await client.patch(
         "/api/v1/admin/providers/999999/contract",
         json=body,

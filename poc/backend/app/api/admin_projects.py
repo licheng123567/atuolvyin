@@ -6,6 +6,7 @@ Endpoints:
     GET    /api/v1/admin/projects/{id}        detail
     PATCH  /api/v1/admin/projects/{id}        update
 """
+
 from __future__ import annotations
 
 from typing import Annotated
@@ -118,6 +119,7 @@ def _enrich(db: Session, p: Project) -> ProjectOut:
         provider_pm_name = db.execute(
             select(UserAccount.name).where(UserAccount.id == p.provider_pm_user_id)
         ).scalar_one_or_none()
+
     # v1.5.6 — 协调员 + 法务对接人（从 project_member 表读 active 行）
     def _read_member(role: str) -> tuple[int | None, str | None]:
         row = db.execute(
@@ -127,16 +129,23 @@ def _enrich(db: Session, p: Project) -> ProjectOut:
                 ProjectMember.project_id == p.id,
                 ProjectMember.role_in_project == role,
                 ProjectMember.is_active.is_(True),
-            ).limit(1)
+            )
+            .limit(1)
         ).one_or_none()
         return (row[0], row[1]) if row else (None, None)
 
     coord_uid, coord_name = _read_member("coordinator")
     legal_uid, legal_name = _read_member("legal")
     return _to_out(
-        p, case_count, provider_name, property_pm_name, provider_pm_name,
-        coordinator_user_id=coord_uid, coordinator_name=coord_name,
-        legal_user_id=legal_uid, legal_name=legal_name,
+        p,
+        case_count,
+        provider_name,
+        property_pm_name,
+        provider_pm_name,
+        coordinator_user_id=coord_uid,
+        coordinator_name=coord_name,
+        legal_user_id=legal_uid,
+        legal_name=legal_name,
     )
 
 
@@ -156,18 +165,14 @@ def list_projects(
         stmt = stmt.where(Project.status == status_filter)
     if provider_id is not None:
         stmt = stmt.where(Project.provider_id == provider_id)
-    total = db.execute(
-        select(func.count()).select_from(stmt.subquery())
-    ).scalar_one()
-    rows = db.execute(
-        stmt.order_by(Project.id.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    ).scalars().all()
-    items = [_enrich(db, p) for p in rows]
-    return PaginatedResponse(
-        items=items, total=total, page=page, page_size=page_size
+    total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
+    rows = (
+        db.execute(stmt.order_by(Project.id.desc()).offset((page - 1) * page_size).limit(page_size))
+        .scalars()
+        .all()
     )
+    items = [_enrich(db, p) for p in rows]
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.post(
@@ -296,26 +301,42 @@ def create_project(
 
     # v1.5.6 — 任意项目都写入 coordinator + legal 绑定
     _validate_member_role(body.coordinator_user_id, "coordinator")  # type: ignore[arg-type]
-    db.add(ProjectMember(
-        project_id=p.id, user_id=body.coordinator_user_id, role_in_project="coordinator",
-    ))
+    db.add(
+        ProjectMember(
+            project_id=p.id,
+            user_id=body.coordinator_user_id,
+            role_in_project="coordinator",
+        )
+    )
     _validate_member_role(body.legal_user_id, "legal")  # type: ignore[arg-type]
-    db.add(ProjectMember(
-        project_id=p.id, user_id=body.legal_user_id, role_in_project="legal",
-    ))
+    db.add(
+        ProjectMember(
+            project_id=p.id,
+            user_id=body.legal_user_id,
+            role_in_project="legal",
+        )
+    )
 
     # 自办：额外写入督导 + 催收员
     if not is_outsourced:
         for uid in body.supervisor_user_ids:
             _validate_member_role(uid, "supervisor")
-            db.add(ProjectMember(
-                project_id=p.id, user_id=uid, role_in_project="supervisor",
-            ))
+            db.add(
+                ProjectMember(
+                    project_id=p.id,
+                    user_id=uid,
+                    role_in_project="supervisor",
+                )
+            )
         for uid in body.agent_user_ids:
             _validate_member_role(uid, "agent_internal")
-            db.add(ProjectMember(
-                project_id=p.id, user_id=uid, role_in_project="agent",
-            ))
+            db.add(
+                ProjectMember(
+                    project_id=p.id,
+                    user_id=uid,
+                    role_in_project="agent",
+                )
+            )
 
     log_audit(
         db,
@@ -348,9 +369,7 @@ def get_project(
 ) -> ProjectOut:
     tenant_id = _require_tenant(payload)
     p = db.execute(
-        select(Project).where(
-            Project.id == project_id, Project.tenant_id == tenant_id
-        )
+        select(Project).where(Project.id == project_id, Project.tenant_id == tenant_id)
     ).scalar_one_or_none()
     if p is None:
         raise HTTPException(
@@ -370,9 +389,7 @@ def update_project(
 ) -> ProjectOut:
     tenant_id = _require_tenant(payload)
     p = db.execute(
-        select(Project).where(
-            Project.id == project_id, Project.tenant_id == tenant_id
-        )
+        select(Project).where(Project.id == project_id, Project.tenant_id == tenant_id)
     ).scalar_one_or_none()
     if p is None:
         raise HTTPException(
@@ -396,6 +413,7 @@ def update_project(
 
     # v1.5.6 — coordinator + legal 绑定 reconcile（任意项目）
     from sqlalchemy import update as sa_update
+
     from app.models.project_member import ProjectMember
 
     def _reconcile_member(new_uid: int | None, role_in_project: str, expected_role: str) -> None:
@@ -435,11 +453,13 @@ def update_project(
             )
         ).scalar_one_or_none()
         if existing is None:
-            db.add(ProjectMember(
-                project_id=p.id,
-                user_id=new_uid,
-                role_in_project=role_in_project,
-            ))
+            db.add(
+                ProjectMember(
+                    project_id=p.id,
+                    user_id=new_uid,
+                    role_in_project=role_in_project,
+                )
+            )
         elif not existing.is_active:
             existing.is_active = True
 
@@ -468,9 +488,9 @@ def update_project(
             actor_user_id=int(payload.get("user_id") or 0) or None,
             actor_role=payload.get("role"),
             tenant_id=tenant_id,
-            action="project.extended" if (
-                p.plan_end and old_plan_end and p.plan_end > old_plan_end
-            ) else "project.plan_end_changed",
+            action="project.extended"
+            if (p.plan_end and old_plan_end and p.plan_end > old_plan_end)
+            else "project.plan_end_changed",
             target_type="project",
             target_id=p.id,
             payload={

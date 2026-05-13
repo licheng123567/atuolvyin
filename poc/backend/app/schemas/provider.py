@@ -1,4 +1,5 @@
 """Sprint 11 — Service Provider schemas (platform_ops)."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -11,7 +12,9 @@ class ProviderCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     provider_type: Literal["legal", "collection", "both"]
     admin_phone: str = Field(..., pattern=r"^1[3-9]\d{9}$")
-    contact_email: str | None = Field(None, max_length=200, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$|^$")
+    contact_email: str | None = Field(
+        None, max_length=200, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$|^$"
+    )
     description: str | None = Field(None, max_length=2000)
     monthly_minute_quota: int | None = Field(None, ge=0, le=1000000)
 
@@ -23,7 +26,9 @@ class ProviderPatch(BaseModel):
 
     name: str | None = Field(None, min_length=1, max_length=100)
     description: str | None = Field(None, max_length=2000)
-    contact_email: str | None = Field(None, max_length=200, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$|^$")
+    contact_email: str | None = Field(
+        None, max_length=200, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$|^$"
+    )
     monthly_minute_quota: int | None = Field(None, ge=0, le=1000000)
 
     model_config = ConfigDict(str_strip_whitespace=True)

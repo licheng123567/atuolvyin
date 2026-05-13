@@ -115,15 +115,17 @@ def process_call(self, call_id: int) -> None:
                 summary = " · ".join(
                     p for p in [fields.get("intent"), fields.get("excuse_category")] if p
                 )
-                db.add(AnalysisResult(
-                    call_id=call_id,
-                    summary=summary,
-                    key_segments=fields,
-                    followup_suggestion=fields.get("promise_date"),
-                    prompt_version="v1",
-                    llm_model=llm_result.get("model"),
-                    needs_review=bool(llm_result.get("needs_review", False)),
-                ))
+                db.add(
+                    AnalysisResult(
+                        call_id=call_id,
+                        summary=summary,
+                        key_segments=fields,
+                        followup_suggestion=fields.get("promise_date"),
+                        prompt_version="v1",
+                        llm_model=llm_result.get("model"),
+                        needs_review=bool(llm_result.get("needs_review", False)),
+                    )
+                )
                 call.result_tag = fields.get("intent")
                 db.flush()
 

@@ -1,4 +1,5 @@
 """v1.4 S17.4 — Login / password-reset OTP storage."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -18,16 +19,10 @@ class LoginOtp(Base):
     purpose: Mapped[str] = mapped_column(
         sa.String(16), nullable=False, default="login"
     )  # login / password_reset
-    expires_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True), nullable=False
-    )
-    consumed_at: Mapped[datetime | None] = mapped_column(
-        sa.DateTime(timezone=True)
-    )
+    expires_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
     )
 
-    __table_args__ = (
-        sa.Index("idx_login_otp_phone", "phone_enc", "purpose"),
-    )
+    __table_args__ = (sa.Index("idx_login_otp_phone", "phone_enc", "purpose"),)

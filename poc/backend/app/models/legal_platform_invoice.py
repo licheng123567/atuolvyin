@@ -6,6 +6,7 @@
 
 invoice_lines 字段冗余存订单 id 列表，便于审计追溯。
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -45,7 +46,9 @@ class LegalPlatformInvoice(Base, TimestampMixin):
             name="ck_legal_invoice_status",
         ),
         sa.UniqueConstraint(
-            "law_firm_id", "period_start", "period_end",
+            "law_firm_id",
+            "period_start",
+            "period_end",
             name="uq_legal_invoice_firm_period",
         ),
         sa.Index("ix_legal_invoice_firm_status", "law_firm_id", "status"),

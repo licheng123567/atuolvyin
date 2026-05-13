@@ -2,6 +2,7 @@
 
 GET /api/v1/super/audit-logs   — paginated list with filters
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -50,9 +51,7 @@ async def list_audit_logs(
     if until:
         stmt = stmt.where(AuditLog.created_at <= until)
 
-    total: int = db.execute(
-        select(func.count()).select_from(stmt.subquery())
-    ).scalar_one()
+    total: int = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
 
     rows = (
         db.execute(

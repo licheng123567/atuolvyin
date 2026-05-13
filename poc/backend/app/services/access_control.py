@@ -7,12 +7,12 @@ D3 — 解约后数据可见性：
 
 业主姓名/手机号在合同 terminated 那一刻起对服务商不可见（脱敏）。
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
 from app.models.tenant import ProviderTenantContract
-
 
 READ_ONLY_DAYS = 30
 PURGE_AFTER_DAYS = 60
@@ -45,7 +45,5 @@ def days_until_readonly_expires(contract: ProviderTenantContract) -> int | None:
     """合同 terminated 后还剩多少天只读。None = 不在只读期。"""
     if contract.status != "terminated" or not contract.terminated_at:
         return None
-    delta = (
-        contract.terminated_at + timedelta(days=READ_ONLY_DAYS)
-    ) - datetime.now(UTC)
+    delta = (contract.terminated_at + timedelta(days=READ_ONLY_DAYS)) - datetime.now(UTC)
     return max(0, delta.days)

@@ -26,10 +26,11 @@ def workorder_auth_headers(db_session, seeded_user, seeded_tenant):
     from app.core.security import create_access_token
     from app.models.tenant import UserTenantMembership
 
+    # v1.9.8 — 工单创建仅允许 agent_internal / admin；fixture 改用 admin 兼顾 list + create
     membership = UserTenantMembership(
         user_id=seeded_user.id,
         tenant_id=seeded_tenant.id,
-        role="workorder",
+        role="admin",
         source_type="INTERNAL",
         is_active=True,
     )
@@ -39,7 +40,7 @@ def workorder_auth_headers(db_session, seeded_user, seeded_tenant):
         "sub": str(seeded_user.id),
         "user_id": seeded_user.id,
         "tenant_id": seeded_tenant.id,
-        "role": "workorder",
+        "role": "admin",
         "scope": f"tenant:{seeded_tenant.id}",
     })
     return {"Authorization": f"Bearer {token}"}

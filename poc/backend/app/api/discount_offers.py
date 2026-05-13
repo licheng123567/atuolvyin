@@ -8,6 +8,7 @@ POST   /api/v1/discount-offers/{id}/reject         拒绝（reason 必填）
 POST   /api/v1/discount-offers/{id}/escalate       supervisor → admin
 POST   /api/v1/discount-offers/{id}/mark-executed  业主已按方案缴清（标记完成）
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -22,7 +23,11 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
-from app.models.case import CollectionCase, OwnerProfile, Project  # noqa: F401  Project 用于 _get_policy
+from app.models.case import (  # noqa: F401  Project 用于 _get_policy
+    CollectionCase,
+    OwnerProfile,
+    Project,
+)
 from app.models.discount_offer import DiscountOffer
 from app.models.settings import TenantSettings
 from app.models.user import UserAccount
@@ -44,7 +49,14 @@ _OFFER_TYPE_LABELS = {
     "long_overdue_compromise": "长账龄一次结清",
 }
 
-ALL_ROLES = ("agent_internal", "agent_external", "supervisor", "admin", "platform_super", "platform_superadmin")
+ALL_ROLES = (
+    "agent_internal",
+    "agent_external",
+    "supervisor",
+    "admin",
+    "platform_super",
+    "platform_superadmin",
+)
 
 
 def _now_str() -> str:
@@ -136,18 +148,24 @@ def get_effective_discount_policy(
             detail={"code": "ERR_NOT_FOUND", "message": "案件不存在或不属于本租户"},
         )
     # v1.6.2 — 同时返回两类策略：本金打折 + 滞纳金减免
-    pd_auto, pd_sup, pd_disabled = _get_policy(db, int(tenant_id), case.project_id, "principal_discount")
-    lf_auto, lf_sup, lf_disabled = _get_policy(db, int(tenant_id), case.project_id, "late_fee_waive")
+    pd_auto, pd_sup, pd_disabled = _get_policy(
+        db, int(tenant_id), case.project_id, "principal_discount"
+    )
+    lf_auto, lf_sup, lf_disabled = _get_policy(
+        db, int(tenant_id), case.project_id, "late_fee_waive"
+    )
     project = db.get(Project, case.project_id) if case.project_id else None
     pd_overridden = bool(
-        project and (
+        project
+        and (
             project.discount_auto_approve_threshold_pct is not None
             or project.discount_supervisor_max_pct is not None
             or project.discount_disabled is not None
         )
     )
     lf_overridden = bool(
-        project and (
+        project
+        and (
             getattr(project, "late_fee_waive_auto_approve_threshold_pct", None) is not None
             or getattr(project, "late_fee_waive_supervisor_max_pct", None) is not None
             or getattr(project, "late_fee_waive_disabled", None) is not None
@@ -222,15 +240,14 @@ def create_offer(
         )
 
     # 分期默认不打折
-    if body.offer_type == "installment":
-        proposed = body.original_amount
-    else:
-        proposed = body.proposed_amount
+    proposed = body.original_amount if body.offer_type == "installment" else body.proposed_amount
 
     discount_pct = 0
     if body.original_amount > 0:
         discount_pct = int(
-            ((body.original_amount - proposed) / body.original_amount * Decimal(100)).quantize(Decimal("1"))
+            ((body.original_amount - proposed) / body.original_amount * Decimal(100)).quantize(
+                Decimal("1")
+            )
         )
     discount_pct = max(0, min(100, discount_pct))
 
@@ -324,7 +341,11 @@ def list_offers(
             status_code=http_status.HTTP_403_FORBIDDEN,
             detail={"code": "ERR_NO_TENANT", "message": "需要租户上下文"},
         )
-    stmt = select(DiscountOffer).where(DiscountOffer.tenant_id == int(tenant_id)).order_by(desc(DiscountOffer.id))
+    stmt = (
+        select(DiscountOffer)
+        .where(DiscountOffer.tenant_id == int(tenant_id))
+        .order_by(desc(DiscountOffer.id))
+    )
     if status:
         stmt = stmt.where(DiscountOffer.status == status)
     if my_pending:
@@ -413,8 +434,13 @@ def approve_offer(
     note = body.note or ""
     _append_audit(offer, actor_name, f"批准{('（' + note + '）') if note else ''}")
     log_audit(
-        db, actor_user_id=user_id, actor_role=role, tenant_id=int(tenant_id),
-        action="discount_offer.approve", target_type="discount_offer", target_id=offer.id,
+        db,
+        actor_user_id=user_id,
+        actor_role=role,
+        tenant_id=int(tenant_id),
+        action="discount_offer.approve",
+        target_type="discount_offer",
+        target_id=offer.id,
         payload={"note": note},
     )
     db.commit()
@@ -443,17 +469,26 @@ def reject_offer(
             detail={"code": "ERR_INVALID_STATE", "message": f"当前状态 {offer.status} 不可拒绝"},
         )
     if offer.status == "pending_supervisor" and role != "supervisor":
-        raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail={"code": "ERR_NOT_SUPERVISOR"})
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN, detail={"code": "ERR_NOT_SUPERVISOR"}
+        )
     if offer.status == "pending_admin" and role != "admin":
-        raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail={"code": "ERR_NOT_ADMIN"})
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN, detail={"code": "ERR_NOT_ADMIN"}
+        )
 
     offer.status = "rejected"
     offer.rejected_reason = body.reason
     offer.approved_at = datetime.now(UTC)
     _append_audit(offer, actor_name, f"拒绝 — {body.reason}")
     log_audit(
-        db, actor_user_id=user_id, actor_role=role, tenant_id=int(tenant_id),
-        action="discount_offer.reject", target_type="discount_offer", target_id=offer.id,
+        db,
+        actor_user_id=user_id,
+        actor_role=role,
+        tenant_id=int(tenant_id),
+        action="discount_offer.reject",
+        target_type="discount_offer",
+        target_id=offer.id,
         payload={"reason": body.reason},
     )
     db.commit()
@@ -477,7 +512,10 @@ def escalate_offer(
 
     offer = _load_offer_or_404(db, offer_id, int(tenant_id))
     if role != "supervisor":
-        raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail={"code": "ERR_NOT_SUPERVISOR", "message": "仅督导可转交 admin"})
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_NOT_SUPERVISOR", "message": "仅督导可转交 admin"},
+        )
     if offer.status != "pending_supervisor":
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,
@@ -488,8 +526,13 @@ def escalate_offer(
     note = body.note or ""
     _append_audit(offer, actor_name, f"转交 admin 审批{('（' + note + '）') if note else ''}")
     log_audit(
-        db, actor_user_id=user_id, actor_role=role, tenant_id=int(tenant_id),
-        action="discount_offer.escalate", target_type="discount_offer", target_id=offer.id,
+        db,
+        actor_user_id=user_id,
+        actor_role=role,
+        tenant_id=int(tenant_id),
+        action="discount_offer.escalate",
+        target_type="discount_offer",
+        target_id=offer.id,
         payload={"note": note},
     )
     db.commit()
@@ -514,13 +557,21 @@ def mark_executed(
     if offer.status != "approved":
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,
-            detail={"code": "ERR_INVALID_STATE", "message": f"仅 approved 状态可标记已执行（当前 {offer.status}）"},
+            detail={
+                "code": "ERR_INVALID_STATE",
+                "message": f"仅 approved 状态可标记已执行（当前 {offer.status}）",
+            },
         )
     offer.status = "executed"
     _append_audit(offer, actor_name, "业主已按方案缴清 — offer 完成")
     log_audit(
-        db, actor_user_id=user_id, actor_role=role, tenant_id=int(tenant_id),
-        action="discount_offer.execute", target_type="discount_offer", target_id=offer.id,
+        db,
+        actor_user_id=user_id,
+        actor_role=role,
+        tenant_id=int(tenant_id),
+        action="discount_offer.execute",
+        target_type="discount_offer",
+        target_id=offer.id,
         payload={},
     )
     db.commit()

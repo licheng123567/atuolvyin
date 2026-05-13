@@ -5,6 +5,7 @@
 
 LegalDocumentRender 是某次生成产物（每个订单可重生成多次，按 version 递增）。
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -38,7 +39,9 @@ class LegalDocumentTemplate(Base, TimestampMixin):
             name="ck_legal_doc_tpl_pkg_type",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "package_type", "slug",
+            "tenant_id",
+            "package_type",
+            "slug",
             name="uq_legal_doc_tpl_tenant_pkg_slug",
         ),
     )
@@ -69,6 +72,4 @@ class LegalDocumentRender(Base, TimestampMixin):
     )
     version: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=1)
 
-    __table_args__ = (
-        sa.Index("ix_legal_doc_render_order_version", "order_id", "version"),
-    )
+    __table_args__ = (sa.Index("ix_legal_doc_render_order_version", "order_id", "version"),)

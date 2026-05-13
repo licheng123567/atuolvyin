@@ -5,9 +5,10 @@ D4 — 话术三层归属与权限：
   GET 列表合并展示平台预置（tenant_id NULL & provider_id NULL）；
   **不可读物业私有话术（属其他租户的数字资产）**。
 """
+
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi import status as http_status
@@ -16,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
-from app.models.script import ScriptTemplate, ScriptTemplateVersion
+from app.models.script import ScriptTemplate
 from app.models.tenant import UserTenantMembership
 from app.schemas.common import PaginatedResponse
 from app.schemas.script import (
@@ -34,12 +35,16 @@ VALID_INTENTS = frozenset({"房屋质量", "经济困难", "服务不满", "联�
 
 
 def _provider_id_for(db: Session, user_id: int) -> int:
-    m = db.execute(
-        select(UserTenantMembership).where(
-            UserTenantMembership.user_id == user_id,
-            UserTenantMembership.role == "provider_admin",
+    m = (
+        db.execute(
+            select(UserTenantMembership).where(
+                UserTenantMembership.user_id == user_id,
+                UserTenantMembership.role == "provider_admin",
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if m is None or m.provider_id is None:
         raise HTTPException(
             status_code=http_status.HTTP_403_FORBIDDEN,
@@ -82,8 +87,8 @@ def list_provider_scripts(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
-    q: Optional[str] = Query(None),
-    intent: Optional[str] = Query(None),
+    q: str | None = Query(None),
+    intent: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[ScriptTemplateOut]:
@@ -106,14 +111,16 @@ def list_provider_scripts(
     if intent:
         stmt = stmt.where(ScriptTemplate.trigger_intent == intent)
 
-    total = len(
-        db.execute(stmt.with_only_columns(ScriptTemplate.id)).scalars().all()
+    total = len(db.execute(stmt.with_only_columns(ScriptTemplate.id)).scalars().all())
+    items = (
+        db.execute(
+            stmt.order_by(ScriptTemplate.updated_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        .scalars()
+        .all()
     )
-    items = db.execute(
-        stmt.order_by(ScriptTemplate.updated_at.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    ).scalars().all()
     return PaginatedResponse(
         items=[_to_out(s) for s in items],
         total=total,

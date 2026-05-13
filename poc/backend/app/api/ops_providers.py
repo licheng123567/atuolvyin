@@ -7,6 +7,7 @@ PATCH  /api/v1/ops/providers/{id}/audit      approve / reject (pending only)
 PATCH  /api/v1/ops/providers/{id}            partial update
 PATCH  /api/v1/ops/providers/{id}/active     toggle is_active
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -99,37 +100,27 @@ async def list_providers(
     if audit_status:
         stmt = stmt.where(ServiceProvider.audit_status == audit_status)
 
-    total: int = db.execute(
-        select(func.count()).select_from(stmt.subquery())
-    ).scalar_one()
+    total: int = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
 
     rows = (
         db.execute(
-            stmt.order_by(ServiceProvider.id.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+            stmt.order_by(ServiceProvider.id.desc()).offset((page - 1) * page_size).limit(page_size)
         )
         .scalars()
         .all()
     )
 
     # 推荐人 tenant_name 一次性查（v1.4 — D1 溯源）
-    recommender_ids = [
-        p.recommended_by_tenant_id for p in rows if p.recommended_by_tenant_id
-    ]
+    recommender_ids = [p.recommended_by_tenant_id for p in rows if p.recommended_by_tenant_id]
     tenant_name_by_id: dict[int, str] = {}
     if recommender_ids:
         tenant_name_by_id = dict(
-            db.execute(
-                select(Tenant.id, Tenant.name).where(Tenant.id.in_(recommender_ids))
-            ).all()
+            db.execute(select(Tenant.id, Tenant.name).where(Tenant.id.in_(recommender_ids))).all()
         )
 
     return PaginatedResponse(
         items=[
-            _provider_to_out(
-                p, tenant_name_by_id.get(p.recommended_by_tenant_id or 0)
-            )
+            _provider_to_out(p, tenant_name_by_id.get(p.recommended_by_tenant_id or 0))
             for p in rows
         ],
         total=total,

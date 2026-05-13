@@ -3,6 +3,7 @@
 build_case_summary：从 CRM 案件聚合催收时间线 + 推荐处理方式 + 预估法律成本。
 撮合律所留 stub（暂不接律所池），订单创建后由平台运营手动 dispatch。
 """
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -14,7 +15,6 @@ from sqlalchemy.orm import Session
 from app.models.call import CallRecord
 from app.models.case import CollectionCase
 from app.models.legal_conversion import LegalServicePackage
-
 
 # ── recommendation 决策 ─────────────────────────────────────────
 
@@ -71,9 +71,7 @@ def recommend_package(
 # ── 历史时间线摘要 ──────────────────────────────────────────────
 
 
-def build_timeline_summary(
-    db: Session, *, case: CollectionCase
-) -> dict[str, Any]:
+def build_timeline_summary(db: Session, *, case: CollectionCase) -> dict[str, Any]:
     """聚合该案件的通话历史，生成法务可读摘要（不含明细 PII）。"""
     rows = db.execute(
         select(

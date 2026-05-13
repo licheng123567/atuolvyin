@@ -8,6 +8,7 @@
 
 非 local 后端（MinIO/OSS）由各自服务直接提供 URL，本路由仅 local 模式生效。
 """
+
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -27,11 +28,14 @@ def listen(call_id: int, db: Session = Depends(get_db)):
     """业务接口：根据 call_log_id 拿到一个对外可访问的录音 URL。
     Web 后台和 App 都用这个接口，<audio src="..."> 即可在线播放。
     """
-    row = db.execute(text("""
+    row = db.execute(
+        text("""
         SELECT object_key, public_url FROM recording_file
         WHERE call_log_id = :c
         ORDER BY id DESC LIMIT 1
-    """), {"c": call_id}).fetchone()
+    """),
+        {"c": call_id},
+    ).fetchone()
     if not row:
         raise HTTPException(404, "recording not found")
     object_key, stored_url = row[0], row[1]

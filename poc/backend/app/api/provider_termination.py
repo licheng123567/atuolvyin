@@ -12,6 +12,7 @@
       POST /api/v1/provider/contracts/{contract_id}/terminate-request
       POST /api/v1/provider/contracts/{contract_id}/terminate-confirm
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -71,14 +72,18 @@ def _to_status_out(c: ProviderTenantContract) -> TerminationStatusOut:
 def _load_active_contract_admin(
     db: Session, tenant_id: int, provider_id: int
 ) -> ProviderTenantContract:
-    c = db.execute(
-        select(ProviderTenantContract)
-        .where(
-            ProviderTenantContract.tenant_id == tenant_id,
-            ProviderTenantContract.provider_id == provider_id,
+    c = (
+        db.execute(
+            select(ProviderTenantContract)
+            .where(
+                ProviderTenantContract.tenant_id == tenant_id,
+                ProviderTenantContract.provider_id == provider_id,
+            )
+            .order_by(ProviderTenantContract.signed_at.desc())
         )
-        .order_by(ProviderTenantContract.signed_at.desc())
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if c is None:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
@@ -90,12 +95,16 @@ def _load_active_contract_admin(
 def _load_contract_provider_side(
     db: Session, user_id: int, contract_id: int
 ) -> ProviderTenantContract:
-    m = db.execute(
-        select(UserTenantMembership).where(
-            UserTenantMembership.user_id == user_id,
-            UserTenantMembership.role == "provider_admin",
+    m = (
+        db.execute(
+            select(UserTenantMembership).where(
+                UserTenantMembership.user_id == user_id,
+                UserTenantMembership.role == "provider_admin",
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if m is None or m.provider_id is None:
         raise HTTPException(
             status_code=http_status.HTTP_403_FORBIDDEN,
@@ -207,9 +216,7 @@ def _do_terminate_confirm(
     contract.termination_confirmed_at = now
     contract.terminated_at = now
     contract.status = "terminated"
-    _audit(
-        db, payload, tenant_id, contract, "provider.contract.terminated"
-    )
+    _audit(db, payload, tenant_id, contract, "provider.contract.terminated")
     db.commit()
     db.refresh(contract)
     return contract
@@ -241,9 +248,7 @@ async def admin_request_terminate(
 ) -> TerminationStatusOut:
     tenant_id = _admin_tenant(payload)
     c = _load_active_contract_admin(db, tenant_id, provider_id)
-    c = _do_terminate_request(
-        db, c, REQUEST_PARTY_PROPERTY, body, payload, tenant_id
-    )
+    c = _do_terminate_request(db, c, REQUEST_PARTY_PROPERTY, body, payload, tenant_id)
     return _to_status_out(c)
 
 
@@ -259,9 +264,7 @@ async def admin_confirm_terminate(
 ) -> TerminationStatusOut:
     tenant_id = _admin_tenant(payload)
     c = _load_active_contract_admin(db, tenant_id, provider_id)
-    c = _do_terminate_confirm(
-        db, c, REQUEST_PARTY_PROPERTY, payload, tenant_id
-    )
+    c = _do_terminate_confirm(db, c, REQUEST_PARTY_PROPERTY, payload, tenant_id)
     return _to_status_out(c)
 
 
@@ -296,9 +299,7 @@ async def provider_request_terminate(
 ) -> TerminationStatusOut:
     user_id = int(payload.get("user_id") or 0)
     c = _load_contract_provider_side(db, user_id, contract_id)
-    c = _do_terminate_request(
-        db, c, REQUEST_PARTY_PROVIDER, body, payload, c.tenant_id
-    )
+    c = _do_terminate_request(db, c, REQUEST_PARTY_PROVIDER, body, payload, c.tenant_id)
     return _to_status_out(c)
 
 
@@ -314,9 +315,7 @@ async def provider_confirm_terminate(
 ) -> TerminationStatusOut:
     user_id = int(payload.get("user_id") or 0)
     c = _load_contract_provider_side(db, user_id, contract_id)
-    c = _do_terminate_confirm(
-        db, c, REQUEST_PARTY_PROVIDER, payload, c.tenant_id
-    )
+    c = _do_terminate_confirm(db, c, REQUEST_PARTY_PROVIDER, payload, c.tenant_id)
     return _to_status_out(c)
 
 
@@ -347,22 +346,30 @@ async def provider_list_contracts(
     db: Annotated[Session, Depends(get_db)],
 ) -> list[TerminationStatusOut]:
     user_id = int(payload.get("user_id") or 0)
-    m = db.execute(
-        select(UserTenantMembership).where(
-            UserTenantMembership.user_id == user_id,
-            UserTenantMembership.role == "provider_admin",
+    m = (
+        db.execute(
+            select(UserTenantMembership).where(
+                UserTenantMembership.user_id == user_id,
+                UserTenantMembership.role == "provider_admin",
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if m is None or m.provider_id is None:
         raise HTTPException(
             status_code=http_status.HTTP_403_FORBIDDEN,
             detail={"code": "ERR_NO_PROVIDER", "message": "当前账号未绑定服务商"},
         )
-    rows = db.execute(
-        select(ProviderTenantContract).where(
-            ProviderTenantContract.provider_id == int(m.provider_id)
+    rows = (
+        db.execute(
+            select(ProviderTenantContract).where(
+                ProviderTenantContract.provider_id == int(m.provider_id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [_to_status_out(c) for c in rows]
 
 

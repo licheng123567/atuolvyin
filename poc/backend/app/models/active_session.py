@@ -5,6 +5,7 @@
 
 PC + App 互相独立计算（device_type 不同 → 各占一行，两端可同时在线）。
 """
+
 from __future__ import annotations
 
 from datetime import datetime

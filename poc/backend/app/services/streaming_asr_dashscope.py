@@ -1,5 +1,6 @@
 # poc/backend/app/services/streaming_asr_dashscope.py
 """DashScope paraformer-realtime-v2 streaming ASR — manually smoke-tested only."""
+
 from __future__ import annotations
 
 import asyncio
@@ -41,14 +42,10 @@ class DashScopeStreamingASRSession:
                         utterance_end=bool(sentence.get("end_time")),
                     )
                     manager._seq += 1
-                    asyncio.run_coroutine_threadsafe(
-                        manager._on_transcript(chunk), manager._loop
-                    )
+                    asyncio.run_coroutine_threadsafe(manager._on_transcript(chunk), manager._loop)
                 except Exception as exc:
                     logger.exception("dashscope callback error")
-                    asyncio.run_coroutine_threadsafe(
-                        manager._on_error(exc), manager._loop
-                    )
+                    asyncio.run_coroutine_threadsafe(manager._on_error(exc), manager._loop)
 
         rec = Recognition(
             model="paraformer-realtime-v2",
@@ -61,9 +58,7 @@ class DashScopeStreamingASRSession:
         return rec
 
     async def feed_audio(self, pcm_bytes: bytes) -> None:
-        await self._loop.run_in_executor(
-            None, self._recognition.send_audio_frame, pcm_bytes
-        )
+        await self._loop.run_in_executor(None, self._recognition.send_audio_frame, pcm_bytes)
 
     async def close(self) -> None:
         await self._loop.run_in_executor(None, self._recognition.stop)

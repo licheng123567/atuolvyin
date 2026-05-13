@@ -14,12 +14,12 @@ class Settings(BaseSettings):
     autoluyin_aes_key: str = ""
 
     # ==== 录音存储后端：local / minio / oss ====
-    storage_backend: str = "local"   # "local" | "minio" | "oss"
+    storage_backend: str = "local"  # "local" | "minio" | "oss"
 
     # 本地文件存储
-    local_storage_root: str = "/data/recordings"           # 容器内挂载点
+    local_storage_root: str = "/data/recordings"  # 容器内挂载点
     local_storage_public_base: str = "http://localhost:8000"  # ASR 拉录音的对外可达地址
-    recording_sign_secret: str = "change-me-in-prod"       # HMAC 签名密钥
+    recording_sign_secret: str = "change-me-in-prod"  # HMAC 签名密钥
 
     # MinIO（自托管 S3 兼容）
     minio_endpoint: str = "minio:9000"
@@ -32,14 +32,14 @@ class Settings(BaseSettings):
     # 阿里云 OSS
     oss_access_key_id: str = ""
     oss_access_key_secret: str = ""
-    oss_endpoint: str = "oss-cn-hangzhou.aliyuncs.com"   # 与 DashScope 同区可走内网
+    oss_endpoint: str = "oss-cn-hangzhou.aliyuncs.com"  # 与 DashScope 同区可走内网
     oss_bucket: str = ""
-    oss_use_signed_url: bool = True       # True=ACL私有 + 签名URL（推荐）；False=公共读
+    oss_use_signed_url: bool = True  # True=ACL私有 + 签名URL（推荐）；False=公共读
     oss_signed_url_expires_sec: int = 3600
 
     # ==== ASR / LLM 后端选择 ====
-    asr_backend: str = "mock"        # "mock" | "dashscope"
-    llm_backend: str = "mock"        # "mock" | "api"（OpenAI 兼容协议，含 DeepSeek/Ollama/Qwen）
+    asr_backend: str = "mock"  # "mock" | "dashscope"
+    llm_backend: str = "mock"  # "mock" | "api"（OpenAI 兼容协议，含 DeepSeek/Ollama/Qwen）
 
     # ASR：阿里云 DashScope
     dashscope_api_key: str = ""
@@ -78,11 +78,11 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = True
 
     # Sprint 5a — risk detection
-    risk_analyzer_backend: str = "mock"         # "mock" | "api"
-    risk_llm_confidence_min: float = 0.70       # discard LLM verdict below this
-    risk_llm_block_confidence: float = 0.85     # threshold for keyword+llm blocking modal
-    risk_llm_free_throttle_sec: int = 10        # min seconds between free-form LLM scans
-    risk_dedup_window_sec: int = 60             # seconds to suppress same category re-emit
+    risk_analyzer_backend: str = "mock"  # "mock" | "api"
+    risk_llm_confidence_min: float = 0.70  # discard LLM verdict below this
+    risk_llm_block_confidence: float = 0.85  # threshold for keyword+llm blocking modal
+    risk_llm_free_throttle_sec: int = 10  # min seconds between free-form LLM scans
+    risk_dedup_window_sec: int = 60  # seconds to suppress same category re-emit
 
 
 settings = Settings()

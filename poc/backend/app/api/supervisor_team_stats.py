@@ -7,9 +7,10 @@ GET /api/v1/supervisor/team-stats?period_days={7|30|90}
 - 回款转化漏斗（拨打 → 接通 → 承诺 → 缴清）
 - 团队成员排名（通话数 / 接通率 / 承诺数 / 缴清金额）
 """
+
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -21,7 +22,6 @@ from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
 from app.models.call import CallRecord
 from app.models.case import CollectionCase
-from app.models.tenant import UserTenantMembership
 from app.models.user import UserAccount
 
 router = APIRouter()
@@ -44,7 +44,7 @@ async def get_team_stats(
         )
     tenant_id = int(tenant_id)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     period_end = now
     period_start = now - timedelta(days=period_days)
 
@@ -54,9 +54,7 @@ async def get_team_stats(
         select(
             day_expr.label("day"),
             func.count(CallRecord.id).label("outbound"),
-            func.sum(
-                case((CallRecord.status == "completed", 1), else_=0)
-            ).label("connected"),
+            func.sum(case((CallRecord.status == "completed", 1), else_=0)).label("connected"),
         )
         .where(
             CallRecord.tenant_id == tenant_id,
@@ -76,36 +74,48 @@ async def get_team_stats(
     ]
 
     # ── 2. 回款转化漏斗 ─────────────────────────────────────
-    outbound_total = db.execute(
-        select(func.count(CallRecord.id)).where(
-            CallRecord.tenant_id == tenant_id,
-            CallRecord.started_at >= period_start,
-            CallRecord.started_at <= period_end,
-        )
-    ).scalar_one() or 0
-    connected_total = db.execute(
-        select(func.count(CallRecord.id)).where(
-            CallRecord.tenant_id == tenant_id,
-            CallRecord.started_at >= period_start,
-            CallRecord.started_at <= period_end,
-            CallRecord.status == "completed",
-        )
-    ).scalar_one() or 0
-    promised_total = db.execute(
-        select(func.count(CallRecord.id)).where(
-            CallRecord.tenant_id == tenant_id,
-            CallRecord.started_at >= period_start,
-            CallRecord.started_at <= period_end,
-            CallRecord.result_tag.in_(("承诺缴", "立即缴")),
-        )
-    ).scalar_one() or 0
-    paid_total = db.execute(
-        select(func.count(CollectionCase.id)).where(
-            CollectionCase.tenant_id == tenant_id,
-            CollectionCase.stage == "paid",
-            CollectionCase.updated_at >= period_start,
-        )
-    ).scalar_one() or 0
+    outbound_total = (
+        db.execute(
+            select(func.count(CallRecord.id)).where(
+                CallRecord.tenant_id == tenant_id,
+                CallRecord.started_at >= period_start,
+                CallRecord.started_at <= period_end,
+            )
+        ).scalar_one()
+        or 0
+    )
+    connected_total = (
+        db.execute(
+            select(func.count(CallRecord.id)).where(
+                CallRecord.tenant_id == tenant_id,
+                CallRecord.started_at >= period_start,
+                CallRecord.started_at <= period_end,
+                CallRecord.status == "completed",
+            )
+        ).scalar_one()
+        or 0
+    )
+    promised_total = (
+        db.execute(
+            select(func.count(CallRecord.id)).where(
+                CallRecord.tenant_id == tenant_id,
+                CallRecord.started_at >= period_start,
+                CallRecord.started_at <= period_end,
+                CallRecord.result_tag.in_(("承诺缴", "立即缴")),
+            )
+        ).scalar_one()
+        or 0
+    )
+    paid_total = (
+        db.execute(
+            select(func.count(CollectionCase.id)).where(
+                CollectionCase.tenant_id == tenant_id,
+                CollectionCase.stage == "paid",
+                CollectionCase.updated_at >= period_start,
+            )
+        ).scalar_one()
+        or 0
+    )
 
     funnel = {
         "outbound": int(outbound_total),
@@ -156,9 +166,7 @@ async def get_team_stats(
     name_by_id: dict[int, str] = {}
     if user_ids:
         for u in db.execute(
-            select(UserAccount.id, UserAccount.name).where(
-                UserAccount.id.in_(user_ids)
-            )
+            select(UserAccount.id, UserAccount.name).where(UserAccount.id.in_(user_ids))
         ).all():
             name_by_id[u.id] = u.name
 

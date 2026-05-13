@@ -5,6 +5,7 @@
 - InternalLegalLetterTemplate：物业 admin 自管的律师函/催告函模板
 - PartnerLawFirm：物业 admin 自管的合作律所列表（不耦合现有 LawFirm，那个是平台级撮合用）
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -127,6 +128,4 @@ class PartnerLawFirm(Base, TimestampMixin):
     notes: Mapped[str | None] = mapped_column(sa.Text)
     is_active: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=True)
 
-    __table_args__ = (
-        sa.UniqueConstraint("tenant_id", "name", name="uq_partner_law_firm_name"),
-    )
+    __table_args__ = (sa.UniqueConstraint("tenant_id", "name", name="uq_partner_law_firm_name"),)

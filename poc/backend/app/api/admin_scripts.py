@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import io
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from fastapi import status as http_status
@@ -13,12 +13,17 @@ from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
 from app.models.call import CallRecord, SuggestionFeedback
 from app.models.script import ScriptTemplate, ScriptTemplateVersion
-from app.schemas.script import (
-    ImportResultOut, RollbackIn, ScriptEffectivenessItem,
-    ScriptEffectivenessOut, ScriptTemplateCreate,
-    ScriptTemplateOut, ScriptTemplateUpdate, ScriptVersionOut,
-)
 from app.schemas.common import PaginatedResponse
+from app.schemas.script import (
+    ImportResultOut,
+    RollbackIn,
+    ScriptEffectivenessItem,
+    ScriptEffectivenessOut,
+    ScriptTemplateCreate,
+    ScriptTemplateOut,
+    ScriptTemplateUpdate,
+    ScriptVersionOut,
+)
 
 router = APIRouter()
 
@@ -63,6 +68,7 @@ def _enrich_with_project(db: Session, script: ScriptTemplate) -> ScriptTemplateO
     project_name: str | None = None
     if script.project_id:
         from app.models.case import Project
+
         project_name = db.execute(
             select(Project.name).where(Project.id == script.project_id)
         ).scalar_one_or_none()
@@ -95,15 +101,14 @@ def _get_script_or_404(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail={"code": "ERR_NOT_FOUND", "message": "话术不存在"},
         )
-    if for_write and role != "platform_superadmin":
-        if script.tenant_id is None:
-            raise HTTPException(
-                status_code=http_status.HTTP_403_FORBIDDEN,
-                detail={
-                    "code": "ERR_PLATFORM_READONLY",
-                    "message": "平台预置话术不可直接修改，请先 Fork 为本物业版",
-                },
-            )
+    if for_write and role != "platform_superadmin" and script.tenant_id is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "ERR_PLATFORM_READONLY",
+                "message": "平台预置话术不可直接修改，请先 Fork 为本物业版",
+            },
+        )
     return script
 
 
@@ -112,10 +117,10 @@ def list_scripts(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
-    q: Optional[str] = Query(None),
-    intent: Optional[str] = Query(None),
-    status: Optional[str] = Query(None),
-    project_id: Optional[int] = Query(None),
+    q: str | None = Query(None),
+    intent: str | None = Query(None),
+    status: str | None = Query(None),
+    project_id: int | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[ScriptTemplateOut]:
@@ -146,10 +151,15 @@ def list_scripts(
         )
 
     total_ids = db.execute(stmt.with_only_columns(ScriptTemplate.id)).scalars().all()
-    items = db.execute(
-        stmt.order_by(ScriptTemplate.updated_at.desc())
-        .offset((page - 1) * page_size).limit(page_size)
-    ).scalars().all()
+    items = (
+        db.execute(
+            stmt.order_by(ScriptTemplate.updated_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        .scalars()
+        .all()
+    )
     return PaginatedResponse(
         items=[_enrich_with_project(db, s) for s in items],
         total=len(total_ids),
@@ -173,10 +183,9 @@ def create_script(
     project_id_to_set: int | None = None
     if body.project_id is not None and role != "platform_superadmin":
         from app.models.case import Project
+
         ok = db.execute(
-            select(Project.id).where(
-                Project.id == body.project_id, Project.tenant_id == tenant_id
-            )
+            select(Project.id).where(Project.id == body.project_id, Project.tenant_id == tenant_id)
         ).scalar_one_or_none()
         if ok is None:
             raise HTTPException(
@@ -220,11 +229,11 @@ def import_scripts(
     contents = file.file.read()
     try:
         wb = openpyxl.load_workbook(io.BytesIO(contents))
-    except Exception:
+    except Exception as exc:
         raise HTTPException(
             status_code=http_status.HTTP_400_BAD_REQUEST,
             detail={"code": "ERR_INVALID_FILE", "message": "无法解析 Excel 文件"},
-        )
+        ) from exc
 
     ws = wb.active
     tenant_filter = (
@@ -233,9 +242,7 @@ def import_scripts(
         else ScriptTemplate.tenant_id.is_(None)
     )
     existing_titles = {
-        row[0] for row in db.execute(
-            select(ScriptTemplate.title).where(tenant_filter)
-        ).all()
+        row[0] for row in db.execute(select(ScriptTemplate.title).where(tenant_filter)).all()
     }
 
     success = skipped = failed = 0
@@ -309,6 +316,7 @@ def update_script(
     if "project_id" in body.model_fields_set:
         if body.project_id is not None and role != "platform_superadmin":
             from app.models.case import Project
+
             ok = db.execute(
                 select(Project.id).where(
                     Project.id == body.project_id, Project.tenant_id == tenant_id
@@ -388,6 +396,7 @@ def toggle_script(
     # Sprint 15.4b — script_disabled 通知（仅 active→inactive 时触发；租户级话术才发）
     if was_active and not script.is_active and script.tenant_id is not None:
         from app.services.notifications.event_subscribers import notify_script_disabled
+
         notify_script_disabled(
             db,
             tenant_id=int(script.tenant_id),
@@ -399,7 +408,9 @@ def toggle_script(
     return _to_out(script)
 
 
-@router.delete("/scripts/{script_id}", status_code=204, response_class=Response, response_model=None)
+@router.delete(
+    "/scripts/{script_id}", status_code=204, response_class=Response, response_model=None
+)
 def delete_script(
     script_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
@@ -428,11 +439,15 @@ def get_versions(
     role = payload.get("role", "")
     tenant_id = int(payload.get("tenant_id") or 0)
     _get_script_or_404(db, script_id, role, tenant_id)
-    versions = db.execute(
-        select(ScriptTemplateVersion)
-        .where(ScriptTemplateVersion.script_template_id == script_id)
-        .order_by(ScriptTemplateVersion.version.desc())
-    ).scalars().all()
+    versions = (
+        db.execute(
+            select(ScriptTemplateVersion)
+            .where(ScriptTemplateVersion.script_template_id == script_id)
+            .order_by(ScriptTemplateVersion.version.desc())
+        )
+        .scalars()
+        .all()
+    )
     return list(versions)
 
 
@@ -441,7 +456,7 @@ def script_effectiveness(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
-    intent: Optional[str] = Query(None),
+    intent: str | None = Query(None),
     period_days: int = Query(30, ge=1, le=365),
 ) -> ScriptEffectivenessOut:
     """采用率 / 督导好评率 / 综合评分（A-D 四级）— 按 trigger_intent 可筛。
@@ -477,12 +492,12 @@ def script_effectiveness(
             func.sum(case((SuggestionFeedback.action == "adopt", 1), else_=0)).label(
                 "total_adopted"
             ),
-            func.sum(
-                case((SuggestionFeedback.supervisor_label.is_not(None), 1), else_=0)
-            ).label("total_supervised"),
-            func.sum(
-                case((SuggestionFeedback.supervisor_label == "good", 1), else_=0)
-            ).label("total_good"),
+            func.sum(case((SuggestionFeedback.supervisor_label.is_not(None), 1), else_=0)).label(
+                "total_supervised"
+            ),
+            func.sum(case((SuggestionFeedback.supervisor_label == "good", 1), else_=0)).label(
+                "total_good"
+            ),
         )
         .join(CallRecord, CallRecord.id == SuggestionFeedback.call_id)
         .where(SuggestionFeedback.script_template_id.in_(template_ids))
@@ -508,7 +523,7 @@ def script_effectiveness(
         adoption_rate = adopted / shown if shown else None
         good_ratio = good / supervised if supervised else None
 
-        composite_score: Optional[float]
+        composite_score: float | None
         if adoption_rate is None and good_ratio is None:
             composite_score = None
         elif good_ratio is None:
@@ -518,7 +533,7 @@ def script_effectiveness(
         else:
             composite_score = 0.6 * adoption_rate + 0.4 * good_ratio
 
-        grade: Optional[str]
+        grade: str | None
         if composite_score is None:
             grade = None
         elif composite_score >= 0.8:
@@ -547,9 +562,7 @@ def script_effectiveness(
             )
         )
 
-    items.sort(
-        key=lambda x: (x.composite_score is None, -(x.composite_score or 0), -x.total_shown)
-    )
+    items.sort(key=lambda x: (x.composite_score is None, -(x.composite_score or 0), -x.total_shown))
     return ScriptEffectivenessOut(period_days=period_days, items=items)
 
 

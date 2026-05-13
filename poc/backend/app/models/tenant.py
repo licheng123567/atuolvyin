@@ -32,9 +32,7 @@ class ServiceProvider(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True)
     name: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    provider_type: Mapped[str] = mapped_column(
-        sa.Text, nullable=False
-    )  # legal / collection / both
+    provider_type: Mapped[str] = mapped_column(sa.Text, nullable=False)  # legal / collection / both
     admin_phone_enc: Mapped[str] = mapped_column(sa.Text, nullable=False)
     monthly_minute_quota: Mapped[int | None] = mapped_column(sa.Integer)
     is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True)
@@ -78,16 +76,10 @@ class ProviderTenantContract(Base, TimestampMixin):
     termination_requested_by: Mapped[int | None] = mapped_column(
         sa.SmallInteger
     )  # 1=物业, 2=服务商
-    termination_requested_at: Mapped[datetime | None] = mapped_column(
-        sa.DateTime(timezone=True)
-    )
+    termination_requested_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     termination_reason: Mapped[str | None] = mapped_column(sa.Text)
-    termination_confirmed_at: Mapped[datetime | None] = mapped_column(
-        sa.DateTime(timezone=True)
-    )
-    terminated_at: Mapped[datetime | None] = mapped_column(
-        sa.DateTime(timezone=True)
-    )
+    termination_confirmed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    terminated_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
 
 
 class TenantMinuteUsage(Base):

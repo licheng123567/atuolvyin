@@ -3,6 +3,7 @@
 直接读取本地录音文件，用 ffmpeg 转成 PCM 后流式送入 DashScope，
 无需公网 URL，无需 OSS，本地开发环境开箱即用。
 """
+
 import logging
 import subprocess
 import time
@@ -38,12 +39,19 @@ def _stream_transcribe(file_path: str) -> dict:
     error = [None]
 
     class _CB(RecognitionCallback):
-        def on_open(self): pass
-        def on_close(self): done[0] = True
-        def on_complete(self): done[0] = True
+        def on_open(self):
+            pass
+
+        def on_close(self):
+            done[0] = True
+
+        def on_complete(self):
+            done[0] = True
+
         def on_error(self, result):
             error[0] = result
             done[0] = True
+
         def on_event(self, result: RecognitionResult):
             s = result.get_sentence()
             if s and RecognitionResult.is_sentence_end(s):

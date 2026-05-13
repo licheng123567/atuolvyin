@@ -1,4 +1,5 @@
 """v1.9.0 — 物业内部法务处理环节 schemas。"""
+
 from __future__ import annotations
 
 from datetime import date, datetime
@@ -170,11 +171,13 @@ class LegalInternalOrderCloseRequest(BaseModel):
 
 class LegalInternalOrderReopenRequest(BaseModel):
     """v1.9.1 — 承诺到期未付时重新打开订单。"""
+
     note: str | None = Field(None, max_length=2000)
 
 
 class LegalInternalOrderKpi(BaseModel):
     """v1.9.2 — 法务工作台 4 张 KPI 卡数据。"""
+
     pending_count: int = 0
     closed_this_month: int = 0
     avg_processing_days: float | None = None  # 本月已关闭订单的平均处理时长；无样本时 null

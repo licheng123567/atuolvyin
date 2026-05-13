@@ -17,9 +17,7 @@ class SettlementStatement(Base, TimestampMixin):
     )
     period_start: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
     period_end: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
-    total_amount: Mapped[sa.Numeric] = mapped_column(
-        sa.Numeric(12, 2), nullable=False, default=0
-    )
+    total_amount: Mapped[sa.Numeric] = mapped_column(sa.Numeric(12, 2), nullable=False, default=0)
     status: Mapped[str] = mapped_column(
         sa.Text, nullable=False, default="DRAFT"
     )  # DRAFT/CONFIRMED/PAID/DISPUTED

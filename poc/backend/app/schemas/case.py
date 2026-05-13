@@ -60,7 +60,7 @@ class OwnerInfo(BaseModel):
 
     id: int
     name: str
-    phone: str | None = None        # decrypted, only for agent_internal
+    phone: str | None = None  # decrypted, only for agent_internal
     phone_masked: str
     building: str | None
     room: str | None
@@ -138,6 +138,7 @@ class TimelineEvent(BaseModel):
 
 class CaseProjectInfo(BaseModel):
     """v1.6.3 — 案件详情中嵌入项目基本信息（合同 + 收费），无需另起接口。"""
+
     name: str
     charge_rate_text: str | None = None
     charge_period: str | None = None
@@ -157,7 +158,9 @@ class CaseDetailResponse(BaseModel):
     project_info: CaseProjectInfo | None = None  # v1.6.3
     owner: OwnerInfo
     assigned_to: int | None
-    assigned_role: str | None = None  # v1.4 — 协作来源 badge：agent_internal / agent_external / null
+    assigned_role: str | None = (
+        None  # v1.4 — 协作来源 badge：agent_internal / agent_external / null
+    )
     pool_type: str
     stage: str
     amount_owed: Decimal | None

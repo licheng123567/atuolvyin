@@ -1,4 +1,5 @@
 """Sprint 15 — platform-level audit log + plan config models."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -57,6 +58,4 @@ class PlanConfig(Base, TimestampMixin):
     features: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, server_default=sa.text("'{}'::jsonb")
     )
-    is_active: Mapped[bool] = mapped_column(
-        sa.Boolean, nullable=False, server_default=sa.true()
-    )
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, server_default=sa.true())
