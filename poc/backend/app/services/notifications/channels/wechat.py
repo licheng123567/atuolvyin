@@ -2,6 +2,7 @@
 
 环境变量 AUTOLUYIN_WECHAT_BOT_URL 配置租户级 webhook URL；缺失则 log-only。
 """
+
 from __future__ import annotations
 
 import logging
@@ -47,6 +48,7 @@ def send(
     error: str | None = None
     try:
         import requests
+
         resp = requests.post(
             url,
             json={"msgtype": "text", "text": {"content": msg}},

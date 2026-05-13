@@ -5,6 +5,7 @@ SystemAnnouncement：平台公告，可指定受众（all / role:admin / tenant:
 LLMPromptTemplate：超管管理的 LLM 基础 Prompt 模板（版本化）。
 BlockchainConfig：单例配置，区块链存证合作方信息（API key AES 加密）。
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -61,16 +62,16 @@ class LLMPromptTemplate(Base, TimestampMixin):
         sa.BigInteger, sa.ForeignKey("user_account.id"), nullable=False
     )
 
-    __table_args__ = (
-        sa.UniqueConstraint("name", "version", name="uq_llm_prompt_name_version"),
-    )
+    __table_args__ = (sa.UniqueConstraint("name", "version", name="uq_llm_prompt_name_version"),)
 
 
 class BlockchainConfig(Base):
     __tablename__ = "blockchain_config"
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-    provider: Mapped[str] = mapped_column(sa.String(64), nullable=False)  # antchain / fisco-bcos / mock
+    provider: Mapped[str] = mapped_column(
+        sa.String(64), nullable=False
+    )  # antchain / fisco-bcos / mock
     api_endpoint: Mapped[str] = mapped_column(sa.Text, nullable=False)
     api_key_enc: Mapped[str | None] = mapped_column(sa.Text, nullable=True)  # AES-256
     is_active: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=False)
@@ -85,6 +86,4 @@ class BlockchainConfig(Base):
         nullable=False,
     )
 
-    __table_args__ = (
-        sa.UniqueConstraint("provider", name="uq_blockchain_config_provider"),
-    )
+    __table_args__ = (sa.UniqueConstraint("provider", name="uq_blockchain_config_provider"),)

@@ -6,6 +6,7 @@ POST   /api/v1/super/plans
 PATCH  /api/v1/super/plans/{id}
 PATCH  /api/v1/super/plans/{id}/active
 """
+
 from __future__ import annotations
 
 from typing import Annotated
@@ -47,11 +48,7 @@ async def list_plans(
     _user: Annotated[UserAccount, Depends(require_roles(*SUPER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[PlanConfigOut]:
-    rows = (
-        db.execute(select(PlanConfig).order_by(PlanConfig.id.asc()))
-        .scalars()
-        .all()
-    )
+    rows = db.execute(select(PlanConfig).order_by(PlanConfig.id.asc())).scalars().all()
     return [PlanConfigOut.model_validate(r) for r in rows]
 
 

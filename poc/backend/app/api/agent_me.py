@@ -3,15 +3,18 @@
 PC view (App side handled in Android Sprint 11.5/.7/.9). Returns the current
 month's calls / connected / promised / paid + minute quota usage + tenant rank.
 """
+
 from __future__ import annotations
 
-from datetime import UTC, date as date_type, datetime, time
+from datetime import UTC, datetime, time
+from datetime import date as date_type
 from decimal import Decimal
 from typing import Annotated
 
+import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
-import sqlalchemy as sa
+from pydantic import BaseModel
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
@@ -22,7 +25,6 @@ from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.tenant import Tenant, TenantMinuteUsage
 from app.models.user import UserAccount
 from app.schemas.common import PaginatedResponse
-from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -167,7 +169,7 @@ class CallHistoryItem(BaseModel):
     has_transcript: bool
     has_analysis: bool
     recording_url: str | None = None  # v1.6.7 — E5 inline 录音
-    score: int | None = None           # v1.6.7 — E6 综合评分（0-100）
+    score: int | None = None  # v1.6.7 — E6 综合评分（0-100）
 
 
 @router.get("/me/call-history", response_model=PaginatedResponse[CallHistoryItem])
@@ -232,12 +234,14 @@ def list_my_call_history(
     analysis_ids: set[int] = set()
     if call_ids:
         transcript_ids = {
-            cid for (cid,) in db.execute(
+            cid
+            for (cid,) in db.execute(
                 select(Transcript.call_id).where(Transcript.call_id.in_(call_ids))
             ).all()
         }
         analysis_ids = {
-            cid for (cid,) in db.execute(
+            cid
+            for (cid,) in db.execute(
                 select(AnalysisResult.call_id).where(AnalysisResult.call_id.in_(call_ids))
             ).all()
         }
@@ -248,35 +252,37 @@ def list_my_call_history(
         call_score: int | None = None
         if cr.billable_duration and cr.billable_duration > 0:
             call_score = _mock_score_for_call(cr.id).score
-        items.append(CallHistoryItem(
-            call_id=cr.id,
-            started_at=cr.started_at,
-            duration_sec=cr.duration_sec,
-            result_tag=cr.result_tag,
-            case_id=cr.case_id,
-            owner_name=owner.name if owner else None,
-            building=owner.building if owner else None,
-            room=owner.room if owner else None,
-            project_id=proj.id if proj else None,
-            project_name=proj.name if proj else None,
-            has_transcript=cr.id in transcript_ids,
-            has_analysis=cr.id in analysis_ids,
-            recording_url=cr.recording_url,
-            score=call_score,
-        ))
+        items.append(
+            CallHistoryItem(
+                call_id=cr.id,
+                started_at=cr.started_at,
+                duration_sec=cr.duration_sec,
+                result_tag=cr.result_tag,
+                case_id=cr.case_id,
+                owner_name=owner.name if owner else None,
+                building=owner.building if owner else None,
+                room=owner.room if owner else None,
+                project_id=proj.id if proj else None,
+                project_name=proj.name if proj else None,
+                has_transcript=cr.id in transcript_ids,
+                has_analysis=cr.id in analysis_ids,
+                recording_url=cr.recording_url,
+                score=call_score,
+            )
+        )
 
     return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 # ── v1.6.7 — E2 今日 KPI 进度条 ─────────────────────────────────
 class TodayKpiResp(BaseModel):
-    date: str                  # YYYY-MM-DD
-    calls_today: int            # 今日拨号数
-    calls_target: int           # 今日目标（默认 30，PoC 阶段写死）
-    connected_today: int        # 今日接通数
-    promised_today: int         # 今日新增承诺数
-    paid_today: int             # 今日新增缴清数
-    minutes_used_today: int     # 今日通话分钟数
+    date: str  # YYYY-MM-DD
+    calls_today: int  # 今日拨号数
+    calls_target: int  # 今日目标（默认 30，PoC 阶段写死）
+    connected_today: int  # 今日接通数
+    promised_today: int  # 今日新增承诺数
+    paid_today: int  # 今日新增缴清数
+    minutes_used_today: int  # 今日通话分钟数
 
 
 @router.get("/me/today-kpi", response_model=TodayKpiResp)
@@ -299,9 +305,9 @@ def get_my_today_kpi(
     call_row = db.execute(
         sa.select(
             sa.func.count().label("total"),
-            sa.func.coalesce(sa.func.sum(
-                sa.case((CallRecord.billable_duration > 0, 1), else_=0)
-            ), 0).label("connected"),
+            sa.func.coalesce(
+                sa.func.sum(sa.case((CallRecord.billable_duration > 0, 1), else_=0)), 0
+            ).label("connected"),
             sa.func.coalesce(sa.func.sum(CallRecord.billable_duration), 0).label("billable"),
         )
         .where(CallRecord.tenant_id == tenant_id)
@@ -317,7 +323,8 @@ def get_my_today_kpi(
             .where(CollectionCase.assigned_to == user_id)
             .where(CollectionCase.stage == "promised")
             .where(CollectionCase.updated_at >= today_start)
-        ).scalar_one() or 0
+        ).scalar_one()
+        or 0
     )
     paid_today = (
         db.execute(
@@ -327,7 +334,8 @@ def get_my_today_kpi(
             .where(CollectionCase.assigned_to == user_id)
             .where(CollectionCase.stage == "paid")
             .where(CollectionCase.updated_at >= today_start)
-        ).scalar_one() or 0
+        ).scalar_one()
+        or 0
     )
 
     return TodayKpiResp(
@@ -344,10 +352,10 @@ def get_my_today_kpi(
 # ── v1.6.7 — E6 通话评分趋势（mock，PoC 阶段不连真 LLM） ────────
 class CallScoreItem(BaseModel):
     call_id: int
-    score: int           # 0-100 综合得分
-    talk: int            # 话术
-    emotion: int         # 情绪
-    conversion: int      # 转化
+    score: int  # 0-100 综合得分
+    talk: int  # 话术
+    emotion: int  # 情绪
+    conversion: int  # 转化
 
 
 class ScoringTrendResp(BaseModel):
@@ -360,12 +368,14 @@ class ScoringTrendResp(BaseModel):
 
 def _mock_score_for_call(call_id: int) -> CallScoreItem:
     """v1.6.7 — PoC 评分生成器（deterministic by call_id；后续替换为 LLM 调用）。"""
-    seed = call_id * 2654435761 & 0xffffffff
+    seed = call_id * 2654435761 & 0xFFFFFFFF
     talk = 60 + (seed % 35)
     emotion = 55 + ((seed >> 8) % 40)
     conversion = 50 + ((seed >> 16) % 45)
     score = (talk + emotion + conversion) // 3
-    return CallScoreItem(call_id=call_id, score=score, talk=talk, emotion=emotion, conversion=conversion)
+    return CallScoreItem(
+        call_id=call_id, score=score, talk=talk, emotion=emotion, conversion=conversion
+    )
 
 
 @router.get("/me/scoring-trend", response_model=ScoringTrendResp)
@@ -383,9 +393,11 @@ def get_my_scoring_trend(
             detail={"code": "ERR_INVALID_TOKEN", "message": "Token 缺少必要字段"},
         )
     from datetime import timedelta
+
     cutoff = datetime.now(UTC) - timedelta(days=30)
     recent_call_ids = [
-        cid for (cid,) in db.execute(
+        cid
+        for (cid,) in db.execute(
             sa.select(CallRecord.id)
             .where(CallRecord.tenant_id == tenant_id)
             .where(CallRecord.caller_user_id == user_id)
@@ -397,7 +409,9 @@ def get_my_scoring_trend(
     ]
     items = [_mock_score_for_call(cid) for cid in recent_call_ids]
     if not items:
-        return ScoringTrendResp(avg_score_30d=0, avg_talk=0, avg_emotion=0, avg_conversion=0, recent=[])
+        return ScoringTrendResp(
+            avg_score_30d=0, avg_talk=0, avg_emotion=0, avg_conversion=0, recent=[]
+        )
     return ScoringTrendResp(
         avg_score_30d=sum(i.score for i in items) // len(items),
         avg_talk=sum(i.talk for i in items) // len(items),
@@ -463,9 +477,17 @@ def get_my_active_call(
 
     if call is None:
         return ActiveCallResp(
-            active_call_id=None, case_id=None, started_at=None, status=None,
-            owner_name=None, owner_phone_masked=None, building=None, room=None,
-            amount_owed=None, project_id=None, project_name=None,
+            active_call_id=None,
+            case_id=None,
+            started_at=None,
+            status=None,
+            owner_name=None,
+            owner_phone_masked=None,
+            building=None,
+            room=None,
+            amount_owed=None,
+            project_id=None,
+            project_name=None,
         )
 
     case = db.get(CollectionCase, call.case_id) if call.case_id else None

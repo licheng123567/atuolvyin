@@ -5,6 +5,7 @@
     - smtp：SMTP 投递（v1.5.6 接入）
     - ses：AWS SES（v1.5.6 接入）
 """
+
 from __future__ import annotations
 
 from app.core.config import settings

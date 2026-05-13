@@ -39,6 +39,7 @@ def log_delivery(
         db.flush()
     except Exception:  # noqa: BLE001 — log write must never break the dispatch
         import logging
+
         logging.getLogger(__name__).exception(
             "delivery log write failed (channel=%s event=%s)", channel, event_type
         )

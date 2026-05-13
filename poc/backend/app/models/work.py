@@ -13,24 +13,16 @@ class WorkOrder(Base, TimestampMixin):
     tenant_id: Mapped[int] = mapped_column(
         sa.BigInteger, sa.ForeignKey("tenant.id"), nullable=False
     )
-    case_id: Mapped[int | None] = mapped_column(
-        sa.BigInteger, sa.ForeignKey("collection_case.id")
-    )
-    call_id: Mapped[int | None] = mapped_column(
-        sa.BigInteger, sa.ForeignKey("call_record.id")
-    )
+    case_id: Mapped[int | None] = mapped_column(sa.BigInteger, sa.ForeignKey("collection_case.id"))
+    call_id: Mapped[int | None] = mapped_column(sa.BigInteger, sa.ForeignKey("call_record.id"))
     order_type: Mapped[str] = mapped_column(
         sa.Text, nullable=False
     )  # quality / reduction / dispute / other
     description: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    assigned_to: Mapped[int | None] = mapped_column(
-        sa.BigInteger, sa.ForeignKey("user_account.id")
-    )
+    assigned_to: Mapped[int | None] = mapped_column(sa.BigInteger, sa.ForeignKey("user_account.id"))
     status: Mapped[str] = mapped_column(sa.Text, nullable=False, default="open")
     # v1.6 — 4 档优先级（urgent_critical/urgent/normal/low），CHECK 约束在 DB 层
-    priority: Mapped[str] = mapped_column(
-        sa.String(16), nullable=False, default="normal"
-    )
+    priority: Mapped[str] = mapped_column(sa.String(16), nullable=False, default="normal")
     resolution: Mapped[str | None] = mapped_column(sa.Text)
 
 

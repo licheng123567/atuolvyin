@@ -1,4 +1,5 @@
 """Sprint 15 — System health & metrics schemas."""
+
 from __future__ import annotations
 
 from datetime import datetime

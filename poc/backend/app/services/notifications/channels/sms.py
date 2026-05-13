@@ -3,6 +3,7 @@
 Dev 模式仅打 log；生产环境需配置 ALIYUN_ACCESS_KEY_ID / SECRET +
 模板 ID 后实现真 HTTP 调用 (alibabacloud-sms20170525 SDK 或 raw HTTP)。
 """
+
 from __future__ import annotations
 
 import logging
@@ -32,9 +33,11 @@ def send(
     payload: dict[str, Any] | None,
 ) -> None:
     enabled = os.getenv("AUTOLUYIN_SMS_ENABLED", "false").lower() == "true"
-    users = db.execute(
-        select(UserAccount).where(UserAccount.id.in_(recipient_user_ids))
-    ).scalars().all()
+    users = (
+        db.execute(select(UserAccount).where(UserAccount.id.in_(recipient_user_ids)))
+        .scalars()
+        .all()
+    )
     for u in users:
         try:
             phone = decrypt_phone(u.phone_enc)
@@ -43,7 +46,11 @@ def send(
         if not enabled:
             logger.info(
                 "[SMS-stub] tenant=%s event=%s → %s : %s | %s",
-                tenant_id, event_type, phone, title, body,
+                tenant_id,
+                event_type,
+                phone,
+                title,
+                body,
             )
             log_delivery(
                 db,

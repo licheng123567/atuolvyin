@@ -5,6 +5,7 @@
 - role_in_firm='lawyer'：律所内律师，承办具体订单 + 上传文书 + 完结
 - 一个 user_account 可在 N 个律所有成员关系（多挂靠律师），但同一律所内仅一条成员记录
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -41,8 +42,6 @@ class LawFirmMembership(Base, TimestampMixin):
             "role_in_firm IN ('admin', 'lawyer')",
             name="ck_law_firm_membership_role",
         ),
-        sa.UniqueConstraint(
-            "user_id", "law_firm_id", name="uq_law_firm_membership_user_firm"
-        ),
+        sa.UniqueConstraint("user_id", "law_firm_id", name="uq_law_firm_membership_user_firm"),
         sa.Index("ix_law_firm_membership_firm_role", "law_firm_id", "role_in_firm"),
     )

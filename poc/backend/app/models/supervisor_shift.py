@@ -3,6 +3,7 @@
 替代 supervisor_shifts.py 中的 in-memory _SHIFT_STORE。
 每行一个 (tenant_id, date, slot) 唯一组合 → supervisor_user_id。
 """
+
 from __future__ import annotations
 
 from datetime import date as date_type
@@ -62,9 +63,7 @@ class SupervisorShiftSwapRequest(Base, TimestampMixin):
     to_user_name: Mapped[str] = mapped_column(sa.String(120), nullable=False)
     shift_date: Mapped[date_type] = mapped_column(sa.Date, nullable=False)
     slot: Mapped[str] = mapped_column(sa.String(16), nullable=False)
-    status: Mapped[str] = mapped_column(
-        sa.String(24), nullable=False, default="pending_confirm"
-    )
+    status: Mapped[str] = mapped_column(sa.String(24), nullable=False, default="pending_confirm")
 
     __table_args__ = (
         sa.CheckConstraint(

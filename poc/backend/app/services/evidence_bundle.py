@@ -19,6 +19,7 @@ ZIP 结构：
       action_meta.json          ← 模板/律所/起草时间
     bundle_manifest.json
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -90,12 +91,16 @@ def build_evidence_bundle_zip(
     tenant = db.get(Tenant, tenant_id)
     generated_at = datetime.now(UTC)
 
-    calls = db.execute(
-        select(CallRecord)
-        .where(CallRecord.tenant_id == tenant_id)
-        .where(CallRecord.case_id == case.id)
-        .order_by(CallRecord.id.asc())
-    ).scalars().all()
+    calls = (
+        db.execute(
+            select(CallRecord)
+            .where(CallRecord.tenant_id == tenant_id)
+            .where(CallRecord.case_id == case.id)
+            .order_by(CallRecord.id.asc())
+        )
+        .scalars()
+        .all()
+    )
 
     files_index: list[dict[str, Any]] = []
     base_dir = f"case_{case.id}"
@@ -105,11 +110,13 @@ def build_evidence_bundle_zip(
 
         def _write(path: str, data: bytes) -> None:
             zf.writestr(path, data)
-            files_index.append({
-                "path": path,
-                "sha256": hashlib.sha256(data).hexdigest(),
-                "size": len(data),
-            })
+            files_index.append(
+                {
+                    "path": path,
+                    "sha256": hashlib.sha256(data).hexdigest(),
+                    "size": len(data),
+                }
+            )
 
         # ── case_summary.json ────────────────────────────
         case_summary: dict[str, Any] = {
@@ -151,11 +158,13 @@ def build_evidence_bundle_zip(
             else:
                 recording_skipped = True
                 recording_skip_reason = "object_key 为空，未上传录音"
-                files_index.append({
-                    "path": f"{call_dir}/recording",
-                    "skipped": True,
-                    "reason": recording_skip_reason,
-                })
+                files_index.append(
+                    {
+                        "path": f"{call_dir}/recording",
+                        "skipped": True,
+                        "reason": recording_skip_reason,
+                    }
+                )
 
             transcript = db.execute(
                 select(Transcript).where(Transcript.call_id == call.id)
@@ -167,14 +176,18 @@ def build_evidence_bundle_zip(
                 if transcript.segments:
                     _write(
                         f"{call_dir}/transcript.segments.json",
-                        json.dumps(transcript.segments, ensure_ascii=False, indent=2).encode("utf-8"),
+                        json.dumps(transcript.segments, ensure_ascii=False, indent=2).encode(
+                            "utf-8"
+                        ),
                     )
             else:
-                files_index.append({
-                    "path": f"{call_dir}/transcript.txt",
-                    "skipped": True,
-                    "reason": "无转写内容",
-                })
+                files_index.append(
+                    {
+                        "path": f"{call_dir}/transcript.txt",
+                        "skipped": True,
+                        "reason": "无转写内容",
+                    }
+                )
 
             analysis = db.execute(
                 select(AnalysisResult).where(AnalysisResult.call_id == call.id)
@@ -192,11 +205,13 @@ def build_evidence_bundle_zip(
                 )
                 analysis_sha = files_index[-1]["sha256"]
             else:
-                files_index.append({
-                    "path": f"{call_dir}/analysis.json",
-                    "skipped": True,
-                    "reason": "无 AI 分析",
-                })
+                files_index.append(
+                    {
+                        "path": f"{call_dir}/analysis.json",
+                        "skipped": True,
+                        "reason": "无 AI 分析",
+                    }
+                )
 
             # 区块链上链（仅当有 recording_sha）
             blockchain_meta: dict[str, Any]
@@ -248,27 +263,53 @@ def build_evidence_bundle_zip(
             )
 
         # ── v1.9.5 — 物业法务内部处理流水 + 律师函附件 ─────
-        actions = db.execute(
-            select(LegalInternalAction)
-            .where(LegalInternalAction.tenant_id == tenant_id)
-            .where(LegalInternalAction.case_id == case.id)
-            .order_by(LegalInternalAction.occurred_at.asc())
-        ).scalars().all()
+        actions = (
+            db.execute(
+                select(LegalInternalAction)
+                .where(LegalInternalAction.tenant_id == tenant_id)
+                .where(LegalInternalAction.case_id == case.id)
+                .order_by(LegalInternalAction.occurred_at.asc())
+            )
+            .scalars()
+            .all()
+        )
         if actions:
             actor_ids = {a.actor_user_id for a in actions if a.actor_user_id}
             tpl_ids = {a.letter_template_id for a in actions if a.letter_template_id}
             firm_ids = {a.partner_law_firm_id for a in actions if a.partner_law_firm_id}
-            actor_map = dict(db.execute(
-                select(UserAccount.id, UserAccount.name).where(UserAccount.id.in_(actor_ids))
-            ).all()) if actor_ids else {}
-            tpl_map = dict(db.execute(
-                select(InternalLegalLetterTemplate.id, InternalLegalLetterTemplate.name)
-                .where(InternalLegalLetterTemplate.id.in_(tpl_ids))
-            ).all()) if tpl_ids else {}
-            firm_map = dict(db.execute(
-                select(PartnerLawFirm.id, PartnerLawFirm.name)
-                .where(PartnerLawFirm.id.in_(firm_ids))
-            ).all()) if firm_ids else {}
+            actor_map = (
+                dict(
+                    db.execute(
+                        select(UserAccount.id, UserAccount.name).where(
+                            UserAccount.id.in_(actor_ids)
+                        )
+                    ).all()
+                )
+                if actor_ids
+                else {}
+            )
+            tpl_map = (
+                dict(
+                    db.execute(
+                        select(
+                            InternalLegalLetterTemplate.id, InternalLegalLetterTemplate.name
+                        ).where(InternalLegalLetterTemplate.id.in_(tpl_ids))
+                    ).all()
+                )
+                if tpl_ids
+                else {}
+            )
+            firm_map = (
+                dict(
+                    db.execute(
+                        select(PartnerLawFirm.id, PartnerLawFirm.name).where(
+                            PartnerLawFirm.id.in_(firm_ids)
+                        )
+                    ).all()
+                )
+                if firm_ids
+                else {}
+            )
 
             actions_payload = [
                 {
@@ -277,8 +318,12 @@ def build_evidence_bundle_zip(
                     "occurred_at": a.occurred_at.isoformat() if a.occurred_at else None,
                     "actor_name": actor_map.get(a.actor_user_id),
                     "note": a.note,
-                    "letter_template_name": tpl_map.get(a.letter_template_id) if a.letter_template_id else None,
-                    "partner_law_firm_name": firm_map.get(a.partner_law_firm_id) if a.partner_law_firm_id else None,
+                    "letter_template_name": tpl_map.get(a.letter_template_id)
+                    if a.letter_template_id
+                    else None,
+                    "partner_law_firm_name": firm_map.get(a.partner_law_firm_id)
+                    if a.partner_law_firm_id
+                    else None,
                     "letter_variables": a.letter_variables,
                     "attachment_filename": a.attachment_filename,
                 }
@@ -301,25 +346,35 @@ def build_evidence_bundle_zip(
                     safe_name = a.attachment_filename or "attachment.bin"
                     _write(f"{letter_dir}/{safe_name}", letter_bytes)
                 except Exception as exc:  # noqa: BLE001
-                    files_index.append({
-                        "path": f"{letter_dir}/{a.attachment_filename or 'attachment'}",
-                        "skipped": True,
-                        "reason": f"读取附件失败：{exc!s}",
-                    })
+                    files_index.append(
+                        {
+                            "path": f"{letter_dir}/{a.attachment_filename or 'attachment'}",
+                            "skipped": True,
+                            "reason": f"读取附件失败：{exc!s}",
+                        }
+                    )
                 # action_meta.json 单独留一份，便于举证「这封律师函的元数据」
                 _write(
                     f"{letter_dir}/action_meta.json",
-                    json.dumps({
-                        "id": a.id,
-                        "action_type": a.action_type,
-                        "occurred_at": a.occurred_at.isoformat() if a.occurred_at else None,
-                        "actor_name": actor_map.get(a.actor_user_id),
-                        "note": a.note,
-                        "letter_template_name": tpl_map.get(a.letter_template_id) if a.letter_template_id else None,
-                        "partner_law_firm_name": firm_map.get(a.partner_law_firm_id) if a.partner_law_firm_id else None,
-                        "letter_variables": a.letter_variables,
-                        "attachment_filename": a.attachment_filename,
-                    }, ensure_ascii=False, indent=2).encode("utf-8"),
+                    json.dumps(
+                        {
+                            "id": a.id,
+                            "action_type": a.action_type,
+                            "occurred_at": a.occurred_at.isoformat() if a.occurred_at else None,
+                            "actor_name": actor_map.get(a.actor_user_id),
+                            "note": a.note,
+                            "letter_template_name": tpl_map.get(a.letter_template_id)
+                            if a.letter_template_id
+                            else None,
+                            "partner_law_firm_name": firm_map.get(a.partner_law_firm_id)
+                            if a.partner_law_firm_id
+                            else None,
+                            "letter_variables": a.letter_variables,
+                            "attachment_filename": a.attachment_filename,
+                        },
+                        ensure_ascii=False,
+                        indent=2,
+                    ).encode("utf-8"),
                 )
 
         # ── bundle_manifest.json（最后写，包含全部 sha256）──

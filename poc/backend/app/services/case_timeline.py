@@ -2,6 +2,7 @@
 
 Used by both admin/cases/{id} and agent/cases/{id} detail endpoints.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -102,6 +103,7 @@ def build_case_timeline(
 
     # ── v1.9.7 工单跟进记录（聚合到案件时间线，让 admin/agent/supervisor 共享处理进度）──
     from app.models.work_order_follow_up import WorkOrderFollowUp
+
     follow_rows = db.execute(
         select(WorkOrderFollowUp, UserAccount.name)
         .join(UserAccount, UserAccount.id == WorkOrderFollowUp.actor_user_id, isouter=True)
@@ -128,12 +130,16 @@ def build_case_timeline(
         )
 
     # ── 法务转化 ─────────────────────────────────────────────────
-    lc_rows = db.execute(
-        select(LegalConversionOrder).where(
-            LegalConversionOrder.case_id == case_id,
-            LegalConversionOrder.tenant_id == tenant_id,
+    lc_rows = (
+        db.execute(
+            select(LegalConversionOrder).where(
+                LegalConversionOrder.case_id == case_id,
+                LegalConversionOrder.tenant_id == tenant_id,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for lc in lc_rows:
         events.append(
             TimelineEvent(
@@ -171,9 +177,7 @@ def build_case_timeline(
         )
     ).all()
     for action, actor_name, tpl_name, firm_name in internal_action_rows:
-        event_type = _INTERNAL_ACTION_TYPE_MAP.get(
-            action.action_type, "legal.internal.other"
-        )
+        event_type = _INTERNAL_ACTION_TYPE_MAP.get(action.action_type, "legal.internal.other")
         # 文案：法务沟通备注；律师函/催告函含模板+律所
         if action.action_type in ("send_lawyer_letter", "send_notice"):
             parts = []
@@ -223,19 +227,24 @@ def build_case_timeline(
             )
 
     # ── 法务案件状态 ────────────────────────────────────────────
-    legal_cases = db.execute(
-        select(LegalCase).where(
-            LegalCase.case_id == case_id,
-            LegalCase.tenant_id == tenant_id,
+    legal_cases = (
+        db.execute(
+            select(LegalCase).where(
+                LegalCase.case_id == case_id,
+                LegalCase.tenant_id == tenant_id,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for lc in legal_cases:
         events.append(
             TimelineEvent(
                 type="legal.case",
                 ts=lc.created_at,
                 actor=lc.lawyer_name,
-                note=f"法务跟进 · {lc.stage}" + (f" ({lc.next_milestone})" if lc.next_milestone else ""),
+                note=f"法务跟进 · {lc.stage}"
+                + (f" ({lc.next_milestone})" if lc.next_milestone else ""),
                 target_id=lc.id,
                 target_type="legal_case",
             )

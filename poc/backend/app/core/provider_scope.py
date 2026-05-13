@@ -9,6 +9,7 @@
 
 返回 SQL 条件元组，调用方用 `.where(*active_project_filter(pid))` 解包。
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa

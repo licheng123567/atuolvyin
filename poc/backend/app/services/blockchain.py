@@ -6,6 +6,7 @@
 
 后续接入蚂蚁链/至信链 SDK 时只需替换 `_submit_to_chain` 内部逻辑。
 """
+
 from __future__ import annotations
 
 import hashlib

@@ -2,6 +2,7 @@
 
 按 settings.llm_base_url + llm_model + llm_api_key 选择。
 """
+
 import json
 
 from openai import OpenAI
@@ -45,15 +46,15 @@ def extract(task_type: str, task_payload: dict, transcript: str) -> dict:
     if task_type == "vote":
         system = VOTE_SYSTEM
         user = (
-            f"投票议题：{task_payload.get('motion_title','')}\n"
-            f"候选选项：{[o['label'] for o in task_payload.get('options',[])]}\n\n"
+            f"投票议题：{task_payload.get('motion_title', '')}\n"
+            f"候选选项：{[o['label'] for o in task_payload.get('options', [])]}\n\n"
             f"=== 通话文字稿 ===\n{transcript}"
         )
     elif task_type == "collection":
         system = COLLECTION_SYSTEM
         user = (
             f"欠费金额：{task_payload.get('amount')}\n"
-            f"欠费月份：{task_payload.get('months','')}\n\n"
+            f"欠费月份：{task_payload.get('months', '')}\n\n"
             f"=== 通话文字稿 ===\n{transcript}"
         )
     else:

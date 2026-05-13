@@ -20,7 +20,7 @@ class KeywordHit:
     category: str
     level: str
     keyword_id: int
-    span: tuple[int, int]   # (start_inclusive, end_inclusive) from AC automaton
+    span: tuple[int, int]  # (start_inclusive, end_inclusive) from AC automaton
 
 
 class RiskKeywordMatcher:
@@ -37,16 +37,20 @@ class RiskKeywordMatcher:
 
     async def ensure_loaded(self, db: Session) -> None:
         if self._automaton is None or (time.monotonic() - self._loaded_at) > _TTL_SEC:
-            self._load_from_db(db)    # no await — sync call
+            self._load_from_db(db)  # no await — sync call
 
     def _load_from_db(self, db: Session) -> None:
-        rows = db.execute(
-            select(RiskKeyword).where(
-                or_(RiskKeyword.tenant_id == self.tenant_id, RiskKeyword.tenant_id.is_(None)),
-                RiskKeyword.speaker == self.speaker,
-                RiskKeyword.is_active.is_(True),
+        rows = (
+            db.execute(
+                select(RiskKeyword).where(
+                    or_(RiskKeyword.tenant_id == self.tenant_id, RiskKeyword.tenant_id.is_(None)),
+                    RiskKeyword.speaker == self.speaker,
+                    RiskKeyword.is_active.is_(True),
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         A: ahocorasick.Automaton = ahocorasick.Automaton()
         for row in rows:
@@ -62,10 +66,15 @@ class RiskKeywordMatcher:
         results: list[KeywordHit] = []
         for end_idx, (kw, cat, lv, kid) in self._automaton.iter(text):
             start_idx = end_idx - len(kw) + 1
-            results.append(KeywordHit(
-                keyword=kw, category=cat, level=lv, keyword_id=kid,
-                span=(start_idx, end_idx),
-            ))
+            results.append(
+                KeywordHit(
+                    keyword=kw,
+                    category=cat,
+                    level=lv,
+                    keyword_id=kid,
+                    span=(start_idx, end_idx),
+                )
+            )
         return results
 
 

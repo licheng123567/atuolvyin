@@ -31,8 +31,14 @@ def self_check(payload: SelfCheckIn, db: Session = Depends(get_db)):
               brand=EXCLUDED.brand, model=EXCLUDED.model, os_version=EXCLUDED.os_version,
               last_self_check=EXCLUDED.last_self_check, self_check_ok=EXCLUDED.self_check_ok
         """),
-        dict(did=payload.device_id, brand=payload.brand, model=payload.model,
-             osv=payload.os_version, ts=datetime.utcnow(), ok=ok),
+        dict(
+            did=payload.device_id,
+            brand=payload.brand,
+            model=payload.model,
+            osv=payload.os_version,
+            ts=datetime.utcnow(),
+            ok=ok,
+        ),
     )
     db.commit()
     return {"can_call": ok}
@@ -43,11 +49,18 @@ def get_device_config(device_id: str, db: Session = Depends(get_db)):
     """运行时配置下发：按设备 ID 取，先取设备级覆盖，再取全局默认。
     APK 启动 + 自检后调用一次，缓存到本地；后台改了立即下发。
     """
-    rows = db.execute(text("""
+    rows = (
+        db.execute(
+            text("""
         SELECT key, value FROM app_config
         WHERE scope = :did OR scope = 'global'
         ORDER BY scope = :did DESC      -- 设备级覆盖优先
-    """), {"did": device_id}).mappings().all()
+    """),
+            {"did": device_id},
+        )
+        .mappings()
+        .all()
+    )
 
     merged: dict = {}
     for r in rows:

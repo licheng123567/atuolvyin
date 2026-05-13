@@ -1,4 +1,5 @@
 """Sprint 9.4 / 9.5 — supervisor view schemas."""
+
 from __future__ import annotations
 
 from datetime import datetime

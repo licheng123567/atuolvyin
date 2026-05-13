@@ -32,6 +32,4 @@ class DeviceProfile(Base):
         nullable=False,
     )
 
-    __table_args__ = (
-        sa.Index("idx_device_profile_tenant_user", "tenant_id", "user_id"),
-    )
+    __table_args__ = (sa.Index("idx_device_profile_tenant_user", "tenant_id", "user_id"),)

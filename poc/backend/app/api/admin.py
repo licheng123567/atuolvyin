@@ -7,11 +7,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-
-from pydantic import BaseModel
 
 from app.core.crypto import decrypt_phone, encrypt_phone
 from app.core.db import get_db
@@ -24,6 +23,7 @@ from app.core.security import (
 from app.models.device import DeviceProfile
 from app.models.tenant import UserTenantMembership
 from app.models.user import UserAccount
+from app.schemas.audit import AuditLogOut
 from app.schemas.common import PaginatedResponse
 from app.schemas.user import (
     UserCreateByAdminRequest,
@@ -44,6 +44,7 @@ class AdminDeviceItem(BaseModel):
     is_healthy: bool
     last_check_at: datetime | None = None
     created_at: datetime
+
 
 router = APIRouter()
 
@@ -93,11 +94,15 @@ async def list_users(
     count_stmt = select(func.count()).select_from(user_stmt.subquery())
     total: int = db.execute(count_stmt).scalar_one()
 
-    user_ids = list(db.execute(
-        user_stmt.order_by(UserAccount.id.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    ).scalars().all())
+    user_ids = list(
+        db.execute(
+            user_stmt.order_by(UserAccount.id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        .scalars()
+        .all()
+    )
 
     if not user_ids:
         return PaginatedResponse(items=[], total=total, page=page, page_size=page_size)
@@ -273,23 +278,29 @@ async def create_user(
     all_roles = [body.role]
     extra = [r for r in (body.extra_roles or []) if r and r != body.role]
     if extra:
-        existing_roles = set(db.execute(
-            select(UserTenantMembership.role).where(
-                UserTenantMembership.user_id == new_user.id,
-                UserTenantMembership.tenant_id == tenant_id,
-                UserTenantMembership.is_active.is_(True),
+        existing_roles = set(
+            db.execute(
+                select(UserTenantMembership.role).where(
+                    UserTenantMembership.user_id == new_user.id,
+                    UserTenantMembership.tenant_id == tenant_id,
+                    UserTenantMembership.is_active.is_(True),
+                )
             )
-        ).scalars().all())
+            .scalars()
+            .all()
+        )
         for r in extra:
             if r in existing_roles:
                 continue
-            db.add(UserTenantMembership(
-                user_id=new_user.id,
-                tenant_id=tenant_id,
-                role=r,
-                source_type="INTERNAL",
-                is_active=True,
-            ))
+            db.add(
+                UserTenantMembership(
+                    user_id=new_user.id,
+                    tenant_id=tenant_id,
+                    role=r,
+                    source_type="INTERNAL",
+                    is_active=True,
+                )
+            )
             all_roles.append(r)
         db.commit()
 
@@ -298,6 +309,7 @@ async def create_user(
     response = _user_to_response(new_user, body.role)
     if login_method == "otp":
         from .auth_extras import _create_otp
+
         try:
             initial_code = _create_otp(db, body.phone, "login")
             dev_return = os.getenv("OTP_DEV_RETURN", "true").lower() == "true"
@@ -337,13 +349,17 @@ async def update_user(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail={"code": "ERR_NOT_FOUND", "message": "用户不存在"},
         )
-    memberships = db.execute(
-        select(UserTenantMembership).where(
-            UserTenantMembership.user_id == user_id,
-            UserTenantMembership.tenant_id == tenant_id,
-            UserTenantMembership.is_active.is_(True),
+    memberships = (
+        db.execute(
+            select(UserTenantMembership).where(
+                UserTenantMembership.user_id == user_id,
+                UserTenantMembership.tenant_id == tenant_id,
+                UserTenantMembership.is_active.is_(True),
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if not memberships:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
@@ -352,9 +368,7 @@ async def update_user(
 
     # 自锁防御：不能改自己的 role / is_active / roles
     is_self = target.id == actor.id
-    if is_self and (
-        body.role is not None or body.is_active is not None or body.roles is not None
-    ):
+    if is_self and (body.role is not None or body.is_active is not None or body.roles is not None):
         raise HTTPException(
             status_code=http_status.HTTP_400_BAD_REQUEST,
             detail={"code": "ERR_SELF_LOCK", "message": "不能修改自己的角色或启用状态"},
@@ -396,13 +410,15 @@ async def update_user(
         # 新增缺失的
         to_add = new_roles - old_role_set
         for r in to_add:
-            db.add(UserTenantMembership(
-                user_id=target.id,
-                tenant_id=tenant_id,
-                role=r,
-                source_type="INTERNAL",
-                is_active=True,
-            ))
+            db.add(
+                UserTenantMembership(
+                    user_id=target.id,
+                    tenant_id=tenant_id,
+                    role=r,
+                    source_type="INTERNAL",
+                    is_active=True,
+                )
+            )
         if to_remove or to_add:
             changes["roles"] = {
                 "from": sorted(old_role_set),
@@ -429,13 +445,17 @@ async def update_user(
     db.commit()
     db.refresh(target)
     # 重新拉取所有 active membership
-    final_roles = list(db.execute(
-        select(UserTenantMembership.role).where(
-            UserTenantMembership.user_id == user_id,
-            UserTenantMembership.tenant_id == tenant_id,
-            UserTenantMembership.is_active.is_(True),
+    final_roles = list(
+        db.execute(
+            select(UserTenantMembership.role).where(
+                UserTenantMembership.user_id == user_id,
+                UserTenantMembership.tenant_id == tenant_id,
+                UserTenantMembership.is_active.is_(True),
+            )
         )
-    ).scalars().all())
+        .scalars()
+        .all()
+    )
     primary = final_roles[0] if final_roles else memberships[0].role
     response = _user_to_response(target, primary)
     response.email = target.email
@@ -645,16 +665,18 @@ async def list_agent_commissions(
         ).all()
         base = sum((D(str(r[0] or 0)) for r in rows), D("0"))
         commission = (base * D(str(INTERNAL_AGENT_COMMISSION_RATE))).quantize(D("0.01"))
-        items.append(AgentCommissionItem(
-            user_id=u.id,
-            name=u.name,
-            phone_masked=mask_phone(u.phone_enc),
-            year_month=year_month,
-            commission_rate=INTERNAL_AGENT_COMMISSION_RATE,
-            base_amount=base,
-            paid_case_count=len(rows),
-            commission=commission,
-        ))
+        items.append(
+            AgentCommissionItem(
+                user_id=u.id,
+                name=u.name,
+                phone_masked=mask_phone(u.phone_enc),
+                year_month=year_month,
+                commission_rate=INTERNAL_AGENT_COMMISSION_RATE,
+                base_amount=base,
+                paid_case_count=len(rows),
+                commission=commission,
+            )
+        )
     total_base = sum((it.base_amount for it in items), D("0"))
     total_commission = sum((it.commission for it in items), D("0"))
     return AgentCommissionList(
@@ -702,7 +724,8 @@ async def get_agent_commission_detail(
             CollectionCase.stage == "paid",
             CollectionCase.updated_at >= period_start,
             CollectionCase.updated_at < period_end,
-        ).order_by(CollectionCase.updated_at.desc())
+        )
+        .order_by(CollectionCase.updated_at.desc())
     ).all()
 
     items = [
@@ -732,12 +755,12 @@ async def get_agent_commission_detail(
 
 class CostSummaryOut(BaseModel):
     year_month: str
-    provider_payable_total: Decimal      # 应付服务商
-    agent_commission_total: Decimal      # 应发员工提成
-    total_cost: Decimal                  # 合计
-    provider_count: int                  # 涉及服务商数
-    agent_count: int                     # 涉及内勤数
-    paid_case_count: int                 # 当月已结清案件数（共计）
+    provider_payable_total: Decimal  # 应付服务商
+    agent_commission_total: Decimal  # 应发员工提成
+    total_cost: Decimal  # 合计
+    provider_count: int  # 涉及服务商数
+    agent_count: int  # 涉及内勤数
+    paid_case_count: int  # 当月已结清案件数（共计）
 
 
 @router.get("/cost-summary", response_model=CostSummaryOut)
@@ -776,21 +799,26 @@ async def admin_cost_summary(
         )
     ).all()
     provider_total = sum(
-        (D(str(s.total_amount or 0)) for s, _pid in settle_rows), D("0"),
+        (D(str(s.total_amount or 0)) for s, _pid in settle_rows),
+        D("0"),
     )
     provider_ids = {pid for _s, pid in settle_rows if pid}
 
     # 应发员工提成：复用 list_agent_commissions 算法
-    agents = db.execute(
-        select(UserAccount.id).join(
-            UserTenantMembership, UserTenantMembership.user_id == UserAccount.id
-        ).where(
-            UserTenantMembership.tenant_id == tenant_id,
-            UserTenantMembership.role == "agent_internal",
-            UserTenantMembership.is_active.is_(True),
-            UserAccount.is_active.is_(True),
+    agents = (
+        db.execute(
+            select(UserAccount.id)
+            .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
+            .where(
+                UserTenantMembership.tenant_id == tenant_id,
+                UserTenantMembership.role == "agent_internal",
+                UserTenantMembership.is_active.is_(True),
+                UserAccount.is_active.is_(True),
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     agent_total = D("0")
     agent_count_with_payout = 0
     for uid in agents:
@@ -806,21 +834,20 @@ async def admin_cost_summary(
         base = sum((D(str(r[0] or 0)) for r in rows), D("0"))
         if base > 0:
             agent_count_with_payout += 1
-        agent_total += (base * D(str(INTERNAL_AGENT_COMMISSION_RATE))).quantize(
-            D("0.01")
-        )
+        agent_total += (base * D(str(INTERNAL_AGENT_COMMISSION_RATE))).quantize(D("0.01"))
 
     # 当月本租户结清案件总数
     paid_case_total: int = db.execute(
         select(func.count()).select_from(
-            select(CollectionCase.id).join(
-                Project, Project.id == CollectionCase.project_id, isouter=True
-            ).where(
+            select(CollectionCase.id)
+            .join(Project, Project.id == CollectionCase.project_id, isouter=True)
+            .where(
                 CollectionCase.tenant_id == tenant_id,
                 CollectionCase.stage == "paid",
                 CollectionCase.updated_at >= period_start,
                 CollectionCase.updated_at < period_end,
-            ).subquery()
+            )
+            .subquery()
         )
     ).scalar_one()
 
@@ -836,9 +863,6 @@ async def admin_cost_summary(
 
 
 # ── v1.5.7 — 物业 admin 审计日志列表 ──────────────────────────────
-
-
-from app.schemas.audit import AuditLogOut
 
 
 @router.get("/audit-logs", response_model=PaginatedResponse[AuditLogOut])
@@ -876,16 +900,19 @@ async def admin_audit_logs(
     if until:
         stmt = stmt.where(AuditLog.created_at <= until)
 
-    total: int = db.execute(
-        select(func.count()).select_from(stmt.subquery())
-    ).scalar_one()
+    total: int = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
     rows = (
         db.execute(
             stmt.order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
-            .offset((page - 1) * page_size).limit(page_size)
-        ).scalars().all()
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        .scalars()
+        .all()
     )
     return PaginatedResponse(
         items=[AuditLogOut.model_validate(r) for r in rows],
-        total=total, page=page, page_size=page_size,
+        total=total,
+        page=page,
+        page_size=page_size,
     )

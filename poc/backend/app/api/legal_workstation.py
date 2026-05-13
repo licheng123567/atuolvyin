@@ -7,6 +7,7 @@ GET   /api/v1/legal-workstation/orders                 列出（按 law_firm_id 
 POST  /api/v1/legal-workstation/orders/{id}/start      dispatched → in_service
 GET   /api/v1/legal-workstation/firms/{id}/stats       律所聚合统计
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -38,9 +39,7 @@ router = APIRouter()
 OPS_ROLES = ("platform_ops", "platform_super", "platform_superadmin")
 
 
-def _order_to_out(
-    order: LegalConversionOrder, package_name: str | None
-) -> LegalConversionOrderOut:
+def _order_to_out(order: LegalConversionOrder, package_name: str | None) -> LegalConversionOrderOut:
     return LegalConversionOrderOut(
         id=order.id,
         tenant_id=order.tenant_id,
@@ -76,12 +75,9 @@ async def list_workstation_orders(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[LegalConversionOrderOut]:
-    stmt = (
-        select(LegalConversionOrder, LegalServicePackage.name)
-        .join(
-            LegalServicePackage,
-            LegalServicePackage.id == LegalConversionOrder.package_id,
-        )
+    stmt = select(LegalConversionOrder, LegalServicePackage.name).join(
+        LegalServicePackage,
+        LegalServicePackage.id == LegalConversionOrder.package_id,
     )
     if law_firm_id is not None:
         stmt = stmt.where(LegalConversionOrder.law_firm_id == law_firm_id)
@@ -99,7 +95,10 @@ async def list_workstation_orders(
     rows = db.execute(stmt.offset((page - 1) * page_size).limit(page_size)).all()
     items = [_order_to_out(o, name) for o, name in rows]
     return PaginatedResponse[LegalConversionOrderOut](
-        items=items, total=total, page=page, page_size=page_size,
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -154,8 +153,7 @@ async def firm_stats(
     by_status = {s: int(c) for s, c in rows}
 
     fee_total = db.execute(
-        select(func.coalesce(func.sum(LegalConversionOrder.platform_fee_amount), 0))
-        .where(
+        select(func.coalesce(func.sum(LegalConversionOrder.platform_fee_amount), 0)).where(
             LegalConversionOrder.law_firm_id == firm_id,
             LegalConversionOrder.status == "completed",
         )
@@ -239,7 +237,9 @@ async def list_firm_invoices(
     rows = db.execute(stmt.offset((page - 1) * page_size).limit(page_size)).scalars().all()
     return PaginatedResponse[LegalPlatformInvoiceOut](
         items=[LegalPlatformInvoiceOut.model_validate(r) for r in rows],
-        total=total, page=page, page_size=page_size,
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 

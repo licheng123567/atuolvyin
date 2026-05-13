@@ -2,6 +2,7 @@
 
 物业 admin 自管：合作律所列表（不耦合现有平台 LawFirm）+ 律师函/催告函模板。
 """
+
 from __future__ import annotations
 
 from typing import Annotated
@@ -82,13 +83,20 @@ def list_partner_law_firms(
     if only_active:
         stmt = stmt.where(PartnerLawFirm.is_active.is_(True))
     total: int = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
-    rows = db.execute(
-        stmt.order_by(desc(PartnerLawFirm.created_at))
-        .offset((page - 1) * page_size).limit(page_size)
-    ).scalars().all()
+    rows = (
+        db.execute(
+            stmt.order_by(desc(PartnerLawFirm.created_at))
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        .scalars()
+        .all()
+    )
     return PaginatedResponse(
         items=[_firm_to_out(f) for f in rows],
-        total=total, page=page, page_size=page_size,
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -130,9 +138,14 @@ def create_partner_law_firm(
     db.add(firm)
     db.flush()
     log_audit(
-        db, actor_user_id=user_id, actor_role=role, tenant_id=tenant_id,
-        action="partner_law_firm.created", target_type="partner_law_firm",
-        target_id=firm.id, payload={"name": body.name},
+        db,
+        actor_user_id=user_id,
+        actor_role=role,
+        tenant_id=tenant_id,
+        action="partner_law_firm.created",
+        target_type="partner_law_firm",
+        target_id=firm.id,
+        payload={"name": body.name},
     )
     db.commit()
     db.refresh(firm)
@@ -156,7 +169,9 @@ def update_partner_law_firm(
         )
     data = body.model_dump(exclude_unset=True)
     if "contact_phone" in data:
-        firm.contact_phone_enc = encrypt_phone(data.pop("contact_phone")) if data["contact_phone"] else None
+        firm.contact_phone_enc = (
+            encrypt_phone(data.pop("contact_phone")) if data["contact_phone"] else None
+        )
     for k, v in data.items():
         setattr(firm, k, v)
     db.commit()
@@ -225,13 +240,20 @@ def list_letter_templates(
     if category:
         stmt = stmt.where(InternalLegalLetterTemplate.category == category)
     total: int = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
-    rows = db.execute(
-        stmt.order_by(desc(InternalLegalLetterTemplate.created_at))
-        .offset((page - 1) * page_size).limit(page_size)
-    ).scalars().all()
+    rows = (
+        db.execute(
+            stmt.order_by(desc(InternalLegalLetterTemplate.created_at))
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        .scalars()
+        .all()
+    )
     return PaginatedResponse(
         items=[_tpl_to_out(t) for t in rows],
-        total=total, page=page, page_size=page_size,
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -272,10 +294,14 @@ def create_letter_template(
     db.add(tpl)
     db.flush()
     log_audit(
-        db, actor_user_id=user_id, actor_role=role, tenant_id=tenant_id,
+        db,
+        actor_user_id=user_id,
+        actor_role=role,
+        tenant_id=tenant_id,
         action="internal_letter_template.created",
         target_type="internal_legal_letter_template",
-        target_id=tpl.id, payload={"name": body.name, "category": body.category},
+        target_id=tpl.id,
+        payload={"name": body.name, "category": body.category},
     )
     db.commit()
     db.refresh(tpl)
@@ -303,7 +329,9 @@ def update_letter_template(
     data = body.model_dump(exclude_unset=True)
     if "variables" in data and data["variables"] is not None:
         # variables 可能是 LetterVariableSpec 的 dict（已通过 pydantic 解析）
-        data["variables"] = [v if isinstance(v, dict) else v.model_dump() for v in data["variables"]]
+        data["variables"] = [
+            v if isinstance(v, dict) else v.model_dump() for v in data["variables"]
+        ]
     for k, v in data.items():
         setattr(tpl, k, v)
     db.commit()

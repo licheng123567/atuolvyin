@@ -13,7 +13,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
-from sqlalchemy import func, or_ as sa_or_, select
+from sqlalchemy import func, select
+from sqlalchemy import or_ as sa_or_
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -27,12 +28,11 @@ from app.core.security import (
     require_roles,
 )
 from app.models.call import CallRecord
-from app.models.case import CollectionCase, OwnerProfile
+from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.tenant import UserTenantMembership
 from app.models.user import UserAccount
 from app.models.work import WorkOrder
 from app.schemas.common import PaginatedResponse
-from app.services.audit import log_audit
 from app.schemas.work_order import (
     CallRef,
     CaseRef,
@@ -43,6 +43,7 @@ from app.schemas.work_order import (
     WorkOrderOut,
     WorkOrderPatch,
 )
+from app.services.audit import log_audit
 
 router = APIRouter()
 
@@ -66,9 +67,9 @@ def _wo_to_out(
     wo: WorkOrder,
     assignee_name: str | None,
     *,
-    owner: "OwnerProfile | None" = None,
-    case: "CollectionCase | None" = None,
-    project: "Project | None" = None,
+    owner: OwnerProfile | None = None,
+    case: CollectionCase | None = None,
+    project: Project | None = None,
 ) -> WorkOrderOut:
     return WorkOrderOut(
         id=wo.id,
@@ -112,30 +113,37 @@ def get_work_orders_kpi(
     now = datetime.now(UTC)
     month_start = datetime(now.year, now.month, 1, tzinfo=UTC)
 
-    open_count = db.execute(
-        select(func.count(WorkOrder.id))
-        .where(WorkOrder.tenant_id == tenant_id)
-        .where(WorkOrder.status == "open")
-    ).scalar_one() or 0
+    open_count = (
+        db.execute(
+            select(func.count(WorkOrder.id))
+            .where(WorkOrder.tenant_id == tenant_id)
+            .where(WorkOrder.status == "open")
+        ).scalar_one()
+        or 0
+    )
 
-    in_progress_count = db.execute(
-        select(func.count(WorkOrder.id))
-        .where(WorkOrder.tenant_id == tenant_id)
-        .where(WorkOrder.status == "in_progress")
-    ).scalar_one() or 0
+    in_progress_count = (
+        db.execute(
+            select(func.count(WorkOrder.id))
+            .where(WorkOrder.tenant_id == tenant_id)
+            .where(WorkOrder.status == "in_progress")
+        ).scalar_one()
+        or 0
+    )
 
     closed_statuses = ("resolved", "closed")
-    closed_this_month = db.execute(
-        select(func.count(WorkOrder.id))
-        .where(WorkOrder.tenant_id == tenant_id)
-        .where(WorkOrder.status.in_(closed_statuses))
-        .where(WorkOrder.updated_at >= month_start)
-    ).scalar_one() or 0
+    closed_this_month = (
+        db.execute(
+            select(func.count(WorkOrder.id))
+            .where(WorkOrder.tenant_id == tenant_id)
+            .where(WorkOrder.status.in_(closed_statuses))
+            .where(WorkOrder.updated_at >= month_start)
+        ).scalar_one()
+        or 0
+    )
 
     avg_seconds = db.execute(
-        select(
-            func.avg(func.extract("epoch", WorkOrder.updated_at - WorkOrder.created_at))
-        )
+        select(func.avg(func.extract("epoch", WorkOrder.updated_at - WorkOrder.created_at)))
         .where(WorkOrder.tenant_id == tenant_id)
         .where(WorkOrder.status.in_(closed_statuses))
         .where(WorkOrder.updated_at >= month_start)
@@ -166,8 +174,6 @@ async def list_work_orders(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[WorkOrderOut]:
-    from app.models.case import CollectionCase, OwnerProfile, Project
-
     tenant_id = _require_tenant(payload)
 
     # v1.9.7 — 始终 join case + owner + project，使得列表可返回业主/房号/项目/欠费上下文
@@ -269,6 +275,7 @@ async def create_work_order(
         project_coord_id: int | None = None
         if body.case_id is not None:
             from app.models.project_member import ProjectMember
+
             project_coord_id = db.execute(
                 select(ProjectMember.user_id)
                 .join(CollectionCase, CollectionCase.project_id == ProjectMember.project_id)
@@ -276,32 +283,40 @@ async def create_work_order(
                     CollectionCase.id == body.case_id,
                     ProjectMember.role_in_project == "coordinator",
                     ProjectMember.is_active.is_(True),
-                ).limit(1)
+                )
+                .limit(1)
             ).scalar_one_or_none()
 
         if project_coord_id is not None:
             assigned_to = project_coord_id
             auto_assigned = True
         else:
-            coordinator_ids = list(db.execute(
-                select(UserTenantMembership.user_id).where(
-                    UserTenantMembership.tenant_id == tenant_id,
-                    UserTenantMembership.role.in_(["coordinator", "workorder"]),
-                    UserTenantMembership.is_active.is_(True),
-                ).order_by(UserTenantMembership.id)
-            ).scalars().all())
-            if coordinator_ids:
-                today_start = datetime.now().replace(
-                    hour=0, minute=0, second=0, microsecond=0
-                )
-                counts: dict[int, int] = dict(db.execute(
-                    select(WorkOrder.assigned_to, func.count())
+            coordinator_ids = list(
+                db.execute(
+                    select(UserTenantMembership.user_id)
                     .where(
-                        WorkOrder.tenant_id == tenant_id,
-                        WorkOrder.assigned_to.in_(coordinator_ids),
-                        WorkOrder.created_at >= today_start,
-                    ).group_by(WorkOrder.assigned_to)
-                ).all())
+                        UserTenantMembership.tenant_id == tenant_id,
+                        UserTenantMembership.role.in_(["coordinator", "workorder"]),
+                        UserTenantMembership.is_active.is_(True),
+                    )
+                    .order_by(UserTenantMembership.id)
+                )
+                .scalars()
+                .all()
+            )
+            if coordinator_ids:
+                today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+                counts: dict[int, int] = dict(
+                    db.execute(
+                        select(WorkOrder.assigned_to, func.count())
+                        .where(
+                            WorkOrder.tenant_id == tenant_id,
+                            WorkOrder.assigned_to.in_(coordinator_ids),
+                            WorkOrder.created_at >= today_start,
+                        )
+                        .group_by(WorkOrder.assigned_to)
+                    ).all()
+                )
                 assigned_to = min(coordinator_ids, key=lambda uid: counts.get(uid, 0))
                 auto_assigned = True
 
@@ -343,7 +358,6 @@ async def get_work_order(
     _user: Annotated[UserAccount, Depends(require_roles(*WORKORDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> WorkOrderDetailOut:
-    from app.models.case import Project
     from app.models.work_order_follow_up import WorkOrderFollowUp
 
     tenant_id = _require_tenant(payload)
@@ -366,8 +380,11 @@ async def get_work_order(
                 project = db.get(Project, case.project_id)
 
     base = _wo_to_out(
-        wo, _resolve_assignee_name(db, wo.assigned_to),
-        owner=owner, case=case, project=project,
+        wo,
+        _resolve_assignee_name(db, wo.assigned_to),
+        owner=owner,
+        case=case,
+        project=project,
     )
 
     case_ref: CaseRef | None = None
@@ -384,7 +401,8 @@ async def get_work_order(
                         db, tenant_id, payload.get("provider_id")
                     ),
                 ),
-            ) or "",
+            )
+            or "",
         )
 
     call_ref: CallRef | None = None
@@ -399,16 +417,26 @@ async def get_work_order(
             )
 
     # v1.9.7 — follow-ups（按时间升序）
-    follow_rows = db.execute(
-        select(WorkOrderFollowUp)
-        .where(WorkOrderFollowUp.work_order_id == order_id)
-        .where(WorkOrderFollowUp.tenant_id == tenant_id)
-        .order_by(WorkOrderFollowUp.occurred_at.asc())
-    ).scalars().all()
+    follow_rows = (
+        db.execute(
+            select(WorkOrderFollowUp)
+            .where(WorkOrderFollowUp.work_order_id == order_id)
+            .where(WorkOrderFollowUp.tenant_id == tenant_id)
+            .order_by(WorkOrderFollowUp.occurred_at.asc())
+        )
+        .scalars()
+        .all()
+    )
     actor_ids = {f.actor_user_id for f in follow_rows if f.actor_user_id}
-    actor_map = dict(db.execute(
-        select(UserAccount.id, UserAccount.name).where(UserAccount.id.in_(actor_ids))
-    ).all()) if actor_ids else {}
+    actor_map = (
+        dict(
+            db.execute(
+                select(UserAccount.id, UserAccount.name).where(UserAccount.id.in_(actor_ids))
+            ).all()
+        )
+        if actor_ids
+        else {}
+    )
     follow_ups = [
         {
             "id": f.id,
@@ -445,6 +473,7 @@ async def add_follow_up(
 ) -> WorkOrderDetailOut:
     """v1.9.7 — 协调员/admin 给工单加跟进记录。"""
     from datetime import UTC
+
     from app.models.work_order_follow_up import WorkOrderFollowUp
 
     tenant_id = _require_tenant(payload)
@@ -507,13 +536,11 @@ async def patch_work_order(
     db.commit()
     db.refresh(wo)
     # Sprint 15.4b — work_order_completed 通知（open/in_progress → completed）
-    if (
-        wo.status == "completed"
-        and prev_status != "completed"
-    ):
+    if wo.status == "completed" and prev_status != "completed":
         from app.services.notifications.event_subscribers import (
             notify_work_order_completed,
         )
+
         # 工单无 creator 字段，回落给 admin 角色 + 案件 assigned_to（如有）
         creator_uid: int | None = None
         if wo.case_id is not None:

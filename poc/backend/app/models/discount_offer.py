@@ -11,6 +11,7 @@
 
 7 天有效期：批准后业主必须在 expires_at 前缴清，否则 status=expired，需重新申请。
 """
+
 from __future__ import annotations
 
 from datetime import datetime

@@ -1,5 +1,6 @@
 # poc/backend/app/services/streaming_asr.py
 """Streaming ASR dispatcher — mirrors app/services/asr.py pattern."""
+
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
@@ -49,8 +50,10 @@ def get_streaming_asr_backend() -> StreamingASRBackend:
     backend = settings.streaming_asr_backend.lower()
     if backend == "mock":
         from . import streaming_asr_mock as impl
+
         return impl.MockStreamingASR()
     if backend == "dashscope":
         from . import streaming_asr_dashscope as impl
+
         return impl.DashScopeStreamingASR()
     raise RuntimeError(f"unknown STREAMING_ASR_BACKEND: {settings.streaming_asr_backend}")

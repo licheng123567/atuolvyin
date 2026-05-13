@@ -52,9 +52,7 @@ async def ws_calls(
         await websocket.close(code=1008, reason="invalid token")
         return
 
-    call = db.execute(
-        select(CallRecord).where(CallRecord.id == call_id)
-    ).scalar_one_or_none()
+    call = db.execute(select(CallRecord).where(CallRecord.id == call_id)).scalar_one_or_none()
     if not call:
         await websocket.close(code=1008, reason="call not found")
         return
@@ -70,6 +68,7 @@ async def ws_calls(
     # Lazy-init the call session on first agent connection
     session = _sessions.get(call_id)
     if session is None and role == "agent":
+
         async def broadcast_transcript(msg: dict) -> None:
             await manager.broadcast(call_id, msg)
 
@@ -89,6 +88,7 @@ async def ws_calls(
             # Sprint 15.2 — L3 自动挂断（PRD §13）：尊重 TenantSettings.l3_hangup_enabled
             if event.get("level") == "L3":
                 from app.services.call_intervention import maybe_auto_hangup_for_l3
+
                 try:
                     await maybe_auto_hangup_for_l3(db, call_id=call_id, risk_event=event)
                 except Exception as exc:

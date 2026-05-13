@@ -1,4 +1,5 @@
 """Sprint 16.2 — Project (物业项目) schemas."""
+
 from __future__ import annotations
 
 from datetime import date, datetime

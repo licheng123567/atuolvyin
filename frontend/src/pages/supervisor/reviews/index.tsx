@@ -177,11 +177,11 @@ export function SupervisorReviewsPage() {
                     )}
                   </td>
                   <td>
-                    {isPending ? (
+                    {isPending || !it.supervisor_quality ? (
                       <span className="ds-badge ds-badge-orange">待复核</span>
                     ) : (
-                      <span className={QUALITY_BADGE_CLASS[it.supervisor_quality!]}>
-                        {QUALITY_LABELS[it.supervisor_quality!]}
+                      <span className={QUALITY_BADGE_CLASS[it.supervisor_quality]}>
+                        {QUALITY_LABELS[it.supervisor_quality]}
                       </span>
                     )}
                   </td>

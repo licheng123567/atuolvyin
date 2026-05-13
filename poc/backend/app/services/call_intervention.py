@@ -11,6 +11,7 @@ WS 推送：
 
 Audit：每次干预写一条 audit_log，留法律存证。
 """
+
 from __future__ import annotations
 
 import logging
@@ -48,8 +49,8 @@ async def dispatch_force_hangup(
     """
     # WS push 给 agent 房间（call-level）
     from app.api.ws_calls import _sessions
-    from app.ws.connection_manager import get_connection_manager
     from app.risk.supervisor_manager import get_supervisor_manager
+    from app.ws.connection_manager import get_connection_manager
 
     payload_agent = {
         "type": "call.force_hangup",
@@ -102,9 +103,7 @@ async def dispatch_force_hangup(
     return payload_agent
 
 
-async def maybe_auto_hangup_for_l3(
-    db: Session, *, call_id: int, risk_event: dict
-) -> bool:
+async def maybe_auto_hangup_for_l3(db: Session, *, call_id: int, risk_event: dict) -> bool:
     """风控管线检测到 L3 时调用。返回是否实际触发了挂断。"""
     if risk_event.get("level") != "L3":
         return False
@@ -142,8 +141,8 @@ async def dispatch_takeover_request(
 ) -> dict:
     """督导发起强制转接请求：WS 推 agent + audit。等 agent 决策后调
     dispatch_takeover_response 通知 supervisor。"""
-    from app.ws.connection_manager import get_connection_manager
     from app.risk.supervisor_manager import get_supervisor_manager
+    from app.ws.connection_manager import get_connection_manager
 
     payload = {
         "type": "supervisor.takeover_request",

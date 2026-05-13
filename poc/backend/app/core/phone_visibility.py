@@ -15,6 +15,7 @@
 - 平台 platform_super/platform_ops → 永远脱敏
 - 未识别 → 脱敏（fail-safe）
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -23,12 +24,8 @@ from sqlalchemy.orm import Session
 from app.core.crypto import decrypt_phone, mask_phone
 from app.models.tenant import ProviderTenantContract
 
-INTERNAL_ROLES = frozenset(
-    {"admin", "supervisor", "agent_internal", "property_manager_property"}
-)
-PROVIDER_ROLES = frozenset(
-    {"agent_external", "property_manager_provider", "provider_admin"}
-)
+INTERNAL_ROLES = frozenset({"admin", "supervisor", "agent_internal", "property_manager_property"})
+PROVIDER_ROLES = frozenset({"agent_external", "property_manager_provider", "provider_admin"})
 LEGAL_ROLES = frozenset({"legal"})
 PLATFORM_ROLES = frozenset({"platform_super", "platform_superadmin", "platform_ops"})
 
@@ -43,9 +40,7 @@ LEGAL_ACTIVE_STAGES = frozenset(
 )
 
 
-def is_provider_contract_active(
-    db: Session, tenant_id: int, provider_id: int | None
-) -> bool:
+def is_provider_contract_active(db: Session, tenant_id: int, provider_id: int | None) -> bool:
     """O(1) 查询 — 服务商 endpoint 入口预取一次，列表渲染复用。
 
     合同 status='active' 且（expires_at IS NULL 或未过期）即视为有效。

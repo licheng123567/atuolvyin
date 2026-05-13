@@ -1,4 +1,5 @@
 """Sprint 16.1 — 法务转化通道 schema (PRD §20.4)."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -53,6 +54,7 @@ class LegalConversionOrderOut(BaseModel):
 
 class ConvertCasePreviewOut(BaseModel):
     """Dry-run 预览：不创建订单，仅返回时间线 + 推荐 + 成本预估。"""
+
     timeline_summary: dict[str, Any]
     recommendation: dict[str, Any]
     available_packages: list[LegalServicePackageOut]
@@ -60,6 +62,7 @@ class ConvertCasePreviewOut(BaseModel):
 
 class DispatchOrderRequest(BaseModel):
     """优先用 law_firm_id（律所池）；缺省时回落到 free-text。"""
+
     law_firm_id: int | None = Field(None, gt=0)
     lawyer_id: int | None = Field(None, gt=0)
     assigned_law_firm: str | None = Field(None, max_length=200)

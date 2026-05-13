@@ -9,6 +9,7 @@ POST   /api/v1/admin/legal-conversion-orders/{id}/dispatch   平台 ops 撮合�
 POST   /api/v1/admin/legal-conversion-orders/{id}/complete   律所标记完成
 POST   /api/v1/admin/legal-conversion-orders/{id}/cancel     物业取消
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -43,12 +44,12 @@ from app.schemas.legal_doc_render import (
     LegalDocumentRenderOut,
     LegalDocumentTemplateOut,
 )
-from app.services.legal_document_render import render_for_order
 from app.services.legal_conversion import (
     build_timeline_summary,
     estimate_cost,
     recommend_package,
 )
+from app.services.legal_document_render import render_for_order
 
 router = APIRouter()
 
@@ -68,17 +69,21 @@ def _require_tenant(payload: dict) -> int:
 
 def _enabled_packages(db: Session, tenant_id: int) -> list[LegalServicePackage]:
     """全局（tenant_id IS NULL）+ 本租户 enabled 包，按 sort_order。"""
-    rows = db.execute(
-        select(LegalServicePackage)
-        .where(
-            LegalServicePackage.enabled.is_(True),
-            or_(
-                LegalServicePackage.tenant_id.is_(None),
-                LegalServicePackage.tenant_id == tenant_id,
-            ),
+    rows = (
+        db.execute(
+            select(LegalServicePackage)
+            .where(
+                LegalServicePackage.enabled.is_(True),
+                or_(
+                    LegalServicePackage.tenant_id.is_(None),
+                    LegalServicePackage.tenant_id == tenant_id,
+                ),
+            )
+            .order_by(LegalServicePackage.sort_order, LegalServicePackage.id)
         )
-        .order_by(LegalServicePackage.sort_order, LegalServicePackage.id)
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return list(rows)
 
 
@@ -295,6 +300,7 @@ async def list_orders(
     rows = db.execute(stmt.offset((page - 1) * page_size).limit(page_size)).all()
 
     from sqlalchemy import func as _f
+
     total_stmt = select(_f.count(LegalConversionOrder.id)).where(
         LegalConversionOrder.tenant_id == tenant_id
     )
@@ -304,7 +310,10 @@ async def list_orders(
 
     items = [_order_to_out(o, name) for o, name in rows]
     return PaginatedResponse[LegalConversionOrderOut](
-        items=items, total=total, page=page, page_size=page_size,
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -379,11 +388,7 @@ async def dispatch_order(
 
         if body.lawyer_id is not None:
             lawyer = db.get(LawFirmLawyer, body.lawyer_id)
-            if (
-                lawyer is None
-                or lawyer.law_firm_id != firm.id
-                or not lawyer.is_active
-            ):
+            if lawyer is None or lawyer.law_firm_id != firm.id or not lawyer.is_active:
                 raise HTTPException(
                     status_code=http_status.HTTP_400_BAD_REQUEST,
                     detail={"code": "ERR_LAWYER_INVALID", "message": "律师不属于该律所或已停用"},
@@ -395,7 +400,10 @@ async def dispatch_order(
         if not body.assigned_law_firm or len(body.assigned_law_firm.strip()) < 2:
             raise HTTPException(
                 status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail={"code": "ERR_VALIDATION", "message": "需提供 law_firm_id 或 assigned_law_firm"},
+                detail={
+                    "code": "ERR_VALIDATION",
+                    "message": "需提供 law_firm_id 或 assigned_law_firm",
+                },
             )
         firm_name = body.assigned_law_firm.strip()
         lawyer_name = (body.assigned_lawyer_name or "").strip() or None
@@ -498,23 +506,25 @@ async def list_doc_templates(
 ) -> list[LegalDocumentTemplateOut]:
     """列出本租户可见模板（平台默认 + 本租户覆盖），按 package_type 排序。"""
     tenant_id = _require_tenant(payload)
-    rows = db.execute(
-        select(LegalDocumentTemplate)
-        .where(
-            LegalDocumentTemplate.enabled.is_(True),
-            or_(
-                LegalDocumentTemplate.tenant_id.is_(None),
-                LegalDocumentTemplate.tenant_id == tenant_id,
-            ),
+    rows = (
+        db.execute(
+            select(LegalDocumentTemplate)
+            .where(
+                LegalDocumentTemplate.enabled.is_(True),
+                or_(
+                    LegalDocumentTemplate.tenant_id.is_(None),
+                    LegalDocumentTemplate.tenant_id == tenant_id,
+                ),
+            )
+            .order_by(LegalDocumentTemplate.package_type, LegalDocumentTemplate.id)
         )
-        .order_by(LegalDocumentTemplate.package_type, LegalDocumentTemplate.id)
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [LegalDocumentTemplateOut.model_validate(r) for r in rows]
 
 
-def _get_order_for_tenant(
-    db: Session, *, order_id: int, tenant_id: int
-) -> LegalConversionOrder:
+def _get_order_for_tenant(db: Session, *, order_id: int, tenant_id: int) -> LegalConversionOrder:
     order = db.get(LegalConversionOrder, order_id)
     if order is None or order.tenant_id != tenant_id:
         raise HTTPException(
@@ -566,14 +576,15 @@ async def render_doc(
     order = _get_order_for_tenant(db, order_id=order_id, tenant_id=tenant_id)
     try:
         render = render_for_order(
-            db, order=order,
+            db,
+            order=order,
             rendered_by=int(payload.get("user_id") or 0) or None,
         )
     except ValueError as exc:
         raise HTTPException(
             status_code=http_status.HTTP_400_BAD_REQUEST,
             detail={"code": "ERR_NO_TEMPLATE", "message": str(exc)},
-        )
+        ) from exc
     db.commit()
     db.refresh(render)
     return LegalDocumentRenderOut.model_validate(render)
@@ -591,9 +602,13 @@ async def list_doc_versions(
 ) -> list[LegalDocumentRenderOut]:
     tenant_id = _require_tenant(payload)
     _get_order_for_tenant(db, order_id=order_id, tenant_id=tenant_id)
-    rows = db.execute(
-        select(LegalDocumentRender)
-        .where(LegalDocumentRender.order_id == order_id)
-        .order_by(LegalDocumentRender.version.desc())
-    ).scalars().all()
+    rows = (
+        db.execute(
+            select(LegalDocumentRender)
+            .where(LegalDocumentRender.order_id == order_id)
+            .order_by(LegalDocumentRender.version.desc())
+        )
+        .scalars()
+        .all()
+    )
     return [LegalDocumentRenderOut.model_validate(r) for r in rows]

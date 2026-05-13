@@ -1,4 +1,5 @@
 """MiPush dispatcher — Xiaomi HTTP API in production, in-memory mock for tests."""
+
 from __future__ import annotations
 
 from typing import Protocol
@@ -28,9 +29,11 @@ def get_mipush_client() -> MiPushClient:
     backend = settings.mipush_backend.lower()
     if backend == "mock":
         from .mipush_mock import MockMiPushClient
+
         _singleton = MockMiPushClient()
     elif backend == "xiaomi":
         from .mipush_xiaomi import XiaomiMiPushClient
+
         _singleton = XiaomiMiPushClient(
             app_secret=settings.mipush_app_secret,
             package_name=settings.mipush_package_name,

@@ -78,7 +78,8 @@ async def test_create_user_duplicate_phone(
         "/api/v1/admin/users", json=payload, headers=admin_auth_headers
     )
     assert resp.status_code == 409
-    assert resp.json()["code"] == "ERR_DUPLICATE_PHONE"
+    # v1.5+ 把跨租户去重改为「同租户去重」，错误码同步重命名
+    assert resp.json()["code"] == "ERR_DUPLICATE_IN_TENANT"
 
 
 @pytest.mark.asyncio

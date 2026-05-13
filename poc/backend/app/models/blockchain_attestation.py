@@ -6,6 +6,7 @@
 
 公开核验入口（GET /api/v1/public/verify/{tx_hash}）查询本表。
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -54,9 +55,7 @@ class BlockchainAttestation(Base):
     submitted_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
     )
-    confirmed_at: Mapped[datetime | None] = mapped_column(
-        sa.DateTime(timezone=True), nullable=True
-    )
+    confirmed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
 
     payload_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 

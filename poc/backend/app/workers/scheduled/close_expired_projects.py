@@ -5,12 +5,13 @@
 
 部署时由 systemd timer / Kubernetes CronJob / n8n 每日触发一次。
 """
+
 from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, select
 
 from app.core.db import SessionLocal
 from app.models.case import Project
@@ -30,31 +31,37 @@ def _project_link(project_id: int) -> str:
     return f"/admin/projects/{project_id}/edit"
 
 
-def _notify_users_for_project(
-    db, project: Project, *, title: str, body: str, severity: str
-) -> int:
+def _notify_users_for_project(db, project: Project, *, title: str, body: str, severity: str) -> int:
     """给该项目相关的物业 admin + 服务商 admin 发通知，去重写入。"""
     # 找物业方接收人：项目所属租户的 admin
     recipients: list[tuple[int, int]] = []  # (user_id, tenant_id)
-    property_admin_ids = db.execute(
-        select(UserTenantMembership.user_id).where(
-            UserTenantMembership.tenant_id == project.tenant_id,
-            UserTenantMembership.role == "admin",
-            UserTenantMembership.is_active.is_(True),
+    property_admin_ids = (
+        db.execute(
+            select(UserTenantMembership.user_id).where(
+                UserTenantMembership.tenant_id == project.tenant_id,
+                UserTenantMembership.role == "admin",
+                UserTenantMembership.is_active.is_(True),
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for uid in property_admin_ids:
         recipients.append((int(uid), int(project.tenant_id)))
 
     # 找服务商方接收人：项目 provider_id 对应的 provider_admin
     if project.provider_id is not None:
-        provider_admin_ids = db.execute(
-            select(UserTenantMembership.user_id).where(
-                UserTenantMembership.provider_id == project.provider_id,
-                UserTenantMembership.role == "provider_admin",
-                UserTenantMembership.is_active.is_(True),
+        provider_admin_ids = (
+            db.execute(
+                select(UserTenantMembership.user_id).where(
+                    UserTenantMembership.provider_id == project.provider_id,
+                    UserTenantMembership.role == "provider_admin",
+                    UserTenantMembership.is_active.is_(True),
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for uid in provider_admin_ids:
             recipients.append((int(uid), int(project.tenant_id)))
 
@@ -64,25 +71,29 @@ def _notify_users_for_project(
     for user_id, tenant_id in recipients:
         # 去重：7 天内同 user + 同 project 的同 event_type 通知不重发
         existing = db.execute(
-            select(Notification.id).where(
+            select(Notification.id)
+            .where(
                 Notification.user_id == user_id,
                 Notification.event_type == "project.expiring",
                 Notification.created_at >= cutoff,
                 # payload 含 project_id（直接用 SQL JSONB）
                 Notification.payload["project_id"].astext == str(project.id),
-            ).limit(1)
+            )
+            .limit(1)
         ).scalar_one_or_none()
         if existing is not None:
             continue
-        db.add(Notification(
-            tenant_id=tenant_id,
-            user_id=user_id,
-            event_type="project.expiring",
-            severity=severity,
-            title=title,
-            body=body,
-            payload={"project_id": project.id, "link": link},
-        ))
+        db.add(
+            Notification(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                event_type="project.expiring",
+                severity=severity,
+                title=title,
+                body=body,
+                payload={"project_id": project.id, "link": link},
+            )
+        )
         sent += 1
     return sent
 
@@ -98,13 +109,17 @@ def run() -> dict[str, int]:
     horizon = now + timedelta(days=EXPIRING_LEAD_DAYS)
     with SessionLocal() as db:
         # Step 1: auto-close
-        expired = db.execute(
-            select(Project).where(
-                Project.status == "active",
-                Project.plan_end.is_not(None),
-                Project.plan_end < now,
+        expired = (
+            db.execute(
+                select(Project).where(
+                    Project.status == "active",
+                    Project.plan_end.is_not(None),
+                    Project.plan_end < now,
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for p in expired:
             p.status = "closed"
             log_audit(
@@ -134,13 +149,17 @@ def run() -> dict[str, int]:
             closed_count += 1
 
         # Step 2: 临期提醒（30 天内）
-        expiring = db.execute(
-            select(Project).where(
-                Project.status == "active",
-                Project.plan_end.is_not(None),
-                and_(Project.plan_end >= now, Project.plan_end <= horizon),
+        expiring = (
+            db.execute(
+                select(Project).where(
+                    Project.status == "active",
+                    Project.plan_end.is_not(None),
+                    and_(Project.plan_end >= now, Project.plan_end <= horizon),
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for p in expiring:
             days_left = max(0, (p.plan_end - now).days)
             notif_count += _notify_users_for_project(
@@ -157,7 +176,8 @@ def run() -> dict[str, int]:
         db.commit()
     logger.info(
         "auto-closed %d expired project(s); sent %d expiring/closed notification(s)",
-        closed_count, notif_count,
+        closed_count,
+        notif_count,
     )
     return {"closed": closed_count, "notifications": notif_count}
 
@@ -166,6 +186,5 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     result = run()
     print(
-        f"auto-closed {result['closed']} project(s); "
-        f"sent {result['notifications']} notification(s)"
+        f"auto-closed {result['closed']} project(s); sent {result['notifications']} notification(s)"
     )

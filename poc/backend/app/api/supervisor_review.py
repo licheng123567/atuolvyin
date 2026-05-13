@@ -3,9 +3,10 @@
 GET  /api/v1/supervisor/reviews        — paginated list of calls needing review
 PATCH /api/v1/supervisor/reviews/{call_id} — label a call with quality rating
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -13,8 +14,8 @@ from fastapi import status as http_status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.phone_visibility import display_owner_phone, should_reveal_owner_phone
 from app.core.db import get_db
+from app.core.phone_visibility import display_owner_phone, should_reveal_owner_phone
 from app.core.security import get_token_payload, require_roles
 from app.models.call import AnalysisResult, CallRecord, RiskEvent, Transcript
 from app.schemas.common import PaginatedResponse
@@ -97,6 +98,7 @@ def list_reviews(
 
     # Count
     from sqlalchemy import func
+
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total: int = db.execute(count_stmt).scalar_one()
 
@@ -108,7 +110,9 @@ def list_reviews(
 
     return PaginatedResponse(
         items=[
-            _to_review_item(call, analysis, reveal_phone=should_reveal_owner_phone(role=payload.get("role", "")))
+            _to_review_item(
+                call, analysis, reveal_phone=should_reveal_owner_phone(role=payload.get("role", ""))
+            )
             for call, analysis in rows
         ],
         total=total,
@@ -158,7 +162,7 @@ def label_review(
     # Write review fields
     analysis.supervisor_quality = body.quality
     analysis.supervisor_review_note = body.note
-    analysis.supervisor_reviewed_at = datetime.now(timezone.utc)
+    analysis.supervisor_reviewed_at = datetime.now(UTC)
     analysis.supervisor_reviewed_by = user_id
 
     # Optional intent correction
@@ -171,7 +175,8 @@ def label_review(
     db.refresh(analysis)
 
     return _to_review_item(
-        call, analysis,
+        call,
+        analysis,
         reveal_phone=should_reveal_owner_phone(role=payload.get("role", "")),
     )
 
@@ -217,7 +222,8 @@ def get_review_detail(
     )
 
     base = _to_review_item(
-        call, analysis,
+        call,
+        analysis,
         reveal_phone=should_reveal_owner_phone(role=payload.get("role", "")),
     )
 

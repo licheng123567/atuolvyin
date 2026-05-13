@@ -4,6 +4,7 @@
 为隐私安全：仅返回非敏感元数据（tenant_name + call_id + 数据 hash + 上链时间），
 不展示业主真名 / 电话 / 欠款金额。
 """
+
 from __future__ import annotations
 
 from typing import Annotated
