@@ -564,3 +564,36 @@
   color: #9ca3af;
   margin-top: 4px;
 }
+
+/* ── v2.2 Module E — Recording mode downgrade banner ─────── */
+/* 镜像 ui/app-agent.html .recording-downgrade-banner */
+.recording-downgrade-banner {
+  background: #fffbeb;
+  border-bottom: 1px solid #fde68a;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: #92400e;
+  flex-shrink: 0;
+}
+.recording-downgrade-banner strong {
+  margin: 0 2px;
+}
+.recording-downgrade-banner button {
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: #92400e;
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+/* ── v2.2 Module E — case-list-item-left helper（原型用） ── */
+.case-list-item-left {
+  min-width: 0;
+  flex: 1;
+}

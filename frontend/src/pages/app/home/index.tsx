@@ -10,6 +10,16 @@
 //        incompatible 例外：保留红色 banner（合规强提示）。
 //   B2 — Summary card 下方新增「今日待拨案件」Top 5 列表，点击直接拨号。
 //   B3 — header 右侧新增搜索快捷入口，跳 cases 页并自动 focus。
+//
+// v2.2 Module E 改造（严格 1:1 还原 app-agent.html#app-home）：
+//   E1 — post_upload 时显示「录音模式降级 banner」（可关闭）。
+//        incompatible 仍走 IncompatibleBanner；两者互斥但不互相吃掉。
+//   E2 — summary-card 下方新增「本月通话分钟小卡」（橙黄底，原型 #fff7ed/#fed7aa）。
+//   E3 — big-btn 下方新增「主管发来拨打请求卡」（mock 数据，后端没列表 endpoint）。
+//   E4 — 页面底部新增「最近跟进案件」section（不同于 B2 的今日待拨；用 useList 默认排序）。
+//   E5 — 从上到下严格按原型顺序排：
+//          header / downgrade-banner / summary-card / 本月分钟卡 / big-btn /
+//          request-card / 今日待拨 / 最近跟进
 import { useState } from "react";
 import { useCustom, useGetIdentity, useList } from "@refinedev/core";
 import { useNavigate } from "react-router-dom";
@@ -85,6 +95,36 @@ function IncompatibleBanner({ state }: { state: CapabilityState }) {
       <a href="/app/profile" className="cap-banner-link">
         详情
       </a>
+    </div>
+  );
+}
+
+/**
+ * v2.2 Module E1 — 录音模式降级 banner
+ * 仅在 post_upload 时显示（事后上传模式提示）。
+ * 可关闭（本地 state，刷新后会重新出现，与原型 onclick='this.parentElement.style.display=none' 行为一致）。
+ */
+function RecordingDowngradeBanner({
+  state,
+  dismissed,
+  onDismiss,
+}: {
+  state: CapabilityState;
+  dismissed: boolean;
+  onDismiss: () => void;
+}) {
+  if (state.capability !== "post_upload") return null;
+  if (dismissed) return null;
+  return (
+    <div className="recording-downgrade-banner">
+      <span>
+        ⬇️ 网络信号较弱，已自动切换为
+        <strong>事后上传模式</strong>
+        ，录音将在通话结束后上传
+      </span>
+      <button type="button" onClick={onDismiss} title="关闭" aria-label="关闭">
+        ×
+      </button>
     </div>
   );
 }
@@ -235,6 +275,31 @@ interface CaseItem {
   months_overdue: number | null;
 }
 
+// v2.2 Module E3 — Supervisor 拨打请求 mock
+// TODO(v2.3+): 后端目前只有 POST /agent/calls/dial-request（创建），没有
+// GET 列出"分配给我但还没处理的"待办。Module E 先用 mock 数据 1:1 还原原型。
+// 等后端补 GET /agent/me/pending-dispatch 之后切到真实数据。
+interface SupervisorRequest {
+  id: string;
+  owner_name: string;
+  address: string; // "3栋2单元1201"
+  amount: string; // "¥3,200"
+  months_overdue: number;
+  supervisor_name: string;
+  case_id?: number; // 真实 case 才能拨号
+  phone?: string;
+}
+const MOCK_SUPERVISOR_REQUESTS: SupervisorRequest[] = [
+  {
+    id: "mock-1",
+    owner_name: "张建国",
+    address: "3栋2单元1201",
+    amount: "¥3,200",
+    months_overdue: 8,
+    supervisor_name: "王主管",
+  },
+];
+
 function formatGreetingDate(d: Date): string {
   const weekday = new Intl.DateTimeFormat("zh-CN", { weekday: "long" }).format(d);
   return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${weekday}`;
@@ -265,6 +330,14 @@ export function MobileHomePage() {
   const capState: CapabilityState = Bridge.getCapability();
   const [capSheetOpen, setCapSheetOpen] = useState(false);
 
+  // v2.2 Module E1 — downgrade banner 本地关闭状态
+  const [downgradeDismissed, setDowngradeDismissed] = useState(false);
+
+  // v2.2 Module E3 — 主管请求本地"已忽略"状态（mock 数据用本地即可）
+  const [dismissedRequestIds, setDismissedRequestIds] = useState<Set<string>>(
+    new Set(),
+  );
+
   const { query: kpiQ } = useCustom<TodayKpi>({
     url: "agent/me/today-kpi",
     method: "get",
@@ -280,9 +353,19 @@ export function MobileHomePage() {
     filters: [{ field: "today", operator: "eq", value: true }],
   });
 
+  // v2.2 Module E4 — 最近跟进案件 Top 3
+  // TODO(v2.3+): 后端 GET /agent/cases 目前固定按 assigned_to+priority 排序，
+  // 不支持 sorters=[updated_at desc]。这里先用默认排序拿前 3 作为"最近跟进"占位，
+  // 等后端补 sort=last_contact_at 或新增 GET /agent/me/recent-cases 后再换。
+  const { query: recentCasesQ } = useList<CaseItem>({
+    resource: "agent/cases",
+    pagination: { currentPage: 1, pageSize: 3 },
+  });
+
   const kpi = kpiQ.data?.data;
   const perf = perfQ.data?.data;
   const todayCases: CaseItem[] = todayCasesQ.data?.data ?? [];
+  const recentCases: CaseItem[] = recentCasesQ.data?.data ?? [];
 
   // "今日待拨" backend 没直接提供；用 calls_target - calls_today 作为剩余指标。
   const todayPending = kpi
@@ -298,6 +381,11 @@ export function MobileHomePage() {
     minutesQuota > 0
       ? Math.min(100, (minutesUsed / minutesQuota) * 100)
       : 0;
+
+  // 过滤未被忽略的主管请求
+  const visibleRequests = MOCK_SUPERVISOR_REQUESTS.filter(
+    (r) => !dismissedRequestIds.has(r.id),
+  );
 
   const handleStartDial = () => {
     // Task 5 之前先在 WebView 内部跳到案件列表
@@ -329,6 +417,29 @@ export function MobileHomePage() {
     });
   };
 
+  // v2.2 Module E3 — 主管请求"立即拨打"
+  const handleRequestDial = (req: SupervisorRequest) => {
+    if (req.case_id && req.phone) {
+      Bridge.dialCase({
+        case_id: req.case_id,
+        phone: req.phone,
+        owner_name: req.owner_name,
+      });
+    } else {
+      // mock 数据：暂时只能提示
+      window.alert("拨打请求（mock 数据）— 真实数据接入后会直接拨号。");
+    }
+  };
+
+  // v2.2 Module E3 — 主管请求"稍后处理"
+  const handleRequestDismiss = (req: SupervisorRequest) => {
+    setDismissedRequestIds((prev) => {
+      const next = new Set(prev);
+      next.add(req.id);
+      return next;
+    });
+  };
+
   // v2.2 Module B3 — header 搜索快捷入口
   const handleOpenSearch = () => {
     navigate("/app/cases?focus=search");
@@ -336,6 +447,13 @@ export function MobileHomePage() {
 
   return (
     <div>
+      {/* ── v2.2 E1 — 录音模式降级 banner（post_upload 显示，可关闭） ── */}
+      <RecordingDowngradeBanner
+        state={capState}
+        dismissed={downgradeDismissed}
+        onDismiss={() => setDowngradeDismissed(true)}
+      />
+
       {/* ── v2.2 B1 — incompatible 强提示保留 banner（合规） ── */}
       <IncompatibleBanner state={capState} />
 
@@ -406,6 +524,72 @@ export function MobileHomePage() {
           </div>
         </div>
       </div>
+
+      {/* ── v2.2 E2 — 本月通话分钟小卡（橙黄底） ── */}
+      <div className="minute-quota-card">
+        <div className="minute-quota-row">
+          <span className="minute-quota-title">本月通话分钟</span>
+          <span className="minute-quota-meta">
+            配额 {minutesQuota.toLocaleString("zh-CN")} 分
+          </span>
+        </div>
+        <div className="minute-quota-numrow">
+          <span className="minute-quota-value">{minutesUsed}</span>
+          <span className="minute-quota-unit">分钟已用</span>
+          <span className="minute-quota-remaining">剩余 {minutesRemaining}</span>
+        </div>
+        <div className="minute-quota-bar-bg">
+          <div
+            className="minute-quota-bar-fg"
+            style={{ width: `${minutesPct.toFixed(1)}%` }}
+          />
+        </div>
+      </div>
+
+      {/* ── 大蓝色按钮 ── */}
+      <button type="button" className="big-btn" onClick={handleStartDial}>
+        📞 立即开始外呼
+      </button>
+
+      {/* ── v2.2 E3 — 主管发来拨打请求卡（条件渲染） ── */}
+      {visibleRequests.map((req) => (
+        <div className="request-card" key={req.id}>
+          <div className="request-card-top">
+            <Bell
+              size={16}
+              strokeWidth={1.75}
+              color="#D97706"
+              style={{ verticalAlign: "middle" }}
+            />
+            <span>主管发来拨打请求</span>
+          </div>
+          <div className="request-card-body">
+            <div className="request-card-name">
+              {req.owner_name} · {req.address}
+            </div>
+            <div className="request-card-amount">{req.amount}</div>
+            <div style={{ fontSize: 12, color: "#6b7280" }}>
+              欠缴{req.months_overdue}个月 · {req.supervisor_name}指派
+            </div>
+            <div className="request-card-actions">
+              <button
+                type="button"
+                className="btn-call-now"
+                onClick={() => handleRequestDial(req)}
+              >
+                立即拨打
+              </button>
+              <button
+                type="button"
+                className="btn-call-later"
+                onClick={() => handleRequestDismiss(req)}
+              >
+                稍后处理
+              </button>
+            </div>
+          </div>
+        </div>
+      ))}
 
       {/* ── v2.2 B2 — 今日待拨案件 Top 5（点击直接拨号） ── */}
       <div className="app-section">
@@ -521,60 +705,64 @@ export function MobileHomePage() {
         ))}
       </div>
 
-      {/* ── 本月通话分钟 ── */}
-      <div className="minute-quota-card">
-        <div className="minute-quota-row">
-          <span className="minute-quota-title">本月通话分钟</span>
-          <span className="minute-quota-meta">
-            配额 {minutesQuota.toLocaleString("zh-CN")} 分
-          </span>
-        </div>
-        <div className="minute-quota-numrow">
-          <span className="minute-quota-value">{minutesUsed}</span>
-          <span className="minute-quota-unit">分钟已用</span>
-          <span className="minute-quota-remaining">
-            剩余 {minutesRemaining}
-          </span>
-        </div>
-        <div className="minute-quota-bar-bg">
+      {/* ── v2.2 E4 — 最近跟进案件 Top 3 ── */}
+      <div className="app-section">
+        <div className="app-section-title">最近跟进案件</div>
+        {recentCasesQ.isLoading && (
           <div
-            className="minute-quota-bar-fg"
-            style={{ width: `${minutesPct.toFixed(1)}%` }}
-          />
-        </div>
-      </div>
-
-      {/* ── 大蓝色按钮 ── */}
-      <button type="button" className="big-btn" onClick={handleStartDial}>
-        📞 立即开始外呼
-      </button>
-
-      {/* ── 拨打请求卡（TODO Task 5+：接 dial-request 列表 endpoint） ── */}
-      <div className="request-card">
-        <div className="request-card-top">
-          <Bell
-            size={16}
-            strokeWidth={1.75}
-            color="#D97706"
-            style={{ verticalAlign: "middle" }}
-          />
-          <span>主管发来拨打请求</span>
-        </div>
-        <div className="request-card-body">
-          <div className="request-card-name">张建国 · 3栋2单元1201</div>
-          <div className="request-card-amount">¥3,200</div>
-          <div style={{ fontSize: 12, color: "#6b7280" }}>
-            欠缴8个月 · 王主管指派
+            style={{
+              background: "white",
+              padding: 16,
+              borderRadius: 10,
+              textAlign: "center",
+              color: "#9ca3af",
+              fontSize: 13,
+            }}
+          >
+            加载中…
           </div>
-          <div className="request-card-actions">
-            <button type="button" className="btn-call-now">
-              立即拨打
-            </button>
-            <button type="button" className="btn-call-later">
-              稍后处理
-            </button>
+        )}
+        {!recentCasesQ.isLoading && recentCases.length === 0 && (
+          <div
+            style={{
+              background: "white",
+              padding: 16,
+              borderRadius: 10,
+              textAlign: "center",
+              color: "#9ca3af",
+              fontSize: 13,
+            }}
+          >
+            暂无跟进案件
           </div>
-        </div>
+        )}
+        {recentCases.map((c) => (
+          <div
+            key={c.id}
+            className="case-list-item"
+            onClick={() => handleOpenCase(c.id)}
+            role="button"
+            aria-label={`查看 ${c.owner.name}`}
+          >
+            <div className="case-list-item-left">
+              <div className="case-list-name">{c.owner.name}</div>
+              <div className="case-list-sub">
+                {c.owner.building ?? ""}
+                {c.owner.room ? `${c.owner.room}` : ""}
+                {c.months_overdue ? ` · 欠缴${c.months_overdue}个月` : ""}
+              </div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div className="case-list-amount">{formatYuan(c.amount_owed)}</div>
+              <span
+                className={stageBadgeClass(c.stage)}
+                style={{ fontSize: 11, marginTop: 3, display: "inline-block" }}
+              >
+                {stageLabel(c.stage)}
+              </span>
+            </div>
+          </div>
+        ))}
       </div>
 
       <div style={{ height: 16 }} />
