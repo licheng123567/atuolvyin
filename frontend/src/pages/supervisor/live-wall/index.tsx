@@ -18,6 +18,24 @@ interface LiveCallsResp {
   items: LiveCall[];
 }
 
+// v2.1 — 坐席能力 map（前端 join 方案：拉一次全部坐席设备能力，按 caller_user_id 查）
+interface AgentDeviceCapItem {
+  user_id: number;
+  latest_capability: string;
+}
+interface AgentDevicesCapResp {
+  items: AgentDeviceCapItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+const CAP_BADGE_LABEL: Record<string, string> = {
+  realtime: "实时",
+  post_upload: "事后",
+  incompatible: "无录音",
+};
+
 export function SupervisorLiveWallPage() {
   const go = useGo();
   const calls = useLiveCallStore((s) => s.calls);
@@ -28,6 +46,20 @@ export function SupervisorLiveWallPage() {
     url: "supervisor/live-calls",
     method: "get",
   });
+
+  // v2.1 — 拉一次全部坐席的最近能力，本地 cache
+  const { query: capQ } = useCustom<AgentDevicesCapResp>({
+    url: "admin/agent-devices",
+    method: "get",
+    config: { query: { page_size: 200 } },
+  });
+  const capMap = useMemo(() => {
+    const m = new Map<number, string>();
+    (capQ.data?.data?.items ?? []).forEach((it) =>
+      m.set(it.user_id, it.latest_capability),
+    );
+    return m;
+  }, [capQ.data]);
 
   useEffect(() => {
     if (query.data?.data?.items) {
@@ -109,6 +141,7 @@ export function SupervisorLiveWallPage() {
               key={c.call_id}
               call={c}
               now={now}
+              capability={capMap.get(c.caller_user_id)}
               onClick={() => go({ to: `/admin/workstation/${c.call_id}` })}
             />
           ))}
@@ -121,10 +154,12 @@ export function SupervisorLiveWallPage() {
 function CallCard({
   call,
   now,
+  capability,
   onClick,
 }: {
   call: LiveCall;
   now: number;
+  capability?: string;
   onClick: () => void;
 }) {
   const { mutate, mutation } = useCustomMutation();
@@ -197,6 +232,14 @@ function CallCard({
               style={{ color: "var(--color-danger)" }}
               aria-label="风控告警"
             />
+          )}
+          {capability && (
+            <span
+              className={`cap-badge cap-badge--${capability}`}
+              title={`坐席手机录音能力: ${CAP_BADGE_LABEL[capability] ?? capability}`}
+            >
+              {CAP_BADGE_LABEL[capability] ?? capability}
+            </span>
           )}
           <span
             className={`livewall-mode livewall-mode--${

@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.autoluyin.demo.capability.DeviceCapabilityProbe
 import com.autoluyin.demo.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
 
@@ -47,6 +48,16 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // v2.1 Task 5 — 首次安装跳转到 Onboarding Wizard。
+        // 条件：onboarding 未完成 AND 未登录（避免老用户升级后误触）。
+        // Onboarding 完成后会 markOnboardingDone + 重新启动 MainActivity，进入 preflight 流程。
+        if (!AppConfig.isOnboardingDone(this) && AppConfig.jwtToken(this) == null) {
+            com.autoluyin.demo.onboarding.OnboardingActivity.start(this)
+            finish()
+            return
+        }
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -227,6 +238,10 @@ class MainActivity : AppCompatActivity() {
         val dirOk = recDirs.isNotEmpty() && (Build.VERSION.SDK_INT < Build.VERSION_CODES.R
                 || Environment.isExternalStorageManager())
 
+        // v2.1 — 设备能力探测：采集 ROM/Android 字段 + 上次扫描失败标志
+        val deviceInfo = DeviceCapabilityProbe.collect()
+        val lastScanFailed = AppConfig.getLastRecordingScanFailed(this)
+
         lifecycleScope.launch {
             try {
                 ensureDeviceRegistered()
@@ -236,12 +251,24 @@ class MainActivity : AppCompatActivity() {
                     recording_dir_ok = dirOk,
                     recording_toggle_on = recDirs.isNotEmpty(),
                     permissions_ok = true,
+                    manufacturer = deviceInfo.manufacturer.takeIf { it.isNotBlank() },
+                    model = deviceInfo.model.takeIf { it.isNotBlank() },
+                    android_version = deviceInfo.androidVersion.takeIf { it.isNotBlank() },
+                    recording_toggle_self_reported = null,  // Task 5 onboarding 才填
+                    last_recording_scan_failed = lastScanFailed,
                 ))
                 // 拉取后台运行时配置（候选目录、超时、prompt 版本…）
                 runCatching {
                     val cfg = api.deviceConfig(DeviceId.get(this@MainActivity))
                     AppConfig.applyRuntime(this@MainActivity, cfg)
                 }
+                // v2.1 — 持久化能力判定（供 onboarding/拨号前展示降级提示用）
+                AppConfig.saveCapability(
+                    this@MainActivity,
+                    capability = resp.recording_capability,
+                    guidance = resp.guidance_text,
+                    rom = resp.detected_rom,
+                )
                 renderHeader()
 
                 canCall = resp.can_call

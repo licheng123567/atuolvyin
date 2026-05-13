@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
 from app.models.device import DeviceProfile
+from app.models.device_capability_log import DeviceCapabilityLog
+from app.services.device_capability import derive_capability, derive_rom_label
 
 router = APIRouter()
 
@@ -42,11 +44,21 @@ class SelfCheckRequest(BaseModel):
     recording_dir_ok: bool
     recording_toggle_on: bool
     permissions_ok: bool
+    # v2.1 — 设备能力探测（全可选，向后兼容旧 App 不传）
+    manufacturer: str | None = None
+    model: str | None = None
+    android_version: str | None = None
+    recording_toggle_self_reported: bool | None = None  # onboarding step 3 用户自报
+    last_recording_scan_failed: bool | None = None       # 上次通话挂断 RecordingScanner 找不到文件
 
 
 class SelfCheckResponse(BaseModel):
     can_call: bool
     fail_reasons: list[str] = []  # v1.6 — recording_dir / recording_toggle / permissions
+    # v2.1 — 设备录音能力（向后兼容：旧 App 收到也不会用，不破坏）
+    recording_capability: Literal["realtime", "post_upload", "incompatible"] = "realtime"
+    detected_rom: str = ""
+    guidance_text: str = ""
 
 
 class PushRegPatchRequest(BaseModel):
@@ -157,11 +169,65 @@ def self_check(
         fail_reasons.append("permissions")
 
     is_healthy = not fail_reasons
+
+    # v2.1 — 设备录音能力判定 + 留痕
+    capability = derive_capability(body.manufacturer, body.android_version)
+
+    # 运行时验证胜过静态矩阵：上次扫不到文件 → 强制降级 incompatible
+    if body.last_recording_scan_failed is True:
+        capability = "incompatible"
+        runtime_source = "runtime_verified"
+        actual_recording_works: bool | None = False
+    elif body.last_recording_scan_failed is False:
+        runtime_source = "runtime_verified"
+        actual_recording_works = True
+    else:
+        runtime_source = "static_matrix"
+        actual_recording_works = None
+
+    rom_label = derive_rom_label(body.manufacturer, body.model, body.android_version)
+
+    # 中文 guidance（按 capability 三档）
+    if capability == "realtime":
+        guidance = f"实时通话分析已就绪 — {rom_label}"
+    elif capability == "post_upload":
+        guidance = (
+            f"事后上传模式 — 您的设备 {rom_label} 暂不支持实时分析。"
+            f"通话挂断 1-2 分钟后可在「通话记录」查看 AI 摘要"
+        )
+    else:  # incompatible
+        guidance = (
+            f"您的设备 {rom_label} 系统级不支持通话录音。"
+            f"建议使用 MIUI 10/11 或 EMUI 9/10 的机型。当前可继续拨号，但 AI 分析功能不可用"
+        )
+
+    # 写留痕
+    log = DeviceCapabilityLog(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        device_id=body.device_id,
+        manufacturer=body.manufacturer,
+        model=body.model,
+        android_version=body.android_version,
+        rom_label=rom_label,
+        capability=capability,
+        actual_recording_works=actual_recording_works,
+        source=runtime_source,
+        notes=None,
+    )
+    db.add(log)
+
     device.is_healthy = is_healthy
     device.last_check_at = datetime.now(UTC)
     db.commit()
 
-    return SelfCheckResponse(can_call=is_healthy, fail_reasons=fail_reasons)
+    return SelfCheckResponse(
+        can_call=is_healthy,
+        fail_reasons=fail_reasons,
+        recording_capability=capability,
+        detected_rom=rom_label,
+        guidance_text=guidance,
+    )
 
 
 @router.patch("/push-reg", response_model=PushRegPatchResponse)

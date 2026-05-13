@@ -99,6 +99,14 @@ export function MobileCaseDetailPage() {
 
   const handleDial = () => {
     if (!detail) return;
+    // v2.1 Task 6 — incompatible 设备拨号前确认
+    const cap = Bridge.getCapability();
+    if (cap.capability === "incompatible") {
+      const ok = window.confirm(
+        `您的设备 (${cap.rom || "未识别"}) 无法保存通话录音，本次通话将无 AI 分析。\n\n是否继续拨号？`,
+      );
+      if (!ok) return;
+    }
     const phone = detail.owner.phone ?? detail.owner.phone_masked;
     Bridge.dialCase({
       case_id: detail.id,
