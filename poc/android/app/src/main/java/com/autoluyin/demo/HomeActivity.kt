@@ -19,6 +19,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -32,6 +33,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.autoluyin.demo.auth.AuthEventBus
+import com.autoluyin.demo.screens.auth.ForceLogoutActivity
 import com.autoluyin.demo.ui.theme.AppTheme
 import com.autoluyin.demo.webview.AppWebView
 
@@ -76,6 +79,15 @@ private val Tabs = listOf(
 private fun AppRoot() {
     val navController = rememberNavController()
     val ctx = LocalContext.current
+
+    // v2.0 Task 8 — 全局监听强制退出事件。
+    // SharedFlow replay = 1，所以即便事件早于 collect 触发，本 LaunchedEffect 仍会拿到。
+    LaunchedEffect(Unit) {
+        AuthEventBus.forceLogout.collect { reason ->
+            ctx.startActivity(ForceLogoutActivity.createIntent(ctx, reason))
+        }
+    }
+
     Scaffold(
         bottomBar = { BottomNavigation4Tabs(navController) },
     ) { padding ->

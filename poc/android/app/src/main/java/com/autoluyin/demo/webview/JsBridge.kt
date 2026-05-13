@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import android.webkit.JavascriptInterface
 import com.autoluyin.demo.AppConfig
+import com.autoluyin.demo.auth.AuthEventBus
 
 /**
  * v2.0 Task 2 — WebView ↔ Native 桥接器骨架。
@@ -46,6 +47,13 @@ class JsBridge(private val ctx: Context) {
 
     @JavascriptInterface
     fun notifyAuthError() {
-        Log.i(tag, "notifyAuthError() — TODO Task 8 ForceLogoutDialog")
+        // v2.0 Task 8 — 前端 fetch 收到 401 时调用本桥。
+        // 前端无法精确区分 ERR_SESSION_EVICTED / ERR_INVALID_TOKEN / ERR_TOKEN_EXPIRED，
+        // 默认按"会话被踢出"处理（最近最常见原因；用户即便看到也合理）。
+        Log.w(tag, "notifyAuthError() called from WebView — firing force logout")
+        AuthEventBus.fireForceLogout(
+            code = "ERR_SESSION_EVICTED",
+            message = "您的账号已在其他设备登录或登录已失效",
+        )
     }
 }

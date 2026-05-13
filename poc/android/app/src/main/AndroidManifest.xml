@@ -108,6 +108,13 @@
                   android:exported="false"
                   android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
 
+        <!-- v2.0 Task 8 — Screen 9 强制退出（账号异地登录 / token 失效）。
+             singleTask + CLEAR_TASK 进入，从根栈卸掉所有鉴权失败时的来源 Activity。 -->
+        <activity android:name=".screens.auth.ForceLogoutActivity"
+                  android:exported="false"
+                  android:launchMode="singleTask"
+                  android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
+
         <!-- Sprint 11.2 — 本月绩效小结 -->
         <activity android:name=".MyPerformanceActivity" android:exported="false" />
 
