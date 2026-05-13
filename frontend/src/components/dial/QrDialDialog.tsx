@@ -34,7 +34,7 @@ export function QrDialDialog({
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div
-        className="bg-white p-6 w-[420px]"
+        className="bg-white p-6 w-[560px]"
         style={{ borderRadius: "var(--radius-lg)" }}
       >
         <div className="flex items-center justify-between mb-4">
@@ -55,9 +55,9 @@ export function QrDialDialog({
           坐席用「催收 App」扫描下方二维码即可拉起本次案件，自动进入系统拨号界面。
         </p>
 
-        <div className="flex flex-col items-center bg-[var(--color-neutral-50)] py-6 mb-3 rounded">
+        <div className="flex flex-col items-center bg-[var(--color-neutral-50)] py-8 mb-3 rounded">
           {expired ? (
-            <div className="w-[220px] h-[220px] flex flex-col items-center justify-center text-[var(--color-neutral-400)]">
+            <div className="w-[360px] h-[360px] flex flex-col items-center justify-center text-[var(--color-neutral-400)]">
               <p className="mb-2 text-sm">二维码已过期</p>
               <button
                 type="button"
@@ -70,7 +70,7 @@ export function QrDialDialog({
           ) : (
             <QRCodeSVG
               value={qrPayload}
-              size={220}
+              size={360}
               includeMargin
               level="M"
             />

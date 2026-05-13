@@ -78,7 +78,7 @@ export function SuperHealthPage() {
       </div>
 
       <p className="text-xs text-[var(--color-neutral-400)]">
-        本期暂用模拟数据：ASR/LLM/MiPush 仅展示 dispatcher 后端类型；WebSocket 客户端数为占位符。
+        ASR/LLM/MiPush 仅展示 dispatcher 后端类型（mock/real）；WebSocket 在线数为单 worker 实时计数。
       </p>
 
       {/* Service status grid (5 cards) */}

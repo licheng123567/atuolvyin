@@ -49,7 +49,12 @@ class PhoneStateReceiver : BroadcastReceiver() {
                     Log.i(TAG, "IDLE → waking CallWatcherService for scan")
                     val i = Intent(context, CallWatcherService::class.java)
                         .putExtra(CallWatcherService.EXTRA_RESUME, true)
-                    context.startForegroundService(i)
+                    // v1.9.9 — API 26 才有 startForegroundService；Android 6/7 退回 startService
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        context.startForegroundService(i)
+                    } else {
+                        context.startService(i)
+                    }
                 }
             }
         }

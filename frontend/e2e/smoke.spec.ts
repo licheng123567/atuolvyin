@@ -41,7 +41,8 @@ async function dismissAppIntroIfPresent(page: Page) {
 
 async function login(page: Page, phone: string, password = PASSWORD) {
   await page.goto("/login");
-  await page.fill('input[id="phone"]', phone);
+  // v1.4 改造后默认是「账号密码」模式（id=account 接受手机/信用代码/邮箱）
+  await page.fill('input[id="account"]', phone);
   await page.fill('input[id="password"]', password);
   await Promise.all([
     page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 10_000 }),
@@ -56,16 +57,16 @@ test.describe("Login page — visual baseline", () => {
     // 品牌字"有证慧催"被 gradient span 拆成两段；多处出现（footer 等），用 first()
     await expect(page.getByText(/有证慧催/).first()).toBeVisible();
     await expect(page.getByText("欢迎回来")).toBeVisible();
-    await expect(page.locator('input[id="phone"]')).toBeVisible();
+    await expect(page.locator('input[id="account"]')).toBeVisible();
     await expect(page.locator('input[id="password"]')).toBeVisible();
   });
 
   test("错误密码应报红 + 不跳转", async ({ page }) => {
     await page.goto("/login");
-    await page.fill('input[id="phone"]', "13000000002");
+    await page.fill('input[id="account"]', "13000000002");
     await page.fill('input[id="password"]', "wrong-password");
     await page.click('button[type="submit"]');
-    await expect(page.getByText(/手机号或密码错误|登录失败/)).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText(/账号或密码错误|手机号或密码错误|登录失败/)).toBeVisible({ timeout: 5_000 });
     expect(page.url()).toContain("/login");
   });
 });
@@ -83,6 +84,10 @@ test.describe("11 角色登录 + 主页加载", () => {
 });
 
 test.describe("admin 关键页", () => {
+  // Sprint 15.1 多设备踢出：admin 账号在长跑套件中被反复 re-login，会偶发 session 失效
+  // 给本 describe 多一次重试（本地 1 + 此处 +1 = 2 retries 总）
+  test.describe.configure({ retries: 2 });
+
   test("admin 案件看板应渲染 6 列（待联系/跟进中/...）", async ({ page }) => {
     page.on("response", (r) => {
       if (r.status() === 401 || r.status() === 403) {
@@ -95,8 +100,8 @@ test.describe("admin 关键页", () => {
     await dismissAppIntroIfPresent(page);
     await page.goto("/admin/cases/kanban");
     await dismissAppIntroIfPresent(page);
-    await page.waitForLoadState("networkidle");
-    await page.getByText("加载中…").waitFor({ state: "hidden", timeout: 10_000 }).catch(() => undefined);
+    // 长跑套件下 networkidle 不靠谱，直接等 .kanban-board 可见（仅 !isLoading 时渲染）
+    await expect(page.locator(".kanban-board")).toBeVisible({ timeout: 15_000 });
     for (const label of ["待联系", "跟进中", "承诺缴费", "已缴费", "升级中", "已关闭"]) {
       await expect(page.getByText(label).first()).toBeVisible({ timeout: 5_000 });
     }

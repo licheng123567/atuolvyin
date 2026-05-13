@@ -11,6 +11,7 @@ and platform-approved Service Providers. They can:
 
 All endpoints scope by the requesting admin's tenant_id (from JWT).
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -59,9 +60,7 @@ def _tenant_id(payload: dict) -> int:
 # ── List signed providers (with member_count) ───────────────────────
 
 
-@router.get(
-    "/providers", response_model=list[AdminProviderListItem]
-)
+@router.get("/providers", response_model=list[AdminProviderListItem])
 async def list_signed_providers(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
@@ -73,9 +72,7 @@ async def list_signed_providers(
 
     contract_stmt = (
         select(ProviderTenantContract, ServiceProvider)
-        .join(
-            ServiceProvider, ServiceProvider.id == ProviderTenantContract.provider_id
-        )
+        .join(ServiceProvider, ServiceProvider.id == ProviderTenantContract.provider_id)
         .where(ProviderTenantContract.tenant_id == tenant_id)
     )
     if q:
@@ -83,9 +80,7 @@ async def list_signed_providers(
     if status:
         contract_stmt = contract_stmt.where(ProviderTenantContract.status == status)
 
-    rows = db.execute(
-        contract_stmt.order_by(ProviderTenantContract.signed_at.desc())
-    ).all()
+    rows = db.execute(contract_stmt.order_by(ProviderTenantContract.signed_at.desc())).all()
 
     if not rows:
         return []
@@ -124,9 +119,7 @@ async def list_signed_providers(
 # ── Available (approved, no active contract) providers ──────────────
 
 
-@router.get(
-    "/providers/available", response_model=list[AdminAvailableProviderItem]
-)
+@router.get("/providers/available", response_model=list[AdminAvailableProviderItem])
 async def list_available_providers(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
@@ -257,9 +250,7 @@ async def patch_contract(
     tenant_id = _tenant_id(payload)
     row = db.execute(
         select(ProviderTenantContract, ServiceProvider)
-        .join(
-            ServiceProvider, ServiceProvider.id == ProviderTenantContract.provider_id
-        )
+        .join(ServiceProvider, ServiceProvider.id == ProviderTenantContract.provider_id)
         .where(
             ProviderTenantContract.tenant_id == tenant_id,
             ProviderTenantContract.provider_id == provider_id,
@@ -274,6 +265,16 @@ async def patch_contract(
     contract, provider = row
 
     data = body.model_dump(exclude_unset=True)
+    # v1.4 S16.4 — 直接 PATCH 到 terminated 已被 schema 屏蔽（Literal 不含 terminated），
+    # 但作为后端二次防线，仍校验，防止绕过 schema 调用。
+    if data.get("status") == "terminated":
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "ERR_USE_TERMINATE_REQUEST",
+                "message": "请走 /providers/{id}/terminate-request 双向握手流程",
+            },
+        )
     for field, value in data.items():
         setattr(contract, field, value)
 

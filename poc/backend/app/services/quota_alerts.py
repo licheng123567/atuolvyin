@@ -10,6 +10,7 @@
 跨阈值判定：previous_used 和 current_used 中只有一方已过阈值时才发；
 保证同一阈值不会重复触发。
 """
+
 from __future__ import annotations
 
 import logging
@@ -31,23 +32,31 @@ THRESHOLDS = [
 
 
 def _admin_user_ids(db: Session, tenant_id: int) -> list[int]:
-    rows = db.execute(
-        select(UserTenantMembership.user_id).where(
-            UserTenantMembership.tenant_id == tenant_id,
-            UserTenantMembership.role == "admin",
-            UserTenantMembership.is_active.is_(True),
+    rows = (
+        db.execute(
+            select(UserTenantMembership.user_id).where(
+                UserTenantMembership.tenant_id == tenant_id,
+                UserTenantMembership.role == "admin",
+                UserTenantMembership.is_active.is_(True),
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [int(r) for r in rows]
 
 
 def _ops_user_ids_for_tenant(db: Session, tenant_id: int) -> list[int]:
-    rows = db.execute(
-        select(PlatformOpsAssignment.ops_user_id).where(
-            PlatformOpsAssignment.entity_type == "tenant",
-            PlatformOpsAssignment.entity_id == tenant_id,
+    rows = (
+        db.execute(
+            select(PlatformOpsAssignment.ops_user_id).where(
+                PlatformOpsAssignment.entity_type == "tenant",
+                PlatformOpsAssignment.entity_id == tenant_id,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [int(r) for r in rows]
 
 
@@ -66,13 +75,14 @@ def check_and_notify_quota_thresholds(
     for ratio, severity, title in THRESHOLDS:
         threshold_minutes = ratio * quota
         if previous_used < threshold_minutes <= current_used:
-            recipients = list(set(
-                _admin_user_ids(db, tenant.id) + _ops_user_ids_for_tenant(db, tenant.id)
-            ))
+            recipients = list(
+                set(_admin_user_ids(db, tenant.id) + _ops_user_ids_for_tenant(db, tenant.id))
+            )
             if not recipients:
                 logger.info(
                     "quota threshold %.0f%% reached for tenant=%s but no recipients",
-                    ratio * 100, tenant.id,
+                    ratio * 100,
+                    tenant.id,
                 )
                 continue
             body = (

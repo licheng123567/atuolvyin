@@ -7,6 +7,7 @@
 
 仅存 SHA256(token)，明文 token 只在响应中给前端，不落库。
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -33,16 +34,10 @@ class DialToken(Base):
     token_hash: Mapped[str] = mapped_column(
         sa.String(64), unique=True, nullable=False
     )  # SHA256 hex
-    expires_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True), nullable=False
-    )
-    used_at: Mapped[datetime | None] = mapped_column(
-        sa.DateTime(timezone=True), nullable=True
-    )
+    expires_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
     )
 
-    __table_args__ = (
-        sa.Index("ix_dial_token_used", "token_hash", "used_at"),
-    )
+    __table_args__ = (sa.Index("ix_dial_token_used", "token_hash", "used_at"),)

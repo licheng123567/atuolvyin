@@ -3,6 +3,7 @@
 法务为某 LegalCase 上传 / 分类 / 维护的法律文件（合同 / 判决书 / 通知 /
 证据材料 / 其他）。文件本体走 storage 层（local / minio / oss），DB 只存元数据。
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -36,9 +37,7 @@ class LegalDocument(Base, TimestampMixin):
     uploaded_by: Mapped[int] = mapped_column(
         sa.BigInteger, sa.ForeignKey("user_account.id"), nullable=False
     )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        sa.DateTime(timezone=True), nullable=True
-    )
+    deleted_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         sa.CheckConstraint(

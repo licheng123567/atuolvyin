@@ -5,6 +5,7 @@ GET   /api/v1/users/me/notifications/unread-count
 PATCH /api/v1/users/me/notifications/{id}/read
 PATCH /api/v1/users/me/notifications/read-all
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime

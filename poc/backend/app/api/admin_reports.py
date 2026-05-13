@@ -9,6 +9,7 @@
 注：CollectionCase 没有 stage 变更日志，所以漏斗与跟进完成率是「快照」语义，
 而非「在窗内进入该 stage 的案件数」。这是已知简化，未来可补 case_stage_history 表。
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -73,9 +74,7 @@ def report_overview(
             UserAccount.id,
             UserAccount.name,
             func.count(CallRecord.id).label("total_calls"),
-            func.sum(
-                case((CallRecord.billable_duration > 0, 1), else_=0)
-            ).label("connected_calls"),
+            func.sum(case((CallRecord.billable_duration > 0, 1), else_=0)).label("connected_calls"),
         )
         .join(CallRecord, CallRecord.caller_user_id == UserAccount.id)
         .where(CallRecord.tenant_id == tenant_id)
@@ -127,8 +126,7 @@ def report_overview(
         .order_by(func.count(SuggestionFeedback.id).desc())
     ).all()
     objection_distribution = [
-        ObjectionItemOut(intent=intent, count=int(count))
-        for intent, count in objection_rows
+        ObjectionItemOut(intent=intent, count=int(count)) for intent, count in objection_rows
     ]
 
     # ── Promise → Paid follow-up rate (snapshot) ──

@@ -1,156 +1,166 @@
-// Sprint 9.5 — 主管督导团队绩效（PRD §L2069）
-import { useCustom } from "@refinedev/core";
-import { TrendingUp, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
-import { useState } from "react";
+// 团队监控 — 1:1 还原 ui/supervisor.html#sv-team
+// v1.5.7 — KPI 4 张 stat-card + 团队成员表
+// v1.6.5 — 加搜索（按姓名）+ 分页（mock 阶段客户端切片）
+import { useMemo, useState } from "react";
+import { PaginationBar } from "../../../components/ui/PaginationBar";
+import { SearchInput } from "../../../components/ui/SearchInput";
+import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 
-interface TeamPerfItem {
-  user_id: number;
+const PAGE_SIZE = 10;
+
+interface AgentRow {
   name: string;
-  total_calls: number;
-  connected_calls: number;
-  promised_cases: number;
-  paid_cases: number;
-  conversion_rate: number | null;
-  delta_vs_previous: number | null;
+  status: "in_call" | "idle" | "offline";
+  status_label: string;
+  status_badge: string;
+  call_count: number;
+  connect_count: number;
+  promise_count: number;
+  ai_adoption: number;
+  private_pool: number;
+  risk_label: string | null;
+  risk_badge: string;
 }
 
-interface TeamPerfOut {
-  period_days: number;
-  items: TeamPerfItem[];
-}
-
-function pct(v: number | null): string {
-  return v === null ? "—" : `${(v * 100).toFixed(1)}%`;
-}
-
-function DeltaBadge({ delta }: { delta: number | null }) {
-  if (delta === null) {
-    return <span className="text-xs text-[var(--color-neutral-400)]">—</span>;
-  }
-  if (Math.abs(delta) < 0.01) {
-    return (
-      <span className="inline-flex items-center text-xs text-[var(--color-neutral-500)]">
-        <Minus className="w-3 h-3 mr-0.5" /> 0%
-      </span>
-    );
-  }
-  const positive = delta > 0;
-  return (
-    <span
-      className="inline-flex items-center text-xs font-medium"
-      style={{
-        color: positive ? "var(--color-success)" : "var(--color-danger)",
-      }}
-    >
-      {positive ? (
-        <ArrowUpRight className="w-3 h-3 mr-0.5" />
-      ) : (
-        <ArrowDownRight className="w-3 h-3 mr-0.5" />
-      )}
-      {Math.abs(delta * 100).toFixed(1)}%
-    </span>
-  );
-}
+const MOCK_AGENTS: AgentRow[] = [
+  { name: "李小红", status: "in_call", status_label: "通话中", status_badge: "ds-badge ds-badge-blue",
+    call_count: 22, connect_count: 15, promise_count: 7, ai_adoption: 89, private_pool: 48,
+    risk_label: "L2×1", risk_badge: "ds-badge ds-badge-red" },
+  { name: "王芳芳", status: "in_call", status_label: "通话中", status_badge: "ds-badge ds-badge-blue",
+    call_count: 18, connect_count: 12, promise_count: 5, ai_adoption: 76, private_pool: 39,
+    risk_label: null, risk_badge: "ds-badge ds-badge-gray" },
+  { name: "张建华", status: "idle", status_label: "空闲", status_badge: "ds-badge ds-badge-gray",
+    call_count: 21, connect_count: 14, promise_count: 6, ai_adoption: 83, private_pool: 41,
+    risk_label: null, risk_badge: "ds-badge ds-badge-gray" },
+  { name: "陈明远", status: "idle", status_label: "空闲", status_badge: "ds-badge ds-badge-green",
+    call_count: 18, connect_count: 11, promise_count: 4, ai_adoption: 72, private_pool: 55,
+    risk_label: null, risk_badge: "ds-badge ds-badge-gray" },
+  { name: "刘晓娟", status: "in_call", status_label: "通话中", status_badge: "ds-badge ds-badge-blue",
+    call_count: 16, connect_count: 10, promise_count: 6, ai_adoption: 85, private_pool: 32,
+    risk_label: null, risk_badge: "ds-badge ds-badge-gray" },
+  { name: "周海燕", status: "idle", status_label: "空闲", status_badge: "ds-badge ds-badge-gray",
+    call_count: 14, connect_count: 9, promise_count: 4, ai_adoption: 79, private_pool: 28,
+    risk_label: null, risk_badge: "ds-badge ds-badge-gray" },
+  { name: "赵志远", status: "in_call", status_label: "通话中", status_badge: "ds-badge ds-badge-blue",
+    call_count: 13, connect_count: 8, promise_count: 3, ai_adoption: 68, private_pool: 24,
+    risk_label: "L1×1", risk_badge: "ds-badge ds-badge-orange" },
+  { name: "孙倩倩", status: "offline", status_label: "离线", status_badge: "ds-badge ds-badge-gray",
+    call_count: 20, connect_count: 13, promise_count: 3, ai_adoption: 74, private_pool: 36,
+    risk_label: null, risk_badge: "ds-badge ds-badge-gray" },
+];
 
 export function SupervisorTeamPerformancePage() {
-  const [period, setPeriod] = useState(7);
-  const { query } = useCustom<TeamPerfOut>({
-    url: "supervisor/team-performance",
-    method: "get",
-    config: { query: { period_days: period } },
-  });
-  const data = query.data?.data;
-  const items = data?.items ?? [];
+  const [date] = useState(new Date().toISOString().slice(0, 10));
+  const [page, setPage] = useState(1);
+  const [keyword, setKeyword] = useState("");
+  const debouncedKw = useDebouncedValue(keyword, 300);
+
+  // KPI 仍按全量计算（不受当前页影响）
+  const totalCalls = MOCK_AGENTS.reduce((s, a) => s + a.call_count, 0);
+  const totalConnect = MOCK_AGENTS.reduce((s, a) => s + a.connect_count, 0);
+  const totalPromise = MOCK_AGENTS.reduce((s, a) => s + a.promise_count, 0);
+  const avgAdoption = Math.round(MOCK_AGENTS.reduce((s, a) => s + a.ai_adoption, 0) / MOCK_AGENTS.length);
+  const connectRate = ((totalConnect / totalCalls) * 100).toFixed(1);
+
+  const filtered = useMemo(() => {
+    const kw = debouncedKw.trim();
+    if (!kw) return MOCK_AGENTS;
+    return MOCK_AGENTS.filter((a) => a.name.includes(kw));
+  }, [debouncedKw]);
+
+  const total = filtered.length;
+  const visible = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center gap-2">
-        <TrendingUp className="w-5 h-5 text-[var(--color-primary)]" />
-        <h1 className="text-xl font-semibold">团队绩效</h1>
-        <span className="text-sm text-[var(--color-neutral-400)]">
-          共 {items.length} 名坐席
-        </span>
-        <select
-          value={period}
-          onChange={(e) => setPeriod(Number(e.target.value))}
-          className="ml-auto px-3 py-1.5 text-sm border border-[var(--color-neutral-200)]"
-          style={{ borderRadius: "var(--radius-md)" }}
-        >
-          <option value={7}>近 7 天</option>
-          <option value={14}>近 14 天</option>
-          <option value={30}>近 30 天</option>
-          <option value={90}>近 90 天</option>
-        </select>
+    <div>
+      <div className="page-header">
+        <div>
+          <div className="page-title">团队监控</div>
+          <div className="page-subtitle">今日团队整体绩效概览 · 共 {total} 名成员</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <SearchInput
+            value={keyword}
+            onChange={(v) => { setKeyword(v); setPage(1); }}
+            placeholder="按姓名搜索"
+            width={200}
+          />
+          <div style={{ fontSize: 12.5, color: "var(--color-neutral-500)" }}>统计日期：{date}</div>
+        </div>
       </div>
 
-      <div className="bg-white rounded-lg border border-[var(--color-neutral-200)] overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-[var(--color-neutral-50)] border-b border-[var(--color-neutral-200)]">
+      <div className="kpi-grid">
+        <StatCard label="今日总通话量" value={totalCalls} change="↑ 12% 较昨日" tone="up" />
+        <StatCard label="接通率" value={`${connectRate}%`} change="↑ 3.1%" tone="up" />
+        <StatCard label="今日承诺数" value={totalPromise} change="↑ 8 条" tone="up" />
+        <StatCard label="平均 AI 采用率" value={`${avgAdoption}%`} change="↑ 5%" tone="up" />
+      </div>
+
+      <div className="table-wrap">
+        <table>
+          <thead>
             <tr>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)] w-12">
-                #
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                姓名
-              </th>
-              <th className="px-4 py-3 text-right font-medium text-[var(--color-neutral-600)]">
-                通话总数
-              </th>
-              <th className="px-4 py-3 text-right font-medium text-[var(--color-neutral-600)]">
-                vs 上期
-              </th>
-              <th className="px-4 py-3 text-right font-medium text-[var(--color-neutral-600)]">
-                接通数
-              </th>
-              <th className="px-4 py-3 text-right font-medium text-[var(--color-neutral-600)]">
-                承诺数
-              </th>
-              <th className="px-4 py-3 text-right font-medium text-[var(--color-neutral-600)]">
-                已缴费
-              </th>
-              <th className="px-4 py-3 text-right font-medium text-[var(--color-neutral-600)]">
-                转化率
-              </th>
+              <th>催收员</th>
+              <th>今日状态</th>
+              <th>通话次数</th>
+              <th>接通次数</th>
+              <th>承诺数</th>
+              <th>AI 采用率</th>
+              <th>私海数</th>
+              <th>风险事件</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[var(--color-neutral-100)]">
-            {query.isLoading && (
+          <tbody>
+            {visible.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-[var(--color-neutral-400)]">
-                  加载中…
+                <td colSpan={8} style={{ textAlign: "center", padding: 24, color: "var(--color-neutral-400)" }}>
+                  无匹配的成员
                 </td>
               </tr>
             )}
-            {!query.isLoading && items.length === 0 && (
-              <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-[var(--color-neutral-400)]">
-                  本组暂无坐席数据
+            {visible.map((a) => (
+              <tr key={a.name}>
+                <td><strong>{a.name}</strong></td>
+                <td><span className={a.status_badge}>{a.status_label}</span></td>
+                <td>{a.call_count}</td>
+                <td>{a.connect_count}</td>
+                <td>{a.promise_count}</td>
+                <td>
+                  {a.ai_adoption >= 80 ? (
+                    <span style={{ color: "var(--color-success)", fontWeight: 600 }}>{a.ai_adoption}%</span>
+                  ) : (
+                    <span>{a.ai_adoption}%</span>
+                  )}
                 </td>
-              </tr>
-            )}
-            {items.map((it, idx) => (
-              <tr key={it.user_id} className="hover:bg-[var(--color-neutral-50)]">
-                <td className="px-4 py-3 text-[var(--color-neutral-400)] font-medium">
-                  {idx + 1}
-                </td>
-                <td className="px-4 py-3 font-medium text-[var(--color-neutral-900)]">
-                  {it.name}
-                </td>
-                <td className="px-4 py-3 text-right">{it.total_calls}</td>
-                <td className="px-4 py-3 text-right">
-                  <DeltaBadge delta={it.delta_vs_previous} />
-                </td>
-                <td className="px-4 py-3 text-right">{it.connected_calls}</td>
-                <td className="px-4 py-3 text-right">{it.promised_cases}</td>
-                <td className="px-4 py-3 text-right">{it.paid_cases}</td>
-                <td className="px-4 py-3 text-right font-medium">
-                  {pct(it.conversion_rate)}
+                <td>{a.private_pool}</td>
+                <td>
+                  {a.risk_label ? (
+                    <span className={a.risk_badge} style={{ fontSize: 11 }}>{a.risk_label}</span>
+                  ) : (
+                    <span className="ds-badge ds-badge-gray" style={{ fontSize: 11 }}>无</span>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        <PaginationBar
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={total}
+          onPageChange={setPage}
+        />
       </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, change, tone }: { label: string; value: string | number; change: string; tone: "up" | "down" }) {
+  return (
+    <div className="stat-card">
+      <div className="stat-label">{label}</div>
+      <div className="stat-value">{value}</div>
+      <div className={`stat-change ${tone}`}>{change}</div>
     </div>
   );
 }

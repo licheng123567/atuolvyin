@@ -55,7 +55,24 @@ data class SelfCheckReq(
 )
 
 @JsonClass(generateAdapter = true)
-data class SelfCheckResp(val can_call: Boolean)
+data class SelfCheckResp(
+    val can_call: Boolean,
+    // v1.6 — 失败项列表："recording_dir" / "recording_toggle" / "permissions"
+    val fail_reasons: List<String> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class PushRegPatchRequest(
+    val device_id: String,
+    val push_reg_id: String,
+    val push_provider: String,
+)
+
+@JsonClass(generateAdapter = true)
+data class PushRegPatchResponse(
+    val device_id: String,
+    val push_reg_id_set: Boolean,
+)
 
 @JsonClass(generateAdapter = true)
 data class LoginReq(
@@ -160,6 +177,12 @@ interface BackendApi {
         @Header("Authorization") authHeader: String,
         @Body body: RegisterDeviceRequest,
     ): RegisterDeviceResponse
+
+    @PATCH("/api/v1/devices/push-reg")
+    suspend fun patchPushReg(
+        @Header("Authorization") authHeader: String,
+        @Body body: PushRegPatchRequest,
+    ): PushRegPatchResponse
 
     @POST("api/v1/calls/{call_id}/suggestions/{suggestion_id}/feedback")
     suspend fun postSuggestionFeedback(

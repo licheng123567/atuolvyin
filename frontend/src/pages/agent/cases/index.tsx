@@ -1,10 +1,17 @@
-import { useCreate, useList } from "@refinedev/core";
+// 1:1 还原 ui/agent-pc.html#my-cases 我的案件
+// v1.6.5 — 加项目过滤 + 统一 SearchInput / PaginationBar
+// v1.6.9 — 公海池抢单：tabs（我的 / 公海）+ 抢单按钮 + 持有上限提示
+import { useCustom, useCreate, useCustomMutation, useInvalidate, useList } from "@refinedev/core";
 import type { CrudFilter } from "@refinedev/core";
-import { ChevronDown, Phone, QrCode } from "lucide-react";
+import { Eye, Inbox, MessageSquarePlus, Phone, RotateCcw } from "lucide-react";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { PaginatedResponse } from "../../../types";
+import { FollowUpNoteModal } from "../../../components/case/FollowUpNoteModal";
 import { QrDialDialog } from "../../../components/dial/QrDialDialog";
+import { PaginationBar } from "../../../components/ui/PaginationBar";
+import { SearchInput } from "../../../components/ui/SearchInput";
+import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 
 interface OwnerInfo {
   id: number;
@@ -24,34 +31,63 @@ interface CaseItem {
   amount_owed: string | null;
   months_overdue: number | null;
   priority_score: number;
+  project_id: number | null;
+  project_name: string | null;
+  last_contact_at?: string | null;
 }
 
+interface ProjectOption { id: number; name: string }
+
 const STAGE_LABELS: Record<string, string> = {
-  new: "待处理",
-  in_progress: "处理中",
-  promised: "已承诺",
+  new: "待跟进",
+  in_progress: "跟进中",
+  promised: "承诺缴费",
   paid: "已缴费",
-  escalated: "已上报",
+  escalated: "升级处理",
   closed: "已关闭",
 };
 
-const STAGE_COLORS: Record<string, React.CSSProperties> = {
-  new: { background: "var(--color-neutral-100)", color: "var(--color-neutral-600)" },
-  in_progress: { background: "var(--color-primary-light)", color: "var(--color-primary)" },
-  promised: { background: "var(--color-warning-light)", color: "var(--color-warning)" },
-  paid: { background: "var(--color-success-light)", color: "var(--color-success)" },
-  escalated: { background: "var(--color-danger-light)", color: "var(--color-danger)" },
-  closed: { background: "var(--color-neutral-100)", color: "var(--color-neutral-400)" },
+const STAGE_BADGE_CLASS: Record<string, string> = {
+  new: "ds-badge ds-badge-orange",
+  in_progress: "ds-badge ds-badge-blue",
+  promised: "ds-badge ds-badge-blue",
+  paid: "ds-badge ds-badge-green",
+  escalated: "ds-badge ds-badge-purple",
+  closed: "ds-badge ds-badge-gray",
 };
+
+function formatLast(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const today = new Date();
+  if (d.toDateString() === today.toDateString()) return `今天 ${d.toTimeString().slice(0, 5)}`;
+  const yest = new Date(); yest.setDate(yest.getDate() - 1);
+  if (d.toDateString() === yest.toDateString()) return `昨天 ${d.toTimeString().slice(0, 5)}`;
+  return d.toISOString().slice(0, 10);
+}
+
+type Tab = "mine" | "pool";
+
+interface PoolQuota {
+  held_open: number;
+  claim_max: number;
+  can_claim_more: boolean;
+  remaining: number;
+}
 
 export function AgentCaseListPage() {
   const navigate = useNavigate();
+  const invalidate = useInvalidate();
+  const [tab, setTab] = useState<Tab>("mine");
   const [page, setPage] = useState(1);
   const [stage, setStage] = useState("");
-  const [poolType, setPoolType] = useState("");
-  const [claimingId, setClaimingId] = useState<number | null>(null);
-  const [dialingId, setDialingId] = useState<number | null>(null);
-  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [projectId, setProjectId] = useState<string>("");
+  const [keyword, setKeyword] = useState("");
+  const [todayMode, setTodayMode] = useState(false);  // v1.6.7
+  const debouncedKw = useDebouncedValue(keyword, 300);
+  const [actingId, setActingId] = useState<number | null>(null);
+  // v1.8.0 — 列表行「记录跟进」快捷入口
+  const [followUpCase, setFollowUpCase] = useState<{ id: number; ownerName: string } | null>(null);
   const [qrState, setQrState] = useState<{
     caseId: number;
     qrPayload: string;
@@ -62,7 +98,11 @@ export function AgentCaseListPage() {
 
   const filters: CrudFilter[] = [];
   if (stage) filters.push({ field: "stage", operator: "eq", value: stage });
-  if (poolType) filters.push({ field: "pool_type", operator: "eq", value: poolType });
+  if (projectId) filters.push({ field: "project_id", operator: "eq", value: Number(projectId) });
+  if (debouncedKw.trim()) filters.push({ field: "q", operator: "contains", value: debouncedKw.trim() });
+  if (todayMode && tab === "mine") filters.push({ field: "today", operator: "eq", value: true });
+  // v1.6.9 — 公海 tab 时只看 pool_type=public（后端 _build_visible_case_filter 会自动过滤已分配的）
+  if (tab === "pool") filters.push({ field: "pool_type", operator: "eq", value: "public" });
 
   const { query } = useList<CaseItem>({
     resource: "agent/cases",
@@ -70,320 +110,389 @@ export function AgentCaseListPage() {
     filters,
   });
 
+  // v1.6.9 — 持有数量 + 上限
+  const { query: quotaQuery } = useCustom<PoolQuota>({
+    url: "agent/me/pool-quota",
+    method: "get",
+  });
+  const quota = quotaQuery.data?.data;
+
+  const { mutate: claimMutate } = useCustomMutation();
+  const { mutate: releaseMutate } = useCustomMutation();
+
+  function handleClaim(caseId: number) {
+    setActingId(caseId);
+    claimMutate(
+      { url: `agent/cases/${caseId}/claim`, method: "post", values: {} },
+      {
+        onSuccess: () => {
+          setActingId(null);
+          void invalidate({ resource: "agent/cases", invalidates: ["list"] });
+          void quotaQuery.refetch();
+          alert("✓ 抢单成功，已加入「我的案件」");
+        },
+        onError: (err) => {
+          setActingId(null);
+          alert(`抢单失败：${err.message ?? "请重试"}`);
+        },
+      },
+    );
+  }
+
+  function handleRelease(caseId: number) {
+    if (!window.confirm("确认把案件放回公海？放回后其他催收员可抢")) return;
+    setActingId(caseId);
+    releaseMutate(
+      { url: `agent/cases/${caseId}/release`, method: "post", values: {} },
+      {
+        onSuccess: () => {
+          setActingId(null);
+          void invalidate({ resource: "agent/cases", invalidates: ["list"] });
+          void quotaQuery.refetch();
+          alert("✓ 已放回公海");
+        },
+        onError: (err) => {
+          setActingId(null);
+          alert(`释放失败：${err.message ?? "请重试"}`);
+        },
+      },
+    );
+  }
+
+  // 项目下拉来自专属端点（distinct project visible to agent）
+  const { query: projectsQuery } = useCustom<ProjectOption[]>({
+    url: "agent/me/projects",
+    method: "get",
+  });
+  const projectOptions: ProjectOption[] = projectsQuery.data?.data ?? [];
+
   const rawData = query.data?.data;
   const items: CaseItem[] =
     (rawData as unknown as PaginatedResponse<CaseItem>)?.items ??
     (rawData as CaseItem[] | undefined) ??
     [];
   const total = query.data?.total ?? 0;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
-  const isLoading = query.isLoading;
 
-  const { mutate: claimCase } = useCreate();
+  const visible = items;
 
-  async function handleDial(caseId: number, mode: "push" | "qr" = "push") {
-    setDialingId(caseId);
-    setOpenMenuId(null);
-    try {
-      const token = localStorage.getItem("access_token") ?? "";
-      const resp = await fetch("/api/v1/calls/dial-request", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ case_id: caseId, mode }),
-      });
-      if (!resp.ok) {
-        alert("拨打失败：" + resp.status);
-        return;
-      }
-      const body = (await resp.json()) as {
-        call_id: number;
-        status: string;
-        qr_payload?: string;
-        expires_at?: string;
-      };
-      if (mode === "qr" && body.qr_payload && body.expires_at) {
-        lastQrCaseId.current = caseId;
-        setQrState({
-          caseId,
-          qrPayload: body.qr_payload,
-          expiresAt: body.expires_at,
-        });
-      } else {
-        navigate(`/agent/workstation/${body.call_id}`);
-      }
-    } finally {
-      setDialingId(null);
-    }
-  }
+  const { mutate: dialMutate } = useCreate();
 
-  function handleClaim(caseId: number) {
-    setClaimingId(caseId);
-    claimCase(
+  function requestQrPayload(caseId: number) {
+    lastQrCaseId.current = caseId;
+    dialMutate(
       {
-        resource: `agent/cases/${caseId}/claim`,
-        values: {},
+        resource: "calls/dial-request",
+        // mode: "qr" — 强制走二维码路径（push 模式需要 MiPush 设备注册，PoC 演示用 qr）
+        values: { case_id: caseId, mode: "qr" },
       },
       {
-        onSuccess: () => {
-          setClaimingId(null);
-          query.refetch();
+        onSuccess: (resp) => {
+          const data = resp.data as { qr_payload?: string; expires_at?: string };
+          if (data.qr_payload && data.expires_at) {
+            setQrState({
+              caseId,
+              qrPayload: data.qr_payload,
+              expiresAt: data.expires_at,
+            });
+          } else {
+            alert("拨号请求成功但未返回二维码，请联系管理员");
+          }
         },
-        onError: () => {
-          setClaimingId(null);
+        onError: (err) => {
+          alert(`拨号失败：${err.message ?? "未知错误"}`);
         },
-      }
+      },
     );
   }
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <Phone className="w-5 h-5 text-[var(--color-primary)]" />
-          <h1 className="text-xl font-semibold text-[var(--color-neutral-900)]">
-            我的案件
-          </h1>
-          <span className="text-sm text-[var(--color-neutral-400)] ml-1">
-            共 {total} 件
-          </span>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">{tab === "pool" ? "公海池" : "我的案件"}</h1>
+          <div className="page-subtitle">
+            {tab === "pool"
+              ? `共 ${total} 件可抢，先到先得${quota ? `；你已持有 ${quota.held_open}/${quota.claim_max} 件` : ""}`
+              : `共 ${total} 件分配案件${quota ? `（持有 ${quota.held_open}/${quota.claim_max}）` : ""}`}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <SearchInput
+            value={keyword}
+            onChange={(v) => { setKeyword(v); setPage(1); }}
+            placeholder="搜索业主姓名 / 房号"
+            width={220}
+          />
+          <select
+            className="filter-select"
+            value={projectId}
+            onChange={(e) => { setProjectId(e.target.value); setPage(1); }}
+          >
+            <option value="">全部项目</option>
+            {projectOptions.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          {tab === "mine" && (
+            <select
+              className="filter-select"
+              value={stage}
+              onChange={(e) => { setStage(e.target.value); setPage(1); }}
+            >
+              <option value="">全部状态</option>
+              {Object.entries(STAGE_LABELS).map(([v, l]) => (
+                <option key={v} value={v}>{l}</option>
+              ))}
+            </select>
+          )}
+          {tab === "mine" && (
+            <button
+              type="button"
+              data-testid="cases-today-toggle"
+              onClick={() => { setTodayMode((v) => !v); setPage(1); }}
+              className={`ds-btn ${todayMode ? "ds-btn-primary" : "ds-btn-ghost"} ds-btn-sm`}
+              title="只显示今日待联系：未结案 + 今天还没拨过 / 上次联系超过 7 天"
+            >
+              {todayMode ? "✓ 今日待联系" : "今日待联系"}
+            </button>
+          )}
+          {(keyword || projectId || stage || todayMode) && (
+            <button
+              type="button"
+              className="ds-btn ds-btn-ghost ds-btn-sm"
+              onClick={() => { setKeyword(""); setProjectId(""); setStage(""); setTodayMode(false); setPage(1); }}
+            >
+              清空筛选
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-3 mb-4">
-        <select
-          value={poolType}
-          onChange={(e) => {
-            setPoolType(e.target.value);
-            setPage(1);
+      {/* v1.6.9 — Tab 切换：我的案件 / 公海池 */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 12, borderBottom: "1px solid var(--color-neutral-200)" }}>
+        <button
+          type="button"
+          data-testid="cases-tab-mine"
+          onClick={() => { setTab("mine"); setPage(1); }}
+          style={{
+            padding: "8px 16px",
+            border: "none",
+            background: "transparent",
+            borderBottom: tab === "mine" ? "2px solid var(--color-primary)" : "2px solid transparent",
+            color: tab === "mine" ? "var(--color-primary)" : "var(--color-neutral-600)",
+            fontWeight: tab === "mine" ? 600 : 500,
+            cursor: "pointer",
+            fontSize: 13,
           }}
-          className="px-3 py-2 text-sm border border-[var(--color-neutral-200)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-          style={{ borderRadius: "var(--radius-md)" }}
         >
-          <option value="">全部（公池+专属）</option>
-          <option value="public">公池</option>
-          <option value="private">我的专属</option>
-        </select>
-        <select
-          value={stage}
-          onChange={(e) => {
-            setStage(e.target.value);
-            setPage(1);
+          我的案件{quota ? ` (${quota.held_open})` : ""}
+        </button>
+        <button
+          type="button"
+          data-testid="cases-tab-pool"
+          onClick={() => { setTab("pool"); setPage(1); setStage(""); setTodayMode(false); }}
+          style={{
+            padding: "8px 16px",
+            border: "none",
+            background: "transparent",
+            borderBottom: tab === "pool" ? "2px solid var(--color-primary)" : "2px solid transparent",
+            color: tab === "pool" ? "var(--color-primary)" : "var(--color-neutral-600)",
+            fontWeight: tab === "pool" ? 600 : 500,
+            cursor: "pointer",
+            fontSize: 13,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
           }}
-          className="px-3 py-2 text-sm border border-[var(--color-neutral-200)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-          style={{ borderRadius: "var(--radius-md)" }}
+          title="公海未分配案件，先到先得；按持有上限限制"
         >
-          <option value="">全部阶段</option>
-          {Object.entries(STAGE_LABELS).map(([val, label]) => (
-            <option key={val} value={val}>
-              {label}
-            </option>
-          ))}
-        </select>
+          <Inbox size={13} /> 公海池
+        </button>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-lg border border-[var(--color-neutral-200)] overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-[var(--color-neutral-50)] border-b border-[var(--color-neutral-200)]">
+      {tab === "pool" && quota && !quota.can_claim_more && (
+        <div
+          style={{
+            padding: "8px 12px",
+            marginBottom: 12,
+            background: "#fef3c7",
+            border: "1px solid #fde68a",
+            borderRadius: 6,
+            fontSize: 12,
+            color: "#92400e",
+          }}
+        >
+          ⚠ 你已达持有上限 {quota.claim_max} 件，请先处理掉部分案件再来抢单（标记缴清/结案后会自动释放配额）
+        </div>
+      )}
+
+      <div className="table-wrap">
+        <table>
+          <thead>
             <tr>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                业主
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                房间
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                欠费(元)
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                逾期月数
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                阶段
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                来源
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                操作
-              </th>
+              <th>业主姓名</th>
+              <th>楼栋/房号</th>
+              <th>项目</th>
+              <th>欠费金额</th>
+              <th>欠费月数</th>
+              <th>状态</th>
+              <th>最近联系</th>
+              <th>操作</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[var(--color-neutral-100)]">
-            {isLoading && (
+          <tbody>
+            {query.isLoading && (
               <tr>
-                <td
-                  colSpan={7}
-                  className="px-4 py-8 text-center text-[var(--color-neutral-400)]"
-                >
+                <td colSpan={8} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
                   加载中…
                 </td>
               </tr>
             )}
-            {!isLoading && items.length === 0 && (
+            {!query.isLoading && visible.length === 0 && (
               <tr>
-                <td
-                  colSpan={7}
-                  className="px-4 py-8 text-center text-[var(--color-neutral-400)]"
-                >
-                  暂无案件
+                <td colSpan={8} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                  {tab === "pool" ? "公海当前没有可抢案件" : "暂无分配的案件"}
                 </td>
               </tr>
             )}
-            {items.map((c) => (
-              <tr
-                key={c.id}
-                className="hover:bg-[var(--color-neutral-50)]"
-              >
-                <td className="px-4 py-3">
-                  <div className="font-medium text-[var(--color-neutral-900)]">
-                    {c.owner.name}
-                  </div>
-                  <div className="text-xs text-[var(--color-neutral-400)]">
-                    {c.owner.phone_masked}
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-[var(--color-neutral-600)]">
-                  {c.owner.building && c.owner.room
-                    ? `${c.owner.building} ${c.owner.room}`
-                    : (c.owner.building ?? c.owner.room ?? "—")}
-                </td>
-                <td className="px-4 py-3 text-[var(--color-neutral-600)]">
-                  {c.amount_owed ?? "—"}
-                </td>
-                <td className="px-4 py-3 text-[var(--color-neutral-600)]">
-                  {c.months_overdue ?? "—"}
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className="inline-flex px-2 py-0.5 text-xs rounded-full font-medium"
-                    style={STAGE_COLORS[c.stage] ?? {}}
+            {visible.map((c) => {
+              const room =
+                c.owner.building && c.owner.room
+                  ? `${c.owner.building}${c.owner.room}`
+                  : c.owner.building ?? c.owner.room ?? "—";
+              const isPaid = c.stage === "paid";
+              return (
+                <tr key={c.id}>
+                  <td>
+                    <strong>{c.owner.name}</strong>
+                    <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>
+                      {c.owner.phone_masked}
+                    </div>
+                  </td>
+                  <td>{room}</td>
+                  <td style={{ fontSize: 12, color: "var(--color-primary)" }}>
+                    {c.project_name ? `📁 ${c.project_name}` : <span style={{ color: "var(--color-neutral-400)" }}>—</span>}
+                  </td>
+                  <td
+                    style={{
+                      color: isPaid ? "#057a55" : "#e02424",
+                      fontWeight: 600,
+                    }}
                   >
-                    {STAGE_LABELS[c.stage] ?? c.stage}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-xs text-[var(--color-neutral-600)]">
-                  {c.pool_type === "public" ? "公池" : "专属"}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    {c.pool_type === "public" && c.assigned_to === null ? (
-                      <button
-                        type="button"
-                        disabled={claimingId === c.id}
-                        onClick={() => handleClaim(c.id)}
-                        className="text-xs font-medium text-white px-2 py-1 disabled:opacity-40"
-                        style={{
-                          background: "var(--color-primary)",
-                          borderRadius: "var(--radius-sm)",
-                        }}
-                      >
-                        {claimingId === c.id ? "认领中…" : "认领"}
-                      </button>
-                    ) : null}
-                    {c.assigned_to !== null && (
-                      <div className="relative">
-                        <div className="inline-flex">
+                    {c.amount_owed
+                      ? `¥${Number(c.amount_owed).toLocaleString()}`
+                      : "—"}
+                  </td>
+                  <td>
+                    {c.months_overdue != null ? `${c.months_overdue}个月` : "—"}
+                  </td>
+                  <td>
+                    <span className={STAGE_BADGE_CLASS[c.stage] ?? "ds-badge ds-badge-gray"}>
+                      {STAGE_LABELS[c.stage] ?? c.stage}
+                    </span>
+                  </td>
+                  <td>{formatLast(c.last_contact_at)}</td>
+                  <td>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                      {tab === "pool" ? (
+                        <>
                           <button
                             type="button"
-                            disabled={dialingId === c.id}
-                            onClick={() => handleDial(c.id, "push")}
-                            className="text-xs font-medium text-white px-2 py-1 disabled:opacity-40 flex items-center gap-1 rounded-l"
-                            style={{
-                              background: "var(--color-success, #16a34a)",
-                              borderRadius: "var(--radius-sm) 0 0 var(--radius-sm)",
-                            }}
-                          >
-                            <Phone className="w-3 h-3" />
-                            {dialingId === c.id ? "拨打中…" : "拨打"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setOpenMenuId(openMenuId === c.id ? null : c.id)
+                            data-testid="case-claim-btn"
+                            className="ds-btn ds-btn-primary ds-btn-sm"
+                            onClick={() => handleClaim(c.id)}
+                            disabled={actingId === c.id || (quota?.can_claim_more === false)}
+                            title={
+                              quota && !quota.can_claim_more
+                                ? `已达上限 ${quota.claim_max} 件`
+                                : "抢单：加入「我的案件」"
                             }
-                            className="text-xs text-white px-1 py-1"
-                            style={{
-                              background: "var(--color-success, #16a34a)",
-                              borderRadius: "0 var(--radius-sm) var(--radius-sm) 0",
-                              borderLeft: "1px solid rgba(255,255,255,.3)",
-                            }}
-                            aria-label="更多拨打方式"
                           >
-                            <ChevronDown className="w-3 h-3" />
+                            <Inbox className="w-3 h-3" />
+                            {actingId === c.id ? "抢单中…" : "抢单"}
                           </button>
-                        </div>
-                        {openMenuId === c.id && (
-                          <div
-                            className="absolute right-0 top-full mt-1 bg-white border border-[var(--color-neutral-200)] shadow-lg z-10 min-w-[180px]"
-                            style={{ borderRadius: "var(--radius-md)" }}
+                          <button
+                            type="button"
+                            className="ds-btn ds-btn-ghost ds-btn-sm"
+                            onClick={() => navigate(`/agent/cases/${c.id}`)}
                           >
+                            <Eye className="w-3 h-3" /> 详情
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className="ds-btn ds-btn-primary ds-btn-sm"
+                            onClick={() => requestQrPayload(c.id)}
+                            disabled={actingId === c.id || c.owner.do_not_call}
+                            title={c.owner.do_not_call ? "业主已加入免打扰" : "扫码到 App 拨号"}
+                          >
+                            <Phone className="w-3 h-3" /> 拨号
+                          </button>
+                          <button
+                            type="button"
+                            className="ds-btn ds-btn-ghost ds-btn-sm"
+                            onClick={() => navigate(`/agent/cases/${c.id}`)}
+                          >
+                            <Eye className="w-3 h-3" /> 详情
+                          </button>
+                          {/* v1.8.0 — 列表行「记录跟进」快捷入口 */}
+                          <button
+                            type="button"
+                            className="ds-btn ds-btn-ghost ds-btn-sm"
+                            onClick={() => setFollowUpCase({ id: c.id, ownerName: c.owner.name })}
+                            title="无需进入详情页，直接写本次跟进备注"
+                          >
+                            <MessageSquarePlus className="w-3 h-3" /> 记录跟进
+                          </button>
+                          {/* v1.6.9 — 自己持有的未结案案件可放回公海 */}
+                          {c.stage !== "paid" && c.stage !== "closed" && (
                             <button
                               type="button"
-                              onClick={() => handleDial(c.id, "qr")}
-                              className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--color-neutral-50)] flex items-center gap-2"
+                              className="ds-btn ds-btn-ghost ds-btn-sm"
+                              style={{ color: "var(--color-neutral-500)" }}
+                              onClick={() => handleRelease(c.id)}
+                              disabled={actingId === c.id}
+                              title="把案件放回公海（其他催收员可抢；释放后该案件不再属于你）"
                             >
-                              <QrCode className="w-3 h-3 text-[var(--color-primary)]" />
-                              扫码拨号（华为/OPPO/vivo）
+                              <RotateCcw className="w-3 h-3" /> 放回公海
                             </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {c.pool_type !== "public" && c.assigned_to === null && (
-                      <span className="text-xs text-[var(--color-neutral-400)]">—</span>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
+        <PaginationBar
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={total}
+          onPageChange={setPage}
+        />
       </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-end gap-2 mt-4">
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className="px-3 py-1.5 text-sm border border-[var(--color-neutral-200)] rounded disabled:opacity-40"
-            style={{ borderRadius: "var(--radius-md)" }}
-          >
-            上一页
-          </button>
-          <span className="text-sm text-[var(--color-neutral-600)]">
-            {page} / {totalPages}
-          </span>
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            className="px-3 py-1.5 text-sm border border-[var(--color-neutral-200)] rounded disabled:opacity-40"
-            style={{ borderRadius: "var(--radius-md)" }}
-          >
-            下一页
-          </button>
-        </div>
-      )}
 
       {qrState && (
         <QrDialDialog
           qrPayload={qrState.qrPayload}
           expiresAt={qrState.expiresAt}
           onClose={() => setQrState(null)}
-          onRegenerate={() => {
-            const cid = lastQrCaseId.current;
-            setQrState(null);
-            if (cid !== null) {
-              void handleDial(cid, "qr");
-            }
-          }}
+          onRegenerate={() => requestQrPayload(qrState.caseId)}
+        />
+      )}
+
+      {/* v1.8.0 — 列表行「记录跟进」Modal */}
+      {followUpCase && (
+        <FollowUpNoteModal
+          caseId={followUpCase.id}
+          ownerName={followUpCase.ownerName}
+          endpoint={`agent/cases/${followUpCase.id}/stage`}
+          invalidateResource="agent/cases"
+          onClose={() => setFollowUpCase(null)}
         />
       )}
     </div>

@@ -12,7 +12,8 @@ async def test_get_settings_returns_defaults_when_unset(
     resp = await client.get("/api/v1/admin/settings", headers=admin_auth_headers)
     assert resp.status_code == 200
     data = resp.json()
-    assert data == {
+    # v1.6+ 加入折扣 / 滞纳金审批阈值默认值；用子集断言避免每加字段都更新
+    expected_base = {
         "recording_mode": "auto",
         "l3_hangup_enabled": False,
         "contact_freq_max": 3,
@@ -24,6 +25,8 @@ async def test_get_settings_returns_defaults_when_unset(
         "notify_promise_expiring": True,
         "notify_channels": ["system"],
     }
+    for k, v in expected_base.items():
+        assert data[k] == v, f"expected {k}={v}, got {data.get(k)!r}"
 
 
 @pytest.mark.asyncio

@@ -1,6 +1,7 @@
-// 物业管理员 - 话术库效果看板（PRD §3.11 / L2046）
+// 物业管理员 - 话术效果看板（PRD §3.11 / L2046）
+// v1.5.7 — 1:1 还原 ui/admin-scripts-effectiveness.html
 import { useCustom } from "@refinedev/core";
-import { BarChart3, ArrowLeft } from "lucide-react";
+import { ArrowLeft, BarChart3 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { TRIGGER_INTENTS } from "./helpers";
@@ -31,13 +32,6 @@ const PERIOD_OPTIONS = [
   { value: 90, label: "近 90 天" },
 ];
 
-const GRADE_STYLE: Record<string, { bg: string; color: string }> = {
-  A: { bg: "var(--color-success-light)", color: "var(--color-success)" },
-  B: { bg: "var(--color-info-light)", color: "var(--color-info)" },
-  C: { bg: "var(--color-warning-light)", color: "var(--color-warning)" },
-  D: { bg: "var(--color-danger-light)", color: "var(--color-danger)" },
-};
-
 function pct(value: number | null): string {
   if (value === null) return "—";
   return `${(value * 100).toFixed(1)}%`;
@@ -57,33 +51,37 @@ export function ScriptEffectivenessPage() {
   const data = query.data?.data;
   const items = data?.items ?? [];
 
+  // 顶部 4 张统计卡 — 前端聚合
+  const totalShown = items.reduce((s, it) => s + it.total_shown, 0);
+  const totalAdopted = items.reduce((s, it) => s + it.total_adopted, 0);
+  const totalSupervised = items.reduce((s, it) => s + it.total_supervised, 0);
+  const totalGood = items.reduce((s, it) => s + it.total_good, 0);
+  const overallAdoption = totalShown > 0 ? (totalAdopted / totalShown) * 100 : null;
+  const overallGood = totalSupervised > 0 ? (totalGood / totalSupervised) * 100 : null;
+  const aGradeCount = items.filter((it) => it.composite_grade === "A").length;
+
   return (
-    <div className="p-6">
-      <Link
-        to="/admin/scripts"
-        className="flex items-center gap-1 text-sm text-[var(--color-neutral-500)] hover:text-[var(--color-primary)] mb-3"
-      >
-        <ArrowLeft className="w-4 h-4" /> 返回话术库
+    <div>
+      <Link to="/admin/scripts" className="back-link" style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--color-neutral-500)", fontSize: 13.5, textDecoration: "none", marginBottom: 12 }}>
+        <ArrowLeft className="w-3.5 h-3.5" /> 返回话术库
       </Link>
 
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <BarChart3 className="w-5 h-5 text-[var(--color-primary)]" />
-          <h1 className="text-xl font-semibold text-[var(--color-neutral-900)]">
-            话术效果看板
-          </h1>
-          <span className="text-sm text-[var(--color-neutral-400)] ml-1">
-            共 {items.length} 条话术
-          </span>
-        </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
+        <BarChart3 style={{ width: 22, height: 22, color: "var(--color-primary)" }} />
+        <h1 style={{ fontSize: 20, fontWeight: 600, color: "var(--color-neutral-900)", margin: 0 }}>
+          话术效果看板
+        </h1>
+        <span style={{ fontSize: 13, color: "var(--color-neutral-500)" }}>
+          共 {items.length} 条话术
+        </span>
       </div>
 
-      <div className="flex items-center gap-3 mb-4">
+      {/* 筛选条 */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
         <select
+          className="filter-select"
           value={periodDays}
           onChange={(e) => setPeriodDays(Number(e.target.value))}
-          className="px-3 py-2 text-sm border border-[var(--color-neutral-200)]"
-          style={{ borderRadius: "var(--radius-md)" }}
         >
           {PERIOD_OPTIONS.map((p) => (
             <option key={p.value} value={p.value}>
@@ -92,10 +90,9 @@ export function ScriptEffectivenessPage() {
           ))}
         </select>
         <select
+          className="filter-select"
           value={intent}
           onChange={(e) => setIntent(e.target.value)}
-          className="px-3 py-2 text-sm border border-[var(--color-neutral-200)]"
-          style={{ borderRadius: "var(--radius-md)" }}
         >
           <option value="">全部异议类型</option>
           {TRIGGER_INTENTS.map((it) => (
@@ -106,107 +103,105 @@ export function ScriptEffectivenessPage() {
         </select>
       </div>
 
-      <div className="bg-white rounded-lg border border-[var(--color-neutral-200)] overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-[var(--color-neutral-50)] border-b border-[var(--color-neutral-200)]">
+      {/* 4 张统计卡 */}
+      <div className="stats-band">
+        <div className="stats-card">
+          <div className="stats-card-label">推送总次数</div>
+          <div className="stats-card-value">{totalShown.toLocaleString("zh-CN")}</div>
+        </div>
+        <div className="stats-card">
+          <div className="stats-card-label">整体采用率</div>
+          <div className="stats-card-value">
+            {overallAdoption === null ? "—" : `${overallAdoption.toFixed(1)}%`}
+            {totalAdopted > 0 && <span className="pct">/ {totalAdopted.toLocaleString("zh-CN")} 次</span>}
+          </div>
+        </div>
+        <div className="stats-card">
+          <div className="stats-card-label">督导好评率</div>
+          <div className="stats-card-value">
+            {overallGood === null ? "—" : `${overallGood.toFixed(1)}%`}
+            {totalGood > 0 && <span className="pct">/ {totalGood.toLocaleString("zh-CN")} 次</span>}
+          </div>
+        </div>
+        <div className="stats-card">
+          <div className="stats-card-label">A 级话术</div>
+          <div className="stats-card-value">
+            {aGradeCount}
+            <span className="pct">/ {items.length}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 表格 */}
+      <div className="table-wrap">
+        <table>
+          <thead>
             <tr>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">话术</th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">异议类型</th>
-              <th className="px-4 py-3 text-right font-medium text-[var(--color-neutral-600)]">推送次数</th>
-              <th className="px-4 py-3 text-right font-medium text-[var(--color-neutral-600)]">采用率</th>
-              <th className="px-4 py-3 text-right font-medium text-[var(--color-neutral-600)]">督导好评率</th>
-              <th className="px-4 py-3 text-center font-medium text-[var(--color-neutral-600)]">综合评分</th>
-              <th className="px-4 py-3 text-center font-medium text-[var(--color-neutral-600)]">评级</th>
-              <th className="px-4 py-3 text-center font-medium text-[var(--color-neutral-600)]">状态</th>
+              <th>话术</th>
+              <th>异议类型</th>
+              <th style={{ textAlign: "right" }}>推送次数</th>
+              <th style={{ textAlign: "right" }}>采用率</th>
+              <th style={{ textAlign: "right" }}>督导好评率</th>
+              <th style={{ textAlign: "center" }}>综合评分</th>
+              <th style={{ textAlign: "center" }}>评级</th>
+              <th style={{ textAlign: "center" }}>状态</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[var(--color-neutral-100)]">
+          <tbody>
             {query.isLoading && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-[var(--color-neutral-400)]">
+                <td colSpan={8} style={{ textAlign: "center", padding: 32, color: "var(--color-neutral-400)" }}>
                   加载中…
                 </td>
               </tr>
             )}
             {!query.isLoading && items.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-[var(--color-neutral-400)]">
+                <td colSpan={8} style={{ textAlign: "center", padding: 32, color: "var(--color-neutral-400)" }}>
                   暂无话术数据
                 </td>
               </tr>
             )}
-            {items.map((item) => {
-              const gradeStyle =
-                item.composite_grade && GRADE_STYLE[item.composite_grade];
-              return (
-                <tr key={item.template_id} className="hover:bg-[var(--color-neutral-50)]">
-                  <td className="px-4 py-3 font-medium text-[var(--color-neutral-900)]">
-                    {item.title}
-                  </td>
-                  <td className="px-4 py-3 text-[var(--color-neutral-600)]">
-                    {item.trigger_intent}
-                  </td>
-                  <td className="px-4 py-3 text-right text-[var(--color-neutral-600)]">
-                    {item.total_shown}
-                  </td>
-                  <td className="px-4 py-3 text-right text-[var(--color-neutral-600)]">
-                    {pct(item.adoption_rate)}
-                    {item.total_shown > 0 && (
-                      <span className="ml-1 text-xs text-[var(--color-neutral-400)]">
-                        ({item.total_adopted}/{item.total_shown})
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right text-[var(--color-neutral-600)]">
-                    {pct(item.good_ratio)}
-                    {item.total_supervised > 0 && (
-                      <span className="ml-1 text-xs text-[var(--color-neutral-400)]">
-                        ({item.total_good}/{item.total_supervised})
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-center text-[var(--color-neutral-700)]">
-                    {item.composite_score === null
-                      ? "—"
-                      : item.composite_score.toFixed(2)}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    {item.composite_grade ? (
-                      <span
-                        className="inline-flex w-6 h-6 items-center justify-center rounded-full text-xs font-bold"
-                        style={
-                          gradeStyle
-                            ? { background: gradeStyle.bg, color: gradeStyle.color }
-                            : {}
-                        }
-                      >
-                        {item.composite_grade}
-                      </span>
-                    ) : (
-                      <span className="text-[var(--color-neutral-400)]">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span
-                      className="inline-flex px-2 py-0.5 text-xs rounded-full font-medium"
-                      style={
-                        item.is_active
-                          ? {
-                              background: "var(--color-success-light)",
-                              color: "var(--color-success)",
-                            }
-                          : {
-                              background: "var(--color-neutral-100)",
-                              color: "var(--color-neutral-500)",
-                            }
-                      }
-                    >
-                      {item.is_active ? "启用" : "禁用"}
+            {items.map((item) => (
+              <tr key={item.template_id}>
+                <td className="title-cell">{item.title}</td>
+                <td>{item.trigger_intent}</td>
+                <td style={{ textAlign: "right" }}>{item.total_shown}</td>
+                <td style={{ textAlign: "right" }}>
+                  {pct(item.adoption_rate)}
+                  {item.total_shown > 0 && (
+                    <span className="ratio-detail">
+                      ({item.total_adopted}/{item.total_shown})
                     </span>
-                  </td>
-                </tr>
-              );
-            })}
+                  )}
+                </td>
+                <td style={{ textAlign: "right" }}>
+                  {pct(item.good_ratio)}
+                  {item.total_supervised > 0 && (
+                    <span className="ratio-detail">
+                      ({item.total_good}/{item.total_supervised})
+                    </span>
+                  )}
+                </td>
+                <td style={{ textAlign: "center" }}>
+                  {item.composite_score === null ? "—" : item.composite_score.toFixed(2)}
+                </td>
+                <td style={{ textAlign: "center" }}>
+                  {item.composite_grade ? (
+                    <span className={`grade grade-${item.composite_grade.toLowerCase()}`}>
+                      {item.composite_grade}
+                    </span>
+                  ) : (
+                    <span style={{ color: "var(--color-neutral-400)" }}>—</span>
+                  )}
+                </td>
+                <td style={{ textAlign: "center" }}>
+                  <span className={`status-pill ${item.is_active ? "status-active" : "status-inactive"}`}>
+                    {item.is_active ? "启用" : "禁用"}
+                  </span>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

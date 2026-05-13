@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import io
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from fastapi import status as http_status
@@ -13,12 +13,17 @@ from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
 from app.models.call import CallRecord, SuggestionFeedback
 from app.models.script import ScriptTemplate, ScriptTemplateVersion
-from app.schemas.script import (
-    ImportResultOut, RollbackIn, ScriptEffectivenessItem,
-    ScriptEffectivenessOut, ScriptTemplateCreate,
-    ScriptTemplateOut, ScriptTemplateUpdate, ScriptVersionOut,
-)
 from app.schemas.common import PaginatedResponse
+from app.schemas.script import (
+    ImportResultOut,
+    RollbackIn,
+    ScriptEffectivenessItem,
+    ScriptEffectivenessOut,
+    ScriptTemplateCreate,
+    ScriptTemplateOut,
+    ScriptTemplateUpdate,
+    ScriptVersionOut,
+)
 
 router = APIRouter()
 
@@ -40,17 +45,69 @@ def _write_snapshot(db: Session, script: ScriptTemplate, editor_id: int) -> None
     db.add(v)
 
 
-def _get_script_or_404(db: Session, script_id: int, role: str, tenant_id: int) -> ScriptTemplate:
+def _script_source(script: ScriptTemplate) -> str:
+    """Compute three-layer source label for ScriptTemplate."""
+    if script.provider_id is not None:
+        return "provider"
+    if script.tenant_id is not None:
+        return "tenant"
+    return "platform"
+
+
+def _to_out(script: ScriptTemplate, project_name: str | None = None) -> ScriptTemplateOut:
+    return ScriptTemplateOut.model_validate(
+        {
+            **{c.name: getattr(script, c.name) for c in script.__table__.columns},
+            "source": _script_source(script),
+            "project_name": project_name,
+        }
+    )
+
+
+def _enrich_with_project(db: Session, script: ScriptTemplate) -> ScriptTemplateOut:
+    project_name: str | None = None
+    if script.project_id:
+        from app.models.case import Project
+
+        project_name = db.execute(
+            select(Project.name).where(Project.id == script.project_id)
+        ).scalar_one_or_none()
+    return _to_out(script, project_name)
+
+
+def _get_script_or_404(
+    db: Session,
+    script_id: int,
+    role: str,
+    tenant_id: int,
+    *,
+    for_write: bool = False,
+) -> ScriptTemplate:
+    """Load script. Read 可见平台 + 本租户私有；写仅限本租户私有（admin）。
+
+    v1.4 S16.5：屏蔽 admin 改/删平台预置（之前是 bug）。
+    platform_superadmin 仍可改平台预置。
+    """
     stmt = select(ScriptTemplate).where(ScriptTemplate.id == script_id)
     if role != "platform_superadmin":
         stmt = stmt.where(
             or_(ScriptTemplate.tenant_id == tenant_id, ScriptTemplate.tenant_id.is_(None))
         )
+        # admin 永远不可见服务商私有话术
+        stmt = stmt.where(ScriptTemplate.provider_id.is_(None))
     script = db.execute(stmt).scalar_one_or_none()
     if not script:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail={"code": "ERR_NOT_FOUND", "message": "话术不存在"},
+        )
+    if for_write and role != "platform_superadmin" and script.tenant_id is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "ERR_PLATFORM_READONLY",
+                "message": "平台预置话术不可直接修改，请先 Fork 为本物业版",
+            },
         )
     return script
 
@@ -60,9 +117,10 @@ def list_scripts(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
-    q: Optional[str] = Query(None),
-    intent: Optional[str] = Query(None),
-    status: Optional[str] = Query(None),
+    q: str | None = Query(None),
+    intent: str | None = Query(None),
+    status: str | None = Query(None),
+    project_id: int | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[ScriptTemplateOut]:
@@ -74,6 +132,8 @@ def list_scripts(
         stmt = stmt.where(
             or_(ScriptTemplate.tenant_id == tenant_id, ScriptTemplate.tenant_id.is_(None))
         )
+        # v1.4 S16.5 — admin 列表永远不可见服务商私有话术
+        stmt = stmt.where(ScriptTemplate.provider_id.is_(None))
     if q:
         stmt = stmt.where(
             or_(ScriptTemplate.title.ilike(f"%{q}%"), ScriptTemplate.content.ilike(f"%{q}%"))
@@ -84,13 +144,28 @@ def list_scripts(
         stmt = stmt.where(ScriptTemplate.is_active.is_(True))
     elif status == "inactive":
         stmt = stmt.where(ScriptTemplate.is_active.is_(False))
+    # v1.5.7 — 项目级过滤：传 project_id=N 时返回「全项目通用 + 该项目专属」
+    if project_id is not None:
+        stmt = stmt.where(
+            or_(ScriptTemplate.project_id.is_(None), ScriptTemplate.project_id == project_id)
+        )
 
     total_ids = db.execute(stmt.with_only_columns(ScriptTemplate.id)).scalars().all()
-    items = db.execute(
-        stmt.order_by(ScriptTemplate.updated_at.desc())
-        .offset((page - 1) * page_size).limit(page_size)
-    ).scalars().all()
-    return PaginatedResponse(items=list(items), total=len(total_ids), page=page, page_size=page_size)
+    items = (
+        db.execute(
+            stmt.order_by(ScriptTemplate.updated_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        .scalars()
+        .all()
+    )
+    return PaginatedResponse(
+        items=[_enrich_with_project(db, s) for s in items],
+        total=len(total_ids),
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.post("/scripts", response_model=ScriptTemplateOut, status_code=201)
@@ -104,9 +179,26 @@ def create_script(
     tenant_id = int(payload.get("tenant_id") or 0)
     user_id = int(payload.get("user_id") or 0)
 
+    # v1.5.7 — 校验 project_id 属本租户
+    project_id_to_set: int | None = None
+    if body.project_id is not None and role != "platform_superadmin":
+        from app.models.case import Project
+
+        ok = db.execute(
+            select(Project.id).where(Project.id == body.project_id, Project.tenant_id == tenant_id)
+        ).scalar_one_or_none()
+        if ok is None:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail={"code": "ERR_INVALID_PROJECT", "message": "项目不存在或不属本租户"},
+            )
+        project_id_to_set = body.project_id
+
     script = ScriptTemplate(
         tenant_id=None if role == "platform_superadmin" else tenant_id,
+        project_id=project_id_to_set,
         title=body.title,
+        scene=body.scene,
         trigger_intent=body.trigger_intent,
         content=body.content,
         notes=body.notes,
@@ -118,7 +210,7 @@ def create_script(
     _write_snapshot(db, script, user_id)
     db.commit()
     db.refresh(script)
-    return script
+    return _enrich_with_project(db, script)
 
 
 @router.post("/scripts/import", response_model=ImportResultOut)
@@ -137,11 +229,11 @@ def import_scripts(
     contents = file.file.read()
     try:
         wb = openpyxl.load_workbook(io.BytesIO(contents))
-    except Exception:
+    except Exception as exc:
         raise HTTPException(
             status_code=http_status.HTTP_400_BAD_REQUEST,
             detail={"code": "ERR_INVALID_FILE", "message": "无法解析 Excel 文件"},
-        )
+        ) from exc
 
     ws = wb.active
     tenant_filter = (
@@ -150,9 +242,7 @@ def import_scripts(
         else ScriptTemplate.tenant_id.is_(None)
     )
     existing_titles = {
-        row[0] for row in db.execute(
-            select(ScriptTemplate.title).where(tenant_filter)
-        ).all()
+        row[0] for row in db.execute(select(ScriptTemplate.title).where(tenant_filter)).all()
     }
 
     success = skipped = failed = 0
@@ -210,22 +300,83 @@ def update_script(
     tenant_id = int(payload.get("tenant_id") or 0)
     user_id = int(payload.get("user_id") or 0)
 
-    script = _get_script_or_404(db, script_id, role, tenant_id)
+    script = _get_script_or_404(db, script_id, role, tenant_id, for_write=True)
 
     if body.title is not None:
         script.title = body.title
+    if body.scene is not None:
+        script.scene = body.scene
     if body.trigger_intent is not None:
         script.trigger_intent = body.trigger_intent
     if body.content is not None:
         script.content = body.content
     if body.notes is not None:
         script.notes = body.notes
+    # v1.5.7 — 项目级范围可改：明确传 project_id（含 null）即更新
+    if "project_id" in body.model_fields_set:
+        if body.project_id is not None and role != "platform_superadmin":
+            from app.models.case import Project
+
+            ok = db.execute(
+                select(Project.id).where(
+                    Project.id == body.project_id, Project.tenant_id == tenant_id
+                )
+            ).scalar_one_or_none()
+            if ok is None:
+                raise HTTPException(
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
+                    detail={"code": "ERR_INVALID_PROJECT", "message": "项目不存在或不属本租户"},
+                )
+        script.project_id = body.project_id
     script.version += 1
     _write_snapshot(db, script, user_id)
 
     db.commit()
     db.refresh(script)
-    return script
+    return _enrich_with_project(db, script)
+
+
+@router.post("/scripts/{script_id}/fork", response_model=ScriptTemplateOut, status_code=201)
+def fork_script(
+    script_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> ScriptTemplateOut:
+    """v1.4 S16.5 — admin 把平台预置话术 fork 成本租户私有副本。"""
+    role = payload.get("role", "")
+    tenant_id = int(payload.get("tenant_id") or 0)
+    user_id = int(payload.get("user_id") or 0)
+
+    if role == "platform_superadmin":
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail={"code": "ERR_NOT_APPLICABLE", "message": "超管直接编辑平台预置即可"},
+        )
+
+    src = _get_script_or_404(db, script_id, role, tenant_id, for_write=False)
+    if src.tenant_id is not None or src.provider_id is not None:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail={"code": "ERR_NOT_PLATFORM", "message": "仅平台预置话术可 Fork"},
+        )
+
+    clone = ScriptTemplate(
+        tenant_id=tenant_id,
+        provider_id=None,
+        title=src.title,
+        trigger_intent=src.trigger_intent,
+        content=src.content,
+        notes=src.notes,
+        version=1,
+        created_by=user_id,
+    )
+    db.add(clone)
+    db.flush()
+    _write_snapshot(db, clone, user_id)
+    db.commit()
+    db.refresh(clone)
+    return _to_out(clone)
 
 
 @router.post("/scripts/{script_id}/toggle", response_model=ScriptTemplateOut)
@@ -237,7 +388,7 @@ def toggle_script(
 ) -> ScriptTemplateOut:
     role = payload.get("role", "")
     tenant_id = int(payload.get("tenant_id") or 0)
-    script = _get_script_or_404(db, script_id, role, tenant_id)
+    script = _get_script_or_404(db, script_id, role, tenant_id, for_write=True)
     was_active = script.is_active
     script.is_active = not script.is_active
     db.commit()
@@ -245,6 +396,7 @@ def toggle_script(
     # Sprint 15.4b — script_disabled 通知（仅 active→inactive 时触发；租户级话术才发）
     if was_active and not script.is_active and script.tenant_id is not None:
         from app.services.notifications.event_subscribers import notify_script_disabled
+
         notify_script_disabled(
             db,
             tenant_id=int(script.tenant_id),
@@ -253,10 +405,12 @@ def toggle_script(
             operator_user_id=int(payload.get("user_id") or 0) or None,
         )
         db.commit()
-    return script
+    return _to_out(script)
 
 
-@router.delete("/scripts/{script_id}", status_code=204, response_class=Response, response_model=None)
+@router.delete(
+    "/scripts/{script_id}", status_code=204, response_class=Response, response_model=None
+)
 def delete_script(
     script_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
@@ -265,7 +419,7 @@ def delete_script(
 ) -> None:
     role = payload.get("role", "")
     tenant_id = int(payload.get("tenant_id") or 0)
-    script = _get_script_or_404(db, script_id, role, tenant_id)
+    script = _get_script_or_404(db, script_id, role, tenant_id, for_write=True)
     if script.is_active:
         raise HTTPException(
             status_code=http_status.HTTP_400_BAD_REQUEST,
@@ -285,11 +439,15 @@ def get_versions(
     role = payload.get("role", "")
     tenant_id = int(payload.get("tenant_id") or 0)
     _get_script_or_404(db, script_id, role, tenant_id)
-    versions = db.execute(
-        select(ScriptTemplateVersion)
-        .where(ScriptTemplateVersion.script_template_id == script_id)
-        .order_by(ScriptTemplateVersion.version.desc())
-    ).scalars().all()
+    versions = (
+        db.execute(
+            select(ScriptTemplateVersion)
+            .where(ScriptTemplateVersion.script_template_id == script_id)
+            .order_by(ScriptTemplateVersion.version.desc())
+        )
+        .scalars()
+        .all()
+    )
     return list(versions)
 
 
@@ -298,7 +456,7 @@ def script_effectiveness(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
-    intent: Optional[str] = Query(None),
+    intent: str | None = Query(None),
     period_days: int = Query(30, ge=1, le=365),
 ) -> ScriptEffectivenessOut:
     """采用率 / 督导好评率 / 综合评分（A-D 四级）— 按 trigger_intent 可筛。
@@ -334,12 +492,12 @@ def script_effectiveness(
             func.sum(case((SuggestionFeedback.action == "adopt", 1), else_=0)).label(
                 "total_adopted"
             ),
-            func.sum(
-                case((SuggestionFeedback.supervisor_label.is_not(None), 1), else_=0)
-            ).label("total_supervised"),
-            func.sum(
-                case((SuggestionFeedback.supervisor_label == "good", 1), else_=0)
-            ).label("total_good"),
+            func.sum(case((SuggestionFeedback.supervisor_label.is_not(None), 1), else_=0)).label(
+                "total_supervised"
+            ),
+            func.sum(case((SuggestionFeedback.supervisor_label == "good", 1), else_=0)).label(
+                "total_good"
+            ),
         )
         .join(CallRecord, CallRecord.id == SuggestionFeedback.call_id)
         .where(SuggestionFeedback.script_template_id.in_(template_ids))
@@ -365,7 +523,7 @@ def script_effectiveness(
         adoption_rate = adopted / shown if shown else None
         good_ratio = good / supervised if supervised else None
 
-        composite_score: Optional[float]
+        composite_score: float | None
         if adoption_rate is None and good_ratio is None:
             composite_score = None
         elif good_ratio is None:
@@ -375,7 +533,7 @@ def script_effectiveness(
         else:
             composite_score = 0.6 * adoption_rate + 0.4 * good_ratio
 
-        grade: Optional[str]
+        grade: str | None
         if composite_score is None:
             grade = None
         elif composite_score >= 0.8:
@@ -404,9 +562,7 @@ def script_effectiveness(
             )
         )
 
-    items.sort(
-        key=lambda x: (x.composite_score is None, -(x.composite_score or 0), -x.total_shown)
-    )
+    items.sort(key=lambda x: (x.composite_score is None, -(x.composite_score or 0), -x.total_shown))
     return ScriptEffectivenessOut(period_days=period_days, items=items)
 
 
@@ -422,7 +578,7 @@ def rollback_script(
     tenant_id = int(payload.get("tenant_id") or 0)
     user_id = int(payload.get("user_id") or 0)
 
-    script = _get_script_or_404(db, script_id, role, tenant_id)
+    script = _get_script_or_404(db, script_id, role, tenant_id, for_write=True)
     target = db.execute(
         select(ScriptTemplateVersion).where(
             ScriptTemplateVersion.script_template_id == script_id,
@@ -444,4 +600,4 @@ def rollback_script(
 
     db.commit()
     db.refresh(script)
-    return script
+    return _to_out(script)

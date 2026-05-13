@@ -8,4 +8,5 @@
       wechat  → 企微机器人 webhook
       dingtalk→ 钉钉机器人 webhook
 """
-from .dispatcher import dispatch, EventType  # noqa: F401
+
+from .dispatcher import EventType, dispatch  # noqa: F401

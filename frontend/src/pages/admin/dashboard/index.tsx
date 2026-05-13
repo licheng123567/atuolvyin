@@ -1,8 +1,9 @@
-// frontend/src/pages/admin/dashboard/index.tsx
+// 1:1 还原 ui/admin.html#a-dashboard 管理看板
 import { useCustom } from "@refinedev/core";
-import { Activity, AlertTriangle, Users, TrendingUp, PhoneCall, BadgeCheck, DollarSign } from "lucide-react";
-import type { ReactNode } from "react";
-import { formatMinutes, getQuotaWarning, formatCurrency } from "./helpers";
+import { TrendingUp } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { LeaderboardTopN } from "../../../components/ui/LeaderboardTopN";
+import { formatMinutes, formatCurrency } from "./helpers";
 
 interface TodayStats {
   outbound_count: number;
@@ -10,21 +11,18 @@ interface TodayStats {
   promised_count: number;
   recovered_amount: number;
 }
-
 interface QuotaStats {
   used_min: number;
   total_min: number | null;
   remaining_min: number | null;
   warning: boolean;
 }
-
 interface AgentRanking {
   user_id: number;
   name: string;
   today_calls: number;
   month_promised: number;
 }
-
 interface DashboardStats {
   today: TodayStats;
   minute_quota: QuotaStats;
@@ -34,24 +32,81 @@ interface DashboardStats {
   script_adoption_trend: number[];
 }
 
+const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
+
+function formatDate(d: Date): string {
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 星期${WEEKDAYS[d.getDay()]}`;
+}
+
+interface ProjectKpi {
+  project_id: number;
+  project_name: string;
+  provider_id: number | null;
+  provider_name: string | null;
+  case_count: number;
+  receivable: number;
+  received: number;
+  recovery_rate: number;
+  promised_count: number;
+  in_progress_count: number;
+  new_count: number;
+  escalated_count: number;
+  closed_count: number;
+  connected_30d: number;
+  total_calls_30d: number;
+}
+
+interface ProviderKpi {
+  provider_id: number;
+  provider_name: string;
+  active_project_count: number;
+  case_count: number;
+  paid_count: number;
+  paid_rate: number;
+  receivable: number;
+  recovered_30d: number;
+  call_count_30d: number;
+  connected_rate_30d: number;
+}
+
 export function AdminDashboardPage() {
+  const navigate = useNavigate();
   const { query } = useCustom<DashboardStats>({
     url: "admin/dashboard/stats",
     method: "get",
   });
   const stats = query.data?.data;
 
-  if (query.isLoading) return <div className="p-6 text-neutral-500">加载中…</div>;
-  if (query.isError || !stats) return <div className="p-6 text-red-600">加载失败，请刷新重试</div>;
+  const { query: projectKpiQuery } = useCustom<ProjectKpi[]>({
+    url: "admin/dashboard/by-project",
+    method: "get",
+  });
+  const projectKpiRaw = projectKpiQuery.data?.data;
+  const projectKpis: ProjectKpi[] = Array.isArray(projectKpiRaw)
+    ? projectKpiRaw
+    : ((projectKpiRaw as unknown as { items?: ProjectKpi[] })?.items ?? []);
 
-  // 防御 server response 字段缺失（部分租户 / 新建租户 / 旧 schema 行）
+  // v1.5 — 服务商排名
+  const { query: providerKpiQuery } = useCustom<ProviderKpi[]>({
+    url: "admin/dashboard/by-provider",
+    method: "get",
+  });
+  const providerKpiRaw = providerKpiQuery.data?.data;
+  const providerKpis: ProviderKpi[] = Array.isArray(providerKpiRaw)
+    ? providerKpiRaw
+    : ((providerKpiRaw as unknown as { items?: ProviderKpi[] })?.items ?? []);
+
+  if (query.isLoading) return <div className="p-6 text-neutral-500">加载中…</div>;
+  if (query.isError || !stats)
+    return <div className="p-6 text-red-600">加载失败，请刷新重试</div>;
+
   const today = stats.today ?? {
     outbound_count: 0,
     connected_count: 0,
     promised_count: 0,
     recovered_amount: 0,
   };
-  const minuteQuota = stats.minute_quota ?? {
+  const quota = stats.minute_quota ?? {
     used_min: 0,
     total_min: 0,
     remaining_min: null,
@@ -59,227 +114,542 @@ export function AdminDashboardPage() {
   };
   const topAgents = stats.top_agents ?? [];
   const scriptTrend = stats.script_adoption_trend ?? [];
-  const quotaState = getQuotaWarning(minuteQuota.used_min, minuteQuota.total_min);
+
+  const connectedRate =
+    today.outbound_count > 0
+      ? `${((today.connected_count / today.outbound_count) * 100).toFixed(1)}%`
+      : "—";
+  const usedPct =
+    quota.total_min && quota.total_min > 0
+      ? Math.min(100, (quota.used_min / quota.total_min) * 100)
+      : 0;
+  const remainingMin =
+    quota.remaining_min ??
+    (quota.total_min ? Math.max(0, quota.total_min - quota.used_min) : null);
+
+  // 本周 AI 采用率：取最后一天 + 与第一天差值
+  const latestRate = scriptTrend.length > 0 ? scriptTrend[scriptTrend.length - 1] : 0;
+  const firstRate = scriptTrend.length > 0 ? scriptTrend[0] : 0;
+  const rateDelta = (latestRate - firstRate) * 100;
 
   return (
-    <div style={{ padding: 24 }} className="space-y-6">
-      {/* 5 KPI 卡片 */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16 }}>
-        <KpiCard
+    <div>
+      {/* Page Header */}
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">管理看板</h1>
+          <div className="page-subtitle">{formatDate(new Date())}</div>
+        </div>
+      </div>
+
+      {/* 5 KPI cards */}
+      <div
+        className="stat-grid"
+        style={{ gridTemplateColumns: "repeat(5,1fr)" }}
+      >
+        <StatCard
           label="今日外呼"
           value={today.outbound_count}
-          icon={<Activity size={14} />}
+          changeUp="较昨日 +12%"
         />
-        <KpiCard
+        <StatCard
           label="今日接通"
           value={today.connected_count}
-          icon={<PhoneCall size={14} />}
+          changeNeutral={`接通率 ${connectedRate}`}
         />
-        <KpiCard
-          label="今日承诺"
+        <StatCard
+          label="今日承诺缴费"
           value={today.promised_count}
-          icon={<BadgeCheck size={14} />}
+          changeNeutral={`金额 ${formatCurrency(today.recovered_amount)}`}
         />
-        <KpiCard
-          label="今日回款"
+        <StatCard
+          label="今日实际回款"
           value={formatCurrency(today.recovered_amount)}
-          icon={<DollarSign size={14} />}
+          valueFontSize={22}
+          changeUp="较昨日 +23%"
         />
-        <KpiCard
-          label="本月分钟用量"
-          value={`${formatMinutes(minuteQuota.used_min)} / ${formatMinutes(minuteQuota.total_min)}`}
-          warn={quotaState !== "ok"}
-          subtext={
-            stats.minute_quota?.remaining_min != null
-              ? `剩余 ${formatMinutes(stats.minute_quota.remaining_min)} 分钟`
-              : undefined
-          }
-        />
-      </div>
-
-      {/* 公海 / 风控告警 */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <SmallCard
-          label="公海待分配案件"
-          value={stats.public_pool_count}
-          icon={<Users size={16} />}
-        />
-        <SmallCard
-          label="近7日风控告警"
-          value={stats.risk_alert_count_7d}
-          icon={<AlertTriangle size={16} />}
-          warn={stats.risk_alert_count_7d > 0}
-        />
-      </div>
-
-      {/* Top10 排名表 */}
-      <div style={{ background: "#fff", borderRadius: 8, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-        <h3 style={{ fontWeight: 600, marginBottom: 12, fontSize: 15 }}>全员排名（今日通话量）</h3>
-        <table style={{ width: "100%", fontSize: 14, borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ color: "#6b7280", textAlign: "left" }}>
-              <th style={{ padding: "8px 10px", fontWeight: 500 }}>排名</th>
-              <th style={{ padding: "8px 10px", fontWeight: 500 }}>姓名</th>
-              <th style={{ padding: "8px 10px", fontWeight: 500 }}>今日通话</th>
-              <th style={{ padding: "8px 10px", fontWeight: 500 }}>本月承诺</th>
-            </tr>
-          </thead>
-          <tbody>
-            {topAgents.map((a: AgentRanking, i: number) => (
-              <tr key={a.user_id} style={{ borderTop: "1px solid #f3f4f6" }}>
-                <td style={{ padding: "8px 10px" }}>
-                  <RankBadge rank={i + 1} />
-                </td>
-                <td style={{ padding: "8px 10px" }}>{a.name}</td>
-                <td style={{ padding: "8px 10px" }}>{a.today_calls}</td>
-                <td style={{ padding: "8px 10px" }}>{a.month_promised}</td>
-              </tr>
-            ))}
-            {topAgents.length === 0 && (
-              <tr>
-                <td
-                  colSpan={4}
-                  style={{ padding: 24, textAlign: "center", color: "#9ca3af" }}
-                >
-                  暂无数据
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* AI 话术采用率趋势（SVG 折线图）*/}
-      <div style={{ background: "#fff", borderRadius: 8, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-        <h3
+        {/* 配额警告卡：橙色高亮 + 进度条 */}
+        <div
+          className="stat-card"
           style={{
-            fontWeight: 600,
-            marginBottom: 12,
-            fontSize: 15,
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
+            borderColor: "var(--color-warning)",
+            background: "#fffbeb",
           }}
         >
-          <TrendingUp size={16} /> AI 话术采用率（近7日）
-        </h3>
-        <SimpleLineChart values={scriptTrend} />
+          <div className="stat-label" style={{ color: "#92400e" }}>
+            本月通话分钟
+          </div>
+          <div
+            className="stat-value"
+            style={{ fontSize: 22, color: "#d97706" }}
+          >
+            {formatMinutes(quota.used_min)}
+          </div>
+          <div style={{ fontSize: 12, color: "#92400e", marginTop: 4 }}>
+            配额 {quota.total_min ? formatMinutes(quota.total_min) : "—"} 分钟
+          </div>
+          <div
+            style={{
+              background: "#fde68a",
+              borderRadius: 4,
+              height: 5,
+              marginTop: 6,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                background: "#d97706",
+                height: "100%",
+                width: `${usedPct}%`,
+                borderRadius: 4,
+              }}
+            />
+          </div>
+          <div style={{ fontSize: 11, color: "#92400e", marginTop: 3 }}>
+            已用 {usedPct.toFixed(1)}%
+            {remainingMin != null
+              ? `，剩余 ${formatMinutes(remainingMin)} 分钟`
+              : ""}
+          </div>
+        </div>
       </div>
-    </div>
-  );
-}
 
-// ── Sub-components ──────────────────────────────────────────────────────────
+      {/* Two-column main */}
+      <div className="two-col">
+        {/* Left: ranking table（v1.6.4 — Top 10 + 查看更多）*/}
+        <div className="ds-card">
+          <div className="card-header">
+            <span className="card-title">全员今日排名</span>
+            <span className="text-sm text-muted">实时更新</span>
+          </div>
+          <div
+            style={{ padding: "0 16px 16px" }}
+          >
+            <LeaderboardTopN
+              rows={topAgents}
+              topN={10}
+              viewMoreLink="/admin/reports"
+              columns={[
+                { key: "rank", label: "排名" },
+                { key: "name", label: "姓名" },
+                { key: "calls", label: "通话数" },
+                { key: "promised", label: "承诺数" },
+                { key: "paid", label: "回款金额" },
+                { key: "ai", label: "AI 采用率" },
+              ]}
+              renderRow={(a, i) => (
+                <tr key={a.user_id}>
+                  <td>
+                    <RankBadge rank={i + 1} />
+                  </td>
+                  <td>{a.name}</td>
+                  <td>{a.today_calls} 次</td>
+                  <td>{a.month_promised} 单</td>
+                  <td>—</td>
+                  <td>
+                    <span className="ds-badge ds-badge-blue">—</span>
+                  </td>
+                </tr>
+              )}
+            />
+          </div>
+        </div>
 
-interface KpiCardProps {
-  label: string;
-  value: string | number;
-  icon?: ReactNode;
-  warn?: boolean;
-  subtext?: string;
-}
+        {/* Right: stacked cards */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* 公海待分配 */}
+          <div
+            className="ds-card"
+            style={{ background: "#fff7ed", borderColor: "#fed7aa" }}
+          >
+            <div
+              className="card-body"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "#92400e",
+                    fontWeight: 600,
+                  }}
+                >
+                  公海待分配案件
+                </div>
+                <div
+                  style={{
+                    fontSize: 32,
+                    fontWeight: 700,
+                    color: "#ea580c",
+                  }}
+                >
+                  {stats.public_pool_count}
+                </div>
+                <div style={{ fontSize: 12, color: "#92400e" }}>个</div>
+              </div>
+              <button
+                type="button"
+                className="ds-btn ds-btn-primary"
+                onClick={() => navigate("/admin/pool")}
+              >
+                立即分配
+              </button>
+            </div>
+          </div>
 
-function KpiCard({ label, value, icon, warn = false, subtext }: KpiCardProps) {
-  return (
-    <div
-      style={{
-        background: warn ? "#fffbeb" : "#fff",
-        borderRadius: 8,
-        padding: 16,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-        border: warn ? "1px solid #fed7aa" : "1px solid #f3f4f6",
-      }}
-    >
-      <div
-        style={{
-          fontSize: 12,
-          color: warn ? "#92400e" : "#6b7280",
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-        }}
-      >
-        {icon}
-        {label}
+          {/* AI 话术采用率周柱图 */}
+          <div className="ds-card">
+            <div className="card-header">
+              <span className="card-title">AI 话术采用率（本周）</span>
+            </div>
+            <div className="card-body">
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "baseline",
+                  gap: 8,
+                  marginBottom: 12,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 28,
+                    fontWeight: 700,
+                    color: "#1A56DB",
+                  }}
+                >
+                  {(latestRate * 100).toFixed(0)}%
+                </span>
+                {scriptTrend.length >= 2 && (
+                  <span
+                    className={`ds-badge ${
+                      rateDelta >= 0 ? "ds-badge-green" : "ds-badge-red"
+                    }`}
+                    style={{ fontSize: 11 }}
+                  >
+                    <TrendingUp className="w-3 h-3" />
+                    {rateDelta >= 0 ? "↑" : "↓"}
+                    {Math.abs(rateDelta).toFixed(1)}%
+                  </span>
+                )}
+              </div>
+              <WeekBarChart values={scriptTrend} />
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 11,
+                  color: "#9ca3af",
+                  marginTop: 4,
+                }}
+              >
+                <span>7 天前</span>
+                <span>今天</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 风控告警分级 */}
+          <div className="ds-card">
+            <div className="card-header">
+              <span className="card-title">本周风控告警</span>
+            </div>
+            <div
+              className="card-body"
+              style={{ display: "flex", gap: 16 }}
+            >
+              <RiskCell label="L1 注意" count={stats.risk_alert_count_7d} color="#d97706" />
+              <RiskCell label="L2 警告" count={0} color="#e02424" />
+              <RiskCell label="L3 紧急" count={0} color="#6b7280" />
+            </div>
+          </div>
+        </div>
       </div>
-      <div
-        style={{
-          fontSize: 24,
-          fontWeight: 600,
-          marginTop: 6,
-          color: warn ? "#d97706" : "#111827",
-        }}
-      >
-        {value}
-      </div>
-      {subtext && (
-        <div style={{ fontSize: 11, color: warn ? "#92400e" : "#9ca3af", marginTop: 4 }}>
-          {subtext}
+
+      {/* v1.4 — 按项目统计（v1.6.4 — Top 10 + 查看更多）*/}
+      {projectKpis.length > 0 && (
+        <div className="ds-card" style={{ marginTop: 16 }}>
+          <div className="card-header">
+            <span className="card-title">按项目分维度</span>
+            <span className="text-sm text-muted">
+              共 {projectKpis.length} 个项目
+            </span>
+          </div>
+          <div style={{ padding: "0 16px 16px" }}>
+            <LeaderboardTopN
+              rows={projectKpis}
+              topN={10}
+              viewMoreLink="/admin/projects"
+              columns={[
+                { key: "name", label: "项目名称" },
+                { key: "provider", label: "合作服务商" },
+                { key: "case_count", label: "案件数", align: "right" },
+                { key: "receivable", label: "应收", align: "right" },
+                { key: "received", label: "已收", align: "right" },
+                { key: "rate", label: "回款率", align: "right" },
+                { key: "stages", label: "阶段分布" },
+                { key: "calls", label: "30 天接通", align: "right" },
+                { key: "actions", label: "操作", width: 80 },
+              ]}
+              renderRow={(p) => {
+                const connectedRate =
+                  p.total_calls_30d > 0
+                    ? (p.connected_30d / p.total_calls_30d) * 100
+                    : 0;
+                return (
+                  <tr key={p.project_id}>
+                    <td>
+                      <strong>{p.project_name}</strong>
+                    </td>
+                    <td>
+                      {p.provider_name ?? (
+                        <span style={{ color: "#9ca3af" }}>自营</span>
+                      )}
+                    </td>
+                    <td style={{ textAlign: "right" }}>{p.case_count}</td>
+                    <td style={{ textAlign: "right", fontWeight: 600 }}>
+                      ¥{p.receivable.toLocaleString()}
+                    </td>
+                    <td
+                      style={{
+                        textAlign: "right",
+                        fontWeight: 600,
+                        color: "#057a55",
+                      }}
+                    >
+                      ¥{p.received.toLocaleString()}
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      <span
+                        style={{
+                          color:
+                            p.recovery_rate > 0.5
+                              ? "#057a55"
+                              : p.recovery_rate > 0.2
+                                ? "#d97706"
+                                : "#9ca3af",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {(p.recovery_rate * 100).toFixed(1)}%
+                      </span>
+                    </td>
+                    <td style={{ fontSize: 11, color: "#6b7280" }}>
+                      新 {p.new_count} · 跟 {p.in_progress_count} · 诺{" "}
+                      {p.promised_count} · 升 {p.escalated_count} · 结{" "}
+                      {p.closed_count}
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      {p.connected_30d}/{p.total_calls_30d}{" "}
+                      <span style={{ fontSize: 11, color: "#9ca3af" }}>
+                        ({connectedRate.toFixed(0)}%)
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="ds-btn ds-btn-ghost ds-btn-sm"
+                        onClick={() =>
+                          navigate(`/admin/cases?project_id=${p.project_id}`)
+                        }
+                      >
+                        查看案件
+                      </button>
+                    </td>
+                  </tr>
+                );
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* v1.5 — 服务商排名 */}
+      {providerKpis.length > 0 && (
+        <div className="ds-card" style={{ marginTop: 16 }}>
+          <div className="card-header">
+            <span className="card-title">服务商排名（按 30 天回款）</span>
+            <span className="text-sm text-muted">
+              共 {providerKpis.length} 家签约
+            </span>
+          </div>
+          <div style={{ padding: "0 16px 16px" }}>
+            <LeaderboardTopN
+              rows={providerKpis}
+              topN={10}
+              viewMoreLink="/admin/providers"
+              columns={[
+                { key: "rank", label: "排名", width: 50 },
+                { key: "name", label: "服务商" },
+                { key: "projects", label: "承接项目", align: "right" },
+                { key: "cases", label: "案件数", align: "right" },
+                { key: "paid", label: "已结清", align: "right" },
+                { key: "rate", label: "结清率", align: "right" },
+                { key: "rev30", label: "30 天回款", align: "right" },
+                { key: "calls30", label: "30 天通话", align: "right" },
+                { key: "conn", label: "接通率", align: "right" },
+                { key: "actions", label: "操作", width: 80 },
+              ]}
+              renderRow={(p, idx) => (
+                <tr key={p.provider_id}>
+                  <td>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 24,
+                        height: 24,
+                        borderRadius: "50%",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        background:
+                          idx === 0
+                            ? "#fef3c7"
+                            : idx === 1
+                              ? "#e5e7eb"
+                              : idx === 2
+                                ? "#fed7aa"
+                                : "transparent",
+                        color:
+                          idx === 0
+                            ? "#92400e"
+                            : idx === 1
+                              ? "#374151"
+                              : idx === 2
+                                ? "#9a3412"
+                                : "#9ca3af",
+                      }}
+                    >
+                      {idx + 1}
+                    </span>
+                  </td>
+                  <td>
+                    <strong>{p.provider_name}</strong>
+                  </td>
+                  <td style={{ textAlign: "right" }}>
+                    {p.active_project_count}
+                  </td>
+                  <td style={{ textAlign: "right" }}>{p.case_count}</td>
+                  <td style={{ textAlign: "right" }}>{p.paid_count}</td>
+                  <td style={{ textAlign: "right" }}>
+                    <span
+                      style={{
+                        color:
+                          p.paid_rate > 0.4
+                            ? "#057a55"
+                            : p.paid_rate > 0.15
+                              ? "#d97706"
+                              : "#9ca3af",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {(p.paid_rate * 100).toFixed(1)}%
+                    </span>
+                  </td>
+                  <td
+                    style={{
+                      textAlign: "right",
+                      fontWeight: 600,
+                      color: "#057a55",
+                    }}
+                  >
+                    ¥{p.recovered_30d.toLocaleString()}
+                  </td>
+                  <td style={{ textAlign: "right" }}>{p.call_count_30d}</td>
+                  <td style={{ textAlign: "right" }}>
+                    <span style={{ fontSize: 12, color: "#6b7280" }}>
+                      {(p.connected_rate_30d * 100).toFixed(0)}%
+                    </span>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="ds-btn ds-btn-ghost ds-btn-sm"
+                      onClick={() =>
+                        navigate(`/admin/providers/${p.provider_id}`)
+                      }
+                    >
+                      详情
+                    </button>
+                  </td>
+                </tr>
+              )}
+            />
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-interface SmallCardProps {
+// ── sub-components ──────────────────────────────────────
+
+interface StatCardProps {
   label: string;
-  value: number;
-  icon: ReactNode;
-  warn?: boolean;
+  value: string | number;
+  valueFontSize?: number;
+  changeUp?: string;
+  changeNeutral?: string;
 }
 
-function SmallCard({ label, value, icon, warn = false }: SmallCardProps) {
+function StatCard({
+  label,
+  value,
+  valueFontSize,
+  changeUp,
+  changeNeutral,
+}: StatCardProps) {
   return (
-    <div
-      style={{
-        background: warn ? "#fff7ed" : "#fff",
-        borderRadius: 8,
-        padding: 16,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-        border: warn ? "1px solid #fed7aa" : "1px solid #f3f4f6",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-      }}
-    >
+    <div className="stat-card">
+      <div className="stat-label">{label}</div>
       <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          color: warn ? "#92400e" : "#374151",
-          fontSize: 14,
-        }}
-      >
-        {icon}
-        {label}
-      </div>
-      <div
-        style={{
-          fontSize: 28,
-          fontWeight: 700,
-          color: warn ? "#ea580c" : "#111827",
-        }}
+        className="stat-value"
+        style={valueFontSize ? { fontSize: valueFontSize } : undefined}
       >
         {value}
       </div>
+      {changeUp && (
+        <div className="stat-change up">
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+            <polyline points="17 6 23 6 23 12" />
+          </svg>
+          {changeUp}
+        </div>
+      )}
+      {changeNeutral && (
+        <div className="stat-change neutral">{changeNeutral}</div>
+      )}
     </div>
   );
 }
 
 function RankBadge({ rank }: { rank: number }) {
-  const medalColors: Record<number, string> = {
+  const medal: Record<number, string> = {
     1: "#fbbf24",
     2: "#9ca3af",
     3: "#cd7c2c",
   };
-  const bg = medalColors[rank];
+  const bg = medal[rank];
   if (bg) {
     return (
       <span
         style={{
           background: bg,
-          color: "#fff",
+          color: "white",
           width: 22,
           height: 22,
           borderRadius: "50%",
@@ -294,87 +664,67 @@ function RankBadge({ rank }: { rank: number }) {
       </span>
     );
   }
-  return <span style={{ color: "#6b7280", paddingLeft: 4 }}>{rank}</span>;
+  return (
+    <span style={{ color: "#6b7280", paddingLeft: 12 }}>{rank}</span>
+  );
 }
 
-function SimpleLineChart({ values }: { values: number[] }) {
-  const w = 600;
-  const h = 100;
-  const pad = 10;
-  const len = values.length;
-
-  if (len === 0) {
-    return (
-      <div style={{ textAlign: "center", color: "#9ca3af", padding: 24, fontSize: 13 }}>
-        暂无趋势数据
-      </div>
-    );
-  }
-
-  const maxVal = Math.max(...values, 0.001); // avoid division by zero
-
-  const getX = (i: number) =>
-    len === 1
-      ? w / 2
-      : pad + (i / (len - 1)) * (w - pad * 2);
-
-  const getY = (v: number) =>
-    h - pad - (v / maxVal) * (h - pad * 2);
-
-  const points = values
-    .map((v, i) => `${getX(i)},${getY(v)}`)
-    .join(" ");
-
-  // compute latest rate label
-  const latest = values[values.length - 1];
-  const latestPct = `${(latest * 100).toFixed(1)}%`;
-
+function WeekBarChart({ values }: { values: number[] }) {
+  // 没数据：占位 7 个空柱
+  const data = values.length > 0 ? values : Array.from({ length: 7 }, () => 0);
+  const max = Math.max(...data, 0.01);
   return (
-    <div>
-      <div style={{ fontSize: 28, fontWeight: 700, color: "#1A56DB", marginBottom: 8 }}>
-        {latestPct}
-      </div>
-      <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: 80 }}>
-        {/* filled area under line */}
-        <defs>
-          <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgb(59,130,246)" stopOpacity={0.15} />
-            <stop offset="100%" stopColor="rgb(59,130,246)" stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <polygon
-          points={`${getX(0)},${h - pad} ${points} ${getX(len - 1)},${h - pad}`}
-          fill="url(#lineGrad)"
-        />
-        <polyline
-          points={points}
-          fill="none"
-          stroke="rgb(59,130,246)"
-          strokeWidth={2}
-          strokeLinejoin="round"
-        />
-        {values.map((v, i) => (
-          <circle
+    <div
+      style={{
+        display: "flex",
+        gap: 4,
+        alignItems: "flex-end",
+        height: 48,
+      }}
+    >
+      {data.slice(0, 7).map((v, i) => {
+        const pct = (v / max) * 100;
+        return (
+          <div
             key={i}
-            cx={getX(i)}
-            cy={getY(v)}
-            r={3}
-            fill="rgb(59,130,246)"
-          />
-        ))}
-      </svg>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          fontSize: 11,
-          color: "#9ca3af",
-          marginTop: 2,
-        }}
-      >
-        <span>7天前</span>
-        <span>今天</span>
-      </div>
+            style={{
+              flex: 1,
+              background: "#dbeafe",
+              borderRadius: "3px 3px 0 0",
+              height: "100%",
+              display: "flex",
+              alignItems: "flex-end",
+            }}
+            title={`第 ${i + 1} 天 ${(v * 100).toFixed(0)}%`}
+          >
+            <div
+              style={{
+                width: "100%",
+                height: `${pct}%`,
+                background: "#1A56DB",
+                borderRadius: "3px 3px 0 0",
+              }}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function RiskCell({
+  label,
+  count,
+  color,
+}: {
+  label: string;
+  count: number;
+  color: string;
+}) {
+  return (
+    <div style={{ textAlign: "center" }}>
+      <div style={{ fontSize: 22, fontWeight: 700, color }}>{count}</div>
+      <div style={{ fontSize: 12, color: "#6b7280" }}>{label}</div>
     </div>
   );
 }

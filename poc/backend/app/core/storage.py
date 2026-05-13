@@ -7,6 +7,7 @@
 
 切换不需要改业务代码：calls.py 等只调用 `storage` 单例的统一接口。
 """
+
 import os
 from abc import ABC, abstractmethod
 from io import BytesIO
@@ -34,6 +35,7 @@ class StorageBackend(ABC):
 class MinIOStorage(StorageBackend):
     def __init__(self) -> None:
         from minio import Minio
+
         self._client = Minio(
             settings.minio_endpoint,
             access_key=settings.minio_access_key,
@@ -44,8 +46,10 @@ class MinIOStorage(StorageBackend):
 
     def put_object(self, object_key: str, data: bytes, content_type: str) -> None:
         self._client.put_object(
-            self._bucket, object_key,
-            BytesIO(data), length=len(data),
+            self._bucket,
+            object_key,
+            BytesIO(data),
+            length=len(data),
             content_type=content_type,
         )
 
@@ -68,7 +72,10 @@ class MinIOStorage(StorageBackend):
 class OSSStorage(StorageBackend):
     def __init__(self) -> None:
         import oss2
-        if not (settings.oss_access_key_id and settings.oss_access_key_secret and settings.oss_bucket):
+
+        if not (
+            settings.oss_access_key_id and settings.oss_access_key_secret and settings.oss_bucket
+        ):
             raise RuntimeError(
                 "STORAGE_BACKEND=oss 但 OSS_* 配置不完整：需要 OSS_ACCESS_KEY_ID / "
                 "OSS_ACCESS_KEY_SECRET / OSS_BUCKET / OSS_ENDPOINT"
@@ -83,7 +90,8 @@ class OSSStorage(StorageBackend):
     def get_url(self, object_key: str) -> str:
         if settings.oss_use_signed_url:
             return self._bucket.sign_url(
-                "GET", object_key,
+                "GET",
+                object_key,
                 settings.oss_signed_url_expires_sec,
                 slash_safe=True,
             )
@@ -101,6 +109,7 @@ class LocalFileStorage(StorageBackend):
     """本机磁盘 + FastAPI serve；URL 形如：
     {public_base}/api/recordings/raw?key=calls/12/xxx.m4a&exp=1730000000&token=...
     """
+
     def __init__(self) -> None:
         self._root = settings.local_storage_root
         self._public_base = settings.local_storage_public_base.rstrip("/")
@@ -115,6 +124,7 @@ class LocalFileStorage(StorageBackend):
     def get_url(self, object_key: str) -> str:
         token, exp = make_token(object_key, expires_sec=3600)
         from urllib.parse import quote
+
         return (
             f"{self._public_base}/api/recordings/raw"
             f"?key={quote(object_key, safe='')}&exp={exp}&token={token}"

@@ -12,7 +12,8 @@ export type UserRole =
   | "agent_internal"
   | "agent_external"
   | "legal"
-  | "workorder"
+  | "workorder"      // v1.5.5 起重命名为 coordinator；保留以兼容旧数据
+  | "coordinator"    // v1.5.6 — 物业内部协调员（接服务商工单 + 调度内部各职能）
   | "project_manager_property"
   | "project_manager_provider"
 

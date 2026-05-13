@@ -91,9 +91,7 @@ class RiskDetector:
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
-    async def _llm_confirm(
-        self, risk_id: str, chunk: TranscriptChunk, hint: KeywordHit
-    ) -> None:
+    async def _llm_confirm(self, risk_id: str, chunk: TranscriptChunk, hint: KeywordHit) -> None:
         try:
             verdict = await analyze_risk_with_llm(
                 transcript_text=chunk.text,

@@ -10,6 +10,7 @@ Existing settings handled by their own routers:
   - AI 推送灵敏度 → admin_suggestion_config
   - 风控自定义词 → admin_risk_keywords
 """
+
 from __future__ import annotations
 
 from typing import Annotated
@@ -33,6 +34,12 @@ DEFAULTS = TenantSettingsOut(
     l3_hangup_enabled=False,
     contact_freq_max=3,
     retention_days=365,
+    discount_auto_approve_threshold_pct=10,
+    discount_supervisor_max_pct=30,
+    discount_disabled=False,
+    late_fee_waive_auto_approve_threshold_pct=50,
+    late_fee_waive_supervisor_max_pct=100,
+    late_fee_waive_disabled=False,
     notify_quota_warning=True,
     notify_script_disabled=True,
     notify_work_order_completed=True,
@@ -48,6 +55,16 @@ def _to_out(s: TenantSettings) -> TenantSettingsOut:
         l3_hangup_enabled=s.l3_hangup_enabled,
         contact_freq_max=s.contact_freq_max,
         retention_days=s.retention_days,
+        discount_auto_approve_threshold_pct=s.discount_auto_approve_threshold_pct,
+        discount_supervisor_max_pct=s.discount_supervisor_max_pct,
+        discount_disabled=s.discount_disabled,
+        late_fee_waive_auto_approve_threshold_pct=getattr(
+            s, "late_fee_waive_auto_approve_threshold_pct", 50
+        )
+        or 50,
+        late_fee_waive_supervisor_max_pct=getattr(s, "late_fee_waive_supervisor_max_pct", 100)
+        or 100,
+        late_fee_waive_disabled=getattr(s, "late_fee_waive_disabled", False) or False,
         notify_quota_warning=s.notify_quota_warning,
         notify_script_disabled=s.notify_script_disabled,
         notify_work_order_completed=s.notify_work_order_completed,

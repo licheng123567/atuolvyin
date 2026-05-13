@@ -26,7 +26,9 @@ async def test_supervisor_cases_include_owner_info(
     assert resp.status_code == 200
     item = next(i for i in resp.json()["items"] if i["id"] == seeded_case.id)
     assert item["owner"]["name"] == seeded_owner.name
-    assert "****" in item["owner"]["phone_masked"]
+    # v1.7.0 — supervisor 是物业内部角色，phone_masked 字段返回明文
+    assert len(item["owner"]["phone_masked"]) == 11
+    assert item["owner"]["phone_masked"].startswith("1")
 
 
 @pytest.mark.asyncio

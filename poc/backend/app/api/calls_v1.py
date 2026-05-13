@@ -11,12 +11,18 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi import status as http_status
-from sqlalchemy import func, select, update as sa_update
+from sqlalchemy import func, select
+from sqlalchemy import update as sa_update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.crypto import decrypt_phone, encrypt_phone, mask_phone
 from app.core.db import get_db
+from app.core.phone_visibility import (
+    display_owner_phone,
+    is_provider_contract_active,
+    should_reveal_owner_phone,
+)
 from app.core.security import get_token_payload, require_roles
 from app.core.storage import storage
 from app.models.call import AnalysisResult, CallRecord, Transcript
@@ -29,6 +35,8 @@ from app.models.user import UserAccount
 from app.schemas.call import (
     AnalysisResultOut,
     CallDetailResponse,
+    CallIntentIn,
+    CallIntentOut,
     CallListItem,
     CallTagOut,
     CallTagPatch,
@@ -39,8 +47,6 @@ from app.schemas.call import (
     DialStartIn,
     DialStartOut,
     HeartbeatOut,
-    LiveCallItem,
-    LiveCallsOut,
     SuggestionFeedbackIn,
     TakeoverResponseIn,
     TakeoverResponseOut,
@@ -127,7 +133,18 @@ async def dial_request(
 
     owner = db.get(OwnerProfile, case.owner_id) if case.owner_id else None
     owner_name = owner.name if owner else "未知业主"
-    owner_phone_masked = mask_phone(owner.phone_enc) if owner and owner.phone_enc else ""
+    # v1.7.0 — 拨号请求侧：按 agent 角色 + 合同决定 phone_masked 字段是明文还是脱敏
+    _agent_reveal = should_reveal_owner_phone(
+        role=payload.get("role", ""),
+        contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
+    )
+    owner_phone_masked = (
+        display_owner_phone(
+            owner.phone_enc if owner else None,
+            reveal=_agent_reveal,
+        )
+        or ""
+    )
 
     # Insert pending_dial CallRecord (shared by push & qr paths)
     call = CallRecord(
@@ -185,7 +202,10 @@ async def dial_request(
     if not device:
         raise HTTPException(
             status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"code": "ERR_PUSH_NOT_REGISTERED", "message": "设备未注册推送，请重新登录催收 App"},
+            detail={
+                "code": "ERR_PUSH_NOT_REGISTERED",
+                "message": "设备未注册推送，请重新登录催收 App",
+            },
         )
 
     push_client = mipush.get_mipush_client()
@@ -251,9 +271,7 @@ def _resolve_recording_mode(
     return "live" if (realtime_quota - realtime_used) >= AUTO_LIVE_THRESHOLD_MIN else "post"
 
 
-def _check_soft_quota(
-    db: Session, tenant_id: int, year_month: str, mode: str
-) -> tuple[bool, int]:
+def _check_soft_quota(db: Session, tenant_id: int, year_month: str, mode: str) -> tuple[bool, int]:
     """软配额检查：余量 ≥ SOFT_QUOTA_MIN_REMAINING 才放行。返回 (is_ok, remaining_minutes)."""
     tenant = db.get(Tenant, tenant_id)
     if tenant is None or tenant.monthly_minute_quota is None:
@@ -269,15 +287,15 @@ def _check_soft_quota(
     return remaining >= SOFT_QUOTA_MIN_REMAINING, max(0, remaining)
 
 
-async def _broadcast_call_event(
-    db: Session, call: CallRecord, event_type: str
-) -> None:
+async def _broadcast_call_event(db: Session, call: CallRecord, event_type: str) -> None:
     """向 supervisor 房间推 call.started / call.ended / call.aborted 事件。"""
     from app.risk.supervisor_manager import get_supervisor_manager
 
     caller = db.get(UserAccount, call.caller_user_id) if call.caller_user_id else None
     case = db.get(CollectionCase, call.case_id) if call.case_id else None
     owner = db.get(OwnerProfile, case.owner_id) if case and case.owner_id else None
+    # v1.7.0 — broadcast 到 supervisor（物业内部角色），统一明文
+    _bc_reveal = should_reveal_owner_phone(role="supervisor")
     payload = {
         "type": event_type,  # "call.started" | "call.ended" | "call.aborted"
         "call_id": call.id,
@@ -285,7 +303,10 @@ async def _broadcast_call_event(
         "caller_user_id": call.caller_user_id,
         "caller_name": caller.name if caller else None,
         "owner_name": owner.name if owner else None,
-        "owner_phone_masked": mask_phone(owner.phone_enc) if owner and owner.phone_enc else None,
+        "owner_phone_masked": display_owner_phone(
+            owner.phone_enc if owner else None,
+            reveal=_bc_reveal,
+        ),
         "started_at": call.started_at.isoformat() if call.started_at else None,
         "recording_mode": call.recording_mode,
         "status": call.status,
@@ -432,7 +453,9 @@ async def call_heartbeat(
     call.last_heartbeat_at = datetime.now(UTC)
     db.commit()
     db.refresh(call)
-    return HeartbeatOut(call_id=call.id, status=call.status, last_heartbeat_at=call.last_heartbeat_at)
+    return HeartbeatOut(
+        call_id=call.id, status=call.status, last_heartbeat_at=call.last_heartbeat_at
+    )
 
 
 # ── Sprint 15.3 — agent 响应督导转接请求 (PRD §11.2) ────────
@@ -462,6 +485,7 @@ async def respond_takeover(
         )
 
     from app.services.call_intervention import dispatch_takeover_response
+
     await dispatch_takeover_response(
         db,
         call_id=call.id,
@@ -471,6 +495,71 @@ async def respond_takeover(
         note=body.note,
     )
     return TakeoverResponseOut(call_id=call.id, accepted=body.accepted)
+
+
+_INTENT_ACTIONS = {"transfer_supervisor", "send_payment_code", "transfer_legal"}
+
+
+@router.post("/{call_id}/intent", response_model=CallIntentOut, status_code=201)
+def post_call_intent(
+    call_id: int,
+    body: CallIntentIn,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> CallIntentOut:
+    """Sprint 16 — 记录坐席意向动作（转主管/发支付码/转法务）。
+
+    实际派发流程（v1.x 主管 inbox / 微信支付码生成 / 法务转化撮合）尚未上线；
+    本端点产出 audit_log 痕迹，保证 PC 端按钮真实落地，便于后续接入实际处理器。
+    """
+    if body.action not in _INTENT_ACTIONS:
+        raise HTTPException(
+            status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "ERR_INVALID_INTENT", "message": "未知的意向动作"},
+        )
+
+    user_id = int(payload.get("user_id") or 0)
+    tenant_id = int(payload.get("tenant_id") or 0)
+    role = str(payload.get("role") or "")
+
+    call = db.execute(
+        select(CallRecord).where(
+            CallRecord.id == call_id,
+            CallRecord.tenant_id == tenant_id,
+        )
+    ).scalar_one_or_none()
+    if call is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "通话不存在"},
+        )
+    # agent 仅能对自己的通话发起意向
+    if call.caller_user_id != user_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_FORBIDDEN", "message": "仅可对本人通话发起动作"},
+        )
+
+    now = datetime.now(UTC)
+    log_audit(
+        db,
+        actor_user_id=user_id,
+        actor_role=role,
+        tenant_id=tenant_id,
+        action=f"call.intent.{body.action}",
+        target_type="call_record",
+        target_id=call_id,
+        payload={"note": body.note} if body.note else None,
+    )
+    db.commit()
+
+    return CallIntentOut(
+        call_id=call_id,
+        action=body.action,
+        recorded_at=now,
+        status="queued",
+    )
 
 
 @router.get("/{call_id}/dial-info", response_model=DialInfoOut)
@@ -677,6 +766,7 @@ async def upload_call(
 
         # Sprint 15.4 — 配额预警通知 (PRD §L412)：80% / 95% / 100% 三档
         from app.services.quota_alerts import check_and_notify_quota_thresholds
+
         check_and_notify_quota_thresholds(
             db,
             tenant=tenant,
@@ -690,6 +780,7 @@ async def upload_call(
 
     # 9. Dispatch async processing task (CELERY_TASK_ALWAYS_EAGER=True in tests)
     from app.worker.tasks.call_pipeline import process_call
+
     process_call.delay(call.id)
 
     return CallUploadResponse(call_id=call.id, status="uploaded")
@@ -722,19 +813,22 @@ def list_calls(
     total: int = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
     calls = (
         db.execute(
-            stmt.order_by(CallRecord.id.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+            stmt.order_by(CallRecord.id.desc()).offset((page - 1) * page_size).limit(page_size)
         )
         .scalars()
         .all()
     )
 
+    # v1.7.0 — 通话列表按当前查看者角色 + 合同决定 callee_phone_masked 字段值
+    _list_reveal = should_reveal_owner_phone(
+        role=role,
+        contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
+    )
     items = [
         CallListItem(
             id=c.id,
             case_id=c.case_id,
-            callee_phone_masked=mask_phone(c.callee_phone_enc),
+            callee_phone_masked=display_owner_phone(c.callee_phone_enc, reveal=_list_reveal) or "",
             started_at=c.started_at,
             ended_at=c.ended_at,
             duration_sec=c.duration_sec,
@@ -785,9 +879,7 @@ def get_call_detail(
     analysis_out: AnalysisResultOut | None = None
 
     if call.status == "processed":
-        t = db.execute(
-            select(Transcript).where(Transcript.call_id == call_id)
-        ).scalar_one_or_none()
+        t = db.execute(select(Transcript).where(Transcript.call_id == call_id)).scalar_one_or_none()
         if t:
             segs = None
             if t.segments:
@@ -814,10 +906,15 @@ def get_call_detail(
                 needs_review=a.needs_review,
             )
 
+    # v1.7.0 — 通话详情按当前查看者角色 + 合同决定 callee_phone_masked 字段值
+    _detail_reveal = should_reveal_owner_phone(
+        role=role,
+        contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
+    )
     return CallDetailResponse(
         id=call.id,
         case_id=call.case_id,
-        callee_phone_masked=mask_phone(call.callee_phone_enc),
+        callee_phone_masked=display_owner_phone(call.callee_phone_enc, reveal=_detail_reveal) or "",
         started_at=call.started_at,
         ended_at=call.ended_at,
         duration_sec=call.duration_sec,
@@ -883,6 +980,7 @@ def patch_call_tag(
     # 推断业务信号
     if body.intent:
         from app.services.signal_inference import infer_signals_for_call
+
         infer_signals_for_call(call.id, body.intent, db)
         db.commit()
 
@@ -916,9 +1014,7 @@ def post_suggestion_feedback(
     tenant_id = int(payload.get("tenant_id") or 0)
 
     call = db.execute(
-        select(CallRecord).where(
-            CallRecord.id == call_id, CallRecord.tenant_id == tenant_id
-        )
+        select(CallRecord).where(CallRecord.id == call_id, CallRecord.tenant_id == tenant_id)
     ).scalar_one_or_none()
     if not call:
         raise HTTPException(
@@ -960,8 +1056,10 @@ def post_suggestion_feedback(
 
     # 采用时累计 usage_count
     if body.action == "adopt" and body.script_template_id is not None:
-        from app.models.script import ScriptTemplate
         from sqlalchemy import update as sa_update
+
+        from app.models.script import ScriptTemplate
+
         db.execute(
             sa_update(ScriptTemplate)
             .where(ScriptTemplate.id == body.script_template_id)

@@ -7,13 +7,15 @@ Endpoints:
   GET   /super/blockchain-config          — get current single config (or null)
   PUT   /super/blockchain-config          — upsert config; api_key encrypted
 """
+
 from __future__ import annotations
 
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi import status as http_status
-from sqlalchemy import desc, func, select, update as sa_update
+from sqlalchemy import desc, func, select
+from sqlalchemy import update as sa_update
 from sqlalchemy.orm import Session
 
 from app.core.crypto import encrypt_phone  # generic AES helper
@@ -78,9 +80,7 @@ async def create_prompt(
     user_id = _user_id(payload)
     # Auto-bump version: max(version) for this name + 1
     latest_version: int | None = db.execute(
-        select(func.max(LLMPromptTemplate.version)).where(
-            LLMPromptTemplate.name == body.name
-        )
+        select(func.max(LLMPromptTemplate.version)).where(LLMPromptTemplate.name == body.name)
     ).scalar_one()
     next_version = (latest_version or 0) + 1
 
@@ -98,9 +98,7 @@ async def create_prompt(
     return LLMPromptOut.model_validate(p)
 
 
-@router.patch(
-    "/llm-prompts/{prompt_id}/active", response_model=LLMPromptOut
-)
+@router.patch("/llm-prompts/{prompt_id}/active", response_model=LLMPromptOut)
 async def set_prompt_active(
     prompt_id: int,
     body: LLMPromptActivateIn,
@@ -143,9 +141,7 @@ def _config_to_out(c: BlockchainConfig) -> BlockchainConfigOut:
     )
 
 
-@router.get(
-    "/blockchain-config", response_model=BlockchainConfigOut | None
-)
+@router.get("/blockchain-config", response_model=BlockchainConfigOut | None)
 async def get_blockchain_config(
     _user: Annotated[UserAccount, Depends(require_roles(*SUPER_ROLES))],
     db: Annotated[Session, Depends(get_db)],

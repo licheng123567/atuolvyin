@@ -18,15 +18,32 @@ function pct(v: number | null): string {
   return v === null ? "—" : `${(v * 100).toFixed(1)}%`;
 }
 
+const ROLE_LABEL: Record<string, string> = {
+  provider_admin: "服务商管理员",
+  project_manager_provider: "项目经理",
+  agent_external: "外勤催收员",
+  agent_internal: "内勤催收员",
+  supervisor: "督导",
+  legal: "法务对接人",
+  admin: "物业管理员",
+  coordinator: "物业协调员",
+  workorder: "物业协调员",
+};
+
+const TOP_N = 10;
+
 export function ProviderTeamPerformancePage() {
   const go = useGo();
   const [period, setPeriod] = useState(30);
+  const [showAll, setShowAll] = useState(false);
   const { query } = useCustom<MemberPerf[]>({
     url: "provider/team-performance",
     method: "get",
     config: { query: { period_days: period } },
   });
-  const items = query.data?.data ?? [];
+  const allItems = query.data?.data ?? [];
+  // v1.6.4 — 默认 Top 10；超过则显「展开全部」
+  const items = showAll ? allItems : allItems.slice(0, TOP_N);
 
   return (
     <div className="p-6 space-y-4">
@@ -34,7 +51,7 @@ export function ProviderTeamPerformancePage() {
         <TrendingUp className="w-5 h-5 text-[var(--color-primary)]" />
         <h1 className="text-xl font-semibold">团队跨租户绩效</h1>
         <span className="text-sm text-[var(--color-neutral-400)]">
-          共 {items.length} 名成员
+          共 {allItems.length} 名成员
         </span>
         <select
           value={period}
@@ -106,7 +123,7 @@ export function ProviderTeamPerformancePage() {
                   </td>
                   <td className="px-4 py-3 font-medium">{m.name}</td>
                   <td className="px-4 py-3 text-[var(--color-neutral-600)]">
-                    {m.role}
+                    {ROLE_LABEL[m.role] ?? m.role}
                   </td>
                   <td className="px-4 py-3 text-right">{m.total_calls}</td>
                   <td className="px-4 py-3 text-right">{m.connected_calls}</td>
@@ -135,6 +152,18 @@ export function ProviderTeamPerformancePage() {
           </tbody>
         </table>
       </div>
+      {allItems.length > TOP_N && (
+        <div className="text-right text-xs text-[var(--color-neutral-500)]">
+          {showAll ? `共 ${allItems.length} 条` : `仅显示前 ${TOP_N} 名`}{" "}
+          <button
+            type="button"
+            onClick={() => setShowAll((v) => !v)}
+            className="text-[var(--color-primary)] underline"
+          >
+            {showAll ? "收起" : `查看更多 → 共 ${allItems.length} 条`}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

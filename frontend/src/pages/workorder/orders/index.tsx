@@ -1,11 +1,13 @@
-import { useGo, useList } from "@refinedev/core";
+// v1.9.6 — 工单列表（协调员/物业管理员）UI 统一到法务列表范式：
+//   page-header + KPI 卡 + ds-tabs（状态）+ table-toolbar（搜索/类型/优先级）+ table-wrap
+import { useCustom, useGo, useList } from "@refinedev/core";
 import type { CrudFilter } from "@refinedev/core";
-import { ClipboardList, Plus, Search } from "lucide-react";
+import { Eye, Inbox, RotateCcw } from "lucide-react";
 import { useState } from "react";
+import { SearchInput } from "../../../components/ui/SearchInput";
 import type { PaginatedResponse } from "../../../types";
 import {
   WORK_ORDER_PRIORITIES,
-  WORK_ORDER_STATUSES,
   WORK_ORDER_TYPES,
   formatPriority,
   formatStatus,
@@ -26,25 +28,57 @@ interface WorkOrderItem {
   resolution: string | null;
   assignee_name: string | null;
   created_at: string;
+  // v1.9.7 — 列表行内案件上下文
+  owner_name: string | null;
+  owner_room: string | null;
+  project_id: number | null;
+  project_name: string | null;
+  amount_owed: string | null;
 }
+
+interface ProjectOption {
+  id: number;
+  name: string;
+}
+
+interface KpiData {
+  open_count: number;
+  in_progress_count: number;
+  closed_this_month: number;
+  avg_processing_days: number | null;
+}
+
+type TabValue = "open" | "in_progress" | "closed" | "all";
+
+const TABS: { v: TabValue; label: string; statusFilter: string[] }[] = [
+  { v: "open", label: "待处理", statusFilter: ["open"] },
+  { v: "in_progress", label: "处理中", statusFilter: ["in_progress"] },
+  { v: "closed", label: "已完成", statusFilter: ["resolved", "closed"] },
+  { v: "all", label: "全部", statusFilter: [] },
+];
+
+const PAGE_SIZE = 20;
 
 export function WorkOrderListPage() {
   const go = useGo();
+  const [tab, setTab] = useState<TabValue>("open");
   const [keyword, setKeyword] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("");
+  const [projectFilter, setProjectFilter] = useState("");
   const [page, setPage] = useState(1);
-  const PAGE_SIZE = 20;
 
+  const currentTab = TABS.find((t) => t.v === tab) ?? TABS[0];
   const filters: CrudFilter[] = [];
   if (keyword) filters.push({ field: "q", operator: "eq", value: keyword });
-  if (statusFilter)
-    filters.push({ field: "status", operator: "eq", value: statusFilter });
-  if (typeFilter)
-    filters.push({ field: "order_type", operator: "eq", value: typeFilter });
-  if (priorityFilter)
-    filters.push({ field: "priority", operator: "eq", value: priorityFilter });
+  // tab 决定 status；若 statusFilter 多于 1（e.g. closed = resolved+closed）后端目前只接受单个
+  // → 先按 resolved；用户切到 closed 后还可点详情看到所有已结束订单
+  if (currentTab.statusFilter.length === 1) {
+    filters.push({ field: "status", operator: "eq", value: currentTab.statusFilter[0] });
+  }
+  if (typeFilter) filters.push({ field: "order_type", operator: "eq", value: typeFilter });
+  if (priorityFilter) filters.push({ field: "priority", operator: "eq", value: priorityFilter });
+  if (projectFilter) filters.push({ field: "project_id", operator: "eq", value: projectFilter });
 
   const { query } = useList<WorkOrderItem>({
     resource: "workorders",
@@ -52,236 +86,244 @@ export function WorkOrderListPage() {
     filters,
   });
 
+  const { query: kpiQuery } = useCustom<KpiData>({
+    url: "workorders/kpi",
+    method: "get",
+  });
+  const kpi = kpiQuery.data?.data;
+
+  // v1.9.7 — 拉项目列表用于「按项目过滤」下拉
+  const { query: projectsQuery } = useCustom<{ items: ProjectOption[] }>({
+    url: "admin/projects",
+    method: "get",
+    config: { query: { page_size: 200 } },
+  });
+  const projectOptions = projectsQuery.data?.data?.items ?? [];
+
   const rawData = query.data?.data;
-  const items: WorkOrderItem[] =
+  let items: WorkOrderItem[] =
     (rawData as unknown as PaginatedResponse<WorkOrderItem>)?.items ??
     (rawData as WorkOrderItem[] | undefined) ??
     [];
-  const total = query.data?.total ?? 0;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  // 「已完成」tab 客户端再过滤一次，把 closed 也包进来（后端按单一 status 过滤）
+  if (tab === "closed") {
+    items = items.filter((wo) => wo.status === "resolved" || wo.status === "closed");
+  }
+  const total = query.data?.total ?? items.length;
   const isLoading = query.isLoading;
+
+  const filtersDirty = !!keyword || !!typeFilter || !!priorityFilter || !!projectFilter;
+  function resetFilters() {
+    setKeyword(""); setTypeFilter(""); setPriorityFilter(""); setProjectFilter(""); setPage(1);
+  }
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <ClipboardList className="w-5 h-5 text-[var(--color-primary)]" />
-          <h1 className="text-xl font-semibold text-[var(--color-neutral-900)]">
-            工单管理
-          </h1>
-          <span className="text-sm text-[var(--color-neutral-400)] ml-1">
-            共 {total} 单
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={() => go({ to: "/workorder/orders/new" })}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white"
-          style={{
-            background: "var(--color-primary)",
-            borderRadius: "var(--radius-md)",
-          }}
-        >
-          <Plus className="w-4 h-4" />
-          新建工单
-        </button>
+      <div className="page-header" style={{ marginBottom: 16 }}>
+        <h1 className="page-title">工单管理</h1>
+        <p className="page-subtitle">
+          催收员从案件发起工单（含工单原因）→ 协调员在此处理（添加跟进 / 解决方案 / 关闭）。处理过程同步到案件活动时间线。
+        </p>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-3 mb-4 flex-wrap">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-neutral-400)]" />
-          <input
-            type="text"
-            placeholder="搜索描述…"
-            value={keyword}
-            onChange={(e) => {
-              setKeyword(e.target.value);
-              setPage(1);
-            }}
-            className="pl-9 pr-3 py-2 text-sm border border-[var(--color-neutral-200)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] w-48"
-            style={{ borderRadius: "var(--radius-md)" }}
+      {/* KPI 卡 */}
+      {kpi && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
+          <KpiCard label="待处理" value={kpi.open_count} suffix="单" tone="orange" />
+          <KpiCard label="处理中" value={kpi.in_progress_count} suffix="单" tone="primary" />
+          <KpiCard label="本月完成" value={kpi.closed_this_month} suffix="单" tone="green" />
+          <KpiCard
+            label="本月平均处理时长"
+            value={kpi.avg_processing_days ?? "—"}
+            suffix={kpi.avg_processing_days != null ? "天" : ""}
+            tone="neutral"
           />
         </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value);
-            setPage(1);
-          }}
-          className="px-3 py-2 text-sm border border-[var(--color-neutral-200)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-          style={{ borderRadius: "var(--radius-md)" }}
-        >
-          <option value="">全部状态</option>
-          {WORK_ORDER_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {formatStatus(s)}
-            </option>
-          ))}
-        </select>
-        <select
-          value={typeFilter}
-          onChange={(e) => {
-            setTypeFilter(e.target.value);
-            setPage(1);
-          }}
-          className="px-3 py-2 text-sm border border-[var(--color-neutral-200)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-          style={{ borderRadius: "var(--radius-md)" }}
-        >
-          <option value="">全部类型</option>
-          {WORK_ORDER_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {formatType(t)}
-            </option>
-          ))}
-        </select>
-        <select
-          value={priorityFilter}
-          onChange={(e) => {
-            setPriorityFilter(e.target.value);
-            setPage(1);
-          }}
-          className="px-3 py-2 text-sm border border-[var(--color-neutral-200)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-          style={{ borderRadius: "var(--radius-md)" }}
-        >
-          <option value="">全部优先级</option>
-          {WORK_ORDER_PRIORITIES.map((p) => (
-            <option key={p} value={p}>
-              {formatPriority(p)}
-            </option>
-          ))}
-        </select>
+      )}
+
+      {/* tabs */}
+      <div className="ds-tabs" style={{ marginBottom: 16 }}>
+        {TABS.map((t) => (
+          <button
+            key={t.v}
+            type="button"
+            className={`ds-tab ${tab === t.v ? "active" : ""}`}
+            onClick={() => { setTab(t.v); setPage(1); }}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-lg border border-[var(--color-neutral-200)] overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-[var(--color-neutral-50)] border-b border-[var(--color-neutral-200)]">
+      {/* 表格 */}
+      <div className="table-wrap">
+        <div className="table-toolbar">
+          <SearchInput
+            value={keyword}
+            onChange={(v) => { setKeyword(v); setPage(1); }}
+            placeholder="搜索业主 / 房号 / 工单原因"
+            width={240}
+          />
+          <select
+            className="form-control"
+            style={{ width: 180 }}
+            value={projectFilter}
+            onChange={(e) => { setProjectFilter(e.target.value); setPage(1); }}
+          >
+            <option value="">全部项目</option>
+            {projectOptions.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <select
+            className="form-control"
+            style={{ width: 130 }}
+            value={typeFilter}
+            onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
+          >
+            <option value="">全部类型</option>
+            {WORK_ORDER_TYPES.map((t) => (
+              <option key={t} value={t}>{formatType(t)}</option>
+            ))}
+          </select>
+          <select
+            className="form-control"
+            style={{ width: 130 }}
+            value={priorityFilter}
+            onChange={(e) => { setPriorityFilter(e.target.value); setPage(1); }}
+          >
+            <option value="">全部优先级</option>
+            {WORK_ORDER_PRIORITIES.map((p) => (
+              <option key={p} value={p}>{formatPriority(p)}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="ds-btn ds-btn-ghost ds-btn-sm"
+            onClick={resetFilters}
+            disabled={!filtersDirty}
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> 重置
+          </button>
+        </div>
+
+        <table>
+          <thead>
             <tr>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                工单号
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                优先级
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                类型
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                描述
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                状态
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                负责人
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                关联案件
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-[var(--color-neutral-600)]">
-                操作
-              </th>
+              <th>工单号</th>
+              <th>业主</th>
+              <th>房号</th>
+              <th>项目</th>
+              <th>类型</th>
+              <th>工单原因</th>
+              <th style={{ textAlign: "right" }}>欠费</th>
+              <th>状态</th>
+              <th>优先级</th>
+              <th>负责人</th>
+              <th>操作</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[var(--color-neutral-100)]">
+          <tbody>
             {isLoading && (
-              <tr>
-                <td
-                  colSpan={8}
-                  className="px-4 py-8 text-center text-[var(--color-neutral-400)]"
-                >
-                  加载中…
-                </td>
-              </tr>
+              <tr><td colSpan={11} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>加载中…</td></tr>
             )}
             {!isLoading && items.length === 0 && (
               <tr>
-                <td
-                  colSpan={8}
-                  className="px-4 py-8 text-center text-[var(--color-neutral-400)]"
-                >
-                  暂无工单
+                <td colSpan={11} style={{ textAlign: "center", padding: 40, color: "var(--color-neutral-400)" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                    <Inbox className="w-8 h-8" style={{ color: "var(--color-neutral-300)" }} />
+                    <span>暂无工单</span>
+                  </div>
                 </td>
               </tr>
             )}
-            {items.map((wo) => (
-              <tr
-                key={wo.id}
-                className="hover:bg-[var(--color-neutral-50)]"
-              >
-                <td className="px-4 py-3 text-[var(--color-neutral-600)]">
+            {!isLoading && items.map((wo) => (
+              <tr key={wo.id}>
+                <td style={{ color: "var(--color-neutral-600)", fontFamily: "var(--font-mono, monospace)", fontSize: 12 }}>
                   #{wo.id}
                 </td>
-                <td className="px-4 py-3">
-                  <span
-                    className="inline-flex px-2 py-0.5 text-xs rounded-full font-medium"
-                    style={getPriorityColor(wo.priority)}
-                  >
-                    {formatPriority(wo.priority)}
-                  </span>
+                <td>
+                  {wo.owner_name ?? <span style={{ color: "var(--color-neutral-400)" }}>—</span>}
                 </td>
-                <td className="px-4 py-3 text-[var(--color-neutral-600)]">
-                  {formatType(wo.order_type)}
+                <td>{wo.owner_room ?? <span style={{ color: "var(--color-neutral-400)" }}>—</span>}</td>
+                <td style={{ fontSize: 12, color: "var(--color-neutral-600)", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={wo.project_name ?? undefined}>
+                  {wo.project_name ?? <span style={{ color: "var(--color-neutral-400)" }}>—</span>}
                 </td>
-                <td className="px-4 py-3 text-[var(--color-neutral-700)] max-w-xs truncate">
+                <td>{formatType(wo.order_type)}</td>
+                <td style={{ maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={wo.description}>
                   {wo.description}
                 </td>
-                <td className="px-4 py-3">
-                  <span
-                    className="inline-flex px-2 py-0.5 text-xs rounded-full font-medium"
-                    style={getStatusColor(wo.status)}
-                  >
+                <td style={{ textAlign: "right", fontWeight: 600, color: wo.amount_owed ? "#dc2626" : "var(--color-neutral-400)" }}>
+                  {wo.amount_owed ? `¥${Number(wo.amount_owed).toLocaleString("zh-CN")}` : "—"}
+                </td>
+                <td>
+                  <span style={{ ...getStatusColor(wo.status), padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 500 }}>
                     {formatStatus(wo.status)}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-[var(--color-neutral-600)]">
-                  {wo.assignee_name ?? "—"}
+                <td>
+                  <span style={{ ...getPriorityColor(wo.priority), padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 500 }}>
+                    {formatPriority(wo.priority)}
+                  </span>
                 </td>
-                <td className="px-4 py-3 text-[var(--color-neutral-600)]">
-                  {wo.case_id ? `#${wo.case_id}` : "—"}
-                </td>
-                <td className="px-4 py-3">
+                <td>{wo.assignee_name ?? <span style={{ color: "var(--color-neutral-400)" }}>未分配</span>}</td>
+                <td>
                   <button
                     type="button"
+                    className="ds-btn ds-btn-ghost ds-btn-sm"
                     onClick={() => go({ to: `/workorder/orders/${wo.id}` })}
-                    className="text-[var(--color-primary)] hover:underline text-xs"
                   >
-                    详情
+                    <Eye className="w-3 h-3" /> 处理
                   </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        {total > PAGE_SIZE && (
+          <div style={{ padding: "10px 16px", borderTop: "1px solid var(--color-neutral-200)", display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>
+            <button
+              type="button"
+              className="ds-btn ds-btn-ghost ds-btn-sm"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+            >上一页</button>
+            <span style={{ fontSize: 12, color: "var(--color-neutral-600)" }}>
+              第 {page} / {Math.ceil(total / PAGE_SIZE)} 页 · 共 {total} 单
+            </span>
+            <button
+              type="button"
+              className="ds-btn ds-btn-ghost ds-btn-sm"
+              onClick={() => setPage((p) => p + 1)}
+              disabled={page >= Math.ceil(total / PAGE_SIZE)}
+            >下一页</button>
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-end gap-2 mt-4">
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className="px-3 py-1.5 text-sm border border-[var(--color-neutral-200)] disabled:opacity-40"
-            style={{ borderRadius: "var(--radius-md)" }}
-          >
-            上一页
-          </button>
-          <span className="text-sm text-[var(--color-neutral-600)]">
-            {page} / {totalPages}
-          </span>
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            className="px-3 py-1.5 text-sm border border-[var(--color-neutral-200)] disabled:opacity-40"
-            style={{ borderRadius: "var(--radius-md)" }}
-          >
-            下一页
-          </button>
-        </div>
-      )}
+function KpiCard({ label, value, suffix, tone }: {
+  label: string;
+  value: number | string;
+  suffix?: string;
+  tone: "primary" | "green" | "orange" | "red" | "neutral";
+}) {
+  const COLOR: Record<typeof tone, string> = {
+    primary: "var(--color-primary)",
+    green: "#16a34a",
+    orange: "#ea580c",
+    red: "#dc2626",
+    neutral: "var(--color-neutral-700)",
+  };
+  return (
+    <div className="ds-card" style={{ padding: "14px 16px" }}>
+      <div style={{ fontSize: 12, color: "var(--color-neutral-500)", marginBottom: 6 }}>{label}</div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+        <span style={{ fontSize: 24, fontWeight: 700, color: COLOR[tone], lineHeight: 1 }}>{value}</span>
+        {suffix && <span style={{ fontSize: 12, color: "var(--color-neutral-500)" }}>{suffix}</span>}
+      </div>
     </div>
   );
 }

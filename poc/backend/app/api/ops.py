@@ -15,7 +15,6 @@ from app.core.security import get_token_payload, mask_phone, require_roles
 from app.models.tenant import Tenant
 from app.models.user import UserAccount
 from app.schemas.common import PaginatedResponse
-from app.services.audit import log_audit
 from app.schemas.tenant import (
     TenantCreate,
     TenantDisableIn,
@@ -24,6 +23,7 @@ from app.schemas.tenant import (
     TenantResponse,
     TenantTrialOut,
 )
+from app.services.audit import log_audit
 
 router = APIRouter()
 
@@ -95,11 +95,7 @@ async def list_tenants(
     total_stmt = select(func.count()).select_from(stmt.subquery())
     total: int = db.execute(total_stmt).scalar_one()
     tenants = (
-        db.execute(
-            stmt.order_by(Tenant.id.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
-        )
+        db.execute(stmt.order_by(Tenant.id.desc()).offset((page - 1) * page_size).limit(page_size))
         .scalars()
         .all()
     )
@@ -162,12 +158,8 @@ async def list_trial_tenants(
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[TenantTrialOut]:
     """试用账号跟进 — plan='trial' OR is_trial=True, sorted by days_remaining asc."""
-    stmt = select(Tenant).where(
-        (Tenant.plan == "trial") | (Tenant.is_trial.is_(True))
-    )
-    total: int = db.execute(
-        select(func.count()).select_from(stmt.subquery())
-    ).scalar_one()
+    stmt = select(Tenant).where((Tenant.plan == "trial") | (Tenant.is_trial.is_(True)))
+    total: int = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
 
     # Sort: NULL expires_at last, otherwise ascending (closest expiry first)
     rows = (

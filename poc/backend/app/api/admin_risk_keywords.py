@@ -21,8 +21,10 @@ _MAX_PAGE_SIZE = 100  # cap per-page rows to limit memory usage
 def _check_auth(payload: dict) -> tuple[str, int | None]:
     role = payload.get("role", "")
     if role not in _ALLOWED_ROLES:
-        raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN,
-                            detail={"code": "ERR_403", "message": "insufficient role"})
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_403", "message": "insufficient role"},
+        )
     tenant_id = payload.get("tenant_id")
     return role, int(tenant_id) if tenant_id else None
 
@@ -30,8 +32,10 @@ def _check_auth(payload: dict) -> tuple[str, int | None]:
 def _assert_can_modify(role: str, tenant_id: int | None, kw: RiskKeyword) -> None:
     """Raise 403 if admin tries to modify a keyword they don't own."""
     if role == "admin" and (kw.tenant_id is None or kw.tenant_id != tenant_id):
-        raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN,
-                            detail={"code": "ERR_403", "message": "cannot modify platform preset"})
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_403", "message": "cannot modify platform preset"},
+        )
 
 
 @router.get("/risk-keywords", response_model=PaginatedResponse[RiskKeywordOut])
@@ -47,9 +51,7 @@ async def list_risk_keywords(
     role, tenant_id = _check_auth(payload)
     stmt = select(RiskKeyword)
     if role == "admin":
-        stmt = stmt.where(
-            or_(RiskKeyword.tenant_id == tenant_id, RiskKeyword.tenant_id.is_(None))
-        )
+        stmt = stmt.where(or_(RiskKeyword.tenant_id == tenant_id, RiskKeyword.tenant_id.is_(None)))
     if category:
         stmt = stmt.where(RiskKeyword.category == category)
     if speaker:
@@ -61,11 +63,15 @@ async def list_risk_keywords(
     rows = db.execute(stmt.offset((page - 1) * page_size).limit(page_size)).scalars().all()
     return PaginatedResponse(
         items=[RiskKeywordOut.model_validate(r) for r in rows],
-        total=total, page=page, page_size=page_size,
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 
-@router.post("/risk-keywords", response_model=RiskKeywordOut, status_code=http_status.HTTP_201_CREATED)
+@router.post(
+    "/risk-keywords", response_model=RiskKeywordOut, status_code=http_status.HTTP_201_CREATED
+)
 async def create_risk_keyword(
     body: RiskKeywordCreate,
     payload: Annotated[dict, Depends(get_token_payload)],
@@ -74,8 +80,10 @@ async def create_risk_keyword(
     role, caller_tenant_id = _check_auth(payload)
     if role == "admin":
         if body.tenant_id is not None and body.tenant_id != caller_tenant_id:
-            raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN,
-                                detail={"code": "ERR_403", "message": "cross-tenant denied"})
+            raise HTTPException(
+                status_code=http_status.HTTP_403_FORBIDDEN,
+                detail={"code": "ERR_403", "message": "cross-tenant denied"},
+            )
         effective_tenant = caller_tenant_id
     else:
         effective_tenant = body.tenant_id  # platform_super may use None
@@ -92,8 +100,10 @@ async def create_risk_keyword(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=http_status.HTTP_409_CONFLICT,
-                            detail={"code": "ERR_409", "message": "keyword already exists"}) from None
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail={"code": "ERR_409", "message": "keyword already exists"},
+        ) from None
     db.refresh(kw)
     return RiskKeywordOut.model_validate(kw)
 
@@ -108,8 +118,10 @@ async def update_risk_keyword(
     role, tenant_id = _check_auth(payload)
     kw = db.get(RiskKeyword, keyword_id)
     if not kw:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND,
-                            detail={"code": "ERR_404", "message": "not found"})
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_404", "message": "not found"},
+        )
     _assert_can_modify(role, tenant_id, kw)
     if body.is_active is not None:
         kw.is_active = body.is_active
@@ -129,8 +141,10 @@ async def delete_risk_keyword(
     role, tenant_id = _check_auth(payload)
     kw = db.get(RiskKeyword, keyword_id)
     if not kw:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND,
-                            detail={"code": "ERR_404", "message": "not found"})
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_404", "message": "not found"},
+        )
     _assert_can_modify(role, tenant_id, kw)
     kw.is_active = False
     db.commit()

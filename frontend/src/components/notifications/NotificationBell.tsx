@@ -96,7 +96,8 @@ export function NotificationBell() {
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="relative p-2 rounded-md hover:bg-[var(--color-neutral-100)] transition"
-        aria-label="通知"
+        aria-label="站内信"
+        title="站内信通知"
       >
         <Bell className="w-5 h-5 text-[var(--color-neutral-700)]" />
         {unread > 0 && (

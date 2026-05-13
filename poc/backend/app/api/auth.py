@@ -37,7 +37,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
             },
         )
 
-    # Get first active membership (multi-tenant selector deferred to later sprint)
+    # MVP — seed 数据每个用户单 membership；多 membership 选择器属 v2.x 范畴 (PRD §5)
     membership = db.execute(
         select(UserTenantMembership)
         .where(
@@ -51,11 +51,13 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     tenant_name: str | None = None
     role = "platform_superadmin"
     scope = "platform"
+    provider_id: int | None = None  # v1.7.0 — 服务商角色用于电话可见性合同查
 
     if membership:
         tenant_id = membership.tenant_id
         role = membership.role
         scope = f"tenant:{membership.tenant_id}"
+        provider_id = membership.provider_id
         tenant_name = db.execute(
             select(Tenant.name).where(Tenant.id == membership.tenant_id)
         ).scalar_one_or_none()
@@ -69,6 +71,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
             "tenant_id": tenant_id,
             "role": role,
             "scope": scope,
+            "provider_id": provider_id,
         }
     )
 

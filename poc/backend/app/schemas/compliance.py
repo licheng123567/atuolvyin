@@ -1,4 +1,5 @@
 """Sprint 8.4 — Compliance monthly report (PRD §3.13)."""
+
 from __future__ import annotations
 
 from pydantic import BaseModel

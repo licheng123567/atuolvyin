@@ -32,14 +32,28 @@ interface PreviewResp {
   available_packages: PackageItem[];
 }
 
+interface ApproveContext {
+  // v1.6.8 — approve mode：申请人 / 申请理由透传，方便审批人参考
+  requesterName?: string | null;
+  reason?: string | null;
+}
+
 export function ConvertToLegalModal({
   caseId,
   onClose,
   onSuccess,
+  mode = "create",
+  requestId,
+  approveContext,
 }: {
   caseId: number;
   onClose: () => void;
   onSuccess: (orderId: number) => void;
+  // v1.6.8 — mode='approve' 时调审批端点（POST legal-conversion-requests/{id}/approve），
+  //          创建 Order 同时把 request 标 approved。
+  mode?: "create" | "approve";
+  requestId?: number;
+  approveContext?: ApproveContext;
 }) {
   const [selectedPkgId, setSelectedPkgId] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
@@ -59,19 +73,30 @@ export function ConvertToLegalModal({
 
   const handleSubmit = () => {
     if (!effectiveSel) return;
+    const isApprove = mode === "approve" && requestId != null;
+    const url = isApprove
+      ? `legal-conversion-requests/${requestId}/approve`
+      : `admin/cases/${caseId}/convert-to-legal`;
     mutate(
       {
-        url: `admin/cases/${caseId}/convert-to-legal`,
+        url,
         method: "post",
         values: { package_id: effectiveSel, notes: notes.trim() || undefined },
       },
       {
         onSuccess: (data) => {
-          const order = data?.data as { id: number };
-          onSuccess(order.id);
+          if (isApprove) {
+            // approve 端点返回 LegalConversionRequestOut（含 related_order_id）
+            const req = data?.data as { related_order_id?: number };
+            onSuccess(req.related_order_id ?? 0);
+          } else {
+            const order = data?.data as { id: number };
+            onSuccess(order.id);
+          }
         },
         onError: (err) => {
-          alert(`下单失败：${(err as { message?: string }).message ?? "请重试"}`);
+          const verb = isApprove ? "审批" : "下单";
+          alert(`${verb}失败：${(err as { message?: string }).message ?? "请重试"}`);
         },
       },
     );
@@ -83,7 +108,11 @@ export function ConvertToLegalModal({
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-neutral-200)] sticky top-0 bg-white">
           <div className="flex items-center gap-2">
             <Scale className="w-5 h-5 text-[var(--color-primary)]" />
-            <h2 className="text-base font-semibold">转法务追诉</h2>
+            <h2 className="text-base font-semibold">
+              {mode === "approve"
+                ? `批准转法务申请${requestId ? ` #${requestId}` : ""}`
+                : "转法务追诉"}
+            </h2>
           </div>
           <button
             type="button"
@@ -100,6 +129,21 @@ export function ConvertToLegalModal({
               <Loader2 className="w-4 h-4 animate-spin" />
               生成催收时间线 + 推荐方案中…
             </div>
+          )}
+
+          {mode === "approve" && approveContext && (
+            <section className="bg-blue-50 border border-blue-200 rounded p-3 text-xs space-y-1">
+              <div>
+                <span className="text-blue-700 font-medium">申请人：</span>
+                <span className="text-blue-900">{approveContext.requesterName ?? "—"}</span>
+              </div>
+              <div>
+                <span className="text-blue-700 font-medium">申请理由：</span>
+                <span className="text-blue-900 whitespace-pre-wrap">
+                  {approveContext.reason ?? "（未填写）"}
+                </span>
+              </div>
+            </section>
           )}
 
           {preview && (
@@ -230,7 +274,7 @@ export function ConvertToLegalModal({
             className="px-4 py-1.5 text-sm rounded bg-[var(--color-primary)] text-white hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
           >
             {mutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            提交订单
+            {mode === "approve" ? "批准并下单" : "提交订单"}
           </button>
         </div>
       </div>

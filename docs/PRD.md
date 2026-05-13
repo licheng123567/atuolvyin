@@ -19,7 +19,7 @@
 | 维度 | 说明 |
 |------|------|
 | 目标客户 | 中大型物业管理公司（管理 500 户以上） |
-| 核心场景 | 物业费催收（兼容业委会催票等通知场景） |
+| 核心场景 | 物业费催收 |
 | 平台 | PC 端（管理/督导）+ Android App（外呼员） |
 | 核心卖点 | **实时 AI 话术辅助**（通话中即时显示建议，延迟 ≤ 3 秒） |
 | 差异化 | 录音上传分析 + 实时辅助双模式，多租户 CRM 公海/私海自动流转 |
@@ -96,7 +96,7 @@ ASR（DashScope）+ LLM（Qwen-Plus）+ WebSocket 实时推流是系统核心竞
 
 ```sql
 User            -- 全局唯一账号（一人一个）
-UserTenantMembership  -- 用户↔租户多对多
+UserTenantMembership  -- 用户↔租户多对多 + 同一租户内多角色
   ├── user_id
   ├── tenant_id
   ├── source_type    -- INTERNAL（直招）/ PROVIDER（服务商派遣）
@@ -106,6 +106,10 @@ UserTenantMembership  -- 用户↔租户多对多
   ├── expire_at      -- 合约到期日
   └── access_hours   -- 可访问时段
 ```
+
+**v1.6.9 — 同租户内多角色（multi-membership 同租户）**：一个 User 在同一 tenant 下可同时拥有多个 role 行（如督导小李同时是 `supervisor` + `agent_internal`）。Topbar 右上角显示「可切换 N 个角色」下拉，点击调 `POST /auth/select-membership` 颁发新 token，前端 `queryClient.clear()` 后硬刷新到 `/`。
+
+**业务约束**（避免数据查询多结果异常）：所有按 `user_id` 查 membership 的 SQL **必须**附加 `role` 过滤或 `limit(1)`，特别是 `assigned_to` 字段对应的角色查找（应显式 `role IN ('agent_internal','agent_external')`）。
 
 ### 3.3 多租户登录体验
 
@@ -153,6 +157,56 @@ UserTenantMembership  -- 用户↔租户多对多
 
 - 所有 API 强制携带 `tenant_id`，中间件层校验，禁止跨租户访问
 - MVP 阶段服务单一租户，v1.1 启用完整多租户 + 服务商体系
+
+### 3.6 v1.4 治理增量（已交付）
+
+v1.0–v1.3 完成基础多租户结构后，v1.4 落地以下治理与协作要素：
+
+#### 3.6.1 项目（Project）成为一等公民
+
+物业租户内的「项目」是案件归属与数据可见性的最小单元，原模型已存在但未启用，v1.4 全链路接通：
+
+- **Project 模型**：`tenant_id` + `provider_id`（指定承接服务商）+ `property_pm_user_id` / `provider_pm_user_id`（双方项目经理）+ `allow_internal_assist`（项目级开关：服务商承接的项目下，是否允许物业内勤协助）。系统纯粹催收，不区分项目子类型。
+- **服务商分配 = 项目级**：物业建项目时选定 `provider_id`，整个项目下的案件默认对该服务商外勤可见
+- **法务分配 = 案件级**：保持原有 `LegalConversionOrder` 不变（按金额阈值 + 付费法律服务包）
+- **项目经理只读**：`project_manager_property` / `project_manager_provider` 角色登录后，所有 admin 端写操作（导入/分配/释放/转法务/添加备注）均隐藏，看板拖拽禁用，列表 checkbox 隐藏
+
+#### 3.6.2 服务商按项目分配 + 推荐入驻
+
+- **服务商创建**：以平台 ops 创建为主；物业 admin 可推荐入驻（`POST /admin/providers/recommend`），写 `ServiceProvider(audit_status='pending', recommended_by_tenant_id=<本租户>)`，ops 端审核通过后该租户即可在项目上选用
+- **agent 可见性**：服务商外勤只看到「自己负责的项目」案件 + 已分配给自己的私海；物业内勤看「无项目案件 + 无服务商项目 + 开了协助开关的项目」公海
+- **跨租户隔离**：服务商 admin 可见自己签约的所有租户，但租户 A 的私有数据（如业主姓名/手机号）严格不暴露给租户 B 的视图
+
+#### 3.6.3 双向解约握手 + 30/60 天数据窗口
+
+- **解约流程**：物业或服务商任一方发起 `POST /providers/{id}/terminate-request` → 对方 7 天内确认 `POST /terminate-confirm` → `status='terminated'` + `terminated_at=now`
+- **超时兜底**：daily worker `app.workers.scheduled.terminate_timeout` 扫 7 天未确认请求自动转 terminated（写审计 `provider.contract.auto_terminated`）
+- **解约后数据窗口**（D3）：
+  - `[0, 30) 天`：服务商对历史通话 / 案件**只读**；业主姓名 / 手机号**立即脱敏**
+  - `[30, 60) 天`：服务商不可读
+  - `≥ 60 天`：daily worker 软删（设 `is_visible=False`）相关通话转写 / AI 分析；案件归物业，不动
+- **UI 状态机**：物业 `/admin/providers/:id` 下方「解约管理」面板（申请/等待对方确认/已终止 + 倒计时）；服务商 dashboard 顶部 banner（收到请求 / 自己请求中 / 已终止）
+
+#### 3.6.4 话术库三层归属（D4）
+
+`script_template` 加 `provider_id BIGINT NULL FK service_provider(id)`，三层语义：
+
+| layer | tenant_id | provider_id | 写权限 | 谁能读 |
+|-------|-----------|-------------|--------|--------|
+| 平台预置 | NULL | NULL | 仅 platform_superadmin | 所有人 |
+| 物业私有 | NOT NULL | NULL | 该租户 admin | 该租户内勤 + 该租户分配项目的服务商外勤 |
+| 服务商私有 | NULL | NOT NULL | 该服务商 admin | 该服务商外勤（含跨租户作业时） |
+
+- 物业 admin **不可改平台预置**（403），可 `POST /admin/scripts/{id}/fork` 复制为本租户私有再编辑
+- 物业 admin **不可读服务商私有**（其数字资产）
+- 服务商 admin **不可读物业私有**（同上）
+- 通话实时建议引擎（`realtime_llm._load_scripts`）按 caller 角色合并加载：
+  - 内勤 → 平台 + 案件归属物业私有
+  - 外勤 → 平台 + 案件归属物业私有 + 本服务商私有
+
+#### 3.6.5 P1 标签语义调整
+
+原 P1 = "未上线"；现 P1 = **"已上线但 demo 数据 / UX 待打磨"**。物业 admin sidebar 上「服务商合作」从 P1 摘除（v1.4 已含完整推荐入驻链路）；「数据报表」「合规月报」保留 P1（v1.5 补 demo 数据）。
 
 ---
 
@@ -220,19 +274,28 @@ UserTenantMembership  -- 用户↔租户多对多
 
 ## 5. 用户创建与账号管理流程
 
-### 5.1 内部用户创建
+### 5.1 内部用户创建（v1.4 方案 A — 无初始密码 + OTP 首登）
 
 ```
 管理员 → 用户管理 → 新建用户
     ↓
-填写：姓名 / 手机号 / 角色 / 所属主管（可选）
+填写：姓名 / 手机号 / 角色（不填密码）
     ↓
-系统发送初始密码短信给员工
+系统创建 UserAccount，password_hash 写入随机占位（不可命中）
     ↓
-员工首次登录强制修改密码
+员工首次登录：登录页选「手机验证码」tab，输入手机号
     ↓
-账号激活，可正常使用
+获取验证码 → 输入 6 位 OTP → 登录成功
+    ↓
+（可选）登录后在「我的账号」自愿设置密码以后用密码登录
 ```
+
+**为什么不强制初始密码**：admin 给基层员工设密码 → 通知 → 员工记 = 三重摩擦；
+我们已落地 OTP 通道（`/auth/otp/send|verify`），员工手机号天然就是 App 拨号绑定号，零摩擦。
+
+**后端实现**：`UserCreateByAdminRequest.password` 改为 Optional；未传时
+`UserAccount.password_hash` 写入 `bcrypt(secrets.token_urlsafe(48))`（实际不可登录），
+`login_method='otp'` 标记偏好。如需 admin 仍想给一个初始密码（特殊场景），传 `password` 字段也支持。
 
 ### 5.2 外部兼职邀请注册
 
@@ -290,6 +353,47 @@ UserTenantMembership  -- 用户↔租户多对多
 - 签名：`有证慧催`
 - 模板：账号激活、密码重置、邀请链接、支付确认（每类独立审批）
 - 发送频率限制：同一手机号每分钟最多 1 条、每天最多 10 条
+
+### 5.5 登录方式（v1.4 已实施）
+
+> 完整账号体系演进设计见 `docs/account-architecture.md`（v1.5 推进中）。
+> 本节为已上线状态。
+
+登录页提供 **2 种登录方式**（tab 切换），所有角色统一同一入口：
+
+#### 方式 A：账号 + 密码
+
+「账号」字段后端自动识别为以下 3 种之一：
+
+| 输入格式 | 识别为 | 说明 |
+|----------|--------|------|
+| 11 位数字 `^1[3-9]\d{9}$` | 手机号 | 全角色通用，存储用 AES-256 加密 |
+| 18 位大写字母数字 `^[0-9A-Z]{18}$` | 统一社会信用代码 | 物业租户专用，登录后自动定位到该租户的第一个 admin 用户 |
+| 含 `@` | 邮箱 | 组织管理员可绑定（v1.5 转为主登录入口） |
+
+后端端点：`POST /api/v1/auth/login-universal`（body: `{account, password}`）
+
+#### 方式 B：手机号 + 短信验证码
+
+- 输入 11 位手机号 → 点「获取验证码」→ `POST /auth/otp/send`
+- 后端生成 6 位 OTP，5 分钟有效，60 秒频率限制
+- dev 模式直接在响应里回传 OTP（生产环境通过阿里云 SMS 发送）
+- 输入验证码 → `POST /auth/otp/verify` → 返回 token
+
+#### 忘记密码
+
+`POST /auth/password-reset/request`（手机号）→ 发送 OTP（用户不存在不报错防探测）→
+`POST /auth/password-reset/confirm`（手机号 + OTP + 新密码）→ 改密成功
+
+#### 各角色推荐登录方式
+
+| 角色 | 推荐 | 备选 |
+|------|------|------|
+| 平台超管 / 平台运营员 | 账号 + 密码（手机号或邮箱）+ TOTP MFA | — |
+| 物业公司管理员 | 账号 + 密码（**社会信用代码** 或手机号或邮箱） | — |
+| 服务商管理员 | 账号 + 密码（手机号或邮箱） | — |
+| 主管 / 内部催收员 / 法务 / 工单 / PM | 手机 + OTP | 手机 + 密码 |
+| 外部兼职催收员（仅 App） | 手机 + OTP | 手机 + 密码 |
 
 ---
 
@@ -462,6 +566,84 @@ App 支持两种录音工作模式，能力差异如下：
 v1.1 支持管理员为特定角色或特定用户覆盖租户默认策略，例如：
 - 外部兼职催收员统一强制「事后上传」（网络环境不可控）
 - 内部核心催收员强制「实时推流」（确保 AI 辅助质量）
+
+### 8.4 Android 设备与录音兼容性矩阵（v1.9.9）
+
+#### 8.4.1 核心原则
+
+App **自己不直接录通话音频**：Android 9 起 Google 在系统层封禁了 `AudioSource.VOICE_CALL` 通道，第三方应用无法获取对方语音。本系统的方案是：
+
+> **依赖手机 ROM 内置的"通话自动录音"功能** → 通话挂断后 App `RecordingScanner` 扫描系统录音目录 → 按号码 + 时间窗口 + 文件大小三层匹配 → 上传后端 ASR
+
+因此"App 录音可用性"等价于"手机 ROM 是否保留了系统通话录音功能 + 录音文件是否对第三方应用可读"。
+
+#### 8.4.2 兼容性矩阵
+
+| Android 版本 | 原生 (Pixel / AOSP) | MIUI / HyperOS（国行） | EMUI / HarmonyOS（国行） | ColorOS / OriginOS（国行） | 海外版（任意品牌） |
+|---|---|---|---|---|---|
+| **6 / 7** | ✅ 完全可用 | ✅ | ✅ | ✅ | ✅ |
+| **8 / 9** | ❌ 系统封禁 | ✅ MIUI 9/10/11 | ✅ EMUI 8/9/10 | ✅ ColorOS 5/6/7 | ❌ |
+| **10** | ❌ | ✅ MIUI 12 | ✅ | ✅ | ❌ |
+| **11** | ❌ | ⚠️ MIUI 12.5（需用户手动开启"通话录音"开关 + 给 App"所有文件访问权限"） | ⚠️ | ⚠️ | ❌ |
+| **12** | ❌ | 🟡 MIUI 13（部分机型砍除） | 🟡 | 🟡 | ❌ |
+| **13 / 14 / 15** | ❌ | 🟡 HyperOS（按机型，多数继续保留） | 🟡 | 🟡 | ❌ |
+
+✅ = 默认开箱可用 / ⚠️ = 可用但需额外配置 / 🟡 = 部分机型可用 / ❌ = 系统级封禁
+
+#### 8.4.3 选机指引（采购建议）
+
+| 等级 | 组合 | 适用 |
+|---|---|---|
+| **A. 最稳** | Android 6/7 + 任何国行 ROM | 内部测试机、低预算客户 |
+| **B. 推荐** | Android 8/9 + MIUI 10/11 | 生产环境主力，最贴近实际坐席用机 |
+| **C. 可用** | Android 10/11 + MIUI 12/12.5 | 较新设备，但需培训坐席开启录音开关 |
+| **D. 谨慎** | Android 12+ + 国行 MIUI 13/HyperOS | 上架前必须**单机实测**录音可用 |
+| **E. 拒绝** | Pixel、海外版任何品牌、Android 10+ AOSP | **明确不支持**，合同里写明 |
+
+#### 8.4.4 APK 构建参数
+
+| 字段 | 取值 | 说明 |
+|---|---|---|
+| `minSdk` | 23（Android 6.0） | 覆盖最低端测试机；正式上线根据客户机型分布可上调到 26/28 |
+| `targetSdk` | 29（Android 10） | 避免 MIUI 老版本 PackageParser "匹配度不够"误报 |
+| `compileSdk` | 35（Android 15） | AGP 8.5.x 要求；不影响安装兼容性 |
+| 签名方案 | v1 + v2 双签 | MIUI 10 / Android 8 era 部分机型只识别 v1，须双签 |
+
+清单中**禁止**出现以下 API 29+ 才存在的属性（老 PackageParser 会拒绝解析）：
+- `<service ... android:foregroundServiceType="..." />` — API 29 引入
+- `<application ... android:requestLegacyExternalStorage="true">` — API 29 引入
+- `<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />` — API 34 引入
+
+如未来需支持 Android 14+，应通过 manifest merger 按 SDK 分层注入（`tools:targetApi`）。
+
+#### 8.4.5 录音文件候选目录
+
+`RecordingScanner.defaultCandidateDirs` 维护各 ROM 录音落盘路径：
+
+| ROM | 录音目录 | 文件后缀 |
+|---|---|---|
+| MIUI 8/9/10 | `/storage/emulated/0/MIUI/sound_recorder/call_rec/` | `.m4a` / `.mp3` |
+| MIUI 11/12+ | `/storage/emulated/0/MIUI/sound_recorder/call/` | `.m4a` |
+| EMUI 8/9/10 | `/storage/emulated/0/Sounds/CallRecord/` | `.m4a` / `.amr` |
+| ColorOS | `/storage/emulated/0/Recordings/Call/` | `.m4a` |
+| AOSP（早期） | `/storage/emulated/0/Recordings/` | `.amr` |
+
+候选目录可由 `/api/v1/devices/{id}/config` 下发（运行时配置 L2），不需要重打 APK 即可适配新机型。
+
+#### 8.4.6 上线前选机与合同条款建议
+
+- **测试机最低覆盖**：至少 2 台 — Android 6 + MIUI 10（最宽松）+ Android 9 + MIUI 11（贴近生产）
+- **合同明文**：列出"支持机型 ROM 矩阵"作为附件，客户买不在矩阵内的机器导致录音抓不到，不承担售后责任
+- **租户层兼容性策略**（v2.0 规划）：在 `tenant_config` 增加 `device_compatibility_policy` 字段（`strict_whitelist` / `warn_only` / `disabled`），App 自检时上报机型+ROM，后端按策略判断是否允许该设备入网
+
+#### 8.4.7 风险与缓解
+
+| 风险 | 严重度 | 缓解 |
+|---|---|---|
+| 客户购入 Android 12+ HyperOS 机型，部分子机型砍录音 | 高 | 上述 §8.4.6 device_compatibility_policy；坐席入职流程加入"录音自检"步骤 |
+| Google 进一步收紧 Android 16+ 录音权限 | 中 | 提前调研 VoIP 桥接方案（接 SIP 网关 / 第三方语音中继）作为方案 B |
+| 海外版手机走私进入国内市场 | 低 | 自检通过 `Build.MANUFACTURER` + `Build.BRAND` + ROM 字符串识别后拒绝 |
+| 录音目录用户手动改路径 | 低 | 候选目录走运行时配置，客服可远程下发新路径 |
 
 ---
 
@@ -871,6 +1053,22 @@ ASR 文本（含 speaker: agent/customer/unknown）
 - 催收员 App 端拨出使用绑定的外呼号，不暴露个人手机号
 
 > **MVP 阶段**：号码管理不做，催收员使用个人手机号外呼；v1.1 引入号码池。
+
+### 13.7 抢单与释放（v1.6.9）
+
+**抢单（claim）**：催收员在「我的案件」页 → 切到「公海池」tab，点行内「抢单」按钮主动认领，无需等管理员分配。
+
+| 端点 | 角色 | 说明 |
+|---|---|---|
+| `GET /agent/me/pool-quota` | agent_internal/external | 返回 `{held_open, claim_max, can_claim_more, remaining}` 用于前端进度条与按钮置灰 |
+| `POST /agent/cases/{id}/claim` | agent_internal/external | 校验持有上限 + 案件仍属 `pool_type=public` AND `assigned_to=null`；成功后写 audit `case.claimed` |
+| `POST /agent/cases/{id}/release` | agent_internal/external | 仅本人持有的未结案（stage NOT IN paid/closed）可放回公海；写 audit `case.released` |
+
+**持有上限配额**（`tenant_settings.public_pool_claim_max`）：默认 50，CHECK 1-1000。达到上限后 `claim` 返回 409 `ERR_CLAIM_LIMIT`。
+
+**与 §13.1 私海上限的区别**：§13.1 的 30/20/10 是按欠费等级分别计的「同时持有该等级案件数」上限（业务侧软规则）；§13.7 的 `public_pool_claim_max` 是按用户的「未结案案件总数」（不区分等级）的硬性配额，由后端在 claim 时强制（防止"快手"催收员把整个公海抢空导致团队负载不均）。两者并行生效。
+
+> **设计思考**：原方案是只允许管理员分配，但实测发现物业体量小、管理员手动分配成为瓶颈；催收员之间能力差异大，"快手"应该被允许多接。引入 claim + 上限组合既释放了催收员主动性，又通过配额避免抢单失控（v1.6.9 决策详见 §22.1）。
 
 ---
 
@@ -2002,6 +2200,32 @@ CRM 案件 → 多次催收无果 → 一键"转法务追诉"
 - 文书模板按 `(tenant_id, package_type)` 二级查找：租户级模板优先 → 平台默认兜底；缺失占位填 `[未填]` 而非崩溃
 - 业务事务与通知发送解耦：通知发送失败做 log，不回滚业务（dispatcher 内 try/except）
 
+#### 20.4.2 v1.6.8 — 两步审批流（催收员申请 → 督导/admin 审批）
+
+v1.5 admin 直接 `POST cases/{id}/convert-to-legal` 一步建单的能力**保留不动**；新增**平行的申请通道**让催收员主动上报。
+
+```
+催收员通话/跟进后 → 点「申请转法务」+ 写理由
+    ↓ POST /agent/cases/{id}/intent action=transfer_legal
+    ↓ INSERT legal_conversion_request(status='pending', reason=...)
+督导/admin 在「法务转化审批」inbox 看到申请
+    ↓ POST /legal-conversion-requests/{id}/approve {package_id, notes}
+    ↓ 复用 build_legal_conversion_order helper → 创建 LegalConversionOrder
+    ↓ 申请单 status='approved' + related_order_id
+    OR
+    ↓ POST /legal-conversion-requests/{id}/reject {reason}  // 必填
+    ↓ status='rejected' + reviewer_note
+```
+
+**新数据模型 `legal_conversion_request`**（迁移 24009v168）：
+- 字段：`tenant_id / case_id / requester_user_id / requester_role / reason / status / reviewer_user_id / reviewer_role / reviewed_at / reviewer_note / related_order_id`
+- 状态：`pending | approved | rejected | cancelled`
+- 同 case 已有 active LegalConversionOrder 或 pending request → 重复申请 409
+
+**审批端点角色**：`supervisor / admin / platform_super`（VIEWER_ROLES 还包含 agent_* 但只能看自己提交的）
+
+**为什么不直接让 admin 一步建单足够**：实测中催收员是最早判断"业主不可能自愿缴"的人，但他们没有合规判断能力（哪些案件适合走法务、买哪个服务包）。两步流程让前线发起 + 后端把关，既不浪费催收员的判断力，又确保法务订单符合公司风控策略（v1.6.8 决策详见 §22.2）。
+
 **单元 / 集成测试覆盖**
 
 - service：推荐分级（金额阶梯）、时间线聚合（通话历史 group_by）、成本预估（含小额诉讼受理费）、模板渲染（占位替换 + 缺省回落 + 租户覆盖）
@@ -2356,6 +2580,156 @@ app.youcuihuicui.com       ← 租户侧所有角色（物业公司管理员/主
 ```
 
 两个入口共用同一套后端 API，通过 JWT 中的 `role` 和 `scope`（`platform` / `tenant:{id}` / `provider:{id}`）做权限隔离。
+
+---
+
+## 22. 决策日志（v1.5.7 - v1.6.10）
+
+> **目的**：记录 v1.5.7 - v1.6.10 期间针对核心业务流程做出的关键产品决策，包含「背景动机 / 决策内容 / 思考过程 / 影响范围」。便于后续团队理解某条规则为何如此设计，避免相同的争论再次发生。每条决策对应一次实测发现的问题或一次产品讨论。
+
+### 22.1 公海池主动抢单 + 持有上限（v1.6.9）
+
+**背景**：MVP 设计是"管理员手动分配 + 催收员被动接单"。实测发现：
+- 物业体量小，admin 每天分配几十条案件成为瓶颈
+- 催收员能力差异大，"快手" 1 天能跟 30 条，"慢手" 跟 5 条都吃力
+- 等管理员分配的延迟让高优先级案件错过最佳追讨窗口
+
+**决定**（已实现，详见 §13.7）：
+- 催收员可在「我的案件 → 公海池」主动抢单（claim）
+- 持有上限由 `tenant_settings.public_pool_claim_max` 控制（默认 50，CHECK 1-1000）
+- 自己持有的未结案案件可主动 release 放回公海
+
+**思考过程**：
+- ❌ 备选方案 A「无上限抢单」：被否决 — 快手会把整个公海抢空，团队负载严重不均
+- ❌ 备选方案 B「保留纯管理员分配」：被否决 — admin 瓶颈未解
+- ✅ 当前方案「抢单 + 上限」：保留管理员分配（仍是主路径），抢单是补充通道；上限确保团队整体负载可控
+- 上限默认 50 是经验值（团队 1 个内勤大约持 30-40 条比较合理，留 10-20 缓冲）；admin 可在系统配置调整
+
+**影响范围**：
+- 后端：`tenant_settings.public_pool_claim_max` 新字段 + 迁移 `24010v169`；3 个新 API（`/agent/me/pool-quota`、`/agent/cases/{id}/claim`、`/agent/cases/{id}/release`）；audit log 新事件 `case.claimed` / `case.released`
+- 前端：「我的案件」加 tab 切换 + 抢单按钮 + 持有数量进度条
+- 测试：4 个新 pytest（quota 默认值 / 上限阻断 / release own / release others 403）
+
+---
+
+### 22.2 法务转化两步审批（v1.6.8）
+
+**背景**：v1.5 `POST /admin/cases/{id}/convert-to-legal` 让 admin 一步建单。但实测发现：
+- 催收员是最早判断"业主不可能自愿缴"的人（直接通话感知）
+- admin 远离一线，对每个案件是否值得走法务缺乏直觉
+- 让催收员直接建法务单 → 风控失控（什么单都转，律所收到一堆低价值单）
+
+**决定**（已实现，详见 §20.4.2）：保留 admin 直接建单 + 平行新增"催收员申请 + 督导/admin 审批"通道。两条路径不互斥。
+
+**思考过程**：
+- ❌ 备选方案 A「让催收员直接建单」：被否决 — 风控失控
+- ❌ 备选方案 B「废弃 admin 一步建单只走审批」：被否决 — admin 在某些场景（如批量历史欠费导入后立即转法务）需要快速建单能力
+- ✅ 当前方案「两条路径」：催收员发起 + 督导把关是常规路径；admin 一步建单是兜底
+
+**为什么用独立 `LegalConversionRequest` 表而不是给 `LegalConversionOrder` 加 `awaiting_approval` 状态**：Order 的状态机本来就是「已建单 → 派发 → 服务 → 完成」的法律业务流；混入"审批中"会让 Order 同时承担"未确定要不要建"和"已建已派单"两种语义，命名/查询/列表渲染都难做。独立表更干净。
+
+**影响范围**：
+- 后端：新表 `legal_conversion_request` + 迁移 `24009v168`；3 个新 API（list/approve/reject）；admin endpoint 抽出 `build_legal_conversion_order` helper 给两个路径共用
+- 前端：督导侧新页 `/supervisor/legal-conversion-approvals`；`ConvertToLegalModal` 加 `mode='approve'`；催收员申请按钮在工作台 + 详情页双入口
+- 测试：9 个新 pytest
+
+---
+
+### 22.3 案件详情页统一蓝本（v1.6.9 - v1.6.10）
+
+**背景**：admin/agent/supervisor 三个角色各有独立的 detail.tsx，维护负担大且 UI 不一致：
+- supervisor 的 detail.tsx 757 行，自建 ProjectInfoCard、BillBreakdownCard、WorkOrdersCard
+- admin/agent 用了部分共享组件但 BillBreakdownCard 重复写
+- 用户实测：「6 个入口（admin 案件列表、agent 我的案件、supervisor 案件分配、升级处理、承诺催付、超期预警）的 详情页 应该统一」
+
+**决定**：
+- **后端**：`build_case_detail_response` helper 三角色共用（admin/agent/supervisor 三个 GET endpoint 同源返回 `CaseDetailResponse`）
+- **前端蓝本**：左栏「业主信息卡（含累计欠费 + 账单期 + 三栏金额拆分 + 欠费理由）」+「项目情况卡」/ 中栏「活动时间线」+「添加跟进备注」/ 右栏 sticky「按角色显示的操作按钮」
+- **共享组件**：`OwnerInfoCard / ProjectInfoCard / ActivityTimeline / FollowUpNoteCard / DiscountRequestModal`
+- **角色差异只在右栏操作面板**：admin 4 按钮 / agent 5-6 按钮 / supervisor 4-5 按钮
+
+**思考过程**：
+- ❌ 备选方案 A「保持三套独立页」：维护负担大，UI 不一致
+- ❌ 备选方案 B「全统一为单组件按 role 显示不同操作」：被采纳的核心思路
+- 关键发现：账单期 + 三栏金额本来就在 `OwnerInfoCard` 里实现了，但又额外写了一个 `BillBreakdownCard` 在底部 → 重复展示。**决策**：删 `BillBreakdownCard` 组件文件，账单一律走业主信息卡内嵌。
+
+**影响范围**：
+- 后端：`supervisor_case_detail.py` 156 行 → 9 行（复用 helper）；admin stage endpoint 角色扩展到 supervisor
+- 前端：supervisor detail 757 行 → ~200 行；admin/agent/supervisor 三页骨架完全统一；删除 `BillBreakdownCard.tsx` + 新建 `FollowUpNoteCard.tsx`
+
+---
+
+### 22.4 时间线节点详情可点击 + 内联听录音（v1.6.9 - v1.6.10）
+
+**背景**：v1.6.7 已经在通话节点加了 `<audio controls>` 内联播放，但只在 `recording_url` 存在且 `status=processed` 时才显示。用户测试时反映：
+- 工单/法务/阶段变更等节点没有任何交互（只是文本）
+- 录音播放控件不够明显（用户找不到）
+
+**决定**：
+- **TimelineEvent schema 加 `target_id` + `target_type`**：让前端按 type 跳详情（workorder→`/workorder/orders/{id}` / legal_order→`/admin/legal-conversion/{id}` / legal_case→`/legal/cases/{id}`）
+- **通话节点加显式「🎧 听录音」按钮**：受控展开 audio（`autoPlay`），无录音时按钮 disabled 灰色
+- **其他系统事件支持 expand**：长 note 点击展开 + 显示操作人 + ID
+
+**思考过程**：交互不显式 → 用户根本不知道有这个能力。同样的功能加一个明确的按钮就解决了。无歧义，直接做。
+
+**影响范围**：
+- 后端：`schemas/case.py` `TimelineEvent` 加 2 字段；`services/case_timeline.py` 工单/法务/法务案件事件填 `target_id`
+- 前端：`ActivityTimeline.tsx` 抽 `CallRow` 子组件，每行独立 `audioOpen` state；系统事件抽 `SystemEventRow`
+
+---
+
+### 22.5 多身份切换 + 督导兼任催收员（v1.6.9 - v1.6.10）
+
+**背景**：原模型已支持「一人多 tenant」，但**未考虑「同一 tenant 内同一 user 多 role」**：
+- 实际业务：督导经常需要直接打几个高优先级案件（教练手 / 救火）
+- 律所代表也是律师本人 — 同一 user 兼任两个 role
+- 用户实测：从督导切到催收员后，工作台业主画像消失、案件详情显示加载中
+
+**决定**（已实现，详见 §3.2）：
+- `UserTenantMembership` 已是 (user_id, tenant_id, role) 复合主键，本就支持多 role
+- Topbar 切换角色时调 `queryClient.clear()` + `window.location.replace("/")` 清缓存
+- demo seed `13000000003` 督导小李同时加 `agent_internal` membership + 分配 2 个案件演示
+
+**重要 bug 与教训**：所有按 `user_id` + `tenant_id` 查 membership 的 SQL 默认假设单结果（`scalar_one_or_none()`），多 membership 后**直接 500**。修复方案是显式加 `role` 过滤 + `limit(1)`。这是数据模型早就支持但代码假设过窄的典型问题。**已在 §3.2 数据模型说明中明确写出该约束**。
+
+**思考过程**：
+- "一人一个角色"是绝大多数 SaaS 的简化假设；当业务真实需要多角色时，前端 + 后端都要审计每一个 membership 查询
+- 切换体验上：原 `window.location.href = "/"` 在某些条件下被 React Router 拦截不真硬刷；改 `replace("/")` + `queryClient.clear()` 双保险
+
+**影响范围**：
+- 后端：`build_case_detail_response` 查 assigned 用户角色加 `role IN agent_*` 过滤 + limit(1)；assign 端点同样修
+- 前端：`Topbar.handleSwitch` 注入 `useQueryClient().clear()`
+- demo seed 演示数据
+
+---
+
+### 22.6 减免申请快捷按钮三角色共用（v1.6.9）
+
+**背景**：减免申请之前埋在「督导 → 案件详情 → 谈判区」深路径，催收员在通话结束后想发起减免要切多个页面。
+
+**决定**：
+- 抽 `DiscountRequestModal` 共享组件（`components/discount/`）
+- 三处入口：催收员案件详情右栏 + 工作台 col-4 quick-actions + 督导案件详情 + 督导升级处理页 ActionRow
+- 后端 `POST /cases/{id}/discount-offers` 已支持催收员/督导双角色发起，按 `discount_pct` 自动判定走督导审批 / admin 审批 / 自动通过
+
+**思考过程**：现成的后端能力前端没暴露。最少改动：写一个 Modal，挂到 5 个入口。
+
+**影响范围**：
+- 前端：新建 `DiscountRequestModal.tsx`；agent/supervisor 详情页 + agent 工作台 + supervisor escalated 页都接入
+
+---
+
+### 22.7 admin stage 端点角色扩展到 supervisor（v1.6.10）
+
+**背景**：v1.6.10 督导详情页加跟进备注卡，需要 `PATCH stage` endpoint。新建 supervisor 专属端点 vs 复用 admin 端点的取舍。
+
+**决定**：复用 `PATCH /admin/cases/{id}/stage`，把 `require_roles(*ADMIN_ROLES, "supervisor")` 加上 supervisor。
+
+**思考过程**：
+- ❌ 备选方案「新建 `PATCH /supervisor/cases/{id}/stage`」：复制粘贴一份 endpoint 代码，违反 DRY
+- ✅ 当前方案：admin 与 supervisor 在租户范围内的 stage 写权限本就一致（督导是租户全权角色），扩 require_roles 是最小改动
+
+**影响范围**：1 行代码改动（`admin_cases.py` `update_case_stage` 的 `require_roles`）；测试覆盖
 
 ---
 

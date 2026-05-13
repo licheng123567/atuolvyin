@@ -13,20 +13,23 @@ Endpoints (all under /api/v1/provider):
     GET    /settlements             read-only settlement list
     GET    /settlements/{id}        read-only settlement detail (+disputes)
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
+from pydantic import BaseModel
 from sqlalchemy import case, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.crypto import mask_phone
+from app.core.crypto import encrypt_phone, mask_phone
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_password_hash, get_token_payload, require_roles
 from app.models.call import CallRecord
 from app.models.case import CollectionCase, OwnerProfile
 from app.models.settlement import DisputeRecord, SettlementStatement
@@ -52,6 +55,7 @@ from app.schemas.provider_admin import (
     ProviderTeamMemberOut,
     ProviderTenantOut,
     TeamActiveIn,
+    TeamMemberCreateIn,
 )
 from app.schemas.settlement import DisputeOut
 
@@ -72,11 +76,15 @@ def _resolve_provider_id(user_id: int, db: Session) -> int:
     Returns 404 ERR_NO_PROVIDER if the user has no membership row with
     a non-null provider_id (account misconfigured).
     """
-    membership = db.execute(
-        select(UserTenantMembership)
-        .where(UserTenantMembership.user_id == user_id)
-        .where(UserTenantMembership.provider_id.isnot(None))
-    ).scalars().first()
+    membership = (
+        db.execute(
+            select(UserTenantMembership)
+            .where(UserTenantMembership.user_id == user_id)
+            .where(UserTenantMembership.provider_id.isnot(None))
+        )
+        .scalars()
+        .first()
+    )
     if membership is None or membership.provider_id is None:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
@@ -156,16 +164,24 @@ async def get_provider_dashboard(
         )
 
     # 合作租户数 — distinct partner tenants with active contracts
-    partner_tenant_count: int = db.execute(
-        select(func.count(func.distinct(ProviderTenantContract.tenant_id)))
-        .where(ProviderTenantContract.provider_id == provider_id)
-    ).scalar_one() or 0
+    partner_tenant_count: int = (
+        db.execute(
+            select(func.count(func.distinct(ProviderTenantContract.tenant_id))).where(
+                ProviderTenantContract.provider_id == provider_id
+            )
+        ).scalar_one()
+        or 0
+    )
 
     # 团队人数 — active memberships under this provider
-    team_count: int = db.execute(
-        select(func.count(UserTenantMembership.id))
-        .where(UserTenantMembership.provider_id == provider_id)
-    ).scalar_one() or 0
+    team_count: int = (
+        db.execute(
+            select(func.count(UserTenantMembership.id)).where(
+                UserTenantMembership.provider_id == provider_id
+            )
+        ).scalar_one()
+        or 0
+    )
 
     # Current month boundaries
     now = datetime.now(UTC)
@@ -258,9 +274,7 @@ async def list_partner_tenants(
     if status:
         stmt = stmt.where(ProviderTenantContract.status == status)
 
-    total: int = db.execute(
-        select(func.count()).select_from(stmt.subquery())
-    ).scalar_one()
+    total: int = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
 
     rows = db.execute(
         stmt.order_by(ProviderTenantContract.signed_at.desc())
@@ -280,17 +294,74 @@ async def list_partner_tenants(
         )
         for c, t in rows
     ]
-    return PaginatedResponse(
-        items=items, total=total, page=page, page_size=page_size
-    )
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 # ── PA.3.3 team management ──────────────────────────────────────────
 
 
-@router.get(
-    "/team", response_model=PaginatedResponse[ProviderTeamMemberOut]
+@router.post(
+    "/team",
+    response_model=ProviderTeamMemberOut,
+    status_code=http_status.HTTP_201_CREATED,
 )
+async def create_team_member(
+    body: TeamMemberCreateIn,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> ProviderTeamMemberOut:
+    user_id = _user_id_from_payload(payload)
+    provider_id = _resolve_provider_id(user_id, db)
+
+    # tenant must be a partner the provider has an active contract with
+    contract = db.execute(
+        select(ProviderTenantContract).where(
+            ProviderTenantContract.provider_id == provider_id,
+            ProviderTenantContract.tenant_id == body.tenant_id,
+            ProviderTenantContract.status == "active",
+        )
+    ).scalar_one_or_none()
+    if contract is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "ERR_NO_CONTRACT",
+                "message": "未与该租户建立合作合同",
+            },
+        )
+
+    new_user = UserAccount(
+        phone_enc=encrypt_phone(body.phone),
+        name=body.name,
+        password_hash=get_password_hash(body.password),
+        is_active=True,
+    )
+    db.add(new_user)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail={"code": "ERR_DUPLICATE_PHONE", "message": "手机号已被注册"},
+        ) from None
+
+    membership = UserTenantMembership(
+        user_id=new_user.id,
+        tenant_id=body.tenant_id,
+        role=body.role,
+        source_type="PROVIDER",
+        provider_id=provider_id,
+        is_active=True,
+    )
+    db.add(membership)
+    db.commit()
+    db.refresh(new_user)
+    return _team_member_to_out(new_user, body.role, True)
+
+
+@router.get("/team", response_model=PaginatedResponse[ProviderTeamMemberOut])
 async def list_team_members(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
@@ -311,27 +382,17 @@ async def list_team_members(
         .where(UserTenantMembership.provider_id == provider_id)
     )
 
-    total: int = db.execute(
-        select(func.count()).select_from(stmt.subquery())
-    ).scalar_one()
+    total: int = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
 
     rows = db.execute(
-        stmt.order_by(UserAccount.id.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
+        stmt.order_by(UserAccount.id.desc()).offset((page - 1) * page_size).limit(page_size)
     ).all()
 
-    items = [
-        _team_member_to_out(user, role, m_active) for user, role, m_active in rows
-    ]
-    return PaginatedResponse(
-        items=items, total=total, page=page, page_size=page_size
-    )
+    items = [_team_member_to_out(user, role, m_active) for user, role, m_active in rows]
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
-@router.get(
-    "/team/{member_user_id}", response_model=ProviderTeamMemberDetailOut
-)
+@router.get("/team/{member_user_id}", response_model=ProviderTeamMemberDetailOut)
 async def get_team_member(
     member_user_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
@@ -410,19 +471,13 @@ async def toggle_team_member_active(
 # ── PA.3.4 settlements (read-only) ──────────────────────────────────
 
 
-@router.get(
-    "/settlements", response_model=PaginatedResponse[ProviderSettlementOut]
-)
+@router.get("/settlements", response_model=PaginatedResponse[ProviderSettlementOut])
 async def list_provider_settlements(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
-    status: str | None = Query(
-        None, description="DRAFT/CONFIRMED/PAID/DISPUTED"
-    ),
-    year_month: str | None = Query(
-        None, description="YYYY-MM, filters by period_start"
-    ),
+    status: str | None = Query(None, description="DRAFT/CONFIRMED/PAID/DISPUTED"),
+    year_month: str | None = Query(None, description="YYYY-MM, filters by period_start"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[ProviderSettlementOut]:
@@ -462,9 +517,7 @@ async def list_provider_settlements(
             SettlementStatement.period_start < period_hi,
         )
 
-    total: int = db.execute(
-        select(func.count()).select_from(stmt.subquery())
-    ).scalar_one()
+    total: int = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
 
     rows = db.execute(
         stmt.order_by(
@@ -476,9 +529,7 @@ async def list_provider_settlements(
     ).all()
 
     items = [_settlement_to_out(s, c, t) for s, c, t in rows]
-    return PaginatedResponse(
-        items=items, total=total, page=page, page_size=page_size
-    )
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.get(
@@ -513,11 +564,15 @@ async def get_provider_settlement(
         )
     s, c, t = row
 
-    disputes = db.execute(
-        select(DisputeRecord)
-        .where(DisputeRecord.statement_id == statement_id)
-        .order_by(DisputeRecord.id.desc())
-    ).scalars().all()
+    disputes = (
+        db.execute(
+            select(DisputeRecord)
+            .where(DisputeRecord.statement_id == statement_id)
+            .order_by(DisputeRecord.id.desc())
+        )
+        .scalars()
+        .all()
+    )
 
     base = _settlement_to_out(s, c, t)
     return ProviderSettlementDetailOut(
@@ -587,9 +642,7 @@ async def submit_dispute(
 # ── PA.3.6 — Sprint 9.1 — cross-tenant team performance ─────────────
 
 
-@router.get(
-    "/team-performance", response_model=list[ProviderMemberPerformance]
-)
+@router.get("/team-performance", response_model=list[ProviderMemberPerformance])
 async def get_team_performance(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
@@ -746,3 +799,200 @@ async def get_member_commission(
         commission=commission,
         items=items,
     )
+
+
+# ── v1.5.5: 项目时效相关 ─────────────────────────────────────────
+
+
+@router.get("/projects/expiring")
+async def list_expiring_projects(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    """v1.5.5 — 服务商端总览 banner 用：30 天内即将到期的项目计数 + 列表。"""
+    from app.models.case import Project
+
+    user_id = _user_id_from_payload(payload)
+    provider_id = _resolve_provider_id(user_id, db)
+    horizon = datetime.now(UTC) + timedelta(days=30)
+    rows = db.execute(
+        select(Project.id, Project.name, Project.plan_end)
+        .where(
+            Project.provider_id == provider_id,
+            Project.status == "active",
+            Project.plan_end.is_not(None),
+            Project.plan_end >= datetime.now(UTC),
+            Project.plan_end <= horizon,
+        )
+        .order_by(Project.plan_end.asc())
+    ).all()
+    return {
+        "count": len(rows),
+        "items": [
+            {"id": r[0], "name": r[1], "plan_end": r[2].isoformat() if r[2] else None} for r in rows
+        ],
+    }
+
+
+@router.get("/historical-reports")
+async def list_historical_reports(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    """v1.5.5 D2 — 到期 30 天内的项目聚合报表（仅展示数字、不可下钻）。"""
+    from app.models.case import CollectionCase, Project
+
+    user_id = _user_id_from_payload(payload)
+    provider_id = _resolve_provider_id(user_id, db)
+
+    # 仅展示已 closed 且 30 天内的项目（active 已在主入口可见）
+    cutoff = datetime.now(UTC) - timedelta(days=30)
+    rows = (
+        db.execute(
+            select(Project)
+            .where(
+                Project.provider_id == provider_id,
+                Project.status == "closed",
+                Project.updated_at >= cutoff,
+            )
+            .order_by(Project.updated_at.desc())
+        )
+        .scalars()
+        .all()
+    )
+
+    items = []
+    for p in rows:
+        # 聚合：案件数 / 总欠费 / 已回款金额
+        agg = db.execute(
+            select(
+                func.count(CollectionCase.id),
+                func.coalesce(func.sum(CollectionCase.amount_owed), 0),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (CollectionCase.stage == "paid", CollectionCase.amount_owed),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ),
+            ).where(
+                CollectionCase.project_id == p.id,
+                CollectionCase.tenant_id == p.tenant_id,
+            )
+        ).one()
+        items.append(
+            {
+                "project_id": p.id,
+                "project_name": p.name,
+                "plan_start": p.plan_start.isoformat() if p.plan_start else None,
+                "plan_end": p.plan_end.isoformat() if p.plan_end else None,
+                "closed_at": p.updated_at.isoformat(),
+                "case_count": int(agg[0] or 0),
+                "total_owed": float(agg[1] or 0),
+                "total_recovered": float(agg[2] or 0),
+            }
+        )
+    return {"items": items, "retention_days": 30}
+
+
+# ── v1.5.6: 服务商端项目列表 + 指派 PM ───────────────────────────
+
+
+@router.get("/projects")
+async def list_provider_projects(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    """v1.5.6 — 服务商工作台「我的项目」列表（仅 active + 服务期未过）。"""
+    from app.core.provider_scope import active_project_filter
+    from app.models.case import Project
+    from app.models.tenant import Tenant
+
+    user_id = _user_id_from_payload(payload)
+    provider_id = _resolve_provider_id(user_id, db)
+
+    rows = db.execute(
+        select(Project, Tenant.name)
+        .join(Tenant, Tenant.id == Project.tenant_id)
+        .where(*active_project_filter(provider_id))
+        .order_by(Project.id.desc())
+    ).all()
+
+    items = []
+    for p, tname in rows:
+        # 解析当前 PM 名字（若已指派）
+        pm_name: str | None = None
+        if p.provider_pm_user_id is not None:
+            pm_name = db.execute(
+                select(UserAccount.name).where(UserAccount.id == p.provider_pm_user_id)
+            ).scalar_one_or_none()
+        items.append(
+            {
+                "project_id": p.id,
+                "project_name": p.name,
+                "tenant_name": tname,
+                "plan_start": p.plan_start.isoformat() if p.plan_start else None,
+                "plan_end": p.plan_end.isoformat() if p.plan_end else None,
+                "provider_pm_user_id": p.provider_pm_user_id,
+                "provider_pm_name": pm_name,
+            }
+        )
+    return {"items": items}
+
+
+class AssignProviderPmIn(BaseModel):
+    user_id: int
+
+
+@router.patch("/projects/{project_id}/pm")
+async def assign_provider_pm(
+    project_id: int,
+    body: AssignProviderPmIn,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    """v1.5.6 — 服务商 admin 指派本家项目经理给项目。"""
+    from app.models.case import Project
+
+    user_id = _user_id_from_payload(payload)
+    provider_id = _resolve_provider_id(user_id, db)
+
+    project = db.execute(
+        select(Project).where(
+            Project.id == project_id,
+            Project.provider_id == provider_id,
+        )
+    ).scalar_one_or_none()
+    if project is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "项目不存在或不属本服务商"},
+        )
+
+    # 校验 user_id 是本服务商的 pm_provider 角色
+    pm_membership = db.execute(
+        select(UserTenantMembership).where(
+            UserTenantMembership.user_id == body.user_id,
+            UserTenantMembership.provider_id == provider_id,
+            UserTenantMembership.role == "project_manager_provider",
+            UserTenantMembership.is_active.is_(True),
+        )
+    ).scalar_one_or_none()
+    if pm_membership is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "ERR_NOT_PM",
+                "message": "指定用户不是本服务商的项目经理",
+            },
+        )
+
+    project.provider_pm_user_id = body.user_id
+    db.commit()
+    return {"status": "ok", "project_id": project.id, "pm_user_id": body.user_id}

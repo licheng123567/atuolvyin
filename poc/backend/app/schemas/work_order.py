@@ -54,6 +54,32 @@ class WorkOrderOut(BaseModel):
     updated_at: datetime
     # enrichments
     assignee_name: str | None = None
+    # v1.9.7 — 列表行内案件上下文
+    owner_name: str | None = None
+    owner_room: str | None = None
+    project_id: int | None = None
+    project_name: str | None = None
+    amount_owed: str | None = None
+
+
+class WorkOrderFollowUpOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    work_order_id: int
+    case_id: int | None
+    actor_user_id: int
+    actor_name: str | None = None
+    occurred_at: datetime
+    kind: str
+    note: str
+
+
+class WorkOrderFollowUpCreate(BaseModel):
+    kind: Literal["note", "resolution_proposed", "escalation"] = "note"
+    note: str = Field(..., min_length=1, max_length=4000)
+
+    model_config = ConfigDict(str_strip_whitespace=True)
 
 
 class CaseRef(BaseModel):
@@ -77,3 +103,13 @@ class CallRef(BaseModel):
 class WorkOrderDetailOut(WorkOrderOut):
     case: CaseRef | None = None
     call: CallRef | None = None
+    follow_ups: list[WorkOrderFollowUpOut] = Field(default_factory=list)
+
+
+class WorkOrderKpi(BaseModel):
+    """v1.9.6 — 工单工作台顶部 4 张 KPI 卡数据。"""
+
+    open_count: int = 0
+    in_progress_count: int = 0
+    closed_this_month: int = 0  # resolved + closed 本月数量
+    avg_processing_days: float | None = None

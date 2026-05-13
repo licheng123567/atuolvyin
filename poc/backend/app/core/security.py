@@ -44,10 +44,9 @@ def create_access_token(
     expires_delta: timedelta | None = None,
 ) -> str:
     import uuid
+
     to_encode = payload.copy()
-    expire = datetime.now(UTC) + (
-        expires_delta or timedelta(minutes=settings.jwt_expires_minutes)
-    )
+    expire = datetime.now(UTC) + (expires_delta or timedelta(minutes=settings.jwt_expires_minutes))
     to_encode["exp"] = expire
     # Sprint 15.1 — jti 保证每个 token 唯一（多设备踢出 hash 比对依赖）
     to_encode.setdefault("jti", uuid.uuid4().hex)
@@ -56,9 +55,7 @@ def create_access_token(
 
 def decode_access_token(token: str) -> dict:
     try:
-        return jwt.decode(
-            token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
-        )
+        return jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -77,12 +74,17 @@ async def get_token_payload(
     # 视为合法以保持向后兼容；只有当存在记录但 hash 不匹配时才 401。
     user_id = payload.get("user_id")
     if user_id and db is not None:
-        from app.models.active_session import ActiveSession
         import hashlib
+
         from sqlalchemy import select
-        rows = db.execute(
-            select(ActiveSession.token_hash).where(ActiveSession.user_id == user_id)
-        ).scalars().all()
+
+        from app.models.active_session import ActiveSession
+
+        rows = (
+            db.execute(select(ActiveSession.token_hash).where(ActiveSession.user_id == user_id))
+            .scalars()
+            .all()
+        )
         if rows:  # 有过 v1.4 登录记录
             token_hash = hashlib.sha256(token.encode()).hexdigest()
             if token_hash not in rows:
@@ -142,4 +144,5 @@ def require_roles(*roles: str):
 def mask_phone(phone_enc: str) -> str:
     """Decrypt AES-256 ciphertext and return masked form like 138****1234."""
     from app.core.crypto import mask_phone as _mask  # avoid circular at module level
+
     return _mask(phone_enc)

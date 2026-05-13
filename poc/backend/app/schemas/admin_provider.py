@@ -6,6 +6,7 @@
 - 查看该服务商在本公司的成员配置
 - 调整合同（到期日 / 服务类型 / 状态）与成员配额
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -59,7 +60,28 @@ class AdminProviderContractOut(BaseModel):
 class AdminProviderContractPatchIn(BaseModel):
     expires_at: datetime | None = None
     service_types: list[str] | None = Field(None, min_length=1)
-    status: Literal["active", "paused", "terminated"] | None = None
+    # v1.4 S16.4 — 直接 PATCH status='terminated' 已禁用，请走 terminate-request；
+    # 仍允许 active <-> paused 互切。
+    status: Literal["active", "paused"] | None = None
+
+
+class TerminateRequestIn(BaseModel):
+    """v1.4 S16.4 — 发起解约（D2 双向握手）。"""
+
+    reason: str | None = Field(None, max_length=2000)
+
+
+class TerminationStatusOut(BaseModel):
+    """合同当前的解约握手状态（用于前端状态机）。"""
+
+    contract_id: int
+    status: str  # active / paused / terminated
+    termination_requested_by: int | None  # 1=property, 2=provider
+    termination_requested_at: datetime | None
+    termination_reason: str | None
+    termination_confirmed_at: datetime | None
+    terminated_at: datetime | None
+    timeout_days_remaining: int | None  # 7 天倒计时（请求未确认时）
 
 
 class AdminProviderMemberOut(BaseModel):

@@ -1,5 +1,6 @@
 # poc/backend/app/ws/auth.py
 """JWT validation for WebSocket query-string token."""
+
 from __future__ import annotations
 
 from jose import JWTError, jwt
@@ -12,9 +13,7 @@ def decode_ws_token(token: str) -> dict | None:
     if not token:
         return None
     try:
-        payload = jwt.decode(
-            token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
-        )
+        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
     except JWTError:
         return None
     if "user_id" not in payload or "tenant_id" not in payload:

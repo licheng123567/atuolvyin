@@ -7,10 +7,11 @@ dispatch(db, *, tenant_id, event_type, title, body, recipient_user_ids, severity
   2. 否则按 settings.notify_channels 路由到各渠道处理器
   3. 每个渠道独立异常隔离，单个渠道失败不阻塞其他
 """
+
 from __future__ import annotations
 
 import logging
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import select
@@ -26,8 +27,9 @@ from .channels import wechat as ch_wechat
 logger = logging.getLogger(__name__)
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     """5 个 PRD §L412 事件类型，与 TenantSettings notify_xxx 字段一一对应。"""
+
     QUOTA_WARNING = "quota_warning"
     SCRIPT_DISABLED = "script_disabled"
     WORK_ORDER_COMPLETED = "work_order_completed"
@@ -83,7 +85,8 @@ def dispatch(
         if flag_attr and not getattr(settings, flag_attr, True):
             logger.info(
                 "notification skipped (event %s disabled by tenant %s)",
-                event_type, tenant_id,
+                event_type,
+                tenant_id,
             )
             result["skipped"].append("event_disabled")
             return result

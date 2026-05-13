@@ -53,21 +53,38 @@ class CallSession:
         self._tenant_id = call.tenant_id
         case = db.get(CollectionCase, call.case_id)
         owner = db.get(OwnerProfile, case.owner_id) if case and case.owner_id else None
-        from app.services.realtime_llm import _load_scripts, SENSITIVITY_THRESHOLD
-        from app.models.script import TenantSuggestionConfig
         from sqlalchemy import select
 
-        scripts = _load_scripts(db, call.tenant_id)
-        cfg = db.execute(
-            select(TenantSuggestionConfig).where(
-                TenantSuggestionConfig.tenant_id == call.tenant_id
+        from app.models.script import TenantSuggestionConfig
+        from app.models.tenant import UserTenantMembership
+        from app.services.realtime_llm import SENSITIVITY_THRESHOLD, _load_scripts
+
+        # v1.4 S16.5 — 取 caller 的 provider_id（外勤 → 服务商话术合并）
+        caller_membership = (
+            db.execute(
+                select(UserTenantMembership).where(
+                    UserTenantMembership.user_id == call.caller_user_id,
+                    UserTenantMembership.tenant_id == call.tenant_id,
+                )
             )
+            .scalars()
+            .first()
+        )
+        agent_provider_id = (
+            int(caller_membership.provider_id)
+            if caller_membership and caller_membership.provider_id
+            else None
+        )
+        scripts = _load_scripts(db, call.tenant_id, agent_provider_id=agent_provider_id)
+        cfg = db.execute(
+            select(TenantSuggestionConfig).where(TenantSuggestionConfig.tenant_id == call.tenant_id)
         ).scalar_one_or_none()
         sensitivity = SENSITIVITY_THRESHOLD.get(cfg.sensitivity if cfg else 3, 0.65)
         max_per_push = cfg.max_per_push if cfg else 3
 
         self._llm_engine = RealtimeSuggestionEngine(
-            case=case, owner=owner,
+            case=case,
+            owner=owner,
             scripts=scripts,
             sensitivity_threshold=sensitivity,
             max_per_push=max_per_push,
@@ -105,14 +122,16 @@ class CallSession:
             self._risk_detector = None
 
     async def _handle_transcript(self, chunk: TranscriptChunk) -> None:
-        await self._on_transcript({
-            "type": "transcript.chunk",
-            "seq": chunk.seq,
-            "speaker": chunk.speaker,
-            "text": chunk.text,
-            "ts": chunk.ts.isoformat() if hasattr(chunk.ts, "isoformat") else chunk.ts,
-            "utterance_end": getattr(chunk, "utterance_end", False),
-        })
+        await self._on_transcript(
+            {
+                "type": "transcript.chunk",
+                "seq": chunk.seq,
+                "speaker": chunk.speaker,
+                "text": chunk.text,
+                "ts": chunk.ts.isoformat() if hasattr(chunk.ts, "isoformat") else chunk.ts,
+                "utterance_end": getattr(chunk, "utterance_end", False),
+            }
+        )
         if self._llm_engine:
             suggestion = await self._llm_engine.on_transcript(chunk)
             if suggestion:

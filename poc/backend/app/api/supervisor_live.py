@@ -8,6 +8,7 @@ POST /api/v1/supervisor/calls/{call_id}/force-hangup
   督导手动结束某通话；走 call_intervention.dispatch_force_hangup。
   权限：supervisor / admin / project_manager_property
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -19,8 +20,12 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.crypto import mask_phone
 from app.core.db import get_db
+from app.core.phone_visibility import (
+    display_owner_phone,
+    is_provider_contract_active,
+    should_reveal_owner_phone,
+)
 from app.core.security import get_token_payload, require_roles
 from app.models.call import CallRecord
 from app.models.case import CollectionCase, OwnerProfile
@@ -66,14 +71,23 @@ def list_live_calls(
             detail={"code": "ERR_INVALID_TOKEN", "message": "Token 缺少 tenant_id"},
         )
 
-    rows = db.execute(
-        select(CallRecord)
-        .where(
-            CallRecord.tenant_id == tenant_id,
-            CallRecord.status.in_(("dialing", "live")),
+    rows = (
+        db.execute(
+            select(CallRecord)
+            .where(
+                CallRecord.tenant_id == tenant_id,
+                CallRecord.status.in_(("dialing", "live")),
+            )
+            .order_by(CallRecord.started_at.desc().nulls_last())
         )
-        .order_by(CallRecord.started_at.desc().nulls_last())
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
+
+    # v1.7.0 — supervisor / admin / project_manager_property 都是物业内部
+    role = payload.get("role", "")
+    contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
+    owner_phone_reveal = should_reveal_owner_phone(role=role, contract_active=contract_active)
 
     now = datetime.now(UTC)
     items: list[LiveCallItem] = []
@@ -91,7 +105,10 @@ def list_live_calls(
                 caller_user_id=c.caller_user_id,
                 caller_name=caller.name if caller else "未知坐席",
                 owner_name=owner.name if owner else None,
-                owner_phone_masked=mask_phone(owner.phone_enc) if owner and owner.phone_enc else None,
+                owner_phone_masked=display_owner_phone(
+                    owner.phone_enc if owner else None,
+                    reveal=owner_phone_reveal,
+                ),
                 started_at=c.started_at,
                 last_heartbeat_at=c.last_heartbeat_at,
                 duration_sec=duration,
@@ -137,6 +154,7 @@ async def supervisor_force_hangup(
         )
 
     from app.services.call_intervention import dispatch_force_hangup
+
     await dispatch_force_hangup(
         db,
         call_id=call.id,
@@ -174,9 +192,7 @@ async def supervisor_takeover(
             detail={"code": "ERR_INVALID_TOKEN", "message": "Token 缺少必要字段"},
         )
     call = db.execute(
-        select(CallRecord).where(
-            CallRecord.id == call_id, CallRecord.tenant_id == tenant_id
-        )
+        select(CallRecord).where(CallRecord.id == call_id, CallRecord.tenant_id == tenant_id)
     ).scalar_one_or_none()
     if call is None:
         raise HTTPException(
@@ -193,6 +209,7 @@ async def supervisor_takeover(
     supervisor_name = supervisor.name if supervisor else "未知主管"
 
     from app.services.call_intervention import dispatch_takeover_request
+
     await dispatch_takeover_request(
         db,
         call_id=call.id,

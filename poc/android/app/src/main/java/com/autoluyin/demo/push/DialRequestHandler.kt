@@ -2,9 +2,10 @@ package com.autoluyin.demo.push
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import com.autoluyin.demo.ApiClient
 import com.autoluyin.demo.AppConfig
-import com.autoluyin.demo.RegisterDeviceRequest
+import com.autoluyin.demo.PushRegPatchRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -39,25 +40,31 @@ object DialRequestHandler {
         ctx.startActivity(intent)
     }
 
+    /**
+     * v1.6 — push 通道 reg id 上报，仅 patch push_reg_id/push_provider，
+     * 不再走 register 主路径：避免 push 回调在用户未登录时（无 device row）
+     * 自动创建设备绑定，或在跨账号设备上覆盖 brand/model 等字段。
+     *
+     * device row 的创建由 MainActivity 登录后的 ensureDeviceRegistered() 负责。
+     * 后端在 device 不存在时返回 404 ERR_DEVICE_NOT_REGISTERED；这里仅 log，
+     * 等下次 self-check 触发主注册后 push 会被重新上报（MiPush 会重发 regId）。
+     */
     fun uploadRegId(ctx: Context, regId: String) {
-        // Use existing Retrofit client; needs JWT, so only succeeds if user logged in
         val token = AppConfig.token(ctx) ?: return
         val deviceId = AppConfig.deviceId(ctx) ?: return
-        // Ensure appContext is initialized before using ApiClient.service
         ApiClient.appContext = ctx.applicationContext
         CoroutineScope(Dispatchers.IO).launch {
             runCatching {
-                ApiClient.service.registerDevice(
+                ApiClient.service.patchPushReg(
                     authHeader = "Bearer $token",
-                    body = RegisterDeviceRequest(
+                    body = PushRegPatchRequest(
                         device_id = deviceId,
-                        brand = android.os.Build.BRAND,
-                        model = android.os.Build.MODEL,
-                        os_version = android.os.Build.VERSION.RELEASE,
                         push_reg_id = regId,
                         push_provider = "xiaomi",
                     ),
                 )
+            }.onFailure {
+                Log.w("DialRequestHandler", "patchPushReg failed (will retry on next regId): ${it.message}")
             }
         }
     }

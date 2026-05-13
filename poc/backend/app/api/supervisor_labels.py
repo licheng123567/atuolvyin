@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -79,11 +79,12 @@ def label_script(
     fb.supervisor_label = body.label
     fb.supervisor_note = body.note
     fb.supervisor_id = user_id
-    fb.supervisor_at = datetime.now(timezone.utc)
+    fb.supervisor_at = datetime.now(UTC)
     db.commit()
     db.refresh(fb)
     return SupervisorLabelOut(
-        feedback_id=fb.id, call_id=fb.call_id,
+        feedback_id=fb.id,
+        call_id=fb.call_id,
         suggestion_text=fb.suggestion_text,
         supervisor_label=fb.supervisor_label,
         supervisor_note=fb.supervisor_note,

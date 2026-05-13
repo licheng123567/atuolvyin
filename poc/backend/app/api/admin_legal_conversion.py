@@ -9,6 +9,7 @@ POST   /api/v1/admin/legal-conversion-orders/{id}/dispatch   平台 ops 撮合�
 POST   /api/v1/admin/legal-conversion-orders/{id}/complete   律所标记完成
 POST   /api/v1/admin/legal-conversion-orders/{id}/cancel     物业取消
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -43,12 +44,12 @@ from app.schemas.legal_doc_render import (
     LegalDocumentRenderOut,
     LegalDocumentTemplateOut,
 )
-from app.services.legal_document_render import render_for_order
 from app.services.legal_conversion import (
     build_timeline_summary,
     estimate_cost,
     recommend_package,
 )
+from app.services.legal_document_render import render_for_order
 
 router = APIRouter()
 
@@ -68,17 +69,21 @@ def _require_tenant(payload: dict) -> int:
 
 def _enabled_packages(db: Session, tenant_id: int) -> list[LegalServicePackage]:
     """全局（tenant_id IS NULL）+ 本租户 enabled 包，按 sort_order。"""
-    rows = db.execute(
-        select(LegalServicePackage)
-        .where(
-            LegalServicePackage.enabled.is_(True),
-            or_(
-                LegalServicePackage.tenant_id.is_(None),
-                LegalServicePackage.tenant_id == tenant_id,
-            ),
+    rows = (
+        db.execute(
+            select(LegalServicePackage)
+            .where(
+                LegalServicePackage.enabled.is_(True),
+                or_(
+                    LegalServicePackage.tenant_id.is_(None),
+                    LegalServicePackage.tenant_id == tenant_id,
+                ),
+            )
+            .order_by(LegalServicePackage.sort_order, LegalServicePackage.id)
         )
-        .order_by(LegalServicePackage.sort_order, LegalServicePackage.id)
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return list(rows)
 
 
@@ -158,27 +163,29 @@ async def preview_case_conversion(
 # ── 创建订单 ─────────────────────────────────────────────────────
 
 
-@router.post(
-    "/cases/{case_id}/convert-to-legal",
-    response_model=LegalConversionOrderOut,
-    status_code=http_status.HTTP_201_CREATED,
-)
-async def convert_case_to_legal(
-    case_id: int,
-    body: ConvertCaseRequest,
-    payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
-    db: Annotated[Session, Depends(get_db)],
-) -> LegalConversionOrderOut:
-    tenant_id = _require_tenant(payload)
-    case = db.get(CollectionCase, case_id)
-    if case is None or case.tenant_id != tenant_id:
-        raise HTTPException(
-            status_code=http_status.HTTP_404_NOT_FOUND,
-            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
-        )
+def build_legal_conversion_order(
+    db: Session,
+    *,
+    case: CollectionCase,
+    package_id: int,
+    notes: str | None,
+    created_by_user_id: int | None,
+    initial_status: str = "pending",
+) -> LegalConversionOrder:
+    """v1.6.8 — 共享 helper：校验 package + 去重已有 active 订单 + 创建 Order（不 commit）。
 
-    package = db.get(LegalServicePackage, body.package_id)
+    被两处复用：
+      1. `POST /admin/cases/{case_id}/convert-to-legal`（admin 直接建单 → status=pending → admin 撮合）
+      2. `POST /legal-conversion-requests/{id}/approve`（督导审批通过 → status=internal_processing → 物业法务内部处理）
+
+    v1.9.0 — initial_status 控制初始状态：
+      - "pending" 走 admin 撮合律所链路（兼容老逻辑）
+      - "internal_processing" 走物业法务内部处理链路（方案 B 新增）
+
+    抛 HTTPException：400 服务包无效 / 409 已有 active 订单
+    """
+    tenant_id = case.tenant_id
+    package = db.get(LegalServicePackage, package_id)
     if (
         package is None
         or not package.enabled
@@ -189,11 +196,13 @@ async def convert_case_to_legal(
             detail={"code": "ERR_PACKAGE_INVALID", "message": "服务包不可用"},
         )
 
-    # 同案件 active 订单去重
     existing = db.execute(
         select(LegalConversionOrder).where(
-            LegalConversionOrder.case_id == case_id,
-            LegalConversionOrder.status.in_(("pending", "dispatched", "in_service")),
+            LegalConversionOrder.case_id == case.id,
+            # v1.9.0 — internal_processing 也算 active
+            LegalConversionOrder.status.in_(
+                ("pending", "dispatched", "in_service", "internal_processing")
+            ),
         )
     ).scalar_one_or_none()
     if existing is not None:
@@ -218,19 +227,50 @@ async def convert_case_to_legal(
         tenant_id=tenant_id,
         case_id=case.id,
         package_id=package.id,
-        status="pending",
+        status=initial_status,
         price_quoted=package.price,
         platform_fee_amount=platform_fee,
         timeline_summary=timeline,
         recommendation=recommendation,
         cost_estimate=cost,
-        notes=body.notes,
-        created_by=int(payload.get("user_id") or 0) or None,
+        notes=notes,
+        created_by=created_by_user_id,
     )
     db.add(order)
+    db.flush()  # populate order.id without committing parent transaction
+    return order
+
+
+@router.post(
+    "/cases/{case_id}/convert-to-legal",
+    response_model=LegalConversionOrderOut,
+    status_code=http_status.HTTP_201_CREATED,
+)
+async def convert_case_to_legal(
+    case_id: int,
+    body: ConvertCaseRequest,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> LegalConversionOrderOut:
+    tenant_id = _require_tenant(payload)
+    case = db.get(CollectionCase, case_id)
+    if case is None or case.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
+        )
+    order = build_legal_conversion_order(
+        db,
+        case=case,
+        package_id=body.package_id,
+        notes=body.notes,
+        created_by_user_id=int(payload.get("user_id") or 0) or None,
+    )
     db.commit()
     db.refresh(order)
-    return _order_to_out(order, package.name)
+    package = db.get(LegalServicePackage, order.package_id)
+    return _order_to_out(order, package.name if package else None)
 
 
 # ── 订单列表 / 详情 ──────────────────────────────────────────────
@@ -260,6 +300,7 @@ async def list_orders(
     rows = db.execute(stmt.offset((page - 1) * page_size).limit(page_size)).all()
 
     from sqlalchemy import func as _f
+
     total_stmt = select(_f.count(LegalConversionOrder.id)).where(
         LegalConversionOrder.tenant_id == tenant_id
     )
@@ -269,7 +310,10 @@ async def list_orders(
 
     items = [_order_to_out(o, name) for o, name in rows]
     return PaginatedResponse[LegalConversionOrderOut](
-        items=items, total=total, page=page, page_size=page_size,
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -344,11 +388,7 @@ async def dispatch_order(
 
         if body.lawyer_id is not None:
             lawyer = db.get(LawFirmLawyer, body.lawyer_id)
-            if (
-                lawyer is None
-                or lawyer.law_firm_id != firm.id
-                or not lawyer.is_active
-            ):
+            if lawyer is None or lawyer.law_firm_id != firm.id or not lawyer.is_active:
                 raise HTTPException(
                     status_code=http_status.HTTP_400_BAD_REQUEST,
                     detail={"code": "ERR_LAWYER_INVALID", "message": "律师不属于该律所或已停用"},
@@ -360,7 +400,10 @@ async def dispatch_order(
         if not body.assigned_law_firm or len(body.assigned_law_firm.strip()) < 2:
             raise HTTPException(
                 status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail={"code": "ERR_VALIDATION", "message": "需提供 law_firm_id 或 assigned_law_firm"},
+                detail={
+                    "code": "ERR_VALIDATION",
+                    "message": "需提供 law_firm_id 或 assigned_law_firm",
+                },
             )
         firm_name = body.assigned_law_firm.strip()
         lawyer_name = (body.assigned_lawyer_name or "").strip() or None
@@ -463,23 +506,25 @@ async def list_doc_templates(
 ) -> list[LegalDocumentTemplateOut]:
     """列出本租户可见模板（平台默认 + 本租户覆盖），按 package_type 排序。"""
     tenant_id = _require_tenant(payload)
-    rows = db.execute(
-        select(LegalDocumentTemplate)
-        .where(
-            LegalDocumentTemplate.enabled.is_(True),
-            or_(
-                LegalDocumentTemplate.tenant_id.is_(None),
-                LegalDocumentTemplate.tenant_id == tenant_id,
-            ),
+    rows = (
+        db.execute(
+            select(LegalDocumentTemplate)
+            .where(
+                LegalDocumentTemplate.enabled.is_(True),
+                or_(
+                    LegalDocumentTemplate.tenant_id.is_(None),
+                    LegalDocumentTemplate.tenant_id == tenant_id,
+                ),
+            )
+            .order_by(LegalDocumentTemplate.package_type, LegalDocumentTemplate.id)
         )
-        .order_by(LegalDocumentTemplate.package_type, LegalDocumentTemplate.id)
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [LegalDocumentTemplateOut.model_validate(r) for r in rows]
 
 
-def _get_order_for_tenant(
-    db: Session, *, order_id: int, tenant_id: int
-) -> LegalConversionOrder:
+def _get_order_for_tenant(db: Session, *, order_id: int, tenant_id: int) -> LegalConversionOrder:
     order = db.get(LegalConversionOrder, order_id)
     if order is None or order.tenant_id != tenant_id:
         raise HTTPException(
@@ -531,14 +576,15 @@ async def render_doc(
     order = _get_order_for_tenant(db, order_id=order_id, tenant_id=tenant_id)
     try:
         render = render_for_order(
-            db, order=order,
+            db,
+            order=order,
             rendered_by=int(payload.get("user_id") or 0) or None,
         )
     except ValueError as exc:
         raise HTTPException(
             status_code=http_status.HTTP_400_BAD_REQUEST,
             detail={"code": "ERR_NO_TEMPLATE", "message": str(exc)},
-        )
+        ) from exc
     db.commit()
     db.refresh(render)
     return LegalDocumentRenderOut.model_validate(render)
@@ -556,9 +602,13 @@ async def list_doc_versions(
 ) -> list[LegalDocumentRenderOut]:
     tenant_id = _require_tenant(payload)
     _get_order_for_tenant(db, order_id=order_id, tenant_id=tenant_id)
-    rows = db.execute(
-        select(LegalDocumentRender)
-        .where(LegalDocumentRender.order_id == order_id)
-        .order_by(LegalDocumentRender.version.desc())
-    ).scalars().all()
+    rows = (
+        db.execute(
+            select(LegalDocumentRender)
+            .where(LegalDocumentRender.order_id == order_id)
+            .order_by(LegalDocumentRender.version.desc())
+        )
+        .scalars()
+        .all()
+    )
     return [LegalDocumentRenderOut.model_validate(r) for r in rows]

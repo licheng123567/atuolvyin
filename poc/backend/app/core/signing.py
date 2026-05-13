@@ -2,6 +2,7 @@
 
 验证逻辑里把 secret 与 path + 过期时间一起 HMAC，外部无法伪造。
 """
+
 import base64
 import hashlib
 import hmac

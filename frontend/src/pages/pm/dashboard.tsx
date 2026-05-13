@@ -3,12 +3,28 @@ import {
   Briefcase,
   ClipboardList,
   DollarSign,
+  FolderKanban,
   LayoutDashboard,
   Scale,
   Users,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 import type { AuthUser } from "../../providers/auth-provider";
+
+interface PmProjectCard {
+  project_id: number;
+  project_name: string;
+  role_in_project: string;
+  case_count: number;
+  receivable: number;
+  received: number;
+  promised_count: number;
+  new_count: number;
+  in_progress_count: number;
+  escalated_count: number;
+  provider_name: string | null;
+}
 
 interface TopOverdueItem {
   case_id: number;
@@ -44,6 +60,177 @@ interface PMProviderStats {
 
 function formatCurrency(n: number | null | undefined): string {
   return `¥${(n ?? 0).toLocaleString()}`;
+}
+
+function MyProjectsSection() {
+  const navigate = useNavigate();
+  const { query } = useCustom<PmProjectCard[]>({
+    url: "pm/projects",
+    method: "get",
+  });
+  const cardsRaw = query.data?.data;
+  const cards: PmProjectCard[] = Array.isArray(cardsRaw)
+    ? cardsRaw
+    : ((cardsRaw as unknown as { items?: PmProjectCard[] })?.items ?? []);
+
+  if (query.isLoading) return null;
+  if (cards.length === 0) {
+    return (
+      <div
+        style={{
+          background: "#f9fafb",
+          border: "1px dashed #d1d5db",
+          borderRadius: 8,
+          padding: 24,
+          textAlign: "center",
+          color: "#9ca3af",
+        }}
+      >
+        <FolderKanban size={32} style={{ margin: "0 auto 8px" }} />
+        <div>当前没有指派给您的项目</div>
+        <div style={{ fontSize: 12, marginTop: 4 }}>
+          请联系物业管理员将您指定为项目负责人
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 12,
+        }}
+      >
+        <h2
+          style={{
+            fontSize: 14,
+            fontWeight: 600,
+            color: "var(--color-neutral-700)",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <FolderKanban size={14} />
+          我管理的项目（共 {cards.length} 个）
+        </h2>
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+          gap: 12,
+        }}
+      >
+        {cards.map((p) => {
+          const recoveryRate =
+            p.receivable > 0 ? (p.received / p.receivable) * 100 : 0;
+          return (
+            <div
+              key={p.project_id}
+              className="ds-card"
+              style={{ cursor: "pointer", transition: "border-color .15s" }}
+              onClick={() =>
+                navigate(`/admin/cases?project_id=${p.project_id}`)
+              }
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.borderColor = "var(--color-primary)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.borderColor =
+                  "var(--color-neutral-200)")
+              }
+            >
+              <div className="card-body">
+                <div
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: "var(--color-neutral-900)",
+                    marginBottom: 4,
+                  }}
+                >
+                  {p.project_name}
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "var(--color-neutral-500)",
+                    marginBottom: 12,
+                  }}
+                >
+                  {p.provider_name ? (
+                    <span>合作服务商：{p.provider_name}</span>
+                  ) : (
+                    <span>自营</span>
+                  )}
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 8,
+                    fontSize: 12,
+                  }}
+                >
+                  <div>
+                    <div style={{ color: "#6b7280" }}>案件数</div>
+                    <div style={{ fontSize: 18, fontWeight: 700 }}>
+                      {p.case_count}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ color: "#6b7280" }}>回款率</div>
+                    <div
+                      style={{
+                        fontSize: 18,
+                        fontWeight: 700,
+                        color:
+                          recoveryRate > 50
+                            ? "#057a55"
+                            : recoveryRate > 20
+                              ? "#d97706"
+                              : "var(--color-neutral-700)",
+                      }}
+                    >
+                      {recoveryRate.toFixed(1)}%
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ color: "#6b7280" }}>应收</div>
+                    <div style={{ fontWeight: 600 }}>
+                      ¥{p.receivable.toLocaleString()}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ color: "#6b7280" }}>已收</div>
+                    <div style={{ fontWeight: 600, color: "#057a55" }}>
+                      ¥{p.received.toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+                <div
+                  style={{
+                    marginTop: 10,
+                    paddingTop: 10,
+                    borderTop: "1px solid #f3f4f6",
+                    fontSize: 11,
+                    color: "#6b7280",
+                  }}
+                >
+                  新 {p.new_count} · 跟进 {p.in_progress_count} · 承诺{" "}
+                  {p.promised_count} · 升级 {p.escalated_count}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export function PMDashboardPage() {
@@ -100,6 +287,9 @@ function PropertyView() {
           物业项目经理看板
         </h1>
       </div>
+
+      {/* v1.4 — 我管理的项目（多项目卡片） */}
+      <MyProjectsSection />
 
       {/* 4 KPI cards */}
       <div
@@ -216,6 +406,9 @@ function ProviderView() {
           服务商项目经理看板
         </h1>
       </div>
+
+      {/* v1.4 — 我管理的项目（多项目卡片） */}
+      <MyProjectsSection />
 
       {/* 4 KPI cards */}
       <div

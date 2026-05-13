@@ -17,26 +17,72 @@ export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 
+interface LoginByAccount {
+  mode?: "account-password";
+  // 账号 = 手机号 / 18 位社会信用代码 / 邮箱（后端自动识别）
+  account: string;
+  password: string;
+}
+
+interface LoginByOtp {
+  mode: "phone-otp";
+  phone: string;
+  code: string;
+}
+
+// v1.5 兼容字段保留：旧 phone-password / credit-code 入口已合并到 account-password
+interface LoginByPhonePasswordLegacy {
+  mode?: "phone-password";
+  phone: string;
+  password: string;
+}
+
+export type LoginInput =
+  | LoginByAccount
+  | LoginByOtp
+  | LoginByPhonePasswordLegacy;
+
 export const authProvider: AuthProvider = {
-  login: async ({ phone, password }: { phone: string; password: string }) => {
+  login: async (input: LoginInput) => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
+      let url: string;
+      let body: Record<string, unknown>;
+      if (input.mode === "phone-otp") {
+        url = `${API_BASE}/api/v1/auth/otp/verify`;
+        body = { phone: input.phone, code: input.code, device_type: "pc" };
+      } else if ("account" in input) {
+        // 统一账号入口：账号自动识别（手机号 / 信用代码 / 邮箱）
+        url = `${API_BASE}/api/v1/auth/login-universal`;
+        body = {
+          account: input.account,
+          password: input.password,
+          device_type: "pc",
+        };
+      } else {
+        // 兼容历史 phone-password 入口
+        url = `${API_BASE}/api/v1/auth/login`;
+        body = {
+          phone: input.phone,
+          password: input.password,
+          device_type: "pc",
+        };
+      }
+
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Sprint 15.1 — 多设备踢出：PC 端固定 device_type='pc'
-        body: JSON.stringify({ phone, password, device_type: "pc" }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as {
           message?: string;
+          detail?: { message?: string };
         };
+        const msg = err.detail?.message ?? err.message ?? "登录失败，请检查输入";
         return {
           success: false,
-          error: {
-            name: "LoginError",
-            message: err.message ?? "登录失败，请检查手机号和密码",
-          },
+          error: { name: "LoginError", message: msg },
         };
       }
 
@@ -87,10 +133,11 @@ export const authProvider: AuthProvider = {
   },
 
   onError: async (error: { status?: number; code?: string; message?: string }) => {
-    if (error.status === 401 || error.status === 403) {
-      // Sprint 15.1 — 多设备踢出：友好提示而非静默跳转
+    // v1.5.7 — 只在 401（认证失败 / 会话失效）时强制登出
+    // 403（认证有效但当前角色无权限）应保持登录，让页面自行处理（如显示「无权限」），
+    // 否则多角色用户访问到非自己角色的端点会被误踢回登录页。
+    if (error.status === 401) {
       if (error.code === "ERR_SESSION_EVICTED") {
-        // 用 sessionStorage 暂存原因，登录页读出后展示 banner
         sessionStorage.setItem(
           "login_reason",
           "您的账号已在其他设备登录，请重新登录",

@@ -1,5 +1,6 @@
 # poc/backend/app/services/streaming_asr_mock.py
 """Mock streaming ASR — emits canned chunks every ~1s of audio."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime

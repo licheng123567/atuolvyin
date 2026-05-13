@@ -93,3 +93,82 @@ async def test_agent_cases_requires_auth(client: AsyncClient):
 async def test_claim_requires_auth(client: AsyncClient, seeded_case):
     resp = await client.post(f"/api/v1/agent/cases/{seeded_case.id}/claim")
     assert resp.status_code == 401
+
+
+# ── v1.6.9 — 公海池 quota + release ──────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_pool_quota_default_50(
+    client: AsyncClient, agent_auth_headers
+):
+    resp = await client.get("/api/v1/agent/me/pool-quota", headers=agent_auth_headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["claim_max"] == 50
+    assert body["held_open"] == 0
+    assert body["can_claim_more"] is True
+    assert body["remaining"] == 50
+
+
+@pytest.mark.asyncio
+async def test_claim_blocked_when_at_limit(
+    client: AsyncClient, db_session, agent_auth_headers, seeded_case,
+    seeded_member_user, seeded_tenant,
+):
+    """把 quota 设到 1，并预先分配 1 件给 agent → claim 公海应 409."""
+    from app.models.settings import TenantSettings
+    db_session.add(TenantSettings(tenant_id=seeded_tenant.id, public_pool_claim_max=1))
+    # 直接把 seeded_case 分给 agent（变成私海持有）
+    seeded_case.assigned_to = seeded_member_user.id
+    seeded_case.pool_type = "private"
+    db_session.flush()
+    # 再造一个公海案件
+    from decimal import Decimal
+    from app.models.case import CollectionCase
+    other = CollectionCase(
+        tenant_id=seeded_tenant.id, owner_id=seeded_case.owner_id,
+        pool_type="public", stage="new",
+        amount_owed=Decimal("100"), priority_score=100,
+    )
+    db_session.add(other)
+    db_session.commit()
+    # 试图 claim → 上限触达
+    resp = await client.post(
+        f"/api/v1/agent/cases/{other.id}/claim", headers=agent_auth_headers,
+    )
+    assert resp.status_code == 409
+    assert resp.json()["code"] == "ERR_CLAIM_LIMIT"
+
+
+@pytest.mark.asyncio
+async def test_release_own_case_back_to_pool(
+    client: AsyncClient, db_session, agent_auth_headers, seeded_case,
+    seeded_member_user,
+):
+    seeded_case.assigned_to = seeded_member_user.id
+    seeded_case.pool_type = "private"
+    db_session.commit()
+    resp = await client.post(
+        f"/api/v1/agent/cases/{seeded_case.id}/release", headers=agent_auth_headers,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["pool_type"] == "public"
+    assert body["assigned_to"] is None
+
+
+@pytest.mark.asyncio
+async def test_release_others_case_returns_403(
+    client: AsyncClient, db_session, agent_auth_headers, seeded_case,
+    seeded_user,
+):
+    """seeded_case 分给另一个用户（admin），agent 试图 release → 403."""
+    seeded_case.assigned_to = seeded_user.id  # admin user, not agent
+    seeded_case.pool_type = "private"
+    db_session.commit()
+    resp = await client.post(
+        f"/api/v1/agent/cases/{seeded_case.id}/release", headers=agent_auth_headers,
+    )
+    assert resp.status_code == 403
+    assert resp.json()["code"] == "ERR_NOT_YOURS"

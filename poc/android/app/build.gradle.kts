@@ -9,8 +9,8 @@ android {
 
     defaultConfig {
         applicationId = "com.autoluyin.demo"
-        minSdk = 26          // Android 8.0 起可用；MIUI 主流机型已远超
-        targetSdk = 33       // 暂保 33 以避免 Android 14 后台限制升级；正式版按需提到 35
+        minSdk = 23          // v1.9.9 — 适配 MIUI 10/Android 6 测试机（PRD：通话录音目标平台）
+        targetSdk = 29       // v1.9.9 — MIUI 10 兼容打包 (Android 10 API)。正式版回 33+
         versionCode = 1
         versionName = "0.1.0"
         // 后端地址不再硬编码，APK 首次启动由用户输入或扫激活码注入；
@@ -18,7 +18,22 @@ android {
         buildConfigField("String", "MIPUSH_APP_ID", "\"\"")
         buildConfigField("String", "MIPUSH_APP_KEY", "\"\"")
     }
+    // v1.9.9 — MIUI 10 / Android 8 era 部分机型只识别 v1 (JAR) 签名，
+    // 默认 AGP 8.x debug 仅 v2，会导致「解析软件包出现了问题」。开启双签。
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+            enableV1Signing = true
+            enableV2Signing = true
+        }
+    }
     buildTypes {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
         }

@@ -1,309 +1,344 @@
 // frontend/src/pages/agent/cases/detail.tsx
-import { useGetIdentity, useGo, useList, useOne } from "@refinedev/core";
-import { GitBranch, Phone, PhoneOff, Scale } from "lucide-react";
+// v1.6.6 — 催收员案件详情：双栏布局
+// v1.6.8 — 三栏布局：左 业主信息+项目情况 / 中 时间线+跟进备注 / 右 sticky 操作按钮组
+//          操作按钮始终右侧可见，无需滚动
+import { useCustomMutation, useGo, useOne } from "@refinedev/core";
+import { ArrowLeft, BadgePercent, ClipboardList, CreditCard, Headphones, Phone, Scale } from "lucide-react";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import type { CaseCallItem, CaseDetailResponse } from "../../../types/case";
-import type { PaginatedResponse } from "../../../types";
-
-const STAGE_LABELS: Record<string, string> = {
-  new: "待处理",
-  in_progress: "处理中",
-  promised: "已承诺",
-  paid: "已缴费",
-  escalated: "已上报",
-  closed: "已关闭",
-};
-
-const RESULT_TAG_COLORS: Record<string, React.CSSProperties> = {
-  "承诺缴": { background: "var(--color-warning-light)", color: "var(--color-warning)" },
-  "立即缴": { background: "var(--color-success-light)", color: "var(--color-success)" },
-  "推托": { background: "var(--color-neutral-100)", color: "var(--color-neutral-600)" },
-  "拒缴": { background: "var(--color-danger-light)", color: "var(--color-danger)" },
-};
+import { ActivityTimeline } from "../../../components/case/ActivityTimeline";
+import { FollowUpNoteCard } from "../../../components/case/FollowUpNoteCard";
+import { OwnerInfoCard } from "../../../components/case/OwnerInfoCard";
+import { ProjectInfoCard } from "../../../components/case/ProjectInfoCard";
+import { DiscountRequestModal } from "../../../components/discount/DiscountRequestModal";
+import { QrDialDialog } from "../../../components/dial/QrDialDialog";
+import type { CaseDetailResponse } from "../../../types/case";
 
 export function AgentWorkstationPage() {
   const { id } = useParams<{ id: string }>();
   const go = useGo();
-  const [selectedCallIdx, setSelectedCallIdx] = useState(0);
-  const { data: identity } = useGetIdentity<{ role: string }>();
-  const isExternal = identity?.role === "agent_external";
+  const [qrState, setQrState] = useState<{ caseId: number; qrPayload: string; expiresAt: string } | null>(null);
+  const [showDiscountModal, setShowDiscountModal] = useState(false);
+  // v1.9.7 — 建工单 Modal（替换 window.prompt）
+  const [woModalOpen, setWoModalOpen] = useState(false);
+  const [woType, setWoType] = useState<"quality" | "reduction" | "dispute" | "other">("quality");
+  const [woPriority, setWoPriority] = useState<"urgent_critical" | "urgent" | "normal" | "low">("normal");
+  const [woReason, setWoReason] = useState("");
 
-  const { query: listQuery } = useList<CaseDetailResponse>({
-    resource: "agent/cases",
-    pagination: { currentPage: 1, pageSize: 50 },
-  });
-
-  const rawListData = listQuery.data?.data;
-  const cases: CaseDetailResponse[] =
-    (rawListData as unknown as PaginatedResponse<CaseDetailResponse>)?.items ??
-    (rawListData as CaseDetailResponse[] | undefined) ??
-    [];
-
-  const { query: detailQuery } = useOne<CaseDetailResponse>({
+  const { query } = useOne<CaseDetailResponse>({
     resource: "agent/cases",
     id: id ?? "",
     queryOptions: { enabled: !!id },
   });
+  const detail = query.data?.data;
+  const isLoading = query.isLoading;
 
-  const detail = detailQuery.data?.data;
-  const isLoading = detailQuery.isLoading;
-  const selectedCall = detail?.calls[selectedCallIdx] ?? null;
+  const { mutate: customMutate } = useCustomMutation();
+  const { mutate: dialMutate } = useCustomMutation();
+
+  function handleDial() {
+    if (!detail) return;
+    dialMutate(
+      { url: "calls/dial-request", method: "post", values: { case_id: detail.id, mode: "qr" } },
+      {
+        onSuccess: (resp) => {
+          const data = resp.data as { qr_payload?: string; expires_at?: string };
+          if (data.qr_payload && data.expires_at) {
+            setQrState({ caseId: detail.id, qrPayload: data.qr_payload, expiresAt: data.expires_at });
+          } else {
+            alert("拨号请求成功但未返回二维码");
+          }
+        },
+        onError: (err) => alert(`拨号失败：${err.message ?? "未知错误"}`),
+      },
+    );
+  }
+
+  function handleCreateWorkOrder() {
+    setWoModalOpen(true);
+  }
+
+  function submitNewWorkOrder() {
+    if (!detail) return;
+    if (!woReason.trim()) { alert("请填写工单原因"); return; }
+    customMutate(
+      {
+        url: "workorders",
+        method: "post",
+        values: {
+          case_id: detail.id,
+          order_type: woType,
+          description: woReason.trim(),
+          priority: woPriority,
+        },
+      },
+      {
+        onSuccess: (resp) => {
+          alert(`✓ 工单 #${(resp.data as { id?: number }).id ?? "?"} 已创建`);
+          setWoModalOpen(false);
+          setWoType("quality");
+          setWoPriority("normal");
+          setWoReason("");
+        },
+        onError: (err) => alert(`建工单失败：${err.message}`),
+      },
+    );
+  }
+
+  function handleIntent(action: "transfer_supervisor" | "transfer_legal", label: string) {
+    if (!detail) return;
+    customMutate(
+      { url: `agent/cases/${detail.id}/intent`, method: "post", values: { action } },
+      {
+        onSuccess: () => alert(`✓ ${label} 已记录，等待业务流程接入`),
+        onError: (err) => alert(`${label} 失败：${err.message}`),
+      },
+    );
+  }
+
+  function handleSendPaymentLink() {
+    if (!detail) return;
+    customMutate(
+      { url: `agent/cases/${detail.id}/send-payment-link`, method: "post", values: {} },
+      {
+        onSuccess: (resp) => {
+          const data = resp.data as { short_link?: string; sent_to?: string };
+          alert(`✓ 已发送缴费链接到 ${data.sent_to ?? "业主"}\n短链：${data.short_link ?? "—"}`);
+        },
+        onError: (err) => alert(`发送失败：${err.message}`),
+      },
+    );
+  }
+
+  if (isLoading) {
+    return <div style={{ padding: 32, color: "var(--color-neutral-400)" }}>加载中…</div>;
+  }
+  if (!detail) {
+    return <div style={{ padding: 32, color: "var(--color-danger)" }}>案件不存在或无权访问</div>;
+  }
 
   return (
-    <div
-      className="h-[calc(100vh-64px)] overflow-hidden"
-      style={{ display: "grid", gridTemplateColumns: "280px 240px 1fr 340px" }}
-    >
-      {/* col-cases */}
-      <div className="border-r border-[var(--color-neutral-200)] flex flex-col overflow-hidden">
-        <div className="p-3 border-b border-[var(--color-neutral-200)]">
-          <span className="text-sm font-semibold text-[var(--color-neutral-900)]">我的案件</span>
-        </div>
-        <div className="overflow-y-auto flex-1">
-          {cases.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => go({ to: `/agent/cases/${c.id}` })}
-              className={`w-full text-left px-3 py-3 border-b border-[var(--color-neutral-100)] text-sm hover:bg-[var(--color-neutral-50)] ${
-                String(c.id) === id
-                  ? "border-l-2 border-l-[var(--color-primary)] bg-blue-50"
-                  : ""
-              }`}
-            >
-              <div className="font-medium text-[var(--color-neutral-900)]">{c.owner.name}</div>
-              <div className="text-xs text-[var(--color-neutral-400)] mt-0.5">
-                {c.owner.building} {c.owner.room}
-              </div>
-            </button>
-          ))}
-        </div>
+    <div>
+      {/* Breadcrumb */}
+      <div className="breadcrumb">
+        <button
+          type="button"
+          onClick={() => go({ to: "/agent/cases" })}
+          className="ds-btn ds-btn-ghost ds-btn-sm"
+          style={{ padding: 0 }}
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          我的案件
+        </button>
+        <span className="sep">›</span>
+        <span className="current">CC-{String(detail.id).padStart(4, "0")}</span>
       </div>
 
-      {/* col-profile */}
-      <div className="border-r border-[var(--color-neutral-200)] flex flex-col overflow-y-auto p-4">
-        {isLoading && (
-          <div className="text-sm text-[var(--color-neutral-400)]">加载中…</div>
-        )}
-        {detail && (
-          <>
-            <div
-              className="w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold mb-3"
-              style={{ background: "var(--color-primary-light)", color: "var(--color-primary)" }}
-            >
-              {detail.owner.name[0]}
-            </div>
-            <div className="text-sm font-semibold mb-1">{detail.owner.name}</div>
-            <div className="text-xs text-[var(--color-neutral-500)] mb-3">
-              {[detail.owner.building, detail.owner.room].filter(Boolean).join(" ")}
-            </div>
-            {/* T2: agent_external guard — never render full phone for external agents */}
-            <div className="text-sm font-mono text-[var(--color-primary)] mb-1">
-              {isExternal
-                ? (detail.owner.phone_masked ?? "—")
-                : (detail.owner.phone ?? detail.owner.phone_masked ?? "—")}
-            </div>
-            {detail.amount_owed && (
-              <div
-                className="rounded p-3 text-center mb-4"
-                style={{ background: "var(--color-danger-light)" }}
-              >
-                <div className="text-xs text-[var(--color-neutral-400)]">欠费</div>
-                <div
-                  className="text-xl font-bold"
-                  style={{ color: "var(--color-danger)" }}
-                >
-                  ¥{Number(detail.amount_owed).toLocaleString()}
-                </div>
-                <div className="text-xs text-[var(--color-neutral-500)]">
-                  {detail.months_overdue} 个月
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* col-transcript: call tabs + transcript preview */}
-      <div className="border-r border-[var(--color-neutral-200)] flex flex-col overflow-hidden">
-        <div className="p-3 border-b border-[var(--color-neutral-200)] flex gap-2 overflow-x-auto">
-          {detail?.calls.map((call: CaseCallItem, idx: number) => (
-            <button
-              key={call.id}
-              type="button"
-              onClick={() => setSelectedCallIdx(idx)}
-              className={`shrink-0 px-3 py-1 text-xs rounded-full border ${
-                idx === selectedCallIdx
-                  ? "border-[var(--color-primary)] text-[var(--color-primary)] bg-[var(--color-primary-light)]"
-                  : "border-[var(--color-neutral-200)] text-[var(--color-neutral-600)]"
-              }`}
-            >
-              通话 {idx + 1}
-            </button>
-          ))}
-        </div>
-        <div className="flex-1 overflow-y-auto p-4">
-          {!selectedCall && (
-            <div className="text-sm text-[var(--color-neutral-400)]">暂无通话记录</div>
-          )}
-          {selectedCall && selectedCall.status !== "processed" && (
-            <div className="text-sm text-[var(--color-neutral-400)]">
-              转写处理中（{selectedCall.status}）…
-            </div>
-          )}
-          {selectedCall?.transcript_preview && (
-            <p className="text-sm text-[var(--color-neutral-700)] whitespace-pre-wrap leading-relaxed">
-              {selectedCall.transcript_preview}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* col-ai: AI analysis + activity timeline + operation buttons */}
-      <div className="flex flex-col overflow-y-auto p-4 gap-6">
-        {/* AI analysis */}
+      {/* v1.6.8 三栏布局：250 业主信息 / 1fr 时间线+跟进 / 260 sticky 操作 */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "320px minmax(0, 1fr) 260px",
+          gap: 16,
+          alignItems: "start",
+        }}
+      >
+        {/* ── 左：业主信息 + 项目情况 ── */}
         <div>
-          <div className="text-sm font-semibold text-[var(--color-neutral-900)] mb-3">AI 分析</div>
-          {!selectedCall && (
-            <div className="text-sm text-[var(--color-neutral-400)]">选择通话查看分析</div>
-          )}
-          {selectedCall && selectedCall.status === "processed" && (
-            <div className="space-y-3 text-sm">
-              {selectedCall.result_tag && (
-                <div className="flex justify-between">
-                  <span className="text-[var(--color-neutral-500)]">意图</span>
-                  <span
-                    className="inline-flex px-1.5 py-0.5 text-xs rounded font-medium"
-                    style={RESULT_TAG_COLORS[selectedCall.result_tag] ?? {}}
-                  >
-                    {selectedCall.result_tag}
-                  </span>
-                </div>
-              )}
-              {selectedCall.confidence != null && (
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-[var(--color-neutral-500)]">置信度</span>
-                    <span>{(selectedCall.confidence * 100).toFixed(0)}%</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-[var(--color-neutral-100)]">
-                    <div
-                      className="h-1.5 rounded-full"
-                      style={{
-                        width: `${selectedCall.confidence * 100}%`,
-                        background: "var(--color-primary)",
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => go({ to: `/calls/${selectedCall.id}` })}
-                className="text-xs text-[var(--color-primary)] hover:underline"
-              >
-                查看完整 AI 分析 →
-              </button>
-            </div>
-          )}
+          <OwnerInfoCard detail={detail} />
+          <ProjectInfoCard detail={detail} />
         </div>
 
-        {/* Activity timeline (T3: 5B.2) */}
-        {detail && (
-          <div>
-            <div className="text-sm font-semibold text-[var(--color-neutral-900)] mb-3">活动时间线</div>
-            {detail.calls.length === 0 ? (
-              <div className="text-sm text-[var(--color-neutral-400)]">暂无活动记录</div>
-            ) : (
-              <div className="space-y-3">
-                {/* Stage placeholder event */}
-                <div className="flex items-center gap-2 text-xs text-[var(--color-neutral-500)] border-l-2 border-[var(--color-primary-light)] pl-3">
-                  <span>
-                    案件创建 · {STAGE_LABELS[detail.stage] ?? detail.stage}
-                  </span>
-                </div>
-                {/* Call timeline entries */}
-                {detail.calls.map((call: CaseCallItem) => (
-                  <div
-                    key={call.id}
-                    className="border border-[var(--color-neutral-100)] rounded-lg p-3"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-2">
-                        {call.status === "processed" ? (
-                          <Phone className="w-3.5 h-3.5 text-[var(--color-success)]" />
-                        ) : (
-                          <PhoneOff className="w-3.5 h-3.5 text-[var(--color-neutral-400)]" />
-                        )}
-                        <span className="text-xs font-medium text-[var(--color-neutral-700)]">
-                          {call.duration_sec
-                            ? `${Math.floor(call.duration_sec / 60)}分${call.duration_sec % 60}秒`
-                            : "—"}
-                        </span>
-                      </div>
-                      <span className="text-xs text-[var(--color-neutral-400)]">
-                        {call.started_at
-                          ? new Date(call.started_at).toLocaleString("zh-CN")
-                          : "—"}
-                      </span>
-                    </div>
-                    {call.result_tag && (
-                      <span
-                        className="inline-flex px-1.5 py-0.5 text-xs rounded font-medium"
-                        style={RESULT_TAG_COLORS[call.result_tag] ?? {}}
-                      >
-                        {call.result_tag}
-                      </span>
-                    )}
-                    {call.status === "processed" && (
-                      <button
-                        type="button"
-                        onClick={() => go({ to: `/calls/${call.id}` })}
-                        className="block text-xs text-[var(--color-primary)] hover:underline mt-1"
-                      >
-                        完整 AI 分析 →
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        {/* ── 中：活动时间线 ── */}
+        <div style={{ minWidth: 0 }}>
+          <ActivityTimeline
+            calls={detail.calls}
+            timelineEvents={detail.timeline_events}
+            createdAt={detail.created_at}
+          />
+        </div>
 
-        {/* Operation buttons — agent_internal only (T3: PRD禁止external操作) */}
-        {detail && !isExternal && (
-          <div>
-            <div className="text-sm font-semibold text-[var(--color-neutral-900)] mb-3">操作</div>
-            <div className="flex flex-col gap-2">
+        {/* ── 右：sticky 操作按钮组 ── */}
+        <div
+          style={{
+            position: "sticky",
+            top: 16,
+            display: "flex", flexDirection: "column", gap: 8,
+          }}
+        >
+          <div
+            className="ds-card"
+            style={{ padding: 14 }}
+          >
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: "#374151", marginBottom: 10 }}>
+              快速操作
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <button
                 type="button"
-                onClick={() => alert("建工单功能将在 v1.1 上线")}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-[var(--color-neutral-300)] text-[var(--color-neutral-600)] hover:bg-[var(--color-neutral-50)] transition-colors"
+                className="ds-btn ds-btn-primary"
+                style={{ width: "100%", justifyContent: "center" }}
+                disabled={detail.owner.do_not_call}
+                onClick={handleDial}
+                title={detail.owner.do_not_call ? "业主已加入免打扰" : "扫码到 App 拨号"}
               >
-                建工单
+                <Phone className="w-3.5 h-3.5" />
+                {detail.owner.do_not_call ? "业主免打扰" : "扫码 App 拨号"}
               </button>
               <button
                 type="button"
-                onClick={() => alert("转主管功能将在 v1.1 上线")}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-[var(--color-neutral-300)] text-[var(--color-neutral-600)] hover:bg-[var(--color-neutral-50)] transition-colors"
+                className="ds-btn ds-btn-secondary"
+                style={{ width: "100%", justifyContent: "center" }}
+                onClick={handleSendPaymentLink}
               >
-                <GitBranch className="w-4 h-4" />
-                转主管
+                <CreditCard className="w-3.5 h-3.5" />
+                发送缴费链接
               </button>
               <button
                 type="button"
-                onClick={() => alert("转法务功能将在 v1.1 上线")}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-[var(--color-neutral-300)] text-[var(--color-neutral-600)] hover:bg-[var(--color-neutral-50)] transition-colors"
+                className="ds-btn ds-btn-secondary"
+                style={{ width: "100%", justifyContent: "center" }}
+                onClick={handleCreateWorkOrder}
               >
-                <Scale className="w-4 h-4" />
-                转法务
+                <ClipboardList className="w-3.5 h-3.5" />
+                创建工单
+              </button>
+              <button
+                type="button"
+                className="ds-btn ds-btn-secondary"
+                style={{
+                  width: "100%", justifyContent: "center",
+                  color: "#b45309", borderColor: "#fcd34d",
+                }}
+                onClick={() => setShowDiscountModal(true)}
+                title="发起减免 / 分期 / 违约金减免申请，督导或 admin 审批"
+              >
+                <BadgePercent className="w-3.5 h-3.5" />
+                申请减免
+              </button>
+              <button
+                type="button"
+                className="ds-btn ds-btn-secondary"
+                style={{ width: "100%", justifyContent: "center" }}
+                onClick={() => handleIntent("transfer_supervisor", "升级督导")}
+              >
+                <Headphones className="w-3.5 h-3.5" />
+                升级督导
+              </button>
+              <button
+                type="button"
+                className="ds-btn ds-btn-secondary"
+                style={{
+                  width: "100%", justifyContent: "center",
+                  color: "#7e3af2", borderColor: "#c4b5fd",
+                }}
+                onClick={() => handleIntent("transfer_legal", "申请转法务")}
+                title="提交转法务申请，督导/admin 审批后真正转化"
+              >
+                <Scale className="w-3.5 h-3.5" />
+                申请转法务
               </button>
             </div>
           </div>
-        )}
+
+          <div style={{ fontSize: 11, color: "var(--color-neutral-400)", textAlign: "center", lineHeight: 1.6 }}>
+            「申请转法务」会提交申请单<br/>督导/admin 审批后才会真正转化
+          </div>
+
+          {/* v1.6.11 — 跟进备注移到右栏（操作完直接写） */}
+          <FollowUpNoteCard
+            caseId={detail.id}
+            endpoint={`agent/cases/${detail.id}/stage`}
+            invalidateResource="agent/cases"
+          />
+        </div>
       </div>
+
+      {qrState && (
+        <QrDialDialog
+          qrPayload={qrState.qrPayload}
+          expiresAt={qrState.expiresAt}
+          onClose={() => setQrState(null)}
+          onRegenerate={handleDial}
+        />
+      )}
+
+      {showDiscountModal && (
+        <DiscountRequestModal
+          caseId={detail.id}
+          originalAmount={detail.amount_owed != null ? Number(detail.amount_owed) : null}
+          ownerName={detail.owner.name}
+          onClose={() => setShowDiscountModal(false)}
+          onSuccess={(offerId) => {
+            setShowDiscountModal(false);
+            alert(`✓ 减免申请 #${offerId} 已提交，等待审批`);
+          }}
+        />
+      )}
+
+      {/* v1.9.7 — 建工单 Modal（替换 window.prompt） */}
+      {woModalOpen && (
+        <div className="modal-overlay" onClick={() => setWoModalOpen(false)}>
+          <div className="ds-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
+            <div className="modal-header">
+              <span className="modal-title">新建工单 · {detail.owner.name}</span>
+              <button type="button" className="modal-close" onClick={() => setWoModalOpen(false)}>×</button>
+            </div>
+            <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">工单类型 <span className="req">*</span></label>
+                  <select
+                    className="form-control"
+                    value={woType}
+                    onChange={(e) => setWoType(e.target.value as "quality" | "reduction" | "dispute" | "other")}
+                  >
+                    <option value="quality">服务质量</option>
+                    <option value="reduction">减免申请</option>
+                    <option value="dispute">业主纠纷</option>
+                    <option value="other">其他</option>
+                  </select>
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">优先级</label>
+                  <select
+                    className="form-control"
+                    value={woPriority}
+                    onChange={(e) => setWoPriority(e.target.value as "urgent_critical" | "urgent" | "normal" | "low")}
+                  >
+                    <option value="urgent_critical">紧急-严重</option>
+                    <option value="urgent">紧急</option>
+                    <option value="normal">普通</option>
+                    <option value="low">低</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">工单原因 <span className="req">*</span></label>
+                <textarea
+                  className="form-control"
+                  style={{ height: 110 }}
+                  placeholder="例：业主反映 5 楼电梯已停运 3 天，多次催修未果，已联系维保但无人响应…"
+                  value={woReason}
+                  onChange={(e) => setWoReason(e.target.value)}
+                />
+                <div style={{ fontSize: 11, color: "var(--color-neutral-500)", marginTop: 4 }}>
+                  提交后此内容将作为工单原因记录，<strong>创建后不可修改</strong>（用于审计基线）；协调员处理过程在「跟进记录」补充。
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="ds-btn ds-btn-secondary" onClick={() => setWoModalOpen(false)}>取消</button>
+              <button
+                type="button"
+                className="ds-btn ds-btn-primary"
+                onClick={submitNewWorkOrder}
+                disabled={!woReason.trim()}
+              >提交工单</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

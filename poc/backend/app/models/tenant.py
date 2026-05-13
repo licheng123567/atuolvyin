@@ -32,12 +32,12 @@ class ServiceProvider(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True)
     name: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    provider_type: Mapped[str] = mapped_column(
-        sa.Text, nullable=False
-    )  # legal / collection / both
+    provider_type: Mapped[str] = mapped_column(sa.Text, nullable=False)  # legal / collection / both
     admin_phone_enc: Mapped[str] = mapped_column(sa.Text, nullable=False)
     monthly_minute_quota: Mapped[int | None] = mapped_column(sa.Integer)
     is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True)
+    # v1.4 S17.4 — 服务商统一社会信用代码（可选；用于 admin 入口登录）
+    credit_code: Mapped[str | None] = mapped_column(sa.String(32), unique=True)
     audit_status: Mapped[str] = mapped_column(
         sa.Text, nullable=False, default="pending"
     )  # pending / approved / rejected
@@ -45,6 +45,10 @@ class ServiceProvider(Base, TimestampMixin):
     audit_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     description: Mapped[str | None] = mapped_column(sa.Text)
     contact_email: Mapped[str | None] = mapped_column(sa.Text)
+    # v1.4 — 物业推荐入驻：记录推荐人（D1）。NULL = 平台 ops 直接创建。
+    recommended_by_tenant_id: Mapped[int | None] = mapped_column(
+        sa.BigInteger, sa.ForeignKey("tenant.id"), nullable=True
+    )
 
     __table_args__ = (
         sa.CheckConstraint(
@@ -68,6 +72,14 @@ class ProviderTenantContract(Base, TimestampMixin):
     expires_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     service_types: Mapped[list[str]] = mapped_column(sa.ARRAY(sa.Text), nullable=False)
     status: Mapped[str] = mapped_column(sa.Text, nullable=False, default="active")
+    # v1.4 S16.4 — 双向解约握手（D2）
+    termination_requested_by: Mapped[int | None] = mapped_column(
+        sa.SmallInteger
+    )  # 1=物业, 2=服务商
+    termination_requested_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    termination_reason: Mapped[str | None] = mapped_column(sa.Text)
+    termination_confirmed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    terminated_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
 
 
 class TenantMinuteUsage(Base):

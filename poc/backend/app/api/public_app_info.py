@@ -7,6 +7,7 @@ GET /api/v1/public/app-info  无需认证
 
 部署时通过环境变量 AUTOLUYIN_APK_URL 注入；缺省给开发占位 URL。
 """
+
 from __future__ import annotations
 
 import os

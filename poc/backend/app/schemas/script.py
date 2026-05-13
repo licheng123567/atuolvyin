@@ -1,40 +1,53 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+_SCENE_PATTERN = r"^(opening|objection_handling|promise_confirm|closing)$"
 
 
 class ScriptTemplateCreate(BaseModel):
     title: str = Field(..., max_length=128)
+    scene: str = Field("objection_handling", pattern=_SCENE_PATTERN)
     trigger_intent: str = Field(..., max_length=64)
     content: str
-    notes: Optional[str] = None
+    notes: str | None = None
+    # v1.5.7 — 项目级生效范围（None=本物业全项目通用）
+    project_id: int | None = None
 
 
 class ScriptTemplateUpdate(BaseModel):
-    title: Optional[str] = Field(None, max_length=128)
-    trigger_intent: Optional[str] = Field(None, max_length=64)
-    content: Optional[str] = None
-    notes: Optional[str] = None
+    title: str | None = Field(None, max_length=128)
+    scene: str | None = Field(None, pattern=_SCENE_PATTERN)
+    trigger_intent: str | None = Field(None, max_length=64)
+    content: str | None = None
+    notes: str | None = None
+    project_id: int | None = None
 
 
 class ScriptTemplateOut(BaseModel):
     id: int
-    tenant_id: Optional[int] = None
+    tenant_id: int | None = None
+    provider_id: int | None = None
+    project_id: int | None = None
+    project_name: str | None = None  # v1.5.7 — 派生字段，前端展示项目名
     title: str
+    scene: str = "objection_handling"
     trigger_intent: str
     content: str
-    notes: Optional[str] = None
+    notes: str | None = None
     version: int
     is_active: bool
     usage_count: int
-    adoption_rate: Optional[float] = None
-    conversion_rate: Optional[float] = None
-    score_grade: Optional[str] = None
+    adoption_rate: float | None = None
+    conversion_rate: float | None = None
+    score_grade: str | None = None
     created_at: datetime
     updated_at: datetime
+    # v1.4 S16.5 — 派生字段（前端展示来源）
+    source: Literal["platform", "tenant", "provider"] = "platform"
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -43,8 +56,8 @@ class ScriptVersionOut(BaseModel):
     title: str
     trigger_intent: str
     content: str
-    notes: Optional[str] = None
-    edited_by: Optional[int] = None
+    notes: str | None = None
+    edited_by: int | None = None
     edited_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
@@ -62,10 +75,10 @@ class ImportResultOut(BaseModel):
 
 class SupervisorLabelCreate(BaseModel):
     label: Literal["good", "bad"]
-    note: Optional[str] = None
+    note: str | None = None
 
     @model_validator(mode="after")
-    def note_required_for_bad(self) -> "SupervisorLabelCreate":
+    def note_required_for_bad(self) -> SupervisorLabelCreate:
         if self.label == "bad" and not self.note:
             raise ValueError("差话术标注必须填写点评")
         return self
@@ -75,9 +88,9 @@ class SupervisorLabelOut(BaseModel):
     feedback_id: int
     call_id: int
     suggestion_text: str
-    supervisor_label: Optional[str] = None
-    supervisor_note: Optional[str] = None
-    script_template_id: Optional[int] = None
+    supervisor_label: str | None = None
+    supervisor_note: str | None = None
+    script_template_id: int | None = None
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
@@ -101,12 +114,12 @@ class ScriptEffectivenessItem(BaseModel):
     is_active: bool
     total_shown: int
     total_adopted: int
-    adoption_rate: Optional[float] = None
+    adoption_rate: float | None = None
     total_supervised: int
     total_good: int
-    good_ratio: Optional[float] = None
-    composite_score: Optional[float] = None
-    composite_grade: Optional[Literal["A", "B", "C", "D"]] = None
+    good_ratio: float | None = None
+    composite_score: float | None = None
+    composite_grade: Literal["A", "B", "C", "D"] | None = None
 
 
 class ScriptEffectivenessOut(BaseModel):

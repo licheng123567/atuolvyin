@@ -1,33 +1,10 @@
+// 1:1 还原 ui/*.html sidebar：分组标题 + 图标 + P1/数字 badge
 import { useGetIdentity, useLogout } from "@refinedev/core";
-import {
-  Activity,
-  AlertTriangle,
-  BarChart3,
-  Brain,
-  Building2,
-  ClipboardCheck,
-  FileText,
-  History,
-  Home,
-  LayoutDashboard,
-  Link2,
-  LogOut,
-  Megaphone,
-  MessageCircle,
-  Package,
-  RadioTower,
-  Receipt,
-  Scale,
-  Settings,
-  Smartphone,
-  Tag,
-  TrendingUp,
-  Users,
-} from "lucide-react";
+import * as Icons from "lucide-react";
+import { Home, LogOut } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import type { AuthUser } from "../../providers/auth-provider";
 import { getNavSections } from "../../config/nav";
-import { cn } from "../../lib/utils";
 
 const ROLE_LABELS: Record<string, string> = {
   platform_superadmin: "平台超管",
@@ -44,40 +21,12 @@ const ROLE_LABELS: Record<string, string> = {
   project_manager_provider: "项目负责人（服务商）",
 };
 
-const ICON_MAP: Record<string, React.ElementType> = {
-  "/": Home,
-  "/ops/tenants": Building2,
-  "/admin/users": Users,
-  "/admin/providers": Building2,
-  "/admin/scripts/effectiveness": BarChart3,
-  "/admin/reports": TrendingUp,
-  "/admin/compliance": FileText,
-  "/admin/legal-conversion": Scale,
-  "/admin/settings": Settings,
-  "/supervisor/live-wall": RadioTower,
-  "/supervisor/reviews": ClipboardCheck,
-  "/supervisor/risk-events": AlertTriangle,
-  "/supervisor/team-performance": TrendingUp,
-  "/supervisor/script-labels": Tag,
-  "/ops/settlements": Receipt,
-  "/ops/law-firms": Building2,
-  "/ops/legal-workstation": Scale,
-  "/ops/announcements": Megaphone,
-  "/ops/audit-logs": History,
-  "/super/llm-prompts": Brain,
-  "/super/blockchain-config": Link2,
-  "/ops/customer-followups": MessageCircle,
-  "/provider/team-performance": TrendingUp,
-  "/provider/dashboard": LayoutDashboard,
-  "/provider/tenants": Building2,
-  "/provider/team": Users,
-  "/provider/settlements": Receipt,
-  "/super/health": Activity,
-  "/super/audit": FileText,
-  "/super/cost": TrendingUp,
-  "/super/plans": Package,
-  "/help/app": Smartphone,
-};
+type LucideMap = Record<string, React.ElementType>;
+function resolveIcon(name: string | undefined): React.ElementType {
+  if (!name) return Home;
+  const m = Icons as unknown as LucideMap;
+  return m[name] ?? Home;
+}
 
 export function Sidebar() {
   const { data: user } = useGetIdentity<AuthUser>();
@@ -92,42 +41,42 @@ export function Sidebar() {
       className="flex flex-col bg-white border-r border-[var(--color-neutral-200)] flex-shrink-0"
       style={{ width: "var(--sidebar-width)" }}
     >
-      {/* Logo row */}
+      {/* Logo row — 与原型 topbar-logo 风格一致 */}
       <div
         className="flex items-center px-5 border-b border-[var(--color-neutral-200)] flex-shrink-0"
         style={{ height: "var(--topbar-height)" }}
       >
-        <span className="text-base font-bold text-[var(--color-primary)]">
+        <span
+          style={{
+            fontSize: 16,
+            fontWeight: 700,
+            color: "var(--color-primary)",
+            letterSpacing: "-0.3px",
+          }}
+        >
           有证慧催
         </span>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
+      {/* Navigation — 用 design-system 的 .sidebar-* class */}
+      <nav className="flex-1 overflow-y-auto" style={{ padding: "12px 8px" }}>
         {sections.map((section, si) => (
           <div key={si}>
             {section.title && (
-              <p className="px-3 mb-1 text-xs font-medium text-[var(--color-neutral-400)] uppercase tracking-wider">
-                {section.title}
-              </p>
+              <div className="sidebar-section-label">{section.title}</div>
             )}
             {section.items.map((item) => {
-              const Icon = ICON_MAP[item.path] ?? Home;
+              const Icon = resolveIcon(item.icon);
               const isActive = location.pathname === item.path;
               return (
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={cn(
-                    "flex items-center gap-2 px-3 py-2 text-sm rounded transition-colors",
-                    isActive
-                      ? "bg-[var(--color-primary)] text-white font-medium"
-                      : "text-[var(--color-neutral-700)] hover:bg-[var(--color-neutral-100)]",
-                  )}
-                  style={{ borderRadius: "var(--radius-md)" }}
+                  className={`sidebar-item${isActive ? " active" : ""}`}
                 >
-                  <Icon className="w-4 h-4 flex-shrink-0" />
-                  {item.label}
+                  <Icon />
+                  <span style={{ flex: 1, minWidth: 0 }}>{item.label}</span>
+                  {item.badge && <NavBadge text={item.badge} />}
                 </Link>
               );
             })}
@@ -158,13 +107,33 @@ export function Sidebar() {
         <button
           type="button"
           onClick={() => logout()}
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded transition-colors text-[var(--color-neutral-600)] hover:bg-[var(--color-neutral-100)]"
-          style={{ borderRadius: "var(--radius-md)" }}
+          className="sidebar-item"
+          style={{ width: "100%", color: "var(--color-neutral-600)" }}
         >
-          <LogOut className="w-4 h-4 flex-shrink-0" />
+          <LogOut />
           退出登录
         </button>
       </div>
     </aside>
   );
+}
+
+function NavBadge({ text }: { text: string }) {
+  // P1 用灰底，纯数字（>0）用红底（与原型 .sidebar-badge 一致）
+  const isP1 = /^P\d+$/.test(text);
+  if (isP1) {
+    return (
+      <span
+        className="ds-badge ds-badge-gray"
+        style={{
+          fontSize: 10,
+          padding: "1px 6px",
+          marginLeft: "auto",
+        }}
+      >
+        {text}
+      </span>
+    );
+  }
+  return <span className="sidebar-badge">{text}</span>;
 }

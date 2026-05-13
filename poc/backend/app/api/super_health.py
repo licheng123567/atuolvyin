@@ -8,6 +8,7 @@ Per spec: real DB ping is mandatory; ASR/LLM/MiPush surface the configured backe
 placeholder until Sprint 4 ws hub exposes a counter — UI labels these as
 "本期暂用模拟数据".
 """
+
 from __future__ import annotations
 
 import time
@@ -31,6 +32,7 @@ from app.schemas.health import (
     ServiceMetricsOut,
     WebSocketHealth,
 )
+from app.ws.connection_manager import get_connection_manager
 
 router = APIRouter()
 
@@ -92,8 +94,10 @@ async def get_service_health(
         last_check_at=now,
     )
 
-    # ── WebSocket: static placeholder (本期暂用模拟数据) ──────
-    websocket = WebSocketHealth(status="ok", connected_clients=0)
+    # ── WebSocket: live count from in-process connection_manager ──
+    # 单 worker 准确；多 worker 部署需替换为 Redis 计数器（PRD §11 已注约束）
+    ws_clients = get_connection_manager().total_connections()
+    websocket = WebSocketHealth(status="ok", connected_clients=ws_clients)
 
     return ServiceHealthOut(
         db=DBHealth(status=db_status, latency_ms=latency_ms),  # type: ignore[arg-type]
@@ -115,11 +119,7 @@ async def get_service_metrics(
     p90_sec = 0.0
     try:
         row = db.execute(
-            select(
-                func.percentile_cont(0.9).within_group(
-                    CallRecord.duration_sec.asc()
-                )
-            ).where(
+            select(func.percentile_cont(0.9).within_group(CallRecord.duration_sec.asc())).where(
                 CallRecord.started_at >= since,
                 CallRecord.duration_sec.is_not(None),
             )
@@ -130,17 +130,23 @@ async def get_service_metrics(
         p90_sec = 0.0
 
     # ── ASR error rate (failed / total over 24h) ──────────────
-    total = db.execute(
-        select(func.count(CallRecord.id)).where(
-            CallRecord.started_at >= since,
-        )
-    ).scalar() or 0
-    failed = db.execute(
-        select(func.count(CallRecord.id)).where(
-            CallRecord.started_at >= since,
-            CallRecord.status == "failed",
-        )
-    ).scalar() or 0
+    total = (
+        db.execute(
+            select(func.count(CallRecord.id)).where(
+                CallRecord.started_at >= since,
+            )
+        ).scalar()
+        or 0
+    )
+    failed = (
+        db.execute(
+            select(func.count(CallRecord.id)).where(
+                CallRecord.started_at >= since,
+                CallRecord.status == "failed",
+            )
+        ).scalar()
+        or 0
+    )
     error_rate = round(failed / total, 4) if total > 0 else 0.0
 
     # ── LLM avg latency: stub 0 until per-call timing recorded ─

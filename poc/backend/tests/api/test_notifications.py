@@ -306,10 +306,56 @@ def test_notify_work_order_completed_falls_back_to_admin(
     assert rows[0].user_id == seeded_user.id
 
 
-def test_promise_expiring_scan_no_op_without_field(db_session):
-    """promise_due_at 字段未建模时扫描应优雅返回 0。"""
+def test_promise_expiring_scan_finds_due_cases(
+    db_session, seeded_tenant, seeded_owner, seeded_member_user
+):
+    """v1.6 — promise_due_at 字段已建模；扫描应给 assigned_to 发提醒。"""
+    from datetime import UTC, datetime, timedelta
+    from decimal import Decimal
+
+    from app.models.case import CollectionCase
+    from app.models.notification import Notification, NotificationDeliveryLog
     from app.services.notifications.event_subscribers import (
         scan_and_notify_promise_expiring,
     )
-    n = scan_and_notify_promise_expiring(db_session)
-    assert n == 0
+
+    case = CollectionCase(
+        tenant_id=seeded_tenant.id,
+        owner_id=seeded_owner.id,
+        assigned_to=seeded_member_user.id,
+        pool_type="private",
+        stage="promised",
+        amount_owed=Decimal("1500.00"),
+        promise_due_at=datetime.now(UTC) + timedelta(hours=12),
+    )
+    db_session.add(case)
+    # 不在 24h 内的不该被扫到
+    case_far = CollectionCase(
+        tenant_id=seeded_tenant.id,
+        owner_id=seeded_owner.id,
+        assigned_to=seeded_member_user.id,
+        pool_type="private",
+        stage="promised",
+        amount_owed=Decimal("1500.00"),
+        promise_due_at=datetime.now(UTC) + timedelta(days=10),
+    )
+    db_session.add(case_far)
+    db_session.commit()
+
+    fired = scan_and_notify_promise_expiring(db_session)
+    db_session.commit()
+    assert fired == 1
+
+    notif = (
+        db_session.query(Notification)
+        .filter_by(event_type="promise_expiring")
+        .one()
+    )
+    assert notif.user_id == seeded_member_user.id
+
+    delivery = (
+        db_session.query(NotificationDeliveryLog)
+        .filter_by(event_type="promise_expiring", channel="system")
+        .one()
+    )
+    assert delivery.status == "sent"

@@ -2,6 +2,7 @@
 
 GET /api/v1/super/cost/dashboard
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -25,9 +26,9 @@ SUPER_ROLES = ("platform_super", "platform_superadmin")
 class TenantUsageItem(BaseModel):
     tenant_id: int
     name: str
-    used_minutes: int          # 总分钟（兼容字段）
+    used_minutes: int  # 总分钟（兼容字段）
     realtime_minutes: int = 0  # Sprint 14.1
-    post_minutes: int = 0      # Sprint 14.1
+    post_minutes: int = 0  # Sprint 14.1
     quota: int | None
     utilization_pct: float
 
@@ -41,7 +42,7 @@ class CostDashboardOut(BaseModel):
     total_quota_pool: int
     total_used_this_month: int
     total_realtime_this_month: int = 0  # Sprint 14.1
-    total_post_this_month: int = 0      # Sprint 14.1
+    total_post_this_month: int = 0  # Sprint 14.1
     tenant_ranking: list[TenantUsageItem]
     monthly_trend: list[MonthlyTrendPoint]
 
@@ -62,9 +63,9 @@ async def get_cost_dashboard(
     current_ym = now.strftime("%Y-%m")
 
     # ── Total quota pool (sum of all tenant.monthly_minute_quota) ──
-    total_quota_pool: int = db.execute(
-        select(func.coalesce(func.sum(Tenant.monthly_minute_quota), 0))
-    ).scalar() or 0
+    total_quota_pool: int = (
+        db.execute(select(func.coalesce(func.sum(Tenant.monthly_minute_quota), 0))).scalar() or 0
+    )
 
     # ── Total used this month ─────────────────────────────────
     totals = db.execute(
@@ -100,9 +101,7 @@ async def get_cost_dashboard(
     ranking: list[TenantUsageItem] = []
     for tid, tname, quota, used, rt, po in rows:
         used_int = int(used or 0)
-        utilization_pct = (
-            round(used_int / quota * 100, 2) if quota and quota > 0 else 0.0
-        )
+        utilization_pct = round(used_int / quota * 100, 2) if quota and quota > 0 else 0.0
         ranking.append(
             TenantUsageItem(
                 tenant_id=tid,
@@ -116,9 +115,7 @@ async def get_cost_dashboard(
         )
 
     # ── Monthly trend (last 6 months including current) ───────
-    months: list[str] = [
-        _shift_year_month(now.year, now.month, -i) for i in range(5, -1, -1)
-    ]
+    months: list[str] = [_shift_year_month(now.year, now.month, -i) for i in range(5, -1, -1)]
     trend_rows = dict(
         db.execute(
             select(
@@ -130,8 +127,7 @@ async def get_cost_dashboard(
         ).all()
     )
     monthly_trend = [
-        MonthlyTrendPoint(year_month=ym, total_used=int(trend_rows.get(ym, 0)))
-        for ym in months
+        MonthlyTrendPoint(year_month=ym, total_used=int(trend_rows.get(ym, 0))) for ym in months
     ]
 
     return CostDashboardOut(

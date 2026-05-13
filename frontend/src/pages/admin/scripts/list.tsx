@@ -1,16 +1,24 @@
-// frontend/src/pages/admin/scripts/list.tsx
-import { useCreate, useDelete, useGo, useList } from "@refinedev/core";
+// 1:1 还原 ui/admin.html#a-scripts 话术库管理
+import { useCreate, useCustomMutation, useDelete, useGo, useInvalidate, useList } from "@refinedev/core";
 import type { CrudFilter } from "@refinedev/core";
-import { Plus, Upload, History, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
+import { AlertTriangle, GitFork, Plus, Search, Upload } from "lucide-react";
 import { useState } from "react";
+import { HelpPanel } from "../../../components/ui/HelpPanel";
 import type { PaginatedResponse } from "../../../types";
-import { getScoreGradeColor, formatAdoptionRate, TRIGGER_INTENTS } from "./helpers";
+import { TRIGGER_INTENTS, formatAdoptionRate } from "./helpers";
 import { ScriptSheet } from "./ScriptSheet";
+
+type SceneKey = "opening" | "objection_handling" | "promise_confirm" | "closing";
 
 interface ScriptItem {
   id: number;
   tenant_id: number | null;
+  provider_id: number | null;
+  project_id: number | null;
+  project_name: string | null;
+  source: "platform" | "tenant" | "provider";
   title: string;
+  scene: SceneKey;
   trigger_intent: string;
   version: number;
   usage_count: number;
@@ -22,15 +30,52 @@ interface ScriptItem {
   notes: string | null;
 }
 
+const SOURCE_BADGE: Record<ScriptItem["source"], { label: string; cls: string }> = {
+  platform: { label: "平台预置", cls: "ds-badge ds-badge-gray" },
+  tenant: { label: "本物业", cls: "ds-badge ds-badge-blue" },
+  provider: { label: "服务商", cls: "ds-badge ds-badge-purple" },
+};
+
+const SCENE_LABEL: Record<SceneKey, string> = {
+  opening: "开场白",
+  objection_handling: "异议处理",
+  promise_confirm: "承诺确认",
+  closing: "挂断收尾",
+};
+
+const SCENE_ICON: Record<SceneKey, string> = {
+  opening: "📞",
+  objection_handling: "❓",
+  promise_confirm: "✅",
+  closing: "👋",
+};
+
+const SCENE_ORDER: SceneKey[] = [
+  "opening",
+  "objection_handling",
+  "promise_confirm",
+  "closing",
+];
+
+const SCORE_CLASS: Record<string, string> = {
+  A: "score-a",
+  B: "score-b",
+  C: "score-c",
+  D: "score-d",
+};
+
+type ViewMode = "by-scene" | "all";
+
 export function ScriptListPage() {
   const go = useGo();
+  const [viewMode, setViewMode] = useState<ViewMode>("by-scene");
   const [keyword, setKeyword] = useState("");
   const [intent, setIntent] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editScript, setEditScript] = useState<ScriptItem | null>(null);
-  const PAGE_SIZE = 20;
+  const PAGE_SIZE = 100;  // 按场景视图下需要全量分组
 
   const filters: CrudFilter[] = [];
   if (keyword) filters.push({ field: "q", operator: "eq", value: keyword });
@@ -43,142 +88,508 @@ export function ScriptListPage() {
     filters,
   });
 
-  const data = query.data?.data as unknown as PaginatedResponse<ScriptItem> | undefined;
+  const data = query.data?.data as unknown as
+    | PaginatedResponse<ScriptItem>
+    | undefined;
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const { mutate: toggle } = useCreate();
   const { mutate: del } = useDelete();
+  const { mutate: forkScript } = useCustomMutation();
+  const invalidate = useInvalidate();
 
-  const hasAutoDisabled = items.some((s) => s.score_grade === "D" && !s.is_active);
+  const autoDisabledCount = items.filter(
+    (s) => s.score_grade === "D" && !s.is_active,
+  ).length;
 
   return (
-    <div style={{ padding: 24 }}>
-      {hasAutoDisabled && (
-        <div style={{
-          background: "var(--color-danger-light)", color: "var(--color-danger)",
-          padding: "8px 16px", borderRadius: 6, marginBottom: 16, fontSize: 14,
-        }}>
-          ⚠ 有话术因 D 级评分被自动禁用，请检查并决定是否删除或重写。
+    <div>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">话术库管理</h1>
+          <div className="page-subtitle">共 {total} 条话术</div>
         </div>
-      )}
-
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        <input
-          placeholder="搜索标题/内容"
-          value={keyword}
-          onChange={(e) => { setKeyword(e.target.value); setPage(1); }}
-          style={{ padding: "6px 10px", border: "1px solid #d1d5db", borderRadius: 6, width: 200 }}
-        />
-        <select value={intent} onChange={(e) => { setIntent(e.target.value); setPage(1); }}
-          style={{ padding: "6px 10px", border: "1px solid #d1d5db", borderRadius: 6 }}>
-          <option value="">全部类型</option>
-          {TRIGGER_INTENTS.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-          style={{ padding: "6px 10px", border: "1px solid #d1d5db", borderRadius: 6 }}>
-          <option value="">全部状态</option>
-          <option value="active">启用</option>
-          <option value="inactive">禁用</option>
-        </select>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-          <button onClick={() => go({ to: "/admin/scripts/import" })}
-            style={{ padding: "6px 14px", background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-            <Upload size={14} /> 批量导入
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            className="ds-btn ds-btn-secondary"
+            onClick={() => go({ to: "/admin/scripts/import" })}
+          >
+            <Upload className="w-3.5 h-3.5" />
+            批量导入
           </button>
-          <button onClick={() => { setEditScript(null); setSheetOpen(true); }}
-            style={{ padding: "6px 14px", background: "var(--color-primary)", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-            <Plus size={14} /> 新增话术
+          <button
+            type="button"
+            className="ds-btn ds-btn-primary"
+            onClick={() => {
+              setEditScript(null);
+              setSheetOpen(true);
+            }}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            新增话术
           </button>
         </div>
       </div>
 
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-        <thead>
-          <tr style={{ borderBottom: "1px solid #e5e7eb", background: "#f9fafb" }}>
-            {["话术标题", "异议类型", "版本", "使用次数", "采用率", "评分", "状态", "操作"].map((h) => (
-              <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 500, color: "#374151" }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {query.isLoading && (
-            <tr><td colSpan={8} style={{ padding: 24, textAlign: "center", color: "#9ca3af" }}>加载中…</td></tr>
-          )}
-          {items.map((s) => (
-            <tr key={s.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
-              <td style={{ padding: "10px 12px", maxWidth: 200 }}>
-                <div style={{ fontWeight: 500 }}>{s.title}</div>
-                {s.tenant_id === null && (
-                  <span style={{ fontSize: 11, color: "#6b7280", background: "#f3f4f6", padding: "1px 6px", borderRadius: 4 }}>平台预置</span>
-                )}
-              </td>
-              <td style={{ padding: "10px 12px" }}>{s.trigger_intent}</td>
-              <td style={{ padding: "10px 12px" }}>v{s.version}</td>
-              <td style={{ padding: "10px 12px" }}>{s.usage_count}</td>
-              <td style={{ padding: "10px 12px" }}>{formatAdoptionRate(s.adoption_rate)}</td>
-              <td style={{ padding: "10px 12px" }}>
-                {s.score_grade ? (
-                  <span
-                    style={{ fontSize: 12, padding: "2px 8px", borderRadius: 4, border: "1px solid" }}
-                    className={getScoreGradeColor(s.score_grade)}
-                  >
-                    {s.score_grade}
+      <HelpPanel
+        tone="info"
+        dismissKey="/admin/scripts"
+        title="话术库的作用"
+        bullets={[
+          <><strong>实时辅助</strong>：催收员在通话中遇到业主异议（如「经济困难」「质量问题」），AI 根据通话内容自动从话术库匹配 1-3 条话术弹屏推荐，辅助应答</>,
+          <><strong>三层来源</strong>：平台预置（通用模板）/ 本物业（你创建的）/ 服务商（外部合作商私有），列表 badge 标识来源；本物业可 Fork 平台预置版到自己改</>,
+          <><strong>四种场景</strong>：开场白 / 异议处理 / 承诺确认 / 挂断收尾，按场景维度分组管理</>,
+          <><strong>生效范围</strong>：默认全项目通用；新增/编辑时可指定「仅金桂园 2026」等具体项目，仅在该项目通话内推荐</>,
+          <><strong>效果反馈</strong>：每条话术被使用 → 督导在「话术反馈」标好/差 → 数据汇总到「话术效果」看板，A/B/C/D 级评分用于优化推荐</>,
+        ]}
+      />
+
+      {/* v1.5 S18.6 — 视图切换 */}
+      <div
+        style={{
+          display: "flex",
+          gap: 0,
+          marginBottom: 16,
+          borderBottom: "1px solid var(--color-neutral-200)",
+        }}
+      >
+        {(
+          [
+            ["by-scene", "按场景"],
+            ["all", "全部列表"],
+          ] as Array<[ViewMode, string]>
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setViewMode(key)}
+            style={{
+              padding: "10px 16px",
+              fontSize: 13,
+              fontWeight: viewMode === key ? 600 : 400,
+              color: viewMode === key ? "var(--color-primary)" : "#6b7280",
+              borderBottom:
+                viewMode === key
+                  ? "2px solid var(--color-primary)"
+                  : "2px solid transparent",
+              background: "none",
+              border: "none",
+              borderBottomWidth: 2,
+              cursor: "pointer",
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {autoDisabledCount > 0 && (
+        <div
+          style={{
+            background: "#fef9c3",
+            border: "1px solid #fde047",
+            borderRadius: 8,
+            padding: "12px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            marginBottom: 16,
+            fontSize: 13.5,
+            color: "#854d0e",
+          }}
+        >
+          <AlertTriangle className="w-4 h-4" />
+          <span>
+            {autoDisabledCount} 条 <strong>D 级话术</strong>（综合评分过低）已被自动禁用，建议修订后重新启用。
+          </span>
+        </div>
+      )}
+
+      {viewMode === "by-scene" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {SCENE_ORDER.map((sceneKey) => {
+            const sceneItems = items.filter((s) => s.scene === sceneKey);
+            return (
+              <div key={sceneKey} className="ds-card">
+                <div className="card-header" style={{ alignItems: "center" }}>
+                  <span className="card-title">
+                    {SCENE_ICON[sceneKey]} {SCENE_LABEL[sceneKey]}
                   </span>
-                ) : "—"}
-              </td>
-              <td style={{ padding: "10px 12px" }}>
-                <span style={{
-                  fontSize: 12, padding: "2px 8px", borderRadius: 4,
-                  background: s.is_active ? "#dcfce7" : "#f3f4f6",
-                  color: s.is_active ? "#15803d" : "#6b7280",
-                }}>
-                  {s.is_active ? "启用" : "禁用"}
-                </span>
-              </td>
-              <td style={{ padding: "10px 12px" }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <button onClick={() => { setEditScript(s); setSheetOpen(true); }}
-                    style={{ fontSize: 12, color: "var(--color-primary)", background: "none", border: "none", cursor: "pointer" }}>
-                    编辑
-                  </button>
-                  <button onClick={() => toggle({ resource: `admin/scripts/${s.id}/toggle`, values: {} })}
-                    title={s.is_active ? "禁用" : "启用"}
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280" }}>
-                    {s.is_active ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
-                  </button>
-                  <button onClick={() => go({ to: `/admin/scripts/${s.id}/versions` })}
-                    title="版本历史"
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280" }}>
-                    <History size={16} />
-                  </button>
-                  {!s.is_active && (
-                    <button onClick={() => del({ resource: "admin/scripts", id: s.id })}
-                      title="删除"
-                      style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444" }}>
-                      <Trash2 size={16} />
-                    </button>
+                  <span className="text-sm text-muted">
+                    {sceneItems.length} 条
+                  </span>
+                </div>
+                <div className="card-body" style={{ padding: 0 }}>
+                  {sceneItems.length === 0 ? (
+                    <div
+                      style={{
+                        padding: 24,
+                        textAlign: "center",
+                        color: "#9ca3af",
+                        fontSize: 13,
+                      }}
+                    >
+                      暂无{SCENE_LABEL[sceneKey]}话术，
+                      <button
+                        type="button"
+                        style={{
+                          color: "var(--color-primary)",
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          padding: 0,
+                        }}
+                        onClick={() => {
+                          setEditScript({
+                            ...({} as ScriptItem),
+                            scene: sceneKey,
+                          } as ScriptItem);
+                          setSheetOpen(true);
+                        }}
+                      >
+                        点此创建
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="table-wrap" style={{ borderRadius: 0, border: "none" }}>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>话术标题</th>
+                            <th>来源</th>
+                            <th>生效范围</th>
+                            {sceneKey === "objection_handling" && <th>异议类型</th>}
+                            <th>评分</th>
+                            <th>采用率</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sceneItems.map((s) => {
+                            const meta = SOURCE_BADGE[s.source] ?? SOURCE_BADGE.platform;
+                            return (
+                              <tr key={s.id}>
+                                <td style={{ fontWeight: 500 }}>{s.title}</td>
+                                <td><span className={meta.cls}>{meta.label}</span></td>
+                                <td style={{ fontSize: 12 }}>
+                                  {s.project_id ? (
+                                    <span className="ds-badge ds-badge-orange" style={{ fontSize: 11 }}>
+                                      仅 {s.project_name ?? `项目#${s.project_id}`}
+                                    </span>
+                                  ) : (
+                                    <span style={{ color: "#9ca3af" }}>全项目</span>
+                                  )}
+                                </td>
+                                {sceneKey === "objection_handling" && <td>{s.trigger_intent}</td>}
+                                <td>
+                                  {s.score_grade ? (
+                                    <span className={SCORE_CLASS[s.score_grade] ?? ""}>
+                                      {s.score_grade}
+                                    </span>
+                                  ) : "—"}
+                                </td>
+                                <td>{formatAdoptionRate(s.adoption_rate)}</td>
+                                <td>
+                                  {s.is_active
+                                    ? <span className="ds-badge ds-badge-green">启用</span>
+                                    : <span className="ds-badge ds-badge-gray">禁用</span>}
+                                </td>
+                                <td>
+                                  {s.source === "platform" ? (
+                                    <button
+                                      type="button"
+                                      className="ds-btn ds-btn-ghost ds-btn-sm"
+                                      title="复制为本物业版后再编辑"
+                                      onClick={() =>
+                                        forkScript(
+                                          {
+                                            url: `admin/scripts/${s.id}/fork`,
+                                            method: "post",
+                                            values: {},
+                                          },
+                                          {
+                                            onSuccess: () => {
+                                              void invalidate({
+                                                resource: "admin/scripts",
+                                                invalidates: ["list"],
+                                              });
+                                            },
+                                          },
+                                        )
+                                      }
+                                    >
+                                      <GitFork className="w-3 h-3" /> Fork
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="ds-btn ds-btn-ghost ds-btn-sm"
+                                      onClick={() => {
+                                        setEditScript(s);
+                                        setSheetOpen(true);
+                                      }}
+                                    >
+                                      编辑
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {total > PAGE_SIZE && (
-        <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 16 }}>
-          <button disabled={page === 1} onClick={() => setPage(p => p - 1)}>上一页</button>
-          <span>第 {page} 页 / 共 {Math.ceil(total / PAGE_SIZE)} 页</span>
-          <button disabled={page * PAGE_SIZE >= total} onClick={() => setPage(p => p + 1)}>下一页</button>
+              </div>
+            );
+          })}
         </div>
+      )}
+
+      {viewMode === "all" && (
+      <div className="table-wrap">
+        <div className="table-toolbar">
+          <div className="search-box">
+            <Search className="w-3.5 h-3.5" />
+            <input
+              className="form-control"
+              placeholder="搜索话术标题或内容"
+              value={keyword}
+              onChange={(e) => {
+                setKeyword(e.target.value);
+                setPage(1);
+              }}
+              style={{ minWidth: 200 }}
+            />
+          </div>
+          <select
+            className="form-control"
+            style={{ width: 140 }}
+            value={intent}
+            onChange={(e) => {
+              setIntent(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">全部异议类型</option>
+            {TRIGGER_INTENTS.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+          <select
+            className="form-control"
+            style={{ width: 110 }}
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">全部状态</option>
+            <option value="active">启用</option>
+            <option value="inactive">已禁用</option>
+          </select>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>话术标题</th>
+              <th>来源</th>
+              <th>异议类型</th>
+              <th>级别</th>
+              <th>使用次数</th>
+              <th>采用率</th>
+              <th>转化率</th>
+              <th>综合评分</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {query.isLoading && (
+              <tr>
+                <td colSpan={10} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                  加载中…
+                </td>
+              </tr>
+            )}
+            {!query.isLoading && items.length === 0 && (
+              <tr>
+                <td colSpan={10} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                  暂无话术
+                </td>
+              </tr>
+            )}
+            {items.map((s) => {
+              const isAutoDisabled = !s.is_active && s.score_grade === "D";
+              return (
+                <tr key={s.id} style={isAutoDisabled ? { opacity: 0.6 } : undefined}>
+                  <td style={{ fontWeight: 500 }}>{s.title}</td>
+                  <td>
+                    {(() => {
+                      const meta = SOURCE_BADGE[s.source] ?? SOURCE_BADGE.platform;
+                      return <span className={meta.cls}>{meta.label}</span>;
+                    })()}
+                  </td>
+                  <td>{s.trigger_intent}</td>
+                  <td>
+                    <span className="ds-badge ds-badge-gray">v{s.version}</span>
+                  </td>
+                  <td>{s.usage_count.toLocaleString()}次</td>
+                  <td>{formatAdoptionRate(s.adoption_rate)}</td>
+                  <td>{formatAdoptionRate(s.conversion_rate)}</td>
+                  <td>
+                    {s.score_grade ? (
+                      <span className={SCORE_CLASS[s.score_grade] ?? ""}>
+                        {s.score_grade}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td>
+                    {s.is_active ? (
+                      <span className="ds-badge ds-badge-green">启用</span>
+                    ) : isAutoDisabled ? (
+                      <span className="ds-badge ds-badge-red">已禁用（自动）</span>
+                    ) : (
+                      <span className="ds-badge ds-badge-gray">已禁用</span>
+                    )}
+                  </td>
+                  <td>
+                    {s.source === "platform" ? (
+                      <button
+                        type="button"
+                        className="ds-btn ds-btn-ghost ds-btn-sm"
+                        title="复制为本物业版后再编辑"
+                        onClick={() =>
+                          forkScript(
+                            {
+                              url: `admin/scripts/${s.id}/fork`,
+                              method: "post",
+                              values: {},
+                            },
+                            {
+                              onSuccess: () => {
+                                void invalidate({
+                                  resource: "admin/scripts",
+                                  invalidates: ["list"],
+                                });
+                              },
+                            },
+                          )
+                        }
+                      >
+                        <GitFork className="w-3 h-3" />
+                        Fork 为本物业版
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="ds-btn ds-btn-ghost ds-btn-sm"
+                        onClick={() => {
+                          setEditScript(s);
+                          setSheetOpen(true);
+                        }}
+                      >
+                        编辑
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="ds-btn ds-btn-ghost ds-btn-sm"
+                      onClick={() => go({ to: `/admin/scripts/${s.id}/versions` })}
+                    >
+                      版本历史
+                    </button>
+                    {s.source !== "platform" && s.is_active && (
+                      <button
+                        type="button"
+                        className="ds-btn ds-btn-ghost ds-btn-sm"
+                        style={{ color: "#e02424" }}
+                        onClick={() =>
+                          toggle({
+                            resource: `admin/scripts/${s.id}/toggle`,
+                            values: {},
+                          })
+                        }
+                      >
+                        禁用
+                      </button>
+                    )}
+                    {s.source !== "platform" && !s.is_active && (
+                      <button
+                        type="button"
+                        className="ds-btn ds-btn-ghost ds-btn-sm"
+                        style={{ color: "#057a55" }}
+                        onClick={() =>
+                          toggle({
+                            resource: `admin/scripts/${s.id}/toggle`,
+                            values: {},
+                          })
+                        }
+                      >
+                        启用
+                      </button>
+                    )}
+                    {s.source !== "platform" && !s.is_active && (
+                      <button
+                        type="button"
+                        className="ds-btn ds-btn-ghost ds-btn-sm"
+                        style={{ color: "#e02424" }}
+                        onClick={() =>
+                          del({ resource: "admin/scripts", id: s.id })
+                        }
+                      >
+                        删除
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        {totalPages > 1 && (
+          <div className="ds-pagination">
+            <span className="pagination-info">
+              共 {total} 条，第 {page}/{totalPages} 页
+            </span>
+            <div className="pagination-pages">
+              {page > 1 && (
+                <div className="page-btn" onClick={() => setPage((p) => p - 1)}>
+                  ‹
+                </div>
+              )}
+              <div className="page-btn active">{page}</div>
+              {page < totalPages && (
+                <div className="page-btn" onClick={() => setPage((p) => p + 1)}>
+                  ›
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
       )}
 
       <ScriptSheet
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
         script={editScript}
-        onSuccess={() => { setSheetOpen(false); query.refetch(); }}
+        onSuccess={() => {
+          setSheetOpen(false);
+          query.refetch();
+        }}
       />
     </div>
   );

@@ -23,8 +23,12 @@ import { TenantTrialPage } from "./pages/ops/tenants/trial";
 import { ProviderListPage } from "./pages/ops/providers/index";
 import { ProviderNewPage } from "./pages/ops/providers/new";
 import { ProviderDetailPage } from "./pages/ops/providers/[id]";
+import { UserEditPage } from "./pages/admin/users/edit";
 import { UserListPage } from "./pages/admin/users/index";
 import { UserNewPage } from "./pages/admin/users/new";
+import { AdminProjectListPage } from "./pages/admin/projects/index";
+import { AdminProjectNewPage } from "./pages/admin/projects/new";
+import { AdminProjectEditPage } from "./pages/admin/projects/edit";
 import { CaseListPage } from "./pages/admin/cases/index";
 import { CaseImportPage } from "./pages/admin/cases/import";
 import { CaseKanbanPage } from "./pages/admin/cases/kanban";
@@ -33,6 +37,9 @@ import { AdminCaseDetailPage } from "./pages/admin/cases/detail";
 import { AgentWorkstationPage } from "./pages/agent/cases/detail";
 import { CallDetailPage } from "./pages/calls/detail";
 import { AgentLiveWorkstationPage } from "./pages/agent/workstation/live";
+import { AgentWorkstationIndexPage } from "./pages/agent/workstation/index";
+import { AgentCallHistoryPage } from "./pages/agent/call-history/index";
+import { AgentProfilePage } from "./pages/agent/profile/index";
 import { AdminLiveWorkstationPage } from "./pages/admin/workstation/live";
 import { ScriptListPage } from "./pages/admin/scripts/list";
 import { ScriptVersionsPage } from "./pages/admin/scripts/versions";
@@ -41,11 +48,20 @@ import { AdminReportsPage } from "./pages/admin/reports/index";
 import { ComplianceListPage } from "./pages/admin/compliance/index";
 import { ComplianceDetailPage } from "./pages/admin/compliance/detail";
 import { AdminLegalConversionListPage } from "./pages/admin/legal-conversion/index";
+import { AdminLegalConversionDetailPage } from "./pages/admin/legal-conversion/[id]";
+import { SupervisorCaseDetailPage } from "./pages/supervisor/cases/detail";
+import { TenantLegalOrdersPage, TenantLegalOrderDetailPage } from "./pages/legal-flow/TenantLegalOrdersPage";
+import { LawFirmOrdersPage, LawFirmOrderDetailPage } from "./pages/legal-flow/LawFirmOrdersPage";
+import { LawyerOrdersPage, LawyerOrderDetailPage } from "./pages/legal-flow/LawyerOrdersPage";
+import { SupervisorDiscountApprovalsPage, SupervisorDiscountApprovalDetailPage } from "./pages/discount/SupervisorApprovals";
+import { SupervisorLegalConversionApprovalsPage } from "./pages/supervisor/legal-conversion-approvals/index";
+import { AdminDiscountApprovalsPage, AdminDiscountApprovalDetailPage } from "./pages/discount/AdminApprovals";
 import { AdminSettingsPage } from "./pages/admin/settings/index";
 import { AdminDashboardPage } from "./pages/admin/dashboard";
 import { AdminPoolPage } from "./pages/admin/pool";
 import { AdminSettlementListPage } from "./pages/admin/settlements";
 import { AdminSettlementDetailPage } from "./pages/admin/settlements/detail";
+import { AdminAuditLogPage } from "./pages/admin/audit-logs";
 import { AdminProvidersPage } from "./pages/admin/providers/index";
 import { AdminProviderDetailPage } from "./pages/admin/providers/detail";
 import { SupervisorScriptLabelsPage } from "./pages/supervisor/script-labels";
@@ -73,11 +89,29 @@ import { RiskKeywordCreatePage } from "./pages/admin/risk-keywords/create";
 import { RiskKeywordEditPage } from "./pages/admin/risk-keywords/edit";
 import { LegalCaseListPage } from "./pages/legal/cases/index";
 import { LegalCaseDetailPage } from "./pages/legal/cases/[id]";
+import { LegalInternalOrdersPage } from "./pages/legal/internal-orders/index";
+import { LegalInternalOrderDetailPage } from "./pages/legal/internal-orders/[id]";
+import { AdminPartnerLawFirmsPage } from "./pages/admin/partner-law-firms/index";
+import { AdminInternalLetterTemplatesPage } from "./pages/admin/internal-letter-templates/index";
 import { WorkOrderListPage } from "./pages/workorder/orders/index";
 import { WorkOrderNewPage } from "./pages/workorder/orders/new";
 import { WorkOrderDetailPage } from "./pages/workorder/orders/[id]";
 import { PMDashboardPage } from "./pages/pm/dashboard";
+import { MePage } from "./pages/me";
+import { SupervisorProjectsPage } from "./pages/supervisor/projects";
+import { SupervisorWorkspacePage } from "./pages/supervisor/workspace";
+import { SupervisorEscalatedPage } from "./pages/supervisor/escalated";
+import { SupervisorStatsPage } from "./pages/supervisor/stats";
+import { SupervisorCasesPage } from "./pages/supervisor/cases";
+import { SupervisorMyKpiPage } from "./pages/supervisor/my-kpi";
+import { SupervisorPromisesPage } from "./pages/supervisor/promises";
+import { SupervisorCaseAlertsPage } from "./pages/supervisor/case-alerts";
+import { SupervisorShiftsPage } from "./pages/supervisor/shifts";
+import { SupervisorTrainingPage } from "./pages/supervisor/training";
 import { ProviderDashboardPage } from "./pages/provider/dashboard";
+import { ProviderHistoricalReportsPage } from "./pages/provider/historical-reports";
+import { ProviderProjectsPage } from "./pages/provider/projects";
+import { ProviderScriptListPage } from "./pages/provider/scripts";
 import { ProviderTenantsPage } from "./pages/provider/tenants";
 import { ProviderTeamPage } from "./pages/provider/team";
 import { ProviderSettlementListPage } from "./pages/provider/settlements";
@@ -94,12 +128,13 @@ const ROLE_HOME: Record<string, string> = {
   platform_superadmin: "/ops/tenants",
   platform_super: "/ops/tenants",
   platform_ops: "/ops/tenants",
-  admin: "/admin/dashboard",
-  supervisor: "/supervisor/reviews",
+  admin: "/admin/projects",
+  supervisor: "/supervisor/workspace",
   agent_internal: "/agent/cases",
   agent_external: "/agent/cases",
-  legal: "/legal/cases",
+  legal: "/legal/internal-orders",
   workorder: "/workorder/orders",
+  coordinator: "/workorder/orders",
   project_manager_property: "/pm/dashboard",
   project_manager_provider: "/pm/dashboard",
   provider_admin: "/provider/dashboard",
@@ -134,13 +169,26 @@ function AuthenticatedShell() {
   );
 }
 
-// Sprint 14.3 — 首登 App 引导（所有角色）
+// Sprint 14.3 — 首登 App 引导（v1.5.6 — 仅对催收员显示）
+const APP_INTRO_ROLES = new Set([
+  "agent_internal",
+  "agent_external",
+]);
+
 function AppIntroModalGate() {
   const [open, setOpen] = useState(false);
   const [checked, setChecked] = useState(false);
+  const { data: identity } = useGetIdentity<AuthUser>();
+  const role = identity?.role;
+  const isCallingRole = role !== undefined && APP_INTRO_ROLES.has(role);
 
   useEffect(() => {
     if (checked) return;
+    if (role === undefined) return;  // identity 还没回来
+    if (!isCallingRole) {
+      setChecked(true);
+      return;  // 非催收员：直接静默
+    }
     const token = getToken();
     if (!token) return;
     fetch(`${API_BASE_URL}/api/v1/users/me/preferences`, {
@@ -154,7 +202,7 @@ function AppIntroModalGate() {
         /* fail silently — modal not shown */
       })
       .finally(() => setChecked(true));
-  }, [checked]);
+  }, [checked, role, isCallingRole]);
 
   const dismissPermanent = () => {
     const token = getToken();
@@ -236,6 +284,16 @@ function App() {
             meta: { label: "话术库" },
           },
           {
+            name: "admin/partner-law-firms",
+            list: "/admin/partner-law-firms",
+            meta: { label: "合作律所" },
+          },
+          {
+            name: "admin/internal-letter-templates",
+            list: "/admin/internal-letter-templates",
+            meta: { label: "律师函模板" },
+          },
+          {
             name: "admin/pool",
             list: "/admin/pool",
             meta: { label: "公海管理" },
@@ -261,6 +319,12 @@ function App() {
             name: "supervisor/reviews",
             list: "/supervisor/reviews",
             meta: { label: "质检复核" },
+          },
+          {
+            name: "legal/internal-orders",
+            list: "/legal/internal-orders",
+            show: "/legal/internal-orders/:id",
+            meta: { label: "待内部处理" },
           },
           {
             name: "legal/cases",
@@ -323,10 +387,17 @@ function App() {
             <Route path="/ops/providers/new" element={<ProviderNewPage />} />
             <Route path="/ops/providers/:id" element={<ProviderDetailPage />} />
             {/* Admin - Dashboard */}
+            {/* v1.5 — 全角色个人中心 */}
+            <Route path="/me" element={<MePage />} />
             <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
             {/* Admin - User Management */}
             <Route path="/admin/users" element={<UserListPage />} />
             <Route path="/admin/users/new" element={<UserNewPage />} />
+            <Route path="/admin/users/:id/edit" element={<UserEditPage />} />
+            {/* Admin - Project Management (v1.4) */}
+            <Route path="/admin/projects" element={<AdminProjectListPage />} />
+            <Route path="/admin/projects/new" element={<AdminProjectNewPage />} />
+            <Route path="/admin/projects/:id/edit" element={<AdminProjectEditPage />} />
             {/* Admin - Case Management */}
             <Route path="/admin/cases" element={<CaseListPage />} />
             <Route path="/admin/cases/kanban" element={<CaseKanbanPage />} />
@@ -339,8 +410,14 @@ function App() {
             <Route path="/agent/cases/:id" element={<AgentWorkstationPage />} />
             {/* Call Detail */}
             <Route path="/calls/:id" element={<CallDetailPage />} />
-            {/* Agent Live Workstation */}
+            {/* Agent Live Workstation — 直接带 call_id 进入（兼容旧链接 / 通话记录跳转） */}
             <Route path="/agent/workstation/:call_id" element={<AgentLiveWorkstationPage />} />
+            {/* Agent — 工作台入口（4 列布局 + 5s 轮询 active-call 实现 App→PC 同步） */}
+            <Route path="/agent/workstation" element={<AgentWorkstationIndexPage />} />
+            {/* Agent — 通话记录 */}
+            <Route path="/agent/call-history" element={<AgentCallHistoryPage />} />
+            {/* Agent — 个人信息 */}
+            <Route path="/agent/profile" element={<AgentProfilePage />} />
             {/* Admin Observer Workstation */}
             <Route path="/admin/workstation/:call_id" element={<AdminLiveWorkstationPage />} />
             {/* Supervisor Alerts */}
@@ -358,6 +435,7 @@ function App() {
             {/* Admin - Settlement Management */}
             <Route path="/admin/settlements" element={<AdminSettlementListPage />} />
             <Route path="/admin/settlements/:id" element={<AdminSettlementDetailPage />} />
+            <Route path="/admin/audit-logs" element={<AdminAuditLogPage />} />
             {/* Admin - Service Provider Cooperation (Sprint 8.1) */}
             <Route path="/admin/providers" element={<AdminProvidersPage />} />
             <Route path="/admin/providers/:id" element={<AdminProviderDetailPage />} />
@@ -368,10 +446,16 @@ function App() {
             <Route path="/admin/compliance/:yearMonth" element={<ComplianceDetailPage />} />
             {/* Sprint 16.1 — Legal conversion channel (PRD §20.4) */}
             <Route path="/admin/legal-conversion" element={<AdminLegalConversionListPage />} />
+            <Route path="/admin/legal-conversion/:id" element={<AdminLegalConversionDetailPage />} />
+            {/* v1.6.8 — 法务转化两步审批 inbox（supervisor + admin 共用同一组件，后端按 role 过滤）*/}
+            <Route path="/supervisor/legal-conversion-approvals" element={<SupervisorLegalConversionApprovalsPage />} />
+            <Route path="/admin/legal-conversion-approvals" element={<SupervisorLegalConversionApprovalsPage />} />
             {/* Admin - System Settings (Sprint 8.5) */}
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
             {/* Supervisor - Script Labels */}
             <Route path="/supervisor/script-labels" element={<SupervisorScriptLabelsPage />} />
+            {/* v1.5 — Supervisor projects 落地页 */}
+            <Route path="/supervisor/projects" element={<SupervisorProjectsPage />} />
             {/* Supervisor - Reviews */}
             <Route path="/supervisor/reviews" element={<SupervisorReviewsPage />} />
             <Route path="/supervisor/reviews/:call_id" element={<SupervisorReviewDetailPage />} />
@@ -379,6 +463,16 @@ function App() {
             <Route path="/supervisor/live-wall" element={<SupervisorLiveWallPage />} />
             <Route path="/supervisor/risk-events" element={<SupervisorRiskEventsPage />} />
             <Route path="/supervisor/team-performance" element={<SupervisorTeamPerformancePage />} />
+            <Route path="/supervisor/workspace" element={<SupervisorWorkspacePage />} />
+            <Route path="/supervisor/escalated" element={<SupervisorEscalatedPage />} />
+            <Route path="/supervisor/stats" element={<SupervisorStatsPage />} />
+            <Route path="/supervisor/cases" element={<SupervisorCasesPage />} />
+            <Route path="/supervisor/cases/:id" element={<SupervisorCaseDetailPage />} />
+            <Route path="/supervisor/my-kpi" element={<SupervisorMyKpiPage />} />
+            <Route path="/supervisor/promises" element={<SupervisorPromisesPage />} />
+            <Route path="/supervisor/case-alerts" element={<SupervisorCaseAlertsPage />} />
+            <Route path="/supervisor/shifts" element={<SupervisorShiftsPage />} />
+            <Route path="/supervisor/training" element={<SupervisorTrainingPage />} />
             {/* Sprint 10 ops + super */}
             <Route path="/ops/settlements" element={<OpsSettlementsOverviewPage />} />
             {/* Sprint 16.2 — Law firm pool + legal workstation (PRD §20.4) */}
@@ -394,6 +488,22 @@ function App() {
             {/* Legal - Cases */}
             <Route path="/legal/cases" element={<LegalCaseListPage />} />
             <Route path="/legal/cases/:id" element={<LegalCaseDetailPage />} />
+            <Route path="/legal/internal-orders" element={<LegalInternalOrdersPage />} />
+            <Route path="/legal/internal-orders/:id" element={<LegalInternalOrderDetailPage />} />
+            <Route path="/admin/partner-law-firms" element={<AdminPartnerLawFirmsPage />} />
+            <Route path="/admin/internal-letter-templates" element={<AdminInternalLetterTemplatesPage />} />
+            {/* v1.5.7 — 法务转化订单三视图 */}
+            <Route path="/legal/orders" element={<TenantLegalOrdersPage />} />
+            <Route path="/legal/orders/:id" element={<TenantLegalOrderDetailPage />} />
+            <Route path="/lawfirm/orders" element={<LawFirmOrdersPage />} />
+            <Route path="/lawfirm/orders/:id" element={<LawFirmOrderDetailPage />} />
+            <Route path="/lawyer/orders" element={<LawyerOrdersPage />} />
+            <Route path="/lawyer/orders/:id" element={<LawyerOrderDetailPage />} />
+            {/* v1.5.7 — 协商打折 / 减免审批 */}
+            <Route path="/supervisor/discount-approvals" element={<SupervisorDiscountApprovalsPage />} />
+            <Route path="/supervisor/discount-approvals/:id" element={<SupervisorDiscountApprovalDetailPage />} />
+            <Route path="/admin/discount-approvals" element={<AdminDiscountApprovalsPage />} />
+            <Route path="/admin/discount-approvals/:id" element={<AdminDiscountApprovalDetailPage />} />
             {/* Workorder - Orders */}
             <Route path="/workorder/orders" element={<WorkOrderListPage />} />
             <Route path="/workorder/orders/new" element={<WorkOrderNewPage />} />
@@ -404,8 +514,11 @@ function App() {
             <Route path="/provider/dashboard" element={<ProviderDashboardPage />} />
             <Route path="/provider/tenants" element={<ProviderTenantsPage />} />
             <Route path="/provider/team" element={<ProviderTeamPage />} />
+            <Route path="/provider/scripts" element={<ProviderScriptListPage />} />
             <Route path="/provider/settlements" element={<ProviderSettlementListPage />} />
             <Route path="/provider/settlements/:id" element={<ProviderSettlementDetailPage />} />
+            <Route path="/provider/historical-reports" element={<ProviderHistoricalReportsPage />} />
+            <Route path="/provider/projects" element={<ProviderProjectsPage />} />
             {/* Sprint 15 — platform_super system management */}
             <Route path="/super/health" element={<SuperHealthPage />} />
             <Route path="/super/audit" element={<SuperAuditPage />} />

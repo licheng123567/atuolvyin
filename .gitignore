@@ -55,6 +55,9 @@ poc/android/.idea/
 # Git worktrees (Sprint 实施隔离)
 .worktrees/
 
-# Playwright
+# Playwright / pytest 临时产物
 frontend/test-results/
 frontend/playwright-report/
+test-results/
+poc/backend/test-results/
+poc/backend/.coverage

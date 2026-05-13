@@ -58,8 +58,16 @@ async def list_cases(
         .limit(page_size)
     ).all()
 
+    # v1.7.0 — supervisor 是物业内部角色，列表内电话明文
+    from app.core.phone_visibility import should_reveal_owner_phone
+
+    owner_phone_reveal = should_reveal_owner_phone(role=payload.get("role", ""))
+
     return PaginatedResponse(
-        items=[_case_row_to_response(case, owner) for case, owner in rows],
+        items=[
+            _case_row_to_response(case, owner, owner_phone_reveal=owner_phone_reveal)
+            for case, owner in rows
+        ],
         total=total,
         page=page,
         page_size=page_size,

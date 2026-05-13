@@ -6,9 +6,10 @@
 - LegalConversionOrder：物业公司从 CRM 案件下单 → 平台撮合律所 → 接单完成
   含催收时间线摘要 + 推荐处理方式 + 预估成本/回款概率（创建时冻结）
 """
+
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -74,13 +75,9 @@ class LegalConversionOrder(Base, TimestampMixin):
         sa.ForeignKey("legal_service_package.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    status: Mapped[str] = mapped_column(
-        sa.String(32), nullable=False, default="pending"
-    )
+    status: Mapped[str] = mapped_column(sa.String(32), nullable=False, default="pending")
     price_quoted: Mapped[Decimal] = mapped_column(sa.Numeric(10, 2), nullable=False)
-    platform_fee_amount: Mapped[Decimal] = mapped_column(
-        sa.Numeric(10, 2), nullable=False
-    )
+    platform_fee_amount: Mapped[Decimal] = mapped_column(sa.Numeric(10, 2), nullable=False)
     law_firm_id: Mapped[int | None] = mapped_column(
         sa.BigInteger, sa.ForeignKey("law_firm.id", ondelete="SET NULL")
     )
@@ -98,11 +95,79 @@ class LegalConversionOrder(Base, TimestampMixin):
     )
     dispatched_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    # v1.9.0 — 物业内部法务处理环节字段
+    internal_close_reason: Mapped[str | None] = mapped_column(sa.String(32))
+    internal_closed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    internal_closed_by: Mapped[int | None] = mapped_column(
+        sa.BigInteger, sa.ForeignKey("user_account.id", ondelete="SET NULL")
+    )
+    # v1.9.1 — closed_promised 时记业主承诺缴清日期，到期未付列表显示红标 + 可重新打开
+    promise_due_date: Mapped[date | None] = mapped_column(sa.Date)
 
     __table_args__ = (
         sa.CheckConstraint(
-            "status IN ('pending','dispatched','in_service','completed','cancelled')",
+            # v1.9.0 — 加 internal_processing + 4 closed_* + escalated_to_lawfirm
+            "status IN ('pending','dispatched','in_service','completed','cancelled',"
+            "'internal_processing','closed_paid','closed_promised',"
+            "'closed_uncollectible','escalated_to_lawfirm')",
             name="ck_legal_conv_status",
         ),
+        sa.CheckConstraint(
+            "internal_close_reason IS NULL OR internal_close_reason IN "
+            "('paid','promised','uncollectible','escalated')",
+            name="ck_legal_conv_close_reason",
+        ),
         sa.Index("ix_legal_conv_tenant_status", "tenant_id", "status"),
+    )
+
+
+class LegalConversionRequest(Base, TimestampMixin):
+    """v1.6.8 — 法务转化申请：催收员提申请 → 督导/admin 审批 → 创建 Order。
+
+    与 LegalConversionOrder 的区别：
+    - Request 在审批前；Order 在审批通过后（或 admin 直接建单）
+    - 申请阶段不选服务包，由审批人决定 package_id
+    """
+
+    __tablename__ = "legal_conversion_request"
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        sa.BigInteger,
+        sa.ForeignKey("tenant.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    case_id: Mapped[int] = mapped_column(
+        sa.BigInteger,
+        sa.ForeignKey("collection_case.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    requester_user_id: Mapped[int] = mapped_column(
+        sa.BigInteger,
+        sa.ForeignKey("user_account.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    requester_role: Mapped[str] = mapped_column(sa.String(32), nullable=False)
+    reason: Mapped[str | None] = mapped_column(sa.Text)
+    status: Mapped[str] = mapped_column(sa.String(20), nullable=False, default="pending")
+    reviewer_user_id: Mapped[int | None] = mapped_column(
+        sa.BigInteger, sa.ForeignKey("user_account.id", ondelete="SET NULL")
+    )
+    reviewer_role: Mapped[str | None] = mapped_column(sa.String(32))
+    reviewed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    reviewer_note: Mapped[str | None] = mapped_column(sa.Text)
+    related_order_id: Mapped[int | None] = mapped_column(
+        sa.BigInteger,
+        sa.ForeignKey("legal_conversion_order.id", ondelete="SET NULL"),
+    )
+
+    __table_args__ = (
+        sa.CheckConstraint(
+            "status IN ('pending','approved','rejected','cancelled')",
+            name="ck_legal_conv_req_status",
+        ),
+        sa.Index("ix_legal_conv_req_tenant_status", "tenant_id", "status"),
+        sa.Index("ix_legal_conv_req_case", "case_id"),
     )
