@@ -41,6 +41,7 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
       title: "人员管理",
       items: [
         { label: "用户管理", path: "/admin/users", icon: "Users" },
+        { label: "坐席设备", path: "/admin/agent-devices", icon: "Smartphone" },
         { label: "服务商合作", path: "/admin/providers", icon: "Briefcase" },
       ],
     },
@@ -85,6 +86,7 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
         { label: "督导工作台", path: "/supervisor/workspace", icon: "LayoutDashboard" },
         { label: "实时通话墙", path: "/supervisor/live-wall", icon: "RadioTower" },
         { label: "团队监控", path: "/supervisor/team-performance", icon: "Activity" },
+        { label: "坐席设备", path: "/admin/agent-devices", icon: "Smartphone" },
       ],
     },
     {

@@ -62,6 +62,7 @@ import { AdminPoolPage } from "./pages/admin/pool";
 import { AdminSettlementListPage } from "./pages/admin/settlements";
 import { AdminSettlementDetailPage } from "./pages/admin/settlements/detail";
 import { AdminAuditLogPage } from "./pages/admin/audit-logs";
+import { AdminAgentDevicesPage } from "./pages/admin/agent-devices";
 import { AdminProvidersPage } from "./pages/admin/providers/index";
 import { AdminProviderDetailPage } from "./pages/admin/providers/detail";
 import { SupervisorScriptLabelsPage } from "./pages/supervisor/script-labels";
@@ -440,6 +441,8 @@ function App() {
             <Route path="/admin/settlements" element={<AdminSettlementListPage />} />
             <Route path="/admin/settlements/:id" element={<AdminSettlementDetailPage />} />
             <Route path="/admin/audit-logs" element={<AdminAuditLogPage />} />
+            {/* v2.1 — Admin/Supervisor: 坐席设备能力（哪些机器系统级录音不支持→实时 AI 不可用） */}
+            <Route path="/admin/agent-devices" element={<AdminAgentDevicesPage />} />
             {/* Admin - Service Provider Cooperation (Sprint 8.1) */}
             <Route path="/admin/providers" element={<AdminProvidersPage />} />
             <Route path="/admin/providers/:id" element={<AdminProviderDetailPage />} />
