@@ -42,8 +42,8 @@ class DeviceCapabilityLog(Base):
     manufacturer: Mapped[str | None] = mapped_column(sa.String(32), nullable=True)
     model: Mapped[str | None] = mapped_column(sa.String(64), nullable=True)
     android_version: Mapped[str | None] = mapped_column(sa.String(16), nullable=True)
-    # 如 "MIUI 10.2"
-    rom_label: Mapped[str | None] = mapped_column(sa.String(32), nullable=True)
+    # 如 "AOSP on Google Pixel 8 (Android 14)" — derive_rom_label 输出
+    rom_label: Mapped[str | None] = mapped_column(sa.String(64), nullable=True)
     # realtime / post_upload / incompatible
     capability: Mapped[str] = mapped_column(sa.String(16), nullable=False)
     actual_recording_works: Mapped[bool | None] = mapped_column(sa.Boolean, nullable=True)

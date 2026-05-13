@@ -42,7 +42,7 @@ def upgrade() -> None:
         sa.Column("manufacturer", sa.String(32), nullable=True),
         sa.Column("model", sa.String(64), nullable=True),
         sa.Column("android_version", sa.String(16), nullable=True),
-        sa.Column("rom_label", sa.String(32), nullable=True),
+        sa.Column("rom_label", sa.String(64), nullable=True),
         sa.Column("capability", sa.String(16), nullable=False),
         sa.Column("actual_recording_works", sa.Boolean, nullable=True),
         sa.Column("source", sa.String(24), nullable=False),
