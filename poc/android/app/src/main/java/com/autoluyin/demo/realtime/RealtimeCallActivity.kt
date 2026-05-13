@@ -1,22 +1,33 @@
 package com.autoluyin.demo.realtime
 
 import android.Manifest
+import android.app.KeyguardManager
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.widget.Button
-import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
+import android.view.WindowManager
+import android.widget.Toast
+import androidx.activity.compose.setContent
+import androidx.activity.viewModels
+import androidx.fragment.app.FragmentActivity
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.core.app.ActivityCompat
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import com.autoluyin.demo.ApiClient
 import com.autoluyin.demo.AppConfig
-import com.autoluyin.demo.R
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import com.autoluyin.demo.screens.postcall.CallEndMarkActivity
+import com.autoluyin.demo.screens.realtime.RealtimeCallScreen
+import com.autoluyin.demo.screens.realtime.RealtimeCallState
+import com.autoluyin.demo.screens.realtime.RealtimeCallViewModel
+import com.autoluyin.demo.ui.theme.AppTheme
+import kotlinx.coroutines.delay
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
@@ -24,7 +35,19 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
 
-class RealtimeCallActivity : AppCompatActivity() {
+/**
+ * v2.0 Task 6 — Compose 全屏 Screen 3 (通话中)。
+ *
+ * 重写要点：
+ *  - 改 [androidx.fragment.app.FragmentActivity] 子类（保留 supportFragmentManager 兼容性）
+ *  - 不再 setContentView XML；UI 全部由 [RealtimeCallScreen] 渲染
+ *  - 状态来自 [RealtimeCallViewModel]，旋转 / 进程恢复保留 transcript
+ *  - 锁屏唤起 + 沉浸式与 [com.autoluyin.demo.screens.dial.DialRequestActivity] 一致
+ *  - 旧 TranscriptAdapter / SuggestionCardView / RiskBannerView 不再被引用，但保留作过渡
+ *  - v2.0 Task 7 起，挂机 / tagPayload 就绪改为 startActivity(CallEndMarkActivity)；
+ *    [com.autoluyin.demo.realtime.PostCallTagDialog] 文件保留作过渡，二期清理
+ */
+class RealtimeCallActivity : FragmentActivity() {
 
     companion object {
         const val EXTRA_CALL_ID = "call_id"
@@ -34,175 +57,184 @@ class RealtimeCallActivity : AppCompatActivity() {
         private const val REQ_PERMS = 4711
     }
 
-    private lateinit var transcriptAdapter: TranscriptAdapter
-    private lateinit var suggestionCard: SuggestionCardView
-    private lateinit var riskBanner: RiskBannerView
-    private lateinit var riskAlertController: RiskAlertController
-    private lateinit var connectionBadge: TextView
-    private lateinit var timerView: TextView
-    private lateinit var streamClient: AudioStreamClient
+    private val viewModel: RealtimeCallViewModel by viewModels()
 
-    private var callId: Long = -1
-    private var caseId: Long = -1
-    private val mainHandler = Handler(Looper.getMainLooper())
-    private var startedAtMs: Long = 0
-    private val tickRunnable = object : Runnable {
-        override fun run() {
-            val secs = (System.currentTimeMillis() - startedAtMs) / 1000
-            timerView.text = "%02d:%02d".format(secs / 60, secs % 60)
-            mainHandler.postDelayed(this, 1000)
-        }
-    }
+    private var callId: Long = -1L
+    private var caseId: Long = -1L
+    private var ownerName: String = "未知业主"
+    private var ownerPhoneMasked: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_realtime_call)
 
+        // ---- 锁屏唤起 ----
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+            getSystemService(KeyguardManager::class.java)
+                ?.requestDismissKeyguard(this, null)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+            )
+        }
+        // ---- 沉浸式 ----
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        // ---- intent extras ----
         callId = intent.getLongExtra(EXTRA_CALL_ID, -1L)
         caseId = intent.getLongExtra(EXTRA_CASE_ID, -1L)
-        if (callId <= 0 || caseId <= 0) { finish(); return }
-
-        findViewById<TextView>(R.id.ownerName).text =
-            intent.getStringExtra(EXTRA_OWNER_NAME) ?: "未知业主"
-        findViewById<TextView>(R.id.ownerRoom).text =
-            intent.getStringExtra(EXTRA_OWNER_PHONE_MASKED) ?: ""
-
-        connectionBadge = findViewById(R.id.connectionBadge)
-        timerView = findViewById(R.id.timer)
-        suggestionCard = findViewById(R.id.suggestionCard)
-        riskBanner = findViewById(R.id.riskBanner)
-        riskAlertController = RiskAlertController(object : RiskAlertController.AlertListener {
-            override fun showToast(message: String) {
-                mainHandler.post {
-                    android.widget.Toast.makeText(this@RealtimeCallActivity, message, android.widget.Toast.LENGTH_SHORT).show()
-                }
-            }
-            override fun showBanner(event: RiskEvent) {
-                mainHandler.post { riskBanner.showForEvent(event) }
-            }
-            override fun showBlockingModal(event: RiskEvent) {
-                mainHandler.post {
-                    streamClient.pauseRecording()
-                    RiskBlockingModal(
-                        context = this@RealtimeCallActivity,
-                        event = event,
-                        onConfirmContinue = {
-                            if (!isFinishing && !isDestroyed) streamClient.resumeRecording()
-                        },
-                        onEndCall = {
-                            if (!isFinishing && !isDestroyed) {
-                                streamClient.resumeRecording()
-                                hangUp()
-                            }
-                        },
-                    ).show()
-                }
-            }
-        })
-
-        val list = findViewById<RecyclerView>(R.id.transcriptList)
-        list.layoutManager = LinearLayoutManager(this).apply { stackFromEnd = true }
-        transcriptAdapter = TranscriptAdapter()
-        list.adapter = transcriptAdapter
-
-        findViewById<Button>(R.id.btnHangup).setOnClickListener { hangUp() }
-
-        ensurePermissionsThenStart()
-    }
-
-    private fun ensurePermissionsThenStart() {
-        val perms = arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CALL_PHONE)
-        val missing = perms.filter {
-            ActivityCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-        if (missing.isEmpty()) startCall()
-        else ActivityCompat.requestPermissions(this, missing.toTypedArray(), REQ_PERMS)
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, results: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, results)
-        if (requestCode == REQ_PERMS && results.all { it == PackageManager.PERMISSION_GRANTED }) {
-            startCall()
-        } else {
+        if (callId <= 0L || caseId <= 0L) {
             finish()
+            return
         }
-    }
+        ownerName = intent.getStringExtra(EXTRA_OWNER_NAME) ?: "未知业主"
+        ownerPhoneMasked = intent.getStringExtra(EXTRA_OWNER_PHONE_MASKED) ?: ""
 
-    private fun startCall() {
-        startedAtMs = System.currentTimeMillis()
-        mainHandler.post(tickRunnable)
-
-        val token = AppConfig.token(this) ?: run { finish(); return }
-        // Ensure ApiClient has application context for service accessor
         ApiClient.appContext = applicationContext
+        ensurePermissionsThenStart()
 
-        streamClient = AudioStreamClient(
-            callId = callId,
-            token = token,
-            context = applicationContext,
-            onTranscript = { seg -> mainHandler.post {
-                transcriptAdapter.append(seg)
-                findViewById<RecyclerView>(R.id.transcriptList)
-                    .smoothScrollToPosition(transcriptAdapter.itemCount - 1)
-            }},
-            onSuggestion = { id, text -> mainHandler.post { suggestionCard.show(id, text) } },
-            onTagReady = { tag -> mainHandler.post { showTagDialog(tag) } },
-            onStateChange = { state -> mainHandler.post { renderState(state) } },
-            onRisk = { event -> mainHandler.post { riskAlertController.onRiskEvent(event) } },
-        )
-        suggestionCard.onAdopt = { id -> postFeedback(id, "adopt") }
-        suggestionCard.onIgnore = { id -> suggestionCard.hide(); postFeedback(id, "ignore") }
-        streamClient.start()
-    }
+        setContent {
+            AppTheme {
+                val transcript by viewModel.transcript.collectAsState()
+                val suggestion by viewModel.suggestion.collectAsState()
+                val connState by viewModel.connectionState.collectAsState()
+                val activeRisk by viewModel.activeBannerRisk.collectAsState()
+                val blockingRisk by viewModel.blockingRisk.collectAsState()
+                val tagPayload by viewModel.tagPayload.collectAsState()
 
-    private fun renderState(state: AudioStreamClient.State) {
-        connectionBadge.text = when (state) {
-            AudioStreamClient.State.NORMAL -> "🟢 实时"
-            AudioStreamClient.State.DEGRADED -> "🟡 弱网"
-            AudioStreamClient.State.FALLBACK_LOCAL -> "🔵 本地录音"
-        }
-    }
+                // ---- 计时器 ----
+                var durationSec by remember { mutableIntStateOf(0) }
+                LaunchedEffect(Unit) {
+                    while (true) {
+                        val started = viewModel.startedAt()
+                        durationSec = if (started > 0L) {
+                            ((System.currentTimeMillis() - started) / 1000L).toInt()
+                        } else 0
+                        delay(1000L)
+                    }
+                }
 
-    private fun postFeedback(suggestionId: String, action: String) {
-        val token = AppConfig.token(this) ?: return
-        CoroutineScope(Dispatchers.IO).launch {
-            runCatching {
-                ApiClient.service.postSuggestionFeedback(
-                    authHeader = "Bearer $token",
-                    callId = callId,
-                    suggestionId = suggestionId,
-                    body = mapOf("action" to action),
+                // ---- tag 全屏 Activity 触发 (v2.0 Task 7) ----
+                LaunchedEffect(tagPayload) {
+                    val payload = tagPayload ?: return@LaunchedEffect
+                    viewModel.consumeTagPayload()
+                    launchCallEndMark(payload)
+                }
+
+                // ---- toast (RiskAlertController L1 toast) ----
+                LaunchedEffect(Unit) {
+                    viewModel.toast.collect { msg ->
+                        Toast.makeText(this@RealtimeCallActivity, msg, Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+                RealtimeCallScreen(
+                    ownerName = ownerName,
+                    ownerPhoneMasked = ownerPhoneMasked,
+                    state = RealtimeCallState(
+                        transcript = transcript,
+                        suggestion = suggestion,
+                        connectionState = connState,
+                        activeRisk = activeRisk,
+                        blockingRisk = blockingRisk,
+                        durationSec = durationSec,
+                    ),
+                    onAdopt = viewModel::adopt,
+                    onIgnore = {
+                        viewModel.suggestion.value?.first?.let(viewModel::ignore)
+                    },
+                    onHangup = ::hangUp,
+                    onMuteToggle = { /* TODO Task 7+ */ },
+                    onAddNote = { /* TODO Task 7+ */ },
+                    onSendCode = { /* TODO 后端 send-payment-link endpoint 接入后再实现 */ },
+                    onDismissBannerRisk = viewModel::dismissBannerRisk,
+                    onDismissBlockingRisk = viewModel::dismissBlockingRisk,
                 )
             }
         }
     }
 
-    private fun showTagDialog(tag: AudioStreamClient.TagPayload) {
-        PostCallTagDialog.newInstance(callId, tag).show(supportFragmentManager, "tag")
+    private fun ensurePermissionsThenStart() {
+        val perms = arrayOf(
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.CALL_PHONE,
+        )
+        val missing = perms.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isEmpty()) {
+            viewModel.start(callId, caseId)
+        } else {
+            ActivityCompat.requestPermissions(this, missing.toTypedArray(), REQ_PERMS)
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != REQ_PERMS) return
+        if (grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+            viewModel.start(callId, caseId)
+        } else {
+            finish()
+        }
     }
 
     private fun hangUp() {
-        val wav = streamClient.stopAndCollectWav()
+        val wav = viewModel.stopAndCollect()
         if (wav != null) {
-            // FALLBACK_LOCAL — upload via Sprint 3a endpoint
             uploadFallback(wav)
         }
-        // Show tag dialog if server never sent tag.ready (fallback or early hangup)
-        if (!streamClient.hadServerTag()) {
-            showTagDialog(AudioStreamClient.TagPayload(null, null, null, null))
+        // 服务端没下发 tag.ready 时强制弹标记页让用户人工填写 (v2.0 Task 7)
+        if (!viewModel.hadServerTag()) {
+            launchCallEndMark(AudioStreamClient.TagPayload(null, null, null, null))
         }
+    }
+
+    /**
+     * v2.0 Task 7 — 启动 [CallEndMarkActivity] 全屏标记页，并 finish 当前通话页。
+     * AI 字段 (intent / promise_date / promise_amount / summary) 通过 extras 预填。
+     */
+    private fun launchCallEndMark(payload: AudioStreamClient.TagPayload) {
+        val started = viewModel.startedAt()
+        val durationSec = if (started > 0L) {
+            ((System.currentTimeMillis() - started) / 1000L).toInt()
+        } else {
+            0
+        }
+        val markIntent = Intent(this, CallEndMarkActivity::class.java).apply {
+            putExtra(CallEndMarkActivity.EXTRA_CALL_ID, callId)
+            putExtra(CallEndMarkActivity.EXTRA_OWNER_NAME, ownerName)
+            putExtra(CallEndMarkActivity.EXTRA_DURATION_SEC, durationSec)
+            putExtra(CallEndMarkActivity.EXTRA_STARTED_AT_MS, started)
+            payload.intent?.let { putExtra(CallEndMarkActivity.EXTRA_AI_INTENT, it) }
+            payload.promiseDate?.let { putExtra(CallEndMarkActivity.EXTRA_AI_PROMISE_DATE, it) }
+            payload.promiseAmount?.let { putExtra(CallEndMarkActivity.EXTRA_AI_PROMISE_AMOUNT, it) }
+            payload.summary?.let { putExtra(CallEndMarkActivity.EXTRA_AI_SUMMARY, it) }
+        }
+        runCatching { startActivity(markIntent) }
+            .onFailure {
+                Toast.makeText(this, "无法打开标记页：${it.message}", Toast.LENGTH_LONG).show()
+            }
+        finish()
     }
 
     private fun uploadFallback(wav: File) {
         val token = AppConfig.token(this) ?: return
         val deviceId = AppConfig.deviceId(this) ?: return
-        val durationSec = ((System.currentTimeMillis() - startedAtMs) / 1000).toString()
-        // TODO: Sprint 4 cleanup — relax callee_phone/started_at/ended_at for
-        // FALLBACK_LOCAL uploads where DIAL_REQUEST didn't persist these fields.
-        CoroutineScope(Dispatchers.IO).launch {
+        val durationSec = ((System.currentTimeMillis() - viewModel.startedAt()) / 1000L).toString()
+        // TODO: Sprint 4 cleanup — relax callee_phone/started_at/ended_at for FALLBACK_LOCAL uploads.
+        Thread {
             runCatching {
-                val requestBody = okhttp3.MultipartBody.Builder()
-                    .setType(okhttp3.MultipartBody.FORM)
+                val requestBody = MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
                     .addFormDataPart("device_id", deviceId)
                     .addFormDataPart("case_id", caseId.toString())
                     .addFormDataPart("callee_phone", "")
@@ -214,21 +246,15 @@ class RealtimeCallActivity : AppCompatActivity() {
                         wav.asRequestBody("audio/wav".toMediaTypeOrNull()),
                     )
                     .build()
-                val baseUrl = AppConfig.backendUrl(this@RealtimeCallActivity) ?: return@runCatching
+                val baseUrl = AppConfig.backendUrl(this) ?: return@runCatching
                 OkHttpClient().newCall(
                     Request.Builder()
                         .url("$baseUrl/api/v1/calls/upload")
                         .header("Authorization", "Bearer $token")
                         .post(requestBody)
-                        .build()
+                        .build(),
                 ).execute().close()
             }
-        }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        mainHandler.removeCallbacks(tickRunnable)
-        if (::streamClient.isInitialized) streamClient.stop()
+        }.start()
     }
 }

@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# v2.0 Task 9 — visual diff artifacts (baseline 是版本化的，actual/diff 每次生成)
+tests/visual-actuals/
+tests/visual-diffs/
+playwright-report/
+test-results/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

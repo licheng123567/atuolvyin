@@ -1,6 +1,7 @@
 package com.autoluyin.demo
 
 import android.content.Context
+import com.autoluyin.demo.auth.AuthErrorInterceptor
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -268,7 +269,8 @@ object ApiClient {
                     .connectTimeout(15, TimeUnit.SECONDS)
                     .readTimeout(60, TimeUnit.SECONDS)
                     .writeTimeout(120, TimeUnit.SECONDS)
-                    .addInterceptor(AuthInterceptor(ctx))
+                    .addInterceptor(AuthInterceptor(ctx))           // 前置：加 Bearer token
+                    .addInterceptor(AuthErrorInterceptor())         // v2.0 Task 8 — 后置：401 → AuthEventBus
                     .build()
                 val built = Retrofit.Builder()
                     .baseUrl(if (configured.endsWith("/")) configured else "$configured/")

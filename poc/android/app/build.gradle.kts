@@ -1,6 +1,8 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    // v2.0 Task 1 — Compose Compiler Plugin（Kotlin 2.0+ 取代旧的 kotlinCompilerExtensionVersion）
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -41,6 +43,7 @@ android {
     buildFeatures {
         viewBinding = true
         buildConfig = true
+        compose = true // v2.0 Task 1 — 引入 Jetpack Compose + Material 3
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -69,6 +72,23 @@ dependencies {
     implementation("com.squareup.moshi:moshi-kotlin:1.15.1")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
+    // v2.0 Task 1 — Jetpack Compose BOM + Material 3
+    // 2024.06 BOM 对 minSdk 23 友好，Material3 1.2.x 系列
+    implementation(platform("androidx.compose:compose-bom:2024.06.00"))
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended") // v2.0 Task 2 — 4 tab 图标
+    implementation("androidx.activity:activity-compose:1.9.0")
+    // v2.0 Task 6 — RealtimeCallViewModel 用 viewModels() + AndroidViewModel
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    // v2.0 Task 6 — ComponentActivity.supportFragmentManager（PostCallTagDialog 仍是 DialogFragment）
+    implementation("androidx.fragment:fragment-ktx:1.8.2")
+    debugImplementation("androidx.compose.ui:ui-tooling")
+
+    // v2.0 Task 2 — Navigation for Compose（4 tab 切换）
+    implementation("androidx.navigation:navigation-compose:2.7.7")
 
     // CardView for SuggestionCardView
     implementation("androidx.cardview:cardview:1.0.0")
