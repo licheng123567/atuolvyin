@@ -95,6 +95,28 @@ data class LoginReq(
 @JsonClass(generateAdapter = true)
 data class LoginResp(val access_token: String, val token_type: String)
 
+// v2.2 Module C — OTP 验证码登录
+@JsonClass(generateAdapter = true)
+data class OtpSendReq(
+    val phone: String,
+    val purpose: String = "login",
+)
+
+@JsonClass(generateAdapter = true)
+data class OtpSendResp(
+    val sent: Boolean = true,
+    val expires_in: Int = 300,
+    // dev mode helper: 后端 OTP_DEV_RETURN=true 时直接回传验证码（生产环境必须关闭）
+    val dev_code: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class OtpVerifyReq(
+    val phone: String,
+    val code: String,
+    val device_type: String = "app",
+)
+
 @JsonClass(generateAdapter = true)
 data class RegisterDeviceRequest(
     val device_id: String,
@@ -170,6 +192,13 @@ data class AgentPerformanceResp(
 interface BackendApi {
     @POST("/api/v1/auth/login")
     suspend fun login(@Body body: LoginReq): LoginResp
+
+    // v2.2 Module C — OTP 验证码登录
+    @POST("/api/v1/auth/otp/send")
+    suspend fun sendOtp(@Body body: OtpSendReq): retrofit2.Response<OtpSendResp>
+
+    @POST("/api/v1/auth/otp/verify")
+    suspend fun verifyOtp(@Body body: OtpVerifyReq): retrofit2.Response<LoginResp>
 
     @POST("/api/v1/devices/self-check")
     suspend fun selfCheck(@Body body: SelfCheckReq): SelfCheckResp

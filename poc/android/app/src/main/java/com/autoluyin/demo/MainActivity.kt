@@ -143,24 +143,135 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ---------- 登录 ----------
+    // v2.2 Module C — 倒计时 job；dialog 关闭/重建时取消，避免 Activity 泄漏 + 复位
+    private var otpCountdownJob: kotlinx.coroutines.Job? = null
+
     private fun showLoginDialog() {
-        val phoneInput = android.widget.EditText(this).apply { hint = "手机号" }
+        // 复位上一次的倒计时（重新进入登录页要复位）
+        otpCountdownJob?.cancel()
+        otpCountdownJob = null
+
+        // 共享：手机号输入框（两个 tab 之间复用同一份 state）
+        val phoneInput = android.widget.EditText(this).apply {
+            hint = "手机号"
+            inputType = android.text.InputType.TYPE_CLASS_PHONE
+        }
+
+        // 密码 tab 内容
         val pwdInput = android.widget.EditText(this).apply {
             hint = "密码"
             inputType = android.text.InputType.TYPE_CLASS_TEXT or
                     android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
         }
+        val pwdPane = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            addView(pwdInput)
+        }
+
+        // 验证码 tab 内容
+        val otpInput = android.widget.EditText(this).apply {
+            hint = "6 位验证码"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        }
+        val btnSendOtp = android.widget.Button(this).apply {
+            text = "获取验证码"
+        }
+        val otpPane = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            addView(btnSendOtp)
+            addView(otpInput)
+            visibility = android.view.View.GONE
+        }
+
+        // Tab 切换按钮（用两个 Button 模拟 TabRow，AlertDialog 不便用 Compose TabRow）
+        val tabPwd = android.widget.Button(this).apply { text = "密码登录" }
+        val tabOtp = android.widget.Button(this).apply { text = "验证码登录" }
+        val tabRow = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            val lp = android.widget.LinearLayout.LayoutParams(
+                0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+            )
+            addView(tabPwd, lp)
+            addView(tabOtp, lp)
+        }
+
+        // 当前 tab：0=密码，1=验证码
+        var currentTab = 0
+        fun applyTabStyle() {
+            tabPwd.alpha = if (currentTab == 0) 1.0f else 0.5f
+            tabOtp.alpha = if (currentTab == 1) 1.0f else 0.5f
+            pwdPane.visibility = if (currentTab == 0) android.view.View.VISIBLE else android.view.View.GONE
+            otpPane.visibility = if (currentTab == 1) android.view.View.VISIBLE else android.view.View.GONE
+        }
+        applyTabStyle()
+        tabPwd.setOnClickListener { currentTab = 0; applyTabStyle() }
+        tabOtp.setOnClickListener { currentTab = 1; applyTabStyle() }
+
         val layout = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             setPadding(48, 16, 48, 0)
+            addView(tabRow)
             addView(phoneInput)
-            addView(pwdInput)
+            addView(pwdPane)
+            addView(otpPane)
         }
-        AlertDialog.Builder(this)
+
+        // 倒计时：60s
+        fun startOtpCountdown() {
+            otpCountdownJob?.cancel()
+            otpCountdownJob = lifecycleScope.launch {
+                var remaining = 60
+                btnSendOtp.isEnabled = false
+                while (remaining > 0) {
+                    btnSendOtp.text = "${remaining}s 后重发"
+                    kotlinx.coroutines.delay(1000)
+                    remaining--
+                }
+                btnSendOtp.text = "获取验证码"
+                btnSendOtp.isEnabled = true
+            }
+        }
+
+        // 发送验证码
+        btnSendOtp.setOnClickListener {
+            val phone = phoneInput.text.toString().trim()
+            if (phone.length != 11) {
+                toast("请填入 11 位手机号"); return@setOnClickListener
+            }
+            btnSendOtp.isEnabled = false
+            lifecycleScope.launch {
+                try {
+                    val resp = ApiClient.get(this@MainActivity).sendOtp(OtpSendReq(phone = phone))
+                    if (resp.isSuccessful) {
+                        toast("验证码已发送，请查收（开发模式可见后端日志）")
+                        startOtpCountdown()
+                    } else {
+                        btnSendOtp.isEnabled = true
+                        val msg = parseErrorMessage(resp.errorBody()?.string())
+                        toast("获取验证码失败：$msg")
+                    }
+                } catch (t: Throwable) {
+                    btnSendOtp.isEnabled = true
+                    toast("获取验证码失败：${t.message}")
+                }
+            }
+        }
+
+        val dialog = AlertDialog.Builder(this)
             .setTitle("登录")
             .setView(layout)
-            .setPositiveButton("登录") { _, _ ->
-                val phone = phoneInput.text.toString().trim()
+            .setPositiveButton("登录", null)  // 先 null，下面手动接管避免点击后立刻关闭
+            .setNegativeButton("取消", null)
+            .create()
+        dialog.setOnDismissListener {
+            otpCountdownJob?.cancel()
+            otpCountdownJob = null
+        }
+        dialog.show()
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val phone = phoneInput.text.toString().trim()
+            if (currentTab == 0) {
+                // 密码登录
                 val pwd = pwdInput.text.toString()
                 lifecycleScope.launch {
                     try {
@@ -168,14 +279,56 @@ class MainActivity : AppCompatActivity() {
                             .login(LoginReq(phone = phone, password = pwd))
                         AppConfig.saveJwtToken(this@MainActivity, resp.access_token)
                         ApiClient.invalidate()
+                        dialog.dismiss()
                         doSelfCheck()
                     } catch (t: Throwable) {
                         toast("登录失败: ${t.message}")
                     }
                 }
+            } else {
+                // 验证码登录
+                val code = otpInput.text.toString().trim()
+                if (phone.length != 11) {
+                    toast("请填入 11 位手机号"); return@setOnClickListener
+                }
+                if (code.length < 4) {
+                    toast("请输入验证码"); return@setOnClickListener
+                }
+                lifecycleScope.launch {
+                    try {
+                        val resp = ApiClient.get(this@MainActivity)
+                            .verifyOtp(OtpVerifyReq(phone = phone, code = code))
+                        if (resp.isSuccessful && resp.body() != null) {
+                            AppConfig.saveJwtToken(this@MainActivity, resp.body()!!.access_token)
+                            ApiClient.invalidate()
+                            dialog.dismiss()
+                            doSelfCheck()
+                        } else {
+                            val msg = parseErrorMessage(resp.errorBody()?.string())
+                            toast("登录失败：$msg")
+                        }
+                    } catch (t: Throwable) {
+                        toast("登录失败：${t.message}")
+                    }
+                }
             }
-            .setNegativeButton("取消", null)
-            .show()
+        }
+    }
+
+    /** 后端错误体形如 {"detail": {"code": "...", "message": "..."}}；尽力提取 message。 */
+    private fun parseErrorMessage(body: String?): String {
+        if (body.isNullOrBlank()) return "请求失败"
+        return try {
+            val root = org.json.JSONObject(body)
+            val detail = root.opt("detail")
+            when (detail) {
+                is org.json.JSONObject -> detail.optString("message", detail.toString())
+                is String -> detail
+                else -> body
+            }
+        } catch (_: Throwable) {
+            body
+        }
     }
 
     // ---------- 权限 ----------
