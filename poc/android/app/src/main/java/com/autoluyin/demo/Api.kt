@@ -53,6 +53,12 @@ data class SelfCheckReq(
     val recording_dir_ok: Boolean,
     val recording_toggle_on: Boolean,
     val permissions_ok: Boolean,
+    // v2.1 — 设备能力探测（全 nullable，向后兼容）
+    val manufacturer: String? = null,
+    val model: String? = null,
+    val android_version: String? = null,
+    val recording_toggle_self_reported: Boolean? = null,  // Task 5 onboarding 才填，本 task 留 null
+    val last_recording_scan_failed: Boolean? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -60,6 +66,10 @@ data class SelfCheckResp(
     val can_call: Boolean,
     // v1.6 — 失败项列表："recording_dir" / "recording_toggle" / "permissions"
     val fail_reasons: List<String> = emptyList(),
+    // v2.1 — 设备能力（向后兼容默认值）
+    val recording_capability: String = "realtime",  // realtime / post_upload / incompatible
+    val detected_rom: String = "",
+    val guidance_text: String = "",
 )
 
 @JsonClass(generateAdapter = true)

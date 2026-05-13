@@ -98,4 +98,46 @@ object AppConfig {
             .putString(KEY_RUNTIME_JSON, runtime.toString())
             .apply()
     }
+
+    // -------- v2.1 — Capability 持久化 --------
+    private const val KEY_CAPABILITY = "capability"          // realtime / post_upload / incompatible
+    private const val KEY_CAPABILITY_GUIDANCE = "capability_guidance"
+    private const val KEY_CAPABILITY_ROM = "capability_rom"
+    private const val KEY_CAPABILITY_CHECKED_AT = "capability_checked_at"  // epoch ms
+    private const val KEY_LAST_RECORDING_SCAN_FAILED = "last_recording_scan_failed"
+
+    data class CapabilityState(
+        val capability: String,    // realtime / post_upload / incompatible
+        val guidance: String,
+        val rom: String,
+        val checkedAtMs: Long,
+    )
+
+    fun saveCapability(ctx: Context, capability: String, guidance: String, rom: String) {
+        prefs(ctx).edit()
+            .putString(KEY_CAPABILITY, capability)
+            .putString(KEY_CAPABILITY_GUIDANCE, guidance)
+            .putString(KEY_CAPABILITY_ROM, rom)
+            .putLong(KEY_CAPABILITY_CHECKED_AT, System.currentTimeMillis())
+            .apply()
+    }
+
+    fun getCapability(ctx: Context): CapabilityState? {
+        val cap = prefs(ctx).getString(KEY_CAPABILITY, null) ?: return null
+        return CapabilityState(
+            capability = cap,
+            guidance = prefs(ctx).getString(KEY_CAPABILITY_GUIDANCE, "") ?: "",
+            rom = prefs(ctx).getString(KEY_CAPABILITY_ROM, "") ?: "",
+            checkedAtMs = prefs(ctx).getLong(KEY_CAPABILITY_CHECKED_AT, 0L),
+        )
+    }
+
+    fun markRecordingScanFailed(ctx: Context, failed: Boolean) {
+        prefs(ctx).edit().putBoolean(KEY_LAST_RECORDING_SCAN_FAILED, failed).apply()
+    }
+
+    fun getLastRecordingScanFailed(ctx: Context): Boolean? {
+        if (!prefs(ctx).contains(KEY_LAST_RECORDING_SCAN_FAILED)) return null  // 从未设置过
+        return prefs(ctx).getBoolean(KEY_LAST_RECORDING_SCAN_FAILED, false)
+    }
 }

@@ -124,6 +124,8 @@ class CallWatcherService : Service() {
         if (hit == null) {
             Log.w(TAG, "no recording matched callee=$callee")
             updateNotif("未找到录音，请手动补传")
+            // v2.1 — 标记上次扫描失败，下次自检 capability 强制降级
+            AppConfig.markRecordingScanFailed(this@CallWatcherService, true)
             clearState(); stopSelfDelayed(); return
         }
 
@@ -142,6 +144,8 @@ class CallWatcherService : Service() {
             )
             Log.i(TAG, "uploaded call=${resp.call_id}")
             updateNotif("上传完成 #${resp.call_id}")
+            // v2.1 — 清除扫描失败标志（实测可用）
+            AppConfig.markRecordingScanFailed(this@CallWatcherService, false)
             sendBroadcast(Intent("com.autoluyin.demo.UPLOAD_DONE")
                 .setPackage(packageName)
                 .putExtra("call_id", resp.call_id)
