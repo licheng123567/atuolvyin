@@ -152,6 +152,18 @@ private fun WebViewTabScreen(tab: String, ctx: Context) {
         )
         return
     }
-    val url = "${backend.trimEnd('/')}/app/$tab"
+    // v2.2 — WebView 加载 React mobile 页面。
+    // 开发环境：Vite dev server 在独立端口（5173）；自动从 backendUrl 推导：
+    //   http://host:18000  → http://host:5173
+    //   https://api.example.com → 同源（生产部署 backend 自托管 dist）
+    val webBase = run {
+        val trimmed = backend.trimEnd('/')
+        if (trimmed.contains(":18000")) {
+            trimmed.replace(":18000", ":5173")
+        } else {
+            trimmed
+        }
+    }
+    val url = "$webBase/app/$tab"
     AppWebView(url = url, modifier = Modifier.fillMaxSize())
 }

@@ -147,11 +147,21 @@ async def validation_exception_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
     first = exc.errors()[0] if exc.errors() else {}
+    # v2.2 临时日志：打印 422 来源（path/loc/收到的 body），用于真机调试
+    import logging
+    body_bytes = await request.body()
+    body_preview = body_bytes[:400].decode("utf-8", errors="replace") if body_bytes else ""
+    logging.warning(
+        "VAL_422 path=%s loc=%s msg=%s body=%s",
+        request.url.path, first.get("loc"), first.get("msg"), body_preview,
+    )
+    loc = first.get("loc", ())
+    loc_str = ".".join(str(x) for x in loc[1:]) if len(loc) > 1 else "?"
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
             "code": "ERR_VALIDATION",
-            "message": str(first.get("msg", "Validation error")),
+            "message": f"[{loc_str}] {first.get('msg', 'Validation error')}",
         },
     )
 
