@@ -5,6 +5,7 @@
 - 通过 case_timeline.py 聚合，作为 workorder.followup 事件
   广播到 admin/agent/supervisor/legal 看的「案件活动时间线」
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -43,13 +44,9 @@ class WorkOrderFollowUp(Base, TimestampMixin):
         sa.ForeignKey("user_account.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    occurred_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True), nullable=False
-    )
+    occurred_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
     # kind: note (普通跟进) / resolution_proposed (提建议) / escalation (升级)
-    kind: Mapped[str] = mapped_column(
-        sa.String(32), nullable=False, default="note"
-    )
+    kind: Mapped[str] = mapped_column(sa.String(32), nullable=False, default="note")
     note: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
     __table_args__ = (

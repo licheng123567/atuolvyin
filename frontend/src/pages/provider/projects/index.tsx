@@ -32,13 +32,12 @@ function dateOnly(iso: string | null): string {
 }
 
 export function ProviderProjectsPage() {
-  const { query, refetch } = (() => {
-    const r = useCustom<ProviderProjectsResp>({
-      url: "provider/projects",
-      method: "get",
-    });
-    return { query: r.query, refetch: () => r.query.refetch() };
-  })();
+  const customResult = useCustom<ProviderProjectsResp>({
+    url: "provider/projects",
+    method: "get",
+  });
+  const query = customResult.query;
+  const refetch = () => customResult.query.refetch();
   const items = query.data?.data?.items ?? [];
 
   const [assignFor, setAssignFor] = useState<ProviderProjectItem | null>(null);

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column
@@ -16,9 +15,7 @@ class CallRecord(Base, TimestampMixin):
     tenant_id: Mapped[int] = mapped_column(
         sa.BigInteger, sa.ForeignKey("tenant.id"), nullable=False
     )
-    case_id: Mapped[int | None] = mapped_column(
-        sa.BigInteger, sa.ForeignKey("collection_case.id")
-    )
+    case_id: Mapped[int | None] = mapped_column(sa.BigInteger, sa.ForeignKey("collection_case.id"))
     caller_user_id: Mapped[int] = mapped_column(
         sa.BigInteger, sa.ForeignKey("user_account.id"), nullable=False
     )
@@ -90,12 +87,12 @@ class AnalysisResult(Base, TimestampMixin):
     llm_model: Mapped[str | None] = mapped_column(sa.Text)
     needs_review: Mapped[bool] = mapped_column(sa.Boolean, default=False)
     # Sprint 8 T1 — supervisor quality review fields
-    supervisor_quality: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
-    supervisor_review_note: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
-    supervisor_reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+    supervisor_quality: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    supervisor_review_note: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    supervisor_reviewed_at: Mapped[datetime | None] = mapped_column(
         sa.DateTime(timezone=True), nullable=True
     )
-    supervisor_reviewed_by: Mapped[Optional[int]] = mapped_column(
+    supervisor_reviewed_by: Mapped[int | None] = mapped_column(
         sa.BigInteger, sa.ForeignKey("user_account.id"), nullable=True
     )
 
@@ -111,14 +108,16 @@ class RiskEvent(Base, TimestampMixin):
     category: Mapped[str] = mapped_column(sa.Text, nullable=False)
     trigger_text: Mapped[str | None] = mapped_column(sa.Text)
     audio_offset_ms: Mapped[int | None] = mapped_column(sa.Integer)
-    intervention: Mapped[str] = mapped_column(sa.Text, nullable=False)  # warn / interrupt / terminate
+    intervention: Mapped[str] = mapped_column(
+        sa.Text, nullable=False
+    )  # warn / interrupt / terminate
     data_hash: Mapped[str | None] = mapped_column(sa.Text)
     # Sprint 9.4 — supervisor manual disposition annotation
     disposition_note: Mapped[str | None] = mapped_column(sa.Text)
     disposition_by: Mapped[int | None] = mapped_column(
         sa.BigInteger, sa.ForeignKey("user_account.id"), nullable=True
     )
-    disposition_at: Mapped["datetime | None"] = mapped_column(
+    disposition_at: Mapped[datetime | None] = mapped_column(
         sa.DateTime(timezone=True), nullable=True
     )
 
@@ -141,14 +140,14 @@ class SuggestionFeedback(Base):
         server_default=sa.func.now(),
         nullable=False,
     )
-    supervisor_label: Mapped[Optional[str]] = mapped_column(sa.String(16))  # good | bad
-    supervisor_note: Mapped[Optional[str]] = mapped_column(sa.Text)
-    supervisor_id: Mapped[Optional[int]] = mapped_column(
+    supervisor_label: Mapped[str | None] = mapped_column(sa.String(16))  # good | bad
+    supervisor_note: Mapped[str | None] = mapped_column(sa.Text)
+    supervisor_id: Mapped[int | None] = mapped_column(
         sa.BigInteger, sa.ForeignKey("user_account.id"), nullable=True
     )
-    supervisor_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True))
-    inferred_signal: Mapped[Optional[int]] = mapped_column(sa.SmallInteger)
-    script_template_id: Mapped[Optional[int]] = mapped_column(
+    supervisor_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    inferred_signal: Mapped[int | None] = mapped_column(sa.SmallInteger)
+    script_template_id: Mapped[int | None] = mapped_column(
         sa.BigInteger, sa.ForeignKey("script_template.id"), nullable=True
     )
 

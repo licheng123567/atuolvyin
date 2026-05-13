@@ -11,6 +11,7 @@ POST   /api/v1/ops/law-firms/{id}/lawyers     add lawyer
 PATCH  /api/v1/ops/law-firms/{id}/lawyers/{lid}
 DELETE /api/v1/ops/law-firms/{id}/lawyers/{lid}
 """
+
 from __future__ import annotations
 
 from typing import Annotated
@@ -41,13 +42,17 @@ OPS_ROLES = ("platform_ops", "platform_super", "platform_superadmin")
 
 
 def _firm_with_lawyers(db: Session, firm: LawFirm) -> LawFirmOut:
-    lawyers = db.execute(
-        select(LawFirmLawyer)
-        .where(LawFirmLawyer.law_firm_id == firm.id)
-        .order_by(LawFirmLawyer.id)
-    ).scalars().all()
+    lawyers = (
+        db.execute(
+            select(LawFirmLawyer)
+            .where(LawFirmLawyer.law_firm_id == firm.id)
+            .order_by(LawFirmLawyer.id)
+        )
+        .scalars()
+        .all()
+    )
     out = LawFirmOut.model_validate(firm)
-    out.lawyers = [LawFirmLawyerOut.model_validate(l) for l in lawyers]
+    out.lawyers = [LawFirmLawyerOut.model_validate(lawyer) for lawyer in lawyers]
     return out
 
 
@@ -64,41 +69,37 @@ async def list_law_firms(
     stmt = select(LawFirm)
     if q:
         like = f"%{q}%"
-        stmt = stmt.where(
-            or_(LawFirm.name.ilike(like), LawFirm.license_no.ilike(like))
-        )
+        stmt = stmt.where(or_(LawFirm.name.ilike(like), LawFirm.license_no.ilike(like)))
     if region:
         stmt = stmt.where(LawFirm.region == region)
     if accepting is True:
-        stmt = stmt.where(
-            LawFirm.enabled.is_(True), LawFirm.accepting_orders.is_(True)
-        )
+        stmt = stmt.where(LawFirm.enabled.is_(True), LawFirm.accepting_orders.is_(True))
     stmt = stmt.order_by(LawFirm.id.desc())
     rows = db.execute(stmt.offset((page - 1) * page_size).limit(page_size)).scalars().all()
 
     from sqlalchemy import func as _f
+
     total_stmt = select(_f.count(LawFirm.id))
     if q:
         like = f"%{q}%"
-        total_stmt = total_stmt.where(
-            or_(LawFirm.name.ilike(like), LawFirm.license_no.ilike(like))
-        )
+        total_stmt = total_stmt.where(or_(LawFirm.name.ilike(like), LawFirm.license_no.ilike(like)))
     if region:
         total_stmt = total_stmt.where(LawFirm.region == region)
     if accepting is True:
-        total_stmt = total_stmt.where(
-            LawFirm.enabled.is_(True), LawFirm.accepting_orders.is_(True)
-        )
+        total_stmt = total_stmt.where(LawFirm.enabled.is_(True), LawFirm.accepting_orders.is_(True))
     total = int(db.execute(total_stmt).scalar_one())
 
     return PaginatedResponse[LawFirmOut](
         items=[_firm_with_lawyers(db, f) for f in rows],
-        total=total, page=page, page_size=page_size,
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 
 @router.post(
-    "/law-firms", response_model=LawFirmOut,
+    "/law-firms",
+    response_model=LawFirmOut,
     status_code=http_status.HTTP_201_CREATED,
 )
 async def create_law_firm(
@@ -110,12 +111,12 @@ async def create_law_firm(
     db.add(firm)
     try:
         db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         db.rollback()
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,
             detail={"code": "ERR_LICENSE_DUPLICATE", "message": "执业证号重复"},
-        )
+        ) from exc
     db.refresh(firm)
     return _firm_with_lawyers(db, firm)
 
@@ -152,12 +153,12 @@ async def patch_law_firm(
         setattr(firm, field, value)
     try:
         db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         db.rollback()
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,
             detail={"code": "ERR_LICENSE_DUPLICATE", "message": "执业证号重复"},
-        )
+        ) from exc
     db.refresh(firm)
     return _firm_with_lawyers(db, firm)
 

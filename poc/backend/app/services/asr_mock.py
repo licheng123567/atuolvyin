@@ -30,12 +30,14 @@ def transcribe(audio_url: str, hint_task_type: str | None = None) -> dict:
             continue
         speaker = 0 if line.startswith("[坐席]") else 1
         clean = line.split("] ", 1)[-1] if "] " in line else line
-        segments.append({
-            "speaker": speaker,
-            "start_ms": i * 4000,
-            "end_ms": i * 4000 + 3500,
-            "text": clean,
-        })
+        segments.append(
+            {
+                "speaker": speaker,
+                "start_ms": i * 4000,
+                "end_ms": i * 4000 + 3500,
+                "text": clean,
+            }
+        )
     return {
         "full_text": text,
         "segments": segments,

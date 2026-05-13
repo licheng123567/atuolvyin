@@ -197,7 +197,9 @@ async def get_legal_case(
     role = payload.get("role", "")
     contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
     reveal = should_reveal_owner_phone(
-        role=role, contract_active=contract_active, legal_case_stage=lc.stage,
+        role=role,
+        contract_active=contract_active,
+        legal_case_stage=lc.stage,
     )
 
     base = _legal_to_out(
@@ -312,5 +314,3 @@ async def download_evidence_bundle(
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
-
-

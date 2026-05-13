@@ -50,7 +50,7 @@ async function parsePreview(file: File): Promise<PreviewRow[]> {
     return [];
   }
   const text = await file.text();
-  const lines = text.replace(/^﻿/, "").split(/\r?\n/).filter((l) => l.trim());
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((l) => l.trim());
   const rows = lines.slice(1, 6).map((line) => {
     // 简易：不处理 quoted-comma（与 exportToCsv 输出兼容即可）
     const cells = line.match(/(?:[^,"]|"(?:[^"]|"")*")+/g) ?? [];

@@ -1,4 +1,5 @@
 """Sprint 11.6 — LegalDocument schemas (PRD §L2136)."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -6,10 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-
-LegalDocumentCategory = Literal[
-    "contract", "judgment", "notice", "evidence", "other"
-]
+LegalDocumentCategory = Literal["contract", "judgment", "notice", "evidence", "other"]
 
 
 class LegalDocumentOut(BaseModel):

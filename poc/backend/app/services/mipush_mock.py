@@ -1,4 +1,5 @@
 """In-memory MiPush mock backend — used in tests and local dev."""
+
 from __future__ import annotations
 
 
@@ -13,12 +14,14 @@ class MockMiPushClient:
         title: str,
         description: str,
     ) -> None:
-        self.sent_messages.append({
-            "reg_id": reg_id,
-            "payload": payload,
-            "title": title,
-            "description": description,
-        })
+        self.sent_messages.append(
+            {
+                "reg_id": reg_id,
+                "payload": payload,
+                "title": title,
+                "description": description,
+            }
+        )
 
     def reset(self) -> None:
         self.sent_messages.clear()

@@ -3,6 +3,7 @@
 Schemas for the service provider's own admin user (provider_admin role).
 Pages: PA.3.1 总览 / PA.3.2 合作租户 / PA.3.3 团队管理 / PA.3.4 收入数据.
 """
+
 from __future__ import annotations
 
 from datetime import datetime

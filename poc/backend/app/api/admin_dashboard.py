@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import sqlalchemy as sa
@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
+from app.models.audit import PlanConfig
 from app.models.call import (
     AnalysisResult,
     CallRecord,
@@ -17,7 +18,6 @@ from app.models.call import (
     SuggestionFeedback,
 )
 from app.models.case import CollectionCase, Project
-from app.models.audit import PlanConfig
 from app.models.tenant import (
     ServiceProvider,
     Tenant,
@@ -51,7 +51,7 @@ def get_dashboard_stats(
 ) -> AdminDashboardStats:
     tenant_id = int(payload.get("tenant_id") or 0)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = today_start + timedelta(days=1)
     seven_days_ago = today_start - timedelta(days=7)
@@ -60,23 +60,29 @@ def get_dashboard_stats(
     # ── 1. Today stats ────────────────────────────────────────────────────────
 
     # Total outbound calls today
-    outbound_count: int = db.execute(
-        select(func.count(CallRecord.id)).where(
-            CallRecord.tenant_id == tenant_id,
-            CallRecord.started_at >= today_start,
-            CallRecord.started_at < today_end,
-        )
-    ).scalar() or 0
+    outbound_count: int = (
+        db.execute(
+            select(func.count(CallRecord.id)).where(
+                CallRecord.tenant_id == tenant_id,
+                CallRecord.started_at >= today_start,
+                CallRecord.started_at < today_end,
+            )
+        ).scalar()
+        or 0
+    )
 
     # Connected = duration_sec > 10
-    connected_count: int = db.execute(
-        select(func.count(CallRecord.id)).where(
-            CallRecord.tenant_id == tenant_id,
-            CallRecord.started_at >= today_start,
-            CallRecord.started_at < today_end,
-            CallRecord.duration_sec > 10,
-        )
-    ).scalar() or 0
+    connected_count: int = (
+        db.execute(
+            select(func.count(CallRecord.id)).where(
+                CallRecord.tenant_id == tenant_id,
+                CallRecord.started_at >= today_start,
+                CallRecord.started_at < today_end,
+                CallRecord.duration_sec > 10,
+            )
+        ).scalar()
+        or 0
+    )
 
     # Promised: AnalysisResult.key_segments['intent'] in PROMISE_INTENTS
     # key_segments is a JSON column — use PostgreSQL ->> operator via sa.type_coerce / cast
@@ -101,9 +107,7 @@ def get_dashboard_stats(
     realtime_min: int = usage.realtime_minutes if usage else 0
     post_min: int = usage.post_minutes if usage else 0
     total_min: int | None = tenant.monthly_minute_quota if tenant else None
-    remaining_min: int | None = (
-        (total_min - used_min) if total_min is not None else None
-    )
+    remaining_min: int | None = (total_min - used_min) if total_min is not None else None
     warning: bool = bool(total_min and used_min >= total_min * 0.8)
 
     # Sprint 14.1 — 套餐细分配额（PlanConfig.monthly_realtime/post_minutes）
@@ -119,23 +123,29 @@ def get_dashboard_stats(
 
     # ── 3. Public pool count ──────────────────────────────────────────────────
 
-    public_pool_count: int = db.execute(
-        select(func.count(CollectionCase.id)).where(
-            CollectionCase.tenant_id == tenant_id,
-            CollectionCase.pool_type == "public",
-        )
-    ).scalar() or 0
+    public_pool_count: int = (
+        db.execute(
+            select(func.count(CollectionCase.id)).where(
+                CollectionCase.tenant_id == tenant_id,
+                CollectionCase.pool_type == "public",
+            )
+        ).scalar()
+        or 0
+    )
 
     # ── 4. Risk alert count (last 7 days) ─────────────────────────────────────
     # RiskEvent has no tenant_id — join via CallRecord
-    risk_alert_count_7d: int = db.execute(
-        select(func.count(RiskEvent.id))
-        .join(CallRecord, RiskEvent.call_id == CallRecord.id)
-        .where(
-            CallRecord.tenant_id == tenant_id,
-            RiskEvent.created_at >= seven_days_ago,
-        )
-    ).scalar() or 0
+    risk_alert_count_7d: int = (
+        db.execute(
+            select(func.count(RiskEvent.id))
+            .join(CallRecord, RiskEvent.call_id == CallRecord.id)
+            .where(
+                CallRecord.tenant_id == tenant_id,
+                RiskEvent.created_at >= seven_days_ago,
+            )
+        ).scalar()
+        or 0
+    )
 
     # ── 5. Top agents (by today's call count) ────────────────────────────────
 
@@ -239,21 +249,24 @@ def _count_promised(
     calls and filter in Python — avoids relying on DB-specific JSON operators
     and works for both PostgreSQL and SQLite (used in some edge cases).
     """
-    rows = db.execute(
-        select(AnalysisResult.key_segments)
-        .join(CallRecord, AnalysisResult.call_id == CallRecord.id)
-        .where(
-            CallRecord.tenant_id == tenant_id,
-            CallRecord.started_at >= start,
-            CallRecord.started_at < end,
+    rows = (
+        db.execute(
+            select(AnalysisResult.key_segments)
+            .join(CallRecord, AnalysisResult.call_id == CallRecord.id)
+            .where(
+                CallRecord.tenant_id == tenant_id,
+                CallRecord.started_at >= start,
+                CallRecord.started_at < end,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     count = 0
     for segments in rows:
-        if segments and isinstance(segments, dict):
-            if segments.get("intent") in _PROMISE_INTENTS:
-                count += 1
+        if segments and isinstance(segments, dict) and segments.get("intent") in _PROMISE_INTENTS:
+            count += 1
     return count
 
 
@@ -328,11 +341,13 @@ def get_dashboard_by_project(
         return []
     tenant_id = int(tenant_id)
 
-    projects = db.execute(
-        select(Project).where(Project.tenant_id == tenant_id).order_by(Project.id)
-    ).scalars().all()
+    projects = (
+        db.execute(select(Project).where(Project.tenant_id == tenant_id).order_by(Project.id))
+        .scalars()
+        .all()
+    )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     cutoff_30d = now - timedelta(days=30)
     items: list[ProjectKpi] = []
 
@@ -365,25 +380,31 @@ def get_dashboard_by_project(
                 escalated += 1
 
         # 通话数 30 天
-        total_calls = db.execute(
-            select(func.count(CallRecord.id))
-            .join(CollectionCase, CollectionCase.id == CallRecord.case_id)
-            .where(
-                CallRecord.tenant_id == tenant_id,
-                CollectionCase.project_id == p.id,
-                CallRecord.started_at >= cutoff_30d,
-            )
-        ).scalar_one() or 0
-        connected = db.execute(
-            select(func.count(CallRecord.id))
-            .join(CollectionCase, CollectionCase.id == CallRecord.case_id)
-            .where(
-                CallRecord.tenant_id == tenant_id,
-                CollectionCase.project_id == p.id,
-                CallRecord.started_at >= cutoff_30d,
-                CallRecord.duration_sec > 10,
-            )
-        ).scalar_one() or 0
+        total_calls = (
+            db.execute(
+                select(func.count(CallRecord.id))
+                .join(CollectionCase, CollectionCase.id == CallRecord.case_id)
+                .where(
+                    CallRecord.tenant_id == tenant_id,
+                    CollectionCase.project_id == p.id,
+                    CallRecord.started_at >= cutoff_30d,
+                )
+            ).scalar_one()
+            or 0
+        )
+        connected = (
+            db.execute(
+                select(func.count(CallRecord.id))
+                .join(CollectionCase, CollectionCase.id == CallRecord.case_id)
+                .where(
+                    CallRecord.tenant_id == tenant_id,
+                    CollectionCase.project_id == p.id,
+                    CallRecord.started_at >= cutoff_30d,
+                    CallRecord.duration_sec > 10,
+                )
+            ).scalar_one()
+            or 0
+        )
 
         provider_name = None
         if p.provider_id:
@@ -391,23 +412,25 @@ def get_dashboard_by_project(
                 select(ServiceProvider.name).where(ServiceProvider.id == p.provider_id)
             ).scalar_one_or_none()
 
-        items.append(ProjectKpi(
-            project_id=p.id,
-            project_name=p.name,
-            provider_id=p.provider_id,
-            provider_name=provider_name,
-            case_count=case_count,
-            receivable=round(receivable, 2),
-            received=round(received, 2),
-            recovery_rate=round(received / receivable, 4) if receivable > 0 else 0.0,
-            promised_count=promised,
-            in_progress_count=in_progress,
-            new_count=new_c,
-            escalated_count=escalated,
-            closed_count=closed,
-            connected_30d=int(connected),
-            total_calls_30d=int(total_calls),
-        ))
+        items.append(
+            ProjectKpi(
+                project_id=p.id,
+                project_name=p.name,
+                provider_id=p.provider_id,
+                provider_name=provider_name,
+                case_count=case_count,
+                receivable=round(receivable, 2),
+                received=round(received, 2),
+                recovery_rate=round(received / receivable, 4) if receivable > 0 else 0.0,
+                promised_count=promised,
+                in_progress_count=in_progress,
+                new_count=new_c,
+                escalated_count=escalated,
+                closed_count=closed,
+                connected_30d=int(connected),
+                total_calls_30d=int(total_calls),
+            )
+        )
 
     return items
 
@@ -443,14 +466,17 @@ def get_dashboard_by_provider(
     for pid, provider_id in project_rows:
         by_provider.setdefault(int(provider_id), []).append(int(pid))
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     cutoff_30d = now - timedelta(days=30)
     items: list[ProviderKpi] = []
 
     for provider_id, project_ids in by_provider.items():
-        provider_name = db.execute(
-            select(ServiceProvider.name).where(ServiceProvider.id == provider_id)
-        ).scalar_one_or_none() or f"#{provider_id}"
+        provider_name = (
+            db.execute(
+                select(ServiceProvider.name).where(ServiceProvider.id == provider_id)
+            ).scalar_one_or_none()
+            or f"#{provider_id}"
+        )
 
         case_rows = db.execute(
             select(CollectionCase.stage, CollectionCase.amount_owed).where(
@@ -469,40 +495,46 @@ def get_dashboard_by_provider(
                 paid_count += 1
                 recovered += amt_f
 
-        total_calls = db.execute(
-            select(func.count(CallRecord.id))
-            .join(CollectionCase, CollectionCase.id == CallRecord.case_id)
-            .where(
-                CallRecord.tenant_id == tenant_id,
-                CollectionCase.project_id.in_(project_ids),
-                CallRecord.started_at >= cutoff_30d,
-            )
-        ).scalar_one() or 0
-        connected = db.execute(
-            select(func.count(CallRecord.id))
-            .join(CollectionCase, CollectionCase.id == CallRecord.case_id)
-            .where(
-                CallRecord.tenant_id == tenant_id,
-                CollectionCase.project_id.in_(project_ids),
-                CallRecord.started_at >= cutoff_30d,
-                CallRecord.duration_sec > 10,
-            )
-        ).scalar_one() or 0
+        total_calls = (
+            db.execute(
+                select(func.count(CallRecord.id))
+                .join(CollectionCase, CollectionCase.id == CallRecord.case_id)
+                .where(
+                    CallRecord.tenant_id == tenant_id,
+                    CollectionCase.project_id.in_(project_ids),
+                    CallRecord.started_at >= cutoff_30d,
+                )
+            ).scalar_one()
+            or 0
+        )
+        connected = (
+            db.execute(
+                select(func.count(CallRecord.id))
+                .join(CollectionCase, CollectionCase.id == CallRecord.case_id)
+                .where(
+                    CallRecord.tenant_id == tenant_id,
+                    CollectionCase.project_id.in_(project_ids),
+                    CallRecord.started_at >= cutoff_30d,
+                    CallRecord.duration_sec > 10,
+                )
+            ).scalar_one()
+            or 0
+        )
 
-        items.append(ProviderKpi(
-            provider_id=provider_id,
-            provider_name=provider_name,
-            active_project_count=len(project_ids),
-            case_count=case_count,
-            paid_count=paid_count,
-            paid_rate=round(paid_count / case_count, 4) if case_count else 0.0,
-            receivable=round(receivable, 2),
-            recovered_30d=round(recovered, 2),
-            call_count_30d=int(total_calls),
-            connected_rate_30d=round(
-                connected / total_calls, 4
-            ) if total_calls else 0.0,
-        ))
+        items.append(
+            ProviderKpi(
+                provider_id=provider_id,
+                provider_name=provider_name,
+                active_project_count=len(project_ids),
+                case_count=case_count,
+                paid_count=paid_count,
+                paid_rate=round(paid_count / case_count, 4) if case_count else 0.0,
+                receivable=round(receivable, 2),
+                recovered_30d=round(recovered, 2),
+                call_count_30d=int(total_calls),
+                connected_rate_30d=round(connected / total_calls, 4) if total_calls else 0.0,
+            )
+        )
 
     items.sort(key=lambda x: x.recovered_30d, reverse=True)
     return items[:10]

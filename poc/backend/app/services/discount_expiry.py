@@ -3,6 +3,7 @@
 每小时扫一次 status 仍在审批 / 已批准但未执行的 offer，超过 expires_at 即标 expired。
 follow heartbeat_cleanup_loop pattern in services/call_lifecycle.py.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -25,20 +26,26 @@ def _sweep_once() -> int:
     db = SessionLocal()
     try:
         now = datetime.now(UTC)
-        rows = db.execute(
-            select(DiscountOffer)
-            .where(DiscountOffer.status.in_(ACTIVE_STATUSES))
-            .where(DiscountOffer.expires_at < now)
-        ).scalars().all()
+        rows = (
+            db.execute(
+                select(DiscountOffer)
+                .where(DiscountOffer.status.in_(ACTIVE_STATUSES))
+                .where(DiscountOffer.expires_at < now)
+            )
+            .scalars()
+            .all()
+        )
         marked = 0
         for offer in rows:
             offer.status = "expired"
             trail = list(offer.audit_trail or [])
-            trail.append({
-                "time": now.strftime("%Y-%m-%d %H:%M:%S"),
-                "actor": "系统",
-                "action": "7 天有效期到期，自动失效",
-            })
+            trail.append(
+                {
+                    "time": now.strftime("%Y-%m-%d %H:%M:%S"),
+                    "actor": "系统",
+                    "action": "7 天有效期到期，自动失效",
+                }
+            )
             offer.audit_trail = trail
             flag_modified(offer, "audit_trail")
             marked += 1

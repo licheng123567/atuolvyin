@@ -1,4 +1,5 @@
 """Sprint 10 — Platform-level schemas."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -6,7 +7,6 @@ from decimal import Decimal
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 # ── Settlement overview (L1999) ─────────────────────────────────────
 

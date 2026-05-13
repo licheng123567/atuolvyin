@@ -22,7 +22,7 @@ export function exportToCsv<T extends Record<string, unknown>>(
   const body = rows
     .map((r) => columns.map((c) => escapeCell(r[c.key])).join(","))
     .join("\n");
-  const csv = `﻿${header}\n${body}`;
+  const csv = `\uFEFF${header}\n${body}`;
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

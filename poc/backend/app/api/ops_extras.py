@@ -10,6 +10,7 @@ Endpoints:
   DELETE /ops/announcements/{id}            — 删除公告
   GET   /ops/audit-logs/me                  — 自己的操作日志
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -18,7 +19,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi import status as http_status
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -68,8 +69,9 @@ async def settlements_overview(
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
     pending = db.execute(
-        select(func.coalesce(func.sum(SettlementStatement.total_amount), 0))
-        .where(SettlementStatement.status.in_(("DRAFT", "CONFIRMED", "DISPUTED")))
+        select(func.coalesce(func.sum(SettlementStatement.total_amount), 0)).where(
+            SettlementStatement.status.in_(("DRAFT", "CONFIRMED", "DISPUTED"))
+        )
     ).scalar_one() or Decimal("0")
 
     paid_month = db.execute(
@@ -78,12 +80,15 @@ async def settlements_overview(
         .where(SettlementStatement.paid_at >= month_start)
     ).scalar_one() or Decimal("0")
 
-    overdue_count = db.execute(
-        select(func.count())
-        .select_from(SettlementStatement)
-        .where(SettlementStatement.status.in_(("DRAFT", "CONFIRMED", "DISPUTED")))
-        .where(SettlementStatement.period_end < now)
-    ).scalar_one() or 0
+    overdue_count = (
+        db.execute(
+            select(func.count())
+            .select_from(SettlementStatement)
+            .where(SettlementStatement.status.in_(("DRAFT", "CONFIRMED", "DISPUTED")))
+            .where(SettlementStatement.period_end < now)
+        ).scalar_one()
+        or 0
+    )
 
     rows = db.execute(
         select(SettlementStatement, Tenant)
@@ -98,11 +103,7 @@ async def settlements_overview(
 
     items: list[SettlementSummaryItem] = []
     for s, t in rows:
-        overdue_days = (
-            (now - s.period_end).days
-            if s.status != "PAID" and s.period_end < now
-            else 0
-        )
+        overdue_days = (now - s.period_end).days if s.status != "PAID" and s.period_end < now else 0
         items.append(
             SettlementSummaryItem(
                 tenant_id=t.id,
@@ -125,9 +126,7 @@ async def settlements_overview(
 # ── L2000 customer followups ────────────────────────────────────────
 
 
-def _followup_to_out(
-    f: CustomerFollowup, tenant_name: str | None = None
-) -> CustomerFollowupOut:
+def _followup_to_out(f: CustomerFollowup, tenant_name: str | None = None) -> CustomerFollowupOut:
     return CustomerFollowupOut(
         id=f.id,
         tenant_id=f.tenant_id,
@@ -169,9 +168,7 @@ async def create_followup(
     return _followup_to_out(f, tenant.name)
 
 
-@router.get(
-    "/customer-followups", response_model=list[CustomerFollowupOut]
-)
+@router.get("/customer-followups", response_model=list[CustomerFollowupOut])
 async def list_followups(
     _user: Annotated[UserAccount, Depends(require_roles(*OPS_ROLES))],
     db: Annotated[Session, Depends(get_db)],
@@ -234,9 +231,7 @@ async def list_announcements(
     return [AnnouncementOut.model_validate(a) for a in rows]
 
 
-@router.patch(
-    "/announcements/{announcement_id}", response_model=AnnouncementOut
-)
+@router.patch("/announcements/{announcement_id}", response_model=AnnouncementOut)
 async def patch_announcement(
     announcement_id: int,
     body: AnnouncementPatchIn,
@@ -281,9 +276,7 @@ async def delete_announcement(
 # ── L2002 my own audit log (filtered, no global access) ─────────────
 
 
-@router.get(
-    "/audit-logs/me", response_model=PaginatedResponse[AuditLogOut]
-)
+@router.get("/audit-logs/me", response_model=PaginatedResponse[AuditLogOut])
 async def my_audit_logs(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[UserAccount, Depends(require_roles(*OPS_ROLES))],
@@ -293,14 +286,16 @@ async def my_audit_logs(
 ) -> PaginatedResponse[AuditLogOut]:
     user_id = _user_id(payload)
     stmt = select(AuditLog).where(AuditLog.actor_user_id == user_id)
-    total: int = db.execute(
-        select(func.count()).select_from(stmt.subquery())
-    ).scalar_one()
-    rows = db.execute(
-        stmt.order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    ).scalars().all()
+    total: int = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
+    rows = (
+        db.execute(
+            stmt.order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        .scalars()
+        .all()
+    )
     return PaginatedResponse(
         items=[AuditLogOut.model_validate(r) for r in rows],
         total=total,

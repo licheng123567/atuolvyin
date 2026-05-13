@@ -7,6 +7,7 @@
 
 也提供同步 cleanup_stale_calls 方便测试直接调用。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -31,12 +32,16 @@ def cleanup_stale_calls(db: Session, *, now: datetime | None = None) -> list[int
         now = datetime.now(UTC)
     threshold = now - timedelta(seconds=HEARTBEAT_TIMEOUT_SEC)
 
-    stale = db.execute(
-        select(CallRecord).where(
-            CallRecord.status.in_(("dialing", "live")),
-            CallRecord.last_heartbeat_at < threshold,
+    stale = (
+        db.execute(
+            select(CallRecord).where(
+                CallRecord.status.in_(("dialing", "live")),
+                CallRecord.last_heartbeat_at < threshold,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     aborted_ids: list[int] = []
     for c in stale:

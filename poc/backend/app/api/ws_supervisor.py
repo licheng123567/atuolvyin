@@ -11,7 +11,11 @@ from app.ws.auth import decode_ws_token
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-_SUPERVISOR_ROLES = {"supervisor", "admin", "project_manager_property"}  # Sprint 14.2 — 实时通话墙观察者
+_SUPERVISOR_ROLES = {
+    "supervisor",
+    "admin",
+    "project_manager_property",
+}  # Sprint 14.2 — 实时通话墙观察者
 
 
 @router.websocket("/ws/supervisor")
@@ -29,14 +33,18 @@ async def ws_supervisor(
     role = payload.get("role", "")
     if role not in _SUPERVISOR_ROLES:
         await websocket.accept()
-        await websocket.send_json({"type": "error", "code": "ERR_AUTH", "message": "insufficient role"})
+        await websocket.send_json(
+            {"type": "error", "code": "ERR_AUTH", "message": "insufficient role"}
+        )
         await websocket.close(code=1008)
         return
 
     tenant_id = int(payload.get("tenant_id") or 0)
     if not tenant_id:
         await websocket.accept()
-        await websocket.send_json({"type": "error", "code": "ERR_AUTH", "message": "missing tenant"})
+        await websocket.send_json(
+            {"type": "error", "code": "ERR_AUTH", "message": "missing tenant"}
+        )
         await websocket.close(code=1008)
         return
 

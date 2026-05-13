@@ -3,6 +3,7 @@
 每个 notify_xxx 单独函数，签名贴业务上下文。失败做 log，不抛回业务，
 保证业务事务不被通知失败回滚。
 """
+
 from __future__ import annotations
 
 import logging
@@ -19,23 +20,31 @@ logger = logging.getLogger(__name__)
 
 
 def _users_with_role(db: Session, tenant_id: int, *roles: str) -> list[int]:
-    rows = db.execute(
-        select(UserTenantMembership.user_id).where(
-            UserTenantMembership.tenant_id == tenant_id,
-            UserTenantMembership.role.in_(roles),
-            UserTenantMembership.is_active.is_(True),
+    rows = (
+        db.execute(
+            select(UserTenantMembership.user_id).where(
+                UserTenantMembership.tenant_id == tenant_id,
+                UserTenantMembership.role.in_(roles),
+                UserTenantMembership.is_active.is_(True),
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [int(r) for r in rows]
 
 
 def _ops_users(db: Session, tenant_id: int) -> list[int]:
-    rows = db.execute(
-        select(PlatformOpsAssignment.ops_user_id).where(
-            PlatformOpsAssignment.entity_type == "tenant",
-            PlatformOpsAssignment.entity_id == tenant_id,
+    rows = (
+        db.execute(
+            select(PlatformOpsAssignment.ops_user_id).where(
+                PlatformOpsAssignment.entity_type == "tenant",
+                PlatformOpsAssignment.entity_id == tenant_id,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [int(r) for r in rows]
 
 
@@ -120,10 +129,9 @@ def notify_case_escalated(
     operator_user_id: int | None = None,
 ) -> None:
     """案件升级到 escalated/legal 等阶段时通知 admin + supervisor + 平台 ops。"""
-    recipients = list(set(
-        _users_with_role(db, tenant_id, "admin", "supervisor")
-        + _ops_users(db, tenant_id)
-    ))
+    recipients = list(
+        set(_users_with_role(db, tenant_id, "admin", "supervisor") + _ops_users(db, tenant_id))
+    )
     if operator_user_id is not None:
         recipients = [u for u in recipients if u != operator_user_id]
     if not recipients:
@@ -133,10 +141,7 @@ def notify_case_escalated(
         tenant_id=tenant_id,
         event_type=EventType.CASE_ESCALATED,
         title="案件已升级",
-        body=(
-            f"案件 #{case_id}（业主：{owner_name or '未命名'}）"
-            f"已升级到 {new_stage} 阶段。"
-        ),
+        body=(f"案件 #{case_id}（业主：{owner_name or '未命名'}）已升级到 {new_stage} 阶段。"),
         recipient_user_ids=recipients,
         severity="warn",
         payload={"case_id": case_id, "new_stage": new_stage},
@@ -156,18 +161,23 @@ def scan_and_notify_promise_expiring(
     Celery beat 调度：每小时跑一次（或 dev 环境用 mgmt 命令手动跑）。
     依赖 v1.6 alembic 21001v16 添加的 collection_case.promise_due_at 字段。
     """
-    from app.models.case import CollectionCase
     from datetime import UTC, datetime, timedelta
+
+    from app.models.case import CollectionCase
 
     now = datetime.now(UTC)
     deadline = now + timedelta(hours=look_ahead_hours)
-    rows = db.execute(
-        select(CollectionCase).where(
-            CollectionCase.promise_due_at.isnot(None),
-            CollectionCase.promise_due_at <= deadline,
-            CollectionCase.promise_due_at > now,
+    rows = (
+        db.execute(
+            select(CollectionCase).where(
+                CollectionCase.promise_due_at.isnot(None),
+                CollectionCase.promise_due_at <= deadline,
+                CollectionCase.promise_due_at > now,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     fired = 0
     for case in rows:

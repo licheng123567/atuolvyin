@@ -1,4 +1,4 @@
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -23,16 +23,15 @@ from app.api import (
     admin_settings,
     admin_settlements,
     admin_suggestion_config,
-    discount_offers,
     agent_cases,
     agent_me,
     auth,
     auth_extras,
-    me as me_api,
     calls,
     calls_v1,
     devices,
     devices_v1,
+    discount_offers,
     lawfirm_orders,
     lawyer_orders,
     legal_cases,
@@ -40,8 +39,6 @@ from app.api import (
     legal_documents,
     legal_internal_orders,
     legal_workstation,
-    tenant_legal_orders,
-    notifications as notifications_api,
     ops,
     ops_extras,
     ops_law_firms,
@@ -60,32 +57,42 @@ from app.api import (
     super_plans,
     supervisor,
     supervisor_case_detail,
+    supervisor_escalated,
     supervisor_extras,
     supervisor_labels,
     supervisor_live,
-    supervisor_escalated,
     supervisor_review,
     supervisor_shifts,
     supervisor_team_stats,
     tasks,
+    tenant_legal_orders,
     user_preferences,
     users,
     work_orders,
     ws_calls,
     ws_supervisor,
 )
+from app.api import (
+    me as me_api,
+)
+from app.api import (
+    notifications as notifications_api,
+)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     import asyncio
+
     from app.core.crypto import _get_key
     from app.services.call_lifecycle import heartbeat_cleanup_loop
     from app.services.discount_expiry import discount_expiry_loop
+
     try:
         _get_key()
     except RuntimeError as exc:
         import sys
+
         print(f"FATAL: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc
     # Sprint 14.2 — 启动通话心跳超时清理后台任务（90s 无心跳 → call.aborted）
@@ -97,10 +104,8 @@ async def lifespan(app: FastAPI):
     finally:
         for task in (cleanup_task, discount_expiry_task):
             task.cancel()
-            try:
+            with suppress(asyncio.CancelledError, Exception):
                 await task
-            except (asyncio.CancelledError, Exception):
-                pass
 
 
 app = FastAPI(
@@ -160,13 +165,23 @@ app.include_router(ops.router, prefix="/api/v1/ops", tags=["ops"])
 app.include_router(ops_providers.router, prefix="/api/v1/ops", tags=["ops-providers"])
 app.include_router(ops_extras.router, prefix="/api/v1/ops", tags=["ops-extras"])
 app.include_router(ops_law_firms.router, prefix="/api/v1/ops", tags=["ops-law-firms"])
-app.include_router(legal_workstation.router, prefix="/api/v1/legal-workstation", tags=["legal-workstation"])
+app.include_router(
+    legal_workstation.router, prefix="/api/v1/legal-workstation", tags=["legal-workstation"]
+)
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 app.include_router(admin_cases.router, prefix="/api/v1/admin", tags=["admin-cases"])
-app.include_router(admin_legal_conversion.router, prefix="/api/v1/admin", tags=["admin-legal-conversion"])
-app.include_router(admin_legal_internal_config.router, prefix="/api/v1/admin", tags=["admin-legal-internal-config"])
-app.include_router(legal_conversion_requests.router, prefix="/api/v1", tags=["legal-conversion-requests"])
-app.include_router(legal_internal_orders.router, prefix="/api/v1/legal", tags=["legal-internal-orders"])
+app.include_router(
+    admin_legal_conversion.router, prefix="/api/v1/admin", tags=["admin-legal-conversion"]
+)
+app.include_router(
+    admin_legal_internal_config.router, prefix="/api/v1/admin", tags=["admin-legal-internal-config"]
+)
+app.include_router(
+    legal_conversion_requests.router, prefix="/api/v1", tags=["legal-conversion-requests"]
+)
+app.include_router(
+    legal_internal_orders.router, prefix="/api/v1/legal", tags=["legal-internal-orders"]
+)
 app.include_router(admin_projects.router, prefix="/api/v1/admin", tags=["admin-projects"])
 app.include_router(
     admin_project_members.router,
@@ -197,20 +212,36 @@ app.include_router(
     prefix="/api/v1/admin",
     tags=["admin-agent-devices"],
 )
-app.include_router(supervisor_labels.router, prefix="/api/v1/supervisor", tags=["supervisor-labels"])
-app.include_router(supervisor_review.router, prefix="/api/v1/supervisor", tags=["supervisor-review"])
+app.include_router(
+    supervisor_labels.router, prefix="/api/v1/supervisor", tags=["supervisor-labels"]
+)
+app.include_router(
+    supervisor_review.router, prefix="/api/v1/supervisor", tags=["supervisor-review"]
+)
 app.include_router(supervisor_live.router, prefix="/api/v1/supervisor", tags=["supervisor-live"])
-app.include_router(supervisor_extras.router, prefix="/api/v1/supervisor", tags=["supervisor-extras"])
-app.include_router(supervisor_case_detail.router, prefix="/api/v1/supervisor", tags=["supervisor-case-detail"])
-app.include_router(supervisor_shifts.router, prefix="/api/v1/supervisor", tags=["supervisor-shifts"])
-app.include_router(supervisor_team_stats.router, prefix="/api/v1/supervisor", tags=["supervisor-team-stats"])
-app.include_router(supervisor_escalated.router, prefix="/api/v1/supervisor", tags=["supervisor-escalated"])
+app.include_router(
+    supervisor_extras.router, prefix="/api/v1/supervisor", tags=["supervisor-extras"]
+)
+app.include_router(
+    supervisor_case_detail.router, prefix="/api/v1/supervisor", tags=["supervisor-case-detail"]
+)
+app.include_router(
+    supervisor_shifts.router, prefix="/api/v1/supervisor", tags=["supervisor-shifts"]
+)
+app.include_router(
+    supervisor_team_stats.router, prefix="/api/v1/supervisor", tags=["supervisor-team-stats"]
+)
+app.include_router(
+    supervisor_escalated.router, prefix="/api/v1/supervisor", tags=["supervisor-escalated"]
+)
 app.include_router(lawfirm_orders.router, prefix="/api/v1/lawfirm", tags=["lawfirm-orders"])
 app.include_router(lawyer_orders.router, prefix="/api/v1/lawyer", tags=["lawyer-orders"])
 app.include_router(tenant_legal_orders.router, prefix="/api/v1/legal", tags=["tenant-legal-orders"])
 # v1.6 — 协商打折 / 减免审批
 app.include_router(discount_offers.router, prefix="/api/v1", tags=["discount-offers"])
-app.include_router(admin_suggestion_config.router, prefix="/api/v1/admin", tags=["suggestion-config"])
+app.include_router(
+    admin_suggestion_config.router, prefix="/api/v1/admin", tags=["suggestion-config"]
+)
 app.include_router(admin_settlements.router, prefix="/api/v1/admin", tags=["admin-settlements"])
 app.include_router(admin_providers.router, prefix="/api/v1/admin", tags=["admin-providers"])
 app.include_router(
@@ -226,9 +257,7 @@ app.include_router(legal_documents.router, prefix="/api/v1/legal", tags=["legal-
 app.include_router(work_orders.router, prefix="/api/v1/workorders", tags=["workorders"])
 app.include_router(pm_dashboard.router, prefix="/api/v1/pm", tags=["pm"])
 app.include_router(provider_admin.router, prefix="/api/v1/provider", tags=["provider"])
-app.include_router(
-    provider_scripts.router, prefix="/api/v1/provider", tags=["provider-scripts"]
-)
+app.include_router(provider_scripts.router, prefix="/api/v1/provider", tags=["provider-scripts"])
 app.include_router(
     provider_termination.admin_router,
     prefix="/api/v1/admin",

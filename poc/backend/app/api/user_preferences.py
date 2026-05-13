@@ -7,6 +7,7 @@ PATCH /api/v1/users/me/preferences  — merge 局部更新
   - app_intro_dismissed: bool — 首次登录引导 modal 是否已关闭
   - 其他 UI 偏好按需扩展
 """
+
 from __future__ import annotations
 
 from typing import Annotated, Any

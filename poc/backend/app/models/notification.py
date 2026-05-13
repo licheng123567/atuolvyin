@@ -4,6 +4,7 @@
 本 sprint 让规则真正触发并把消息送达；本表是 system 渠道的落点。
 SMS / 企微 / 钉钉 渠道在 services/notifications/channels/ 下分别实现。
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -87,9 +88,7 @@ class NotificationDeliveryLog(Base):
             "channel IN ('system','sms','wechat','dingtalk')",
             name="ck_delivery_channel",
         ),
-        sa.CheckConstraint(
-            "status IN ('sent','skipped','failed')", name="ck_delivery_status"
-        ),
+        sa.CheckConstraint("status IN ('sent','skipped','failed')", name="ck_delivery_status"),
         sa.Index("ix_delivery_log_tenant_event", "tenant_id", "event_type"),
         sa.Index("ix_delivery_log_created_at", "created_at"),
     )

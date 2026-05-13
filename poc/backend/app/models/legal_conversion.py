@@ -6,6 +6,7 @@
 - LegalConversionOrder：物业公司从 CRM 案件下单 → 平台撮合律所 → 接单完成
   含催收时间线摘要 + 推荐处理方式 + 预估成本/回款概率（创建时冻结）
 """
+
 from __future__ import annotations
 
 from datetime import date, datetime
@@ -74,13 +75,9 @@ class LegalConversionOrder(Base, TimestampMixin):
         sa.ForeignKey("legal_service_package.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    status: Mapped[str] = mapped_column(
-        sa.String(32), nullable=False, default="pending"
-    )
+    status: Mapped[str] = mapped_column(sa.String(32), nullable=False, default="pending")
     price_quoted: Mapped[Decimal] = mapped_column(sa.Numeric(10, 2), nullable=False)
-    platform_fee_amount: Mapped[Decimal] = mapped_column(
-        sa.Numeric(10, 2), nullable=False
-    )
+    platform_fee_amount: Mapped[Decimal] = mapped_column(sa.Numeric(10, 2), nullable=False)
     law_firm_id: Mapped[int | None] = mapped_column(
         sa.BigInteger, sa.ForeignKey("law_firm.id", ondelete="SET NULL")
     )
@@ -154,9 +151,7 @@ class LegalConversionRequest(Base, TimestampMixin):
     )
     requester_role: Mapped[str] = mapped_column(sa.String(32), nullable=False)
     reason: Mapped[str | None] = mapped_column(sa.Text)
-    status: Mapped[str] = mapped_column(
-        sa.String(20), nullable=False, default="pending"
-    )
+    status: Mapped[str] = mapped_column(sa.String(20), nullable=False, default="pending")
     reviewer_user_id: Mapped[int | None] = mapped_column(
         sa.BigInteger, sa.ForeignKey("user_account.id", ondelete="SET NULL")
     )

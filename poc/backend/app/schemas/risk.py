@@ -13,7 +13,7 @@ class RiskEventOut(BaseModel):
     category: str
     speaker: str
     level: str
-    trigger: str        # "keyword" | "llm" | "keyword+llm"
+    trigger: str  # "keyword" | "llm" | "keyword+llm"
     matched_keyword: str | None = None
     llm_confidence: float | None = None
     transcript_text: str
@@ -39,7 +39,7 @@ class RiskKeywordCreate(BaseModel):
     speaker: str
     level: str
     keyword: str
-    tenant_id: int | None = None     # None = platform preset; only platform_super may set
+    tenant_id: int | None = None  # None = platform preset; only platform_super may set
 
 
 class RiskKeywordUpdate(BaseModel):

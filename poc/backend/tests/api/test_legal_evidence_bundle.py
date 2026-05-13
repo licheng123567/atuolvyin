@@ -474,7 +474,8 @@ async def test_bundle_manifest_has_bundle_sha256(
     manifest = json.loads(
         zf.read(f"case_{seeded_case.id}/bundle_manifest.json")
     )
-    assert manifest["bundle_version"] == "1.0"
+    # v1.x bundle 格式升级为 1.1（manifest 字段扩充）
+    assert manifest["bundle_version"] == "1.1"
     assert manifest["call_count"] == 1
     assert len(manifest["bundle_sha256"]) == 64  # SHA-256 hex
     assert manifest["tenant_id"] == seeded_tenant.id

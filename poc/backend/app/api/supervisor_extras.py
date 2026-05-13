@@ -5,6 +5,7 @@ Endpoints:
   - PATCH /supervisor/risk-events/{id} — 添加 / 更新 disposition_note
   - GET  /supervisor/team-performance  — 团队成员排名 + 与上一周期对比
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -67,9 +68,7 @@ def list_risk_events(
     )
     if level:
         stmt = stmt.where(RiskEvent.level == level)
-    rows = db.execute(
-        stmt.order_by(RiskEvent.created_at.desc()).limit(limit)
-    ).all()
+    rows = db.execute(stmt.order_by(RiskEvent.created_at.desc()).limit(limit)).all()
 
     return [
         RiskEventTimelineItem(
@@ -161,11 +160,7 @@ def team_performance(
         select(UserAccount.id, UserAccount.name)
         .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
         .where(UserTenantMembership.tenant_id == tenant_id)
-        .where(
-            UserTenantMembership.role.in_(
-                ("agent_internal", "agent_external")
-            )
-        )
+        .where(UserTenantMembership.role.in_(("agent_internal", "agent_external")))
         .where(UserTenantMembership.is_active.is_(True))
     ).all()
     agent_ids = [r.id for r in agent_rows]
@@ -177,9 +172,7 @@ def team_performance(
             select(
                 CallRecord.caller_user_id,
                 func.count().label("total"),
-                func.sum(case((CallRecord.billable_duration > 0, 1), else_=0)).label(
-                    "connected"
-                ),
+                func.sum(case((CallRecord.billable_duration > 0, 1), else_=0)).label("connected"),
             )
             .where(CallRecord.tenant_id == tenant_id)
             .where(CallRecord.caller_user_id.in_(agent_ids))

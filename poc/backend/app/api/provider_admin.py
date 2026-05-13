@@ -13,14 +13,16 @@ Endpoints (all under /api/v1/provider):
     GET    /settlements             read-only settlement list
     GET    /settlements/{id}        read-only settlement detail (+disputes)
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
+from pydantic import BaseModel
 from sqlalchemy import case, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -38,7 +40,6 @@ from app.models.tenant import (
     UserTenantMembership,
 )
 from app.models.user import UserAccount
-from pydantic import BaseModel
 from app.schemas.common import PaginatedResponse
 from app.schemas.provider_admin import (
     CommissionLineItem,
@@ -75,11 +76,15 @@ def _resolve_provider_id(user_id: int, db: Session) -> int:
     Returns 404 ERR_NO_PROVIDER if the user has no membership row with
     a non-null provider_id (account misconfigured).
     """
-    membership = db.execute(
-        select(UserTenantMembership)
-        .where(UserTenantMembership.user_id == user_id)
-        .where(UserTenantMembership.provider_id.isnot(None))
-    ).scalars().first()
+    membership = (
+        db.execute(
+            select(UserTenantMembership)
+            .where(UserTenantMembership.user_id == user_id)
+            .where(UserTenantMembership.provider_id.isnot(None))
+        )
+        .scalars()
+        .first()
+    )
     if membership is None or membership.provider_id is None:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
@@ -159,16 +164,24 @@ async def get_provider_dashboard(
         )
 
     # 合作租户数 — distinct partner tenants with active contracts
-    partner_tenant_count: int = db.execute(
-        select(func.count(func.distinct(ProviderTenantContract.tenant_id)))
-        .where(ProviderTenantContract.provider_id == provider_id)
-    ).scalar_one() or 0
+    partner_tenant_count: int = (
+        db.execute(
+            select(func.count(func.distinct(ProviderTenantContract.tenant_id))).where(
+                ProviderTenantContract.provider_id == provider_id
+            )
+        ).scalar_one()
+        or 0
+    )
 
     # 团队人数 — active memberships under this provider
-    team_count: int = db.execute(
-        select(func.count(UserTenantMembership.id))
-        .where(UserTenantMembership.provider_id == provider_id)
-    ).scalar_one() or 0
+    team_count: int = (
+        db.execute(
+            select(func.count(UserTenantMembership.id)).where(
+                UserTenantMembership.provider_id == provider_id
+            )
+        ).scalar_one()
+        or 0
+    )
 
     # Current month boundaries
     now = datetime.now(UTC)
@@ -261,9 +274,7 @@ async def list_partner_tenants(
     if status:
         stmt = stmt.where(ProviderTenantContract.status == status)
 
-    total: int = db.execute(
-        select(func.count()).select_from(stmt.subquery())
-    ).scalar_one()
+    total: int = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
 
     rows = db.execute(
         stmt.order_by(ProviderTenantContract.signed_at.desc())
@@ -283,9 +294,7 @@ async def list_partner_tenants(
         )
         for c, t in rows
     ]
-    return PaginatedResponse(
-        items=items, total=total, page=page, page_size=page_size
-    )
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 # ── PA.3.3 team management ──────────────────────────────────────────
@@ -352,9 +361,7 @@ async def create_team_member(
     return _team_member_to_out(new_user, body.role, True)
 
 
-@router.get(
-    "/team", response_model=PaginatedResponse[ProviderTeamMemberOut]
-)
+@router.get("/team", response_model=PaginatedResponse[ProviderTeamMemberOut])
 async def list_team_members(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
@@ -375,27 +382,17 @@ async def list_team_members(
         .where(UserTenantMembership.provider_id == provider_id)
     )
 
-    total: int = db.execute(
-        select(func.count()).select_from(stmt.subquery())
-    ).scalar_one()
+    total: int = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
 
     rows = db.execute(
-        stmt.order_by(UserAccount.id.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
+        stmt.order_by(UserAccount.id.desc()).offset((page - 1) * page_size).limit(page_size)
     ).all()
 
-    items = [
-        _team_member_to_out(user, role, m_active) for user, role, m_active in rows
-    ]
-    return PaginatedResponse(
-        items=items, total=total, page=page, page_size=page_size
-    )
+    items = [_team_member_to_out(user, role, m_active) for user, role, m_active in rows]
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
-@router.get(
-    "/team/{member_user_id}", response_model=ProviderTeamMemberDetailOut
-)
+@router.get("/team/{member_user_id}", response_model=ProviderTeamMemberDetailOut)
 async def get_team_member(
     member_user_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
@@ -474,19 +471,13 @@ async def toggle_team_member_active(
 # ── PA.3.4 settlements (read-only) ──────────────────────────────────
 
 
-@router.get(
-    "/settlements", response_model=PaginatedResponse[ProviderSettlementOut]
-)
+@router.get("/settlements", response_model=PaginatedResponse[ProviderSettlementOut])
 async def list_provider_settlements(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
-    status: str | None = Query(
-        None, description="DRAFT/CONFIRMED/PAID/DISPUTED"
-    ),
-    year_month: str | None = Query(
-        None, description="YYYY-MM, filters by period_start"
-    ),
+    status: str | None = Query(None, description="DRAFT/CONFIRMED/PAID/DISPUTED"),
+    year_month: str | None = Query(None, description="YYYY-MM, filters by period_start"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[ProviderSettlementOut]:
@@ -526,9 +517,7 @@ async def list_provider_settlements(
             SettlementStatement.period_start < period_hi,
         )
 
-    total: int = db.execute(
-        select(func.count()).select_from(stmt.subquery())
-    ).scalar_one()
+    total: int = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
 
     rows = db.execute(
         stmt.order_by(
@@ -540,9 +529,7 @@ async def list_provider_settlements(
     ).all()
 
     items = [_settlement_to_out(s, c, t) for s, c, t in rows]
-    return PaginatedResponse(
-        items=items, total=total, page=page, page_size=page_size
-    )
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.get(
@@ -577,11 +564,15 @@ async def get_provider_settlement(
         )
     s, c, t = row
 
-    disputes = db.execute(
-        select(DisputeRecord)
-        .where(DisputeRecord.statement_id == statement_id)
-        .order_by(DisputeRecord.id.desc())
-    ).scalars().all()
+    disputes = (
+        db.execute(
+            select(DisputeRecord)
+            .where(DisputeRecord.statement_id == statement_id)
+            .order_by(DisputeRecord.id.desc())
+        )
+        .scalars()
+        .all()
+    )
 
     base = _settlement_to_out(s, c, t)
     return ProviderSettlementDetailOut(
@@ -651,9 +642,7 @@ async def submit_dispute(
 # ── PA.3.6 — Sprint 9.1 — cross-tenant team performance ─────────────
 
 
-@router.get(
-    "/team-performance", response_model=list[ProviderMemberPerformance]
-)
+@router.get("/team-performance", response_model=list[ProviderMemberPerformance])
 async def get_team_performance(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
@@ -828,19 +817,20 @@ async def list_expiring_projects(
     provider_id = _resolve_provider_id(user_id, db)
     horizon = datetime.now(UTC) + timedelta(days=30)
     rows = db.execute(
-        select(Project.id, Project.name, Project.plan_end).where(
+        select(Project.id, Project.name, Project.plan_end)
+        .where(
             Project.provider_id == provider_id,
             Project.status == "active",
             Project.plan_end.is_not(None),
             Project.plan_end >= datetime.now(UTC),
             Project.plan_end <= horizon,
-        ).order_by(Project.plan_end.asc())
+        )
+        .order_by(Project.plan_end.asc())
     ).all()
     return {
         "count": len(rows),
         "items": [
-            {"id": r[0], "name": r[1], "plan_end": r[2].isoformat() if r[2] else None}
-            for r in rows
+            {"id": r[0], "name": r[1], "plan_end": r[2].isoformat() if r[2] else None} for r in rows
         ],
     }
 
@@ -852,7 +842,6 @@ async def list_historical_reports(
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     """v1.5.5 D2 — 到期 30 天内的项目聚合报表（仅展示数字、不可下钻）。"""
-    from app.core.provider_scope import readonly_project_filter
     from app.models.case import CollectionCase, Project
 
     user_id = _user_id_from_payload(payload)
@@ -860,13 +849,19 @@ async def list_historical_reports(
 
     # 仅展示已 closed 且 30 天内的项目（active 已在主入口可见）
     cutoff = datetime.now(UTC) - timedelta(days=30)
-    rows = db.execute(
-        select(Project).where(
-            Project.provider_id == provider_id,
-            Project.status == "closed",
-            Project.updated_at >= cutoff,
-        ).order_by(Project.updated_at.desc())
-    ).scalars().all()
+    rows = (
+        db.execute(
+            select(Project)
+            .where(
+                Project.provider_id == provider_id,
+                Project.status == "closed",
+                Project.updated_at >= cutoff,
+            )
+            .order_by(Project.updated_at.desc())
+        )
+        .scalars()
+        .all()
+    )
 
     items = []
     for p in rows:
@@ -889,16 +884,18 @@ async def list_historical_reports(
                 CollectionCase.tenant_id == p.tenant_id,
             )
         ).one()
-        items.append({
-            "project_id": p.id,
-            "project_name": p.name,
-            "plan_start": p.plan_start.isoformat() if p.plan_start else None,
-            "plan_end": p.plan_end.isoformat() if p.plan_end else None,
-            "closed_at": p.updated_at.isoformat(),
-            "case_count": int(agg[0] or 0),
-            "total_owed": float(agg[1] or 0),
-            "total_recovered": float(agg[2] or 0),
-        })
+        items.append(
+            {
+                "project_id": p.id,
+                "project_name": p.name,
+                "plan_start": p.plan_start.isoformat() if p.plan_start else None,
+                "plan_end": p.plan_end.isoformat() if p.plan_end else None,
+                "closed_at": p.updated_at.isoformat(),
+                "case_count": int(agg[0] or 0),
+                "total_owed": float(agg[1] or 0),
+                "total_recovered": float(agg[2] or 0),
+            }
+        )
     return {"items": items, "retention_days": 30}
 
 
@@ -934,15 +931,17 @@ async def list_provider_projects(
             pm_name = db.execute(
                 select(UserAccount.name).where(UserAccount.id == p.provider_pm_user_id)
             ).scalar_one_or_none()
-        items.append({
-            "project_id": p.id,
-            "project_name": p.name,
-            "tenant_name": tname,
-            "plan_start": p.plan_start.isoformat() if p.plan_start else None,
-            "plan_end": p.plan_end.isoformat() if p.plan_end else None,
-            "provider_pm_user_id": p.provider_pm_user_id,
-            "provider_pm_name": pm_name,
-        })
+        items.append(
+            {
+                "project_id": p.id,
+                "project_name": p.name,
+                "tenant_name": tname,
+                "plan_start": p.plan_start.isoformat() if p.plan_start else None,
+                "plan_end": p.plan_end.isoformat() if p.plan_end else None,
+                "provider_pm_user_id": p.provider_pm_user_id,
+                "provider_pm_name": pm_name,
+            }
+        )
     return {"items": items}
 
 

@@ -9,8 +9,8 @@ from app.risk.keyword_matcher import KeywordHit
 @dataclass
 class LLMRiskVerdict:
     is_risk: bool
-    category: str       # "owner_abuse" | "owner_threat" | "agent_violation" | "agent_minor_misconduct" | "none"
-    level: str          # "L1" | "L2" | "none"
+    category: str  # "owner_abuse" | "owner_threat" | "agent_violation" | "agent_minor_misconduct" | "none"
+    level: str  # "L1" | "L2" | "none"
     confidence: float
     reason: str
 
@@ -48,11 +48,21 @@ def _mock_analyze(
     _BENIGN_HINTS = ["好的", "明白", "知道了", "谢谢"]
     for w in _AGENT_VIOLATION_HINTS:
         if w in text:
-            return LLMRiskVerdict(is_risk=True, category="agent_violation", level="L2", confidence=0.88, reason=f"heuristic: {w}")
+            return LLMRiskVerdict(
+                is_risk=True,
+                category="agent_violation",
+                level="L2",
+                confidence=0.88,
+                reason=f"heuristic: {w}",
+            )
     for w in _BENIGN_HINTS:
         if w in text:
-            return LLMRiskVerdict(is_risk=False, category="none", level="none", confidence=0.95, reason="benign")
-    return LLMRiskVerdict(is_risk=False, category="none", level="none", confidence=0.50, reason="no signal")
+            return LLMRiskVerdict(
+                is_risk=False, category="none", level="none", confidence=0.95, reason="benign"
+            )
+    return LLMRiskVerdict(
+        is_risk=False, category="none", level="none", confidence=0.50, reason="no signal"
+    )
 
 
 # ── API implementation ────────────────────────────────────────────────────────
@@ -115,4 +125,6 @@ async def _api_analyze(
             reason=raw.get("reason", ""),
         )
     except (json.JSONDecodeError, ValueError, KeyError):
-        return LLMRiskVerdict(is_risk=False, category="none", level="none", confidence=0.0, reason="parse_error")
+        return LLMRiskVerdict(
+            is_risk=False, category="none", level="none", confidence=0.0, reason="parse_error"
+        )

@@ -1,4 +1,5 @@
 """Sprint 16.3 — 法务结算账单 schema (PRD §20.4)."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -13,7 +14,7 @@ class GenerateInvoiceRequest(BaseModel):
     period_end: datetime
 
     @model_validator(mode="after")
-    def _ordered(self) -> "GenerateInvoiceRequest":
+    def _ordered(self) -> GenerateInvoiceRequest:
         if self.period_end <= self.period_start:
             raise ValueError("period_end must be after period_start")
         return self

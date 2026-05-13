@@ -48,9 +48,7 @@ class Project(Base, TimestampMixin):
     # DEPRECATED v1.5.6 — 混合协助模式已废弃（项目要么自办要么外包，二选一）
     # 字段保留以兼容旧数据 / API 客户端；代码层面所有判断都视作 False
     # v1.6 表清理时统一删除
-    allow_internal_assist: Mapped[bool] = mapped_column(
-        sa.Boolean, nullable=False, default=False
-    )
+    allow_internal_assist: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=False)
     # v1.6 — 项目收费 + 合同信息（用户反馈：创建项目应录入收费标准 / 时间约定 / 合同）
     charge_rate_per_sqm: Mapped[sa.Numeric | None] = mapped_column(
         sa.Numeric(8, 4)
@@ -73,18 +71,12 @@ class Project(Base, TimestampMixin):
     # v1.6.1 — 项目级减免阈值（NULL 时继承 TenantSettings；不同项目可有不同政策）
     # v1.6.2 — 拆分为两类：本金打折 + 滞纳金减免（pricinpal_discount_* + late_fee_waive_*）
     # 旧字段保留作为「本金打折」别名（discount_* == principal_discount_*），下版本清理
-    discount_auto_approve_threshold_pct: Mapped[int | None] = mapped_column(
-        sa.SmallInteger
-    )
+    discount_auto_approve_threshold_pct: Mapped[int | None] = mapped_column(sa.SmallInteger)
     discount_supervisor_max_pct: Mapped[int | None] = mapped_column(sa.SmallInteger)
     discount_disabled: Mapped[bool | None] = mapped_column(sa.Boolean)
     # v1.6.2 — 滞纳金减免（独立策略；多数物业愿意减免滞纳金）
-    late_fee_waive_auto_approve_threshold_pct: Mapped[int | None] = mapped_column(
-        sa.SmallInteger
-    )
-    late_fee_waive_supervisor_max_pct: Mapped[int | None] = mapped_column(
-        sa.SmallInteger
-    )
+    late_fee_waive_auto_approve_threshold_pct: Mapped[int | None] = mapped_column(sa.SmallInteger)
+    late_fee_waive_supervisor_max_pct: Mapped[int | None] = mapped_column(sa.SmallInteger)
     late_fee_waive_disabled: Mapped[bool | None] = mapped_column(sa.Boolean)
 
     __table_args__ = (
@@ -130,15 +122,11 @@ class CollectionCase(Base, TimestampMixin):
     tenant_id: Mapped[int] = mapped_column(
         sa.BigInteger, sa.ForeignKey("tenant.id"), nullable=False
     )
-    project_id: Mapped[int | None] = mapped_column(
-        sa.BigInteger, sa.ForeignKey("project.id")
-    )
+    project_id: Mapped[int | None] = mapped_column(sa.BigInteger, sa.ForeignKey("project.id"))
     owner_id: Mapped[int] = mapped_column(
         sa.BigInteger, sa.ForeignKey("owner_profile.id"), nullable=False
     )
-    assigned_to: Mapped[int | None] = mapped_column(
-        sa.BigInteger, sa.ForeignKey("user_account.id")
-    )
+    assigned_to: Mapped[int | None] = mapped_column(sa.BigInteger, sa.ForeignKey("user_account.id"))
     pool_type: Mapped[str] = mapped_column(sa.Text, nullable=False, default="public")
     stage: Mapped[str] = mapped_column(sa.Text, nullable=False, default="new")
     amount_owed: Mapped[sa.Numeric | None] = mapped_column(sa.Numeric(12, 2))

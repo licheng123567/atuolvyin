@@ -7,9 +7,11 @@ GET    /api/v1/supervisor/shifts/swap-requests       本租户调班申请列表
 
 组长由 user_account.preferences.is_shift_lead = true 标识（JSONB 字段，无需新表）。
 """
+
 from __future__ import annotations
 
-from datetime import date as date_type, datetime, timedelta
+from datetime import date as date_type
+from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -50,13 +52,15 @@ def _ensure_seed_week(db: Session, tenant_id: int) -> None:
         d = today + timedelta(days=i)
         for s in SLOTS:
             if (d, s) not in have:
-                inserts.append(SupervisorShift(
-                    tenant_id=tenant_id,
-                    shift_date=d,
-                    slot=s,
-                    supervisor_user_id=None,
-                    supervisor_name="",
-                ))
+                inserts.append(
+                    SupervisorShift(
+                        tenant_id=tenant_id,
+                        shift_date=d,
+                        slot=s,
+                        supervisor_user_id=None,
+                        supervisor_name="",
+                    )
+                )
     if inserts:
         db.add_all(inserts)
         db.commit()
@@ -82,12 +86,16 @@ async def list_shifts(
 
     today = date_type.today()
     end = today + timedelta(days=6)
-    rows = db.execute(
-        select(SupervisorShift)
-        .where(SupervisorShift.tenant_id == int(tenant_id))
-        .where(SupervisorShift.shift_date.between(today, end))
-        .order_by(SupervisorShift.shift_date, SupervisorShift.slot)
-    ).scalars().all()
+    rows = (
+        db.execute(
+            select(SupervisorShift)
+            .where(SupervisorShift.tenant_id == int(tenant_id))
+            .where(SupervisorShift.shift_date.between(today, end))
+            .order_by(SupervisorShift.shift_date, SupervisorShift.slot)
+        )
+        .scalars()
+        .all()
+    )
 
     by_date: dict[str, dict[str, str]] = {}
     for r in rows:
@@ -96,11 +104,19 @@ async def list_shifts(
         by_date[ds][r.slot] = r.supervisor_name or ""
 
     # 列出本租户所有督导，给前端做下拉
-    supervisors = db.execute(
-        select(UserAccount.name)
-        .join_from(UserAccount, UserAccount, UserAccount.id == UserAccount.id)
-    ).scalars().all() if False else []  # placeholder — 见下方真实查询
+    supervisors = (
+        db.execute(
+            select(UserAccount.name).join_from(
+                UserAccount, UserAccount, UserAccount.id == UserAccount.id
+            )
+        )
+        .scalars()
+        .all()
+        if False
+        else []
+    )  # placeholder — 见下方真实查询
     from app.models.tenant import UserTenantMembership
+
     sup_rows = db.execute(
         select(UserAccount.name)
         .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
@@ -211,11 +227,11 @@ async def submit_swap_request(
         )
     try:
         d = date_type.fromisoformat(d_str)
-    except ValueError:
+    except ValueError as exc:
         raise HTTPException(
             status_code=http_status.HTTP_400_BAD_REQUEST,
             detail={"code": "ERR_VALIDATION", "message": "date 格式无效"},
-        )
+        ) from exc
 
     row = db.execute(
         select(SupervisorShift)
@@ -262,11 +278,15 @@ async def list_swap_requests(
     tenant_id = payload.get("tenant_id")
     if tenant_id is None:
         return []
-    rows = db.execute(
-        select(SupervisorShiftSwapRequest)
-        .where(SupervisorShiftSwapRequest.tenant_id == int(tenant_id))
-        .order_by(SupervisorShiftSwapRequest.id.desc())
-    ).scalars().all()
+    rows = (
+        db.execute(
+            select(SupervisorShiftSwapRequest)
+            .where(SupervisorShiftSwapRequest.tenant_id == int(tenant_id))
+            .order_by(SupervisorShiftSwapRequest.id.desc())
+        )
+        .scalars()
+        .all()
+    )
     return [
         {
             "id": r.id,

@@ -1,4 +1,5 @@
 """Sprint 16.4 — 法律文书模板 schema (PRD §20.4)."""
+
 from __future__ import annotations
 
 from datetime import datetime

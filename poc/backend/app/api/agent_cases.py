@@ -1,22 +1,24 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from datetime import UTC, datetime
-
-from pydantic import BaseModel
-
 from app.core.db import get_db
+from app.core.phone_visibility import (
+    is_provider_contract_active,
+    should_reveal_owner_phone,
+)
 from app.core.security import get_token_payload, require_roles
-from app.models.call import CallRecord
-from app.models.case import CollectionCase, OwnerProfile
+from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.legal_conversion import LegalConversionOrder, LegalConversionRequest
+from app.models.tenant import UserTenantMembership
 from app.models.user import UserAccount
 from app.schemas.case import (
     CaseDetailResponse,
@@ -27,31 +29,25 @@ from app.schemas.case import (
 from app.schemas.common import PaginatedResponse
 from app.services.audit import log_audit
 
-from app.models.case import Project
-from app.models.tenant import UserTenantMembership
-
-from app.core.phone_visibility import (
-    is_provider_contract_active,
-    should_reveal_owner_phone,
-)
-
 from .admin_cases import _case_row_to_response, _require_tenant, build_case_detail_response
 
 
 def _agent_provider_id(db: Session, user_id: int, tenant_id: int) -> int | None:
     """Return the provider_id for an agent_external; None for agent_internal."""
-    m = db.execute(
-        sa.select(UserTenantMembership).where(
-            UserTenantMembership.user_id == user_id,
-            UserTenantMembership.tenant_id == tenant_id,
+    m = (
+        db.execute(
+            sa.select(UserTenantMembership).where(
+                UserTenantMembership.user_id == user_id,
+                UserTenantMembership.tenant_id == tenant_id,
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     return m.provider_id if m and m.provider_id else None
 
 
-def _build_visible_case_filter(
-    db: Session, user_id: int, tenant_id: int, role: str
-):
+def _build_visible_case_filter(db: Session, user_id: int, tenant_id: int, role: str):
     """Build SQLAlchemy WHERE clause for cases visible to the agent.
 
     内勤：私海（自己的）+ 公海（无项目 OR 项目无服务商 OR 项目允许协助）
@@ -97,6 +93,7 @@ def _build_visible_case_filter(
     )
     return sa.or_(own_clause, internal_visible)
 
+
 router = APIRouter()
 
 AGENT_ROLES = ("agent_internal", "agent_external")
@@ -111,7 +108,9 @@ async def list_my_cases(
     stage: str | None = Query(None),
     project_id: int | None = Query(None),
     q: str | None = Query(None, description="搜索业主姓名 / 房号"),
-    today: bool = Query(False, description="只展示今日待联系：未结案 + (今天没联系过 OR 上次联系超过 7 天)"),
+    today: bool = Query(
+        False, description="只展示今日待联系：未结案 + (今天没联系过 OR 上次联系超过 7 天)"
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[CaseWithOwnerResponse]:
@@ -145,7 +144,9 @@ async def list_my_cases(
         )
     if today:
         # v1.6.7 — 今日聚合：未缴清未关闭，且今天还没拨过 / 拨了 > 7 天没回访
-        from datetime import UTC, datetime as _dt, timedelta
+        from datetime import UTC, timedelta
+        from datetime import datetime as _dt
+
         now = _dt.now(UTC)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_ago = now - timedelta(days=7)
@@ -188,7 +189,8 @@ async def list_my_cases(
     return PaginatedResponse(
         items=[
             _case_row_to_response(
-                case, owner,
+                case,
+                owner,
                 project_name=project_name_map.get(case.project_id) if case.project_id else None,
                 owner_phone_reveal=owner_phone_reveal,
             )
@@ -272,7 +274,9 @@ async def get_case_detail(
     # v1.6.6 — 复用 admin 同款 helper；agent_internal 拿到明文手机号用于拨号
     # v1.7.0 — 传 viewer 角色让 phone_masked 字段动态决定明文 / 脱敏
     return build_case_detail_response(
-        db, case, owner,
+        db,
+        case,
+        owner,
         tenant_id=tenant_id,
         include_phone_plain=(role == "agent_internal"),
         viewer_role=role,
@@ -316,8 +320,9 @@ async def agent_update_case_stage(
         action="case.stage_changed",
         target_type="collection_case",
         target_id=case_id,
-        payload={"from": prev_stage, "to": body.stage, "note": body.note} if body.note
-              else {"from": prev_stage, "to": body.stage},
+        payload={"from": prev_stage, "to": body.stage, "note": body.note}
+        if body.note
+        else {"from": prev_stage, "to": body.stage},
     )
     db.commit()
     return case
@@ -416,8 +421,9 @@ def post_case_intent(
             action="legal_conversion_request.created",
             target_type="legal_conversion_request",
             target_id=request_row.id,
-            payload={"case_id": case_id, "reason": body.note} if body.note
-                  else {"case_id": case_id},
+            payload={"case_id": case_id, "reason": body.note}
+            if body.note
+            else {"case_id": case_id},
         )
 
     now = datetime.now(UTC)
@@ -460,8 +466,9 @@ def send_payment_link(
     - 写 audit log（actor / case_id / sent_to_phone_masked）
     - 短信通道接入留 TODO（sms_status='queued'）
     """
-    from secrets import token_urlsafe
     from datetime import timedelta
+    from secrets import token_urlsafe
+
     from app.core.crypto import mask_phone
 
     tenant_id = _require_tenant(payload)
@@ -519,28 +526,34 @@ def send_payment_link(
     )
 
 
-_OPEN_STAGES = ("new", "in_progress", "promised", "escalated")  # 未结案的 stages（不含 paid/closed）
+_OPEN_STAGES = (
+    "new",
+    "in_progress",
+    "promised",
+    "escalated",
+)  # 未结案的 stages（不含 paid/closed）
 
 
 def _claim_quota(db: Session, *, tenant_id: int) -> int:
     """Return tenant's `public_pool_claim_max` (default 50 if no settings row)."""
     from app.models.settings import TenantSettings
+
     row = db.execute(
-        select(TenantSettings.public_pool_claim_max).where(
-            TenantSettings.tenant_id == tenant_id
-        )
+        select(TenantSettings.public_pool_claim_max).where(TenantSettings.tenant_id == tenant_id)
     ).scalar_one_or_none()
     return int(row) if row is not None else 50
 
 
 def _agent_open_case_count(db: Session, *, user_id: int, tenant_id: int) -> int:
-    return int(db.execute(
-        select(func.count(CollectionCase.id)).where(
-            CollectionCase.tenant_id == tenant_id,
-            CollectionCase.assigned_to == user_id,
-            CollectionCase.stage.in_(_OPEN_STAGES),
-        )
-    ).scalar_one())
+    return int(
+        db.execute(
+            select(func.count(CollectionCase.id)).where(
+                CollectionCase.tenant_id == tenant_id,
+                CollectionCase.assigned_to == user_id,
+                CollectionCase.stage.in_(_OPEN_STAGES),
+            )
+        ).scalar_one()
+    )
 
 
 @router.get("/me/pool-quota")
@@ -584,9 +597,7 @@ async def claim_case(
         )
 
     case = db.execute(
-        select(CollectionCase)
-        .where(CollectionCase.id == case_id)
-        .with_for_update()
+        select(CollectionCase).where(CollectionCase.id == case_id).with_for_update()
     ).scalar_one_or_none()
     if not case or case.tenant_id != tenant_id:
         raise HTTPException(
@@ -627,9 +638,7 @@ async def release_case(
     tenant_id = _require_tenant(payload)
     role = str(payload.get("role") or "")
     case = db.execute(
-        select(CollectionCase)
-        .where(CollectionCase.id == case_id)
-        .with_for_update()
+        select(CollectionCase).where(CollectionCase.id == case_id).with_for_update()
     ).scalar_one_or_none()
     if not case or case.tenant_id != tenant_id:
         raise HTTPException(

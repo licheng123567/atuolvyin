@@ -7,6 +7,7 @@
 - POST /legal/internal-orders/{id}/close     — 关闭订单（带 close_reason → 联动 case.stage）
 - POST /legal/internal-orders/{id}/escalate  — 升级到律所（仅标记 status，方案 C 才实际派单）
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -19,14 +20,13 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.storage import storage
-from app.services.evidence_bundle import build_evidence_bundle_zip
 from app.core.phone_visibility import (
     display_owner_phone,
     is_provider_contract_active,
     should_reveal_owner_phone,
 )
 from app.core.security import get_token_payload, require_roles
+from app.core.storage import storage
 from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.legal_conversion import LegalConversionOrder, LegalConversionRequest
 from app.models.legal_internal import (
@@ -46,6 +46,7 @@ from app.schemas.legal_internal import (
     LegalInternalOrderReopenRequest,
 )
 from app.services.audit import log_audit
+from app.services.evidence_bundle import build_evidence_bundle_zip
 
 router = APIRouter()
 
@@ -109,28 +110,37 @@ def get_internal_orders_kpi(
     now = datetime.now(UTC)
     month_start = datetime(now.year, now.month, 1, tzinfo=UTC)
 
-    pending_count = db.execute(
-        select(func.count(LegalConversionOrder.id))
-        .where(LegalConversionOrder.tenant_id == tenant_id)
-        .where(LegalConversionOrder.status == "internal_processing")
-    ).scalar_one() or 0
+    pending_count = (
+        db.execute(
+            select(func.count(LegalConversionOrder.id))
+            .where(LegalConversionOrder.tenant_id == tenant_id)
+            .where(LegalConversionOrder.status == "internal_processing")
+        ).scalar_one()
+        or 0
+    )
 
     closed_statuses = ("closed_paid", "closed_promised", "closed_uncollectible")
-    closed_this_month = db.execute(
-        select(func.count(LegalConversionOrder.id))
-        .where(LegalConversionOrder.tenant_id == tenant_id)
-        .where(LegalConversionOrder.status.in_(closed_statuses))
-        .where(LegalConversionOrder.internal_closed_at.is_not(None))
-        .where(LegalConversionOrder.internal_closed_at >= month_start)
-    ).scalar_one() or 0
+    closed_this_month = (
+        db.execute(
+            select(func.count(LegalConversionOrder.id))
+            .where(LegalConversionOrder.tenant_id == tenant_id)
+            .where(LegalConversionOrder.status.in_(closed_statuses))
+            .where(LegalConversionOrder.internal_closed_at.is_not(None))
+            .where(LegalConversionOrder.internal_closed_at >= month_start)
+        ).scalar_one()
+        or 0
+    )
 
-    escalated_this_month = db.execute(
-        select(func.count(LegalConversionOrder.id))
-        .where(LegalConversionOrder.tenant_id == tenant_id)
-        .where(LegalConversionOrder.status == "escalated_to_lawfirm")
-        .where(LegalConversionOrder.internal_closed_at.is_not(None))
-        .where(LegalConversionOrder.internal_closed_at >= month_start)
-    ).scalar_one() or 0
+    escalated_this_month = (
+        db.execute(
+            select(func.count(LegalConversionOrder.id))
+            .where(LegalConversionOrder.tenant_id == tenant_id)
+            .where(LegalConversionOrder.status == "escalated_to_lawfirm")
+            .where(LegalConversionOrder.internal_closed_at.is_not(None))
+            .where(LegalConversionOrder.internal_closed_at >= month_start)
+        ).scalar_one()
+        or 0
+    )
 
     # 平均处理时长（天）：本月所有已关闭/升级的订单 (closed_at - created_at) 平均
     avg_seconds = db.execute(
@@ -150,8 +160,7 @@ def get_internal_orders_kpi(
 
     total_finalized = closed_this_month + escalated_this_month
     escalation_rate = (
-        round(escalated_this_month / total_finalized * 100, 1)
-        if total_finalized > 0 else None
+        round(escalated_this_month / total_finalized * 100, 1) if total_finalized > 0 else None
     )
 
     return LegalInternalOrderKpi(
@@ -183,7 +192,8 @@ def list_internal_orders(
     # v1.9.0 — legal 角色处理内部订单时（无论是 internal_processing 进行中还是已关闭/升级）
     # 都需要明文电话用于发律师函/电话沟通；其他角色按 v1.7.0 决策
     reveal = (
-        True if role == "legal"
+        True
+        if role == "legal"
         else should_reveal_owner_phone(role=role, contract_active=contract_active)
     )
 
@@ -198,6 +208,7 @@ def list_internal_orders(
         stmt = stmt.where(CollectionCase.project_id == project_id)
     if q:
         from sqlalchemy import or_ as sa_or_
+
         stmt = stmt.where(
             sa_or_(
                 OwnerProfile.name.ilike(f"%{q}%"),
@@ -273,7 +284,10 @@ def list_internal_orders(
         for o, owner, case, proj in rows
     ]
     return PaginatedResponse(
-        items=items, total=total, page=page, page_size=page_size,
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -310,35 +324,57 @@ def get_internal_order(
     # v1.9.0 — legal 角色处理内部订单时（无论是 internal_processing 进行中还是已关闭/升级）
     # 都需要明文电话用于发律师函/电话沟通；其他角色按 v1.7.0 决策
     reveal = (
-        True if role == "legal"
+        True
+        if role == "legal"
         else should_reveal_owner_phone(role=role, contract_active=contract_active)
     )
 
-    action_rows = db.execute(
-        select(LegalInternalAction)
-        .where(LegalInternalAction.legal_order_id == order_id)
-        .order_by(LegalInternalAction.occurred_at.asc())
-    ).scalars().all()
+    action_rows = (
+        db.execute(
+            select(LegalInternalAction)
+            .where(LegalInternalAction.legal_order_id == order_id)
+            .order_by(LegalInternalAction.occurred_at.asc())
+        )
+        .scalars()
+        .all()
+    )
     actor_ids = {a.actor_user_id for a in action_rows}
     template_ids = {a.letter_template_id for a in action_rows if a.letter_template_id}
     firm_ids = {a.partner_law_firm_id for a in action_rows if a.partner_law_firm_id}
-    actor_map = {
-        uid: name for uid, name in db.execute(
-            select(UserAccount.id, UserAccount.name).where(UserAccount.id.in_(actor_ids))
-        ).all()
-    } if actor_ids else {}
-    template_map = {
-        tid: name for tid, name in db.execute(
-            select(InternalLegalLetterTemplate.id, InternalLegalLetterTemplate.name)
-            .where(InternalLegalLetterTemplate.id.in_(template_ids))
-        ).all()
-    } if template_ids else {}
-    firm_map = {
-        fid: name for fid, name in db.execute(
-            select(PartnerLawFirm.id, PartnerLawFirm.name)
-            .where(PartnerLawFirm.id.in_(firm_ids))
-        ).all()
-    } if firm_ids else {}
+    actor_map = (
+        {
+            uid: name
+            for uid, name in db.execute(
+                select(UserAccount.id, UserAccount.name).where(UserAccount.id.in_(actor_ids))
+            ).all()
+        }
+        if actor_ids
+        else {}
+    )
+    template_map = (
+        {
+            tid: name
+            for tid, name in db.execute(
+                select(InternalLegalLetterTemplate.id, InternalLegalLetterTemplate.name).where(
+                    InternalLegalLetterTemplate.id.in_(template_ids)
+                )
+            ).all()
+        }
+        if template_ids
+        else {}
+    )
+    firm_map = (
+        {
+            fid: name
+            for fid, name in db.execute(
+                select(PartnerLawFirm.id, PartnerLawFirm.name).where(
+                    PartnerLawFirm.id.in_(firm_ids)
+                )
+            ).all()
+        }
+        if firm_ids
+        else {}
+    )
 
     return LegalInternalOrderDetailOut(
         id=order.id,
@@ -359,8 +395,12 @@ def get_internal_order(
             _action_to_out(
                 a,
                 actor_name=actor_map.get(a.actor_user_id),
-                template_name=template_map.get(a.letter_template_id) if a.letter_template_id else None,
-                law_firm_name=firm_map.get(a.partner_law_firm_id) if a.partner_law_firm_id else None,
+                template_name=template_map.get(a.letter_template_id)
+                if a.letter_template_id
+                else None,
+                law_firm_name=firm_map.get(a.partner_law_firm_id)
+                if a.partner_law_firm_id
+                else None,
             )
             for a in action_rows
         ],
@@ -552,7 +592,9 @@ def escalate_to_lawfirm(
     return close_internal_order(
         order_id,
         LegalInternalOrderCloseRequest(close_reason="escalated", note="升级到律所，待律所撮合"),
-        payload, _user, db,
+        payload,
+        _user,
+        db,
     )
 
 
@@ -620,7 +662,11 @@ def reopen_internal_order(
         action="legal_internal_order.reopened",
         target_type="legal_conversion_order",
         target_id=order_id,
-        payload={"original_promise_due_date": str(order.promise_due_date) if order.promise_due_date else None},
+        payload={
+            "original_promise_due_date": str(order.promise_due_date)
+            if order.promise_due_date
+            else None
+        },
     )
     # promise_due_date 保留作为审计；如果再次 close_promised 时会被新值覆盖
     db.commit()
@@ -715,12 +761,13 @@ def upload_action_attachment(
     firm_name = None
     if action.partner_law_firm_id:
         firm_name = db.execute(
-            select(PartnerLawFirm.name).where(
-                PartnerLawFirm.id == action.partner_law_firm_id
-            )
+            select(PartnerLawFirm.name).where(PartnerLawFirm.id == action.partner_law_firm_id)
         ).scalar_one_or_none()
     return _action_to_out(
-        action, actor_name=actor_name, template_name=template_name, law_firm_name=firm_name,
+        action,
+        actor_name=actor_name,
+        template_name=template_name,
+        law_firm_name=firm_name,
     )
 
 
@@ -810,8 +857,12 @@ def download_internal_order_evidence_bundle(
             "internal_order_id": order.id,
             "internal_order_status": order.status,
             "internal_close_reason": order.internal_close_reason,
-            "internal_closed_at": order.internal_closed_at.isoformat() if order.internal_closed_at else None,
-            "promise_due_date": order.promise_due_date.isoformat() if order.promise_due_date else None,
+            "internal_closed_at": order.internal_closed_at.isoformat()
+            if order.internal_closed_at
+            else None,
+            "promise_due_date": order.promise_due_date.isoformat()
+            if order.promise_due_date
+            else None,
         },
         user_id=user_id or None,
         legal_order_id=order.id,

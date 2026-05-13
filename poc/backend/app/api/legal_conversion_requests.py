@@ -7,6 +7,7 @@ GET    /api/v1/legal-conversion-requests              列表（按角色过滤�
 POST   /api/v1/legal-conversion-requests/{id}/approve 批准 → 创建 Order（复用 build_legal_conversion_order）
 POST   /api/v1/legal-conversion-requests/{id}/reject  驳回（必填理由）
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -17,12 +18,12 @@ from fastapi import status as http_status
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
+from app.core.db import get_db
 from app.core.phone_visibility import (
     display_owner_phone,
     is_provider_contract_active,
     should_reveal_owner_phone,
 )
-from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
 from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.legal_conversion import LegalConversionRequest
@@ -179,9 +180,7 @@ def list_requests(
     # 催收员只能看自己提交的；审批人看所有
     if role in REQUESTER_ROLES and role not in REVIEWER_ROLES:
         base = base.where(LegalConversionRequest.requester_user_id == user_id)
-        count_stmt = count_stmt.where(
-            LegalConversionRequest.requester_user_id == user_id
-        )
+        count_stmt = count_stmt.where(LegalConversionRequest.requester_user_id == user_id)
 
     if status:
         base = base.where(LegalConversionRequest.status == status)
@@ -202,9 +201,7 @@ def list_requests(
     reviewer_names: dict[int, str] = {}
     if reviewer_ids:
         for uid, name in db.execute(
-            select(UserAccount.id, UserAccount.name).where(
-                UserAccount.id.in_(reviewer_ids)
-            )
+            select(UserAccount.id, UserAccount.name).where(UserAccount.id.in_(reviewer_ids))
         ).all():
             reviewer_names[int(uid)] = name
 
@@ -225,7 +222,10 @@ def list_requests(
         for r, c, o, pn, rn in rows
     ]
     return PaginatedResponse[LegalConversionRequestOut](
-        items=items, total=total, page=page, page_size=page_size,
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -297,9 +297,11 @@ def approve_request(
     )
     db.commit()
     db.refresh(request_row)
-    reviewer_name = db.execute(
-        select(UserAccount.name).where(UserAccount.id == user_id)
-    ).scalar_one_or_none() if user_id else None
+    reviewer_name = (
+        db.execute(select(UserAccount.name).where(UserAccount.id == user_id)).scalar_one_or_none()
+        if user_id
+        else None
+    )
     return _row_to_out(
         request_row=request_row,
         case=case,
@@ -360,9 +362,11 @@ def reject_request(
     )
     db.commit()
     db.refresh(request_row)
-    reviewer_name = db.execute(
-        select(UserAccount.name).where(UserAccount.id == user_id)
-    ).scalar_one_or_none() if user_id else None
+    reviewer_name = (
+        db.execute(select(UserAccount.name).where(UserAccount.id == user_id)).scalar_one_or_none()
+        if user_id
+        else None
+    )
     return _row_to_out(
         request_row=request_row,
         case=case,

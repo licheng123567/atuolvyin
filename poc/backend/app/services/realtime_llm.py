@@ -12,12 +12,12 @@ State machine:
     thousands of seconds since boot, so ``now - 0`` always exceeds any finite
     timeout_sec, causing the first non-utterance-end chunk to spuriously trigger.
 """
+
 from __future__ import annotations
 
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -36,7 +36,7 @@ class Suggestion:
     text: str
     intent: str
     confidence: float
-    script_template_id: Optional[int] = None
+    script_template_id: int | None = None
 
     def to_message(self) -> dict:
         msg = {
@@ -65,7 +65,7 @@ class RealtimeSuggestionEngine:
         owner: object,
         debounce_sec: int | None = None,
         timeout_sec: int | None = None,
-        scripts: Optional[dict[str, list[str]]] = None,
+        scripts: dict[str, list[str]] | None = None,
         sensitivity_threshold: float = 0.65,
         max_per_push: int = 3,
     ):
@@ -87,7 +87,7 @@ class RealtimeSuggestionEngine:
         self._system_prompt: str = _build_system_prompt(
             self._scripts,
             "你是物业费催收实时辅助助手。根据业主最近一句话，给坐席生成 1 条简短话术建议。"
-            "严格输出 JSON，字段：{\"text\": \"建议内容\", \"intent\": \"意图标签\", \"confidence\": 0~1}"
+            '严格输出 JSON，字段：{"text": "建议内容", "intent": "意图标签", "confidence": 0~1}'
             "不要输出 JSON 以外的任何内容。",
         )
 
@@ -111,7 +111,7 @@ class RealtimeSuggestionEngine:
         result = await _call_final_analysis(self._build_messages(final=True))
         return result
 
-    async def _invoke_llm(self) -> Optional[Suggestion]:
+    async def _invoke_llm(self) -> Suggestion | None:
         result = await _call_llm(self._build_messages(final=False), self._system_prompt)
         confidence = float(result.get("confidence", 0.0))
         if confidence < self._sensitivity_threshold:
@@ -218,8 +218,8 @@ async def _call_final_analysis(messages: list[dict]) -> dict:
 
         system = (
             "你是物业费催收通话分析助手。根据完整通话记录，输出最终分析。"
-            "严格输出 JSON，字段：{\"intent\": \"...\", \"promise_date\": \"YYYY-MM-DD或null\","
-            "\"promise_amount\": number或null, \"summary\": \"...\", \"needs_review\": true/false}"
+            '严格输出 JSON，字段：{"intent": "...", "promise_date": "YYYY-MM-DD或null",'
+            '"promise_amount": number或null, "summary": "...", "needs_review": true/false}'
             "不要输出 JSON 以外的任何内容。"
         )
         client = AsyncOpenAI(api_key=_KEY, base_url=_BASE)
@@ -253,9 +253,9 @@ async def _call_final_analysis(messages: list[dict]) -> dict:
 
 def _load_scripts(
     db: Session,
-    tenant_id: Optional[int],
+    tenant_id: int | None,
     *,
-    agent_provider_id: Optional[int] = None,
+    agent_provider_id: int | None = None,
 ) -> dict[str, list[str]]:
     """v1.4 S16.5 — 三层话术合并加载（D4）。
 
@@ -275,15 +275,17 @@ def _load_scripts(
         (ScriptTemplate.tenant_id == tenant_id) & ScriptTemplate.provider_id.is_(None),
     )
     if agent_provider_id is not None:
-        visibility = or_(
-            visibility, ScriptTemplate.provider_id == agent_provider_id
-        )
+        visibility = or_(visibility, ScriptTemplate.provider_id == agent_provider_id)
 
-    rows = db.execute(
-        select(ScriptTemplate)
-        .where(ScriptTemplate.is_active.is_(True), visibility)
-        .order_by(ScriptTemplate.trigger_intent)
-    ).scalars().all()
+    rows = (
+        db.execute(
+            select(ScriptTemplate)
+            .where(ScriptTemplate.is_active.is_(True), visibility)
+            .order_by(ScriptTemplate.trigger_intent)
+        )
+        .scalars()
+        .all()
+    )
     result: dict[str, list[str]] = {}
     for row in rows:
         result.setdefault(row.trigger_intent, []).append(row.content)

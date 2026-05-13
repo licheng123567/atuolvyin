@@ -7,6 +7,7 @@
 写入 ServiceProvider(audit_status='pending', recommended_by_tenant_id=<本租户>)。
 ops 端可以在 GET /api/v1/ops/providers?audit_status=pending 看到推荐人。
 """
+
 from __future__ import annotations
 
 from typing import Annotated

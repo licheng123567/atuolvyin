@@ -3,6 +3,7 @@
 平台运营维护合作律所池；分单时从该池中选取律所和律师，
 denormalize 名字到 LegalConversionOrder.assigned_law_firm/assigned_lawyer_name 便于审计。
 """
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -26,9 +27,7 @@ class LawFirm(Base, TimestampMixin):
     address: Mapped[str | None] = mapped_column(sa.String(300))
     specialties: Mapped[list[str] | None] = mapped_column(ARRAY(sa.Text))
     enabled: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=True)
-    accepting_orders: Mapped[bool] = mapped_column(
-        sa.Boolean, nullable=False, default=True
-    )
+    accepting_orders: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=True)
     rating_avg: Mapped[Decimal] = mapped_column(
         sa.Numeric(3, 2), nullable=False, default=Decimal("5.00")
     )
@@ -57,6 +56,4 @@ class LawFirmLawyer(Base, TimestampMixin):
     specialties: Mapped[list[str] | None] = mapped_column(ARRAY(sa.Text))
     is_active: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=True)
 
-    __table_args__ = (
-        sa.Index("ix_law_firm_lawyer_active", "law_firm_id", "is_active"),
-    )
+    __table_args__ = (sa.Index("ix_law_firm_lawyer_active", "law_firm_id", "is_active"),)

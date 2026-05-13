@@ -6,6 +6,7 @@ Endpoints:
   GET    /api/v1/legal/documents/{doc_id}/download        signed URL
   DELETE /api/v1/legal/documents/{doc_id}                 soft delete (sets deleted_at)
 """
+
 from __future__ import annotations
 
 import uuid
@@ -136,9 +137,7 @@ async def upload_document(
 
     filename = name or file.filename or f"document_{uuid.uuid4().hex[:8]}"
     ext = filename.rsplit(".", 1)[-1] if "." in filename else "bin"
-    object_key = (
-        f"legal_docs/{tenant_id}/{legal_case_id}/{uuid.uuid4().hex}.{ext}"
-    )
+    object_key = f"legal_docs/{tenant_id}/{legal_case_id}/{uuid.uuid4().hex}.{ext}"
     try:
         storage.put_object(object_key, raw, mime or "application/octet-stream")
     except Exception as exc:  # noqa: BLE001

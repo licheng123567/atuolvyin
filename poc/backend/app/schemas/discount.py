@@ -1,4 +1,5 @@
 """v1.6 — Discount offer schemas (协商打折 / 减免审批)。"""
+
 from __future__ import annotations
 
 from datetime import datetime

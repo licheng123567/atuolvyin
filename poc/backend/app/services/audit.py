@@ -3,6 +3,7 @@
 Caller-managed transaction: log_audit() does NOT commit. Failures are swallowed
 and logged so an audit-write error never breaks the parent business operation.
 """
+
 from __future__ import annotations
 
 import logging

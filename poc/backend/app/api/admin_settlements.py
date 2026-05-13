@@ -6,9 +6,10 @@ PATCH  /api/v1/admin/settlements/{id}/confirm         DRAFT → CONFIRMED
 PATCH  /api/v1/admin/settlements/{id}/pay             CONFIRMED → PAID (+payment_proof_url)
 POST   /api/v1/admin/settlements/{id}/dispute         any non-PAID → DISPUTED + DisputeRecord
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -112,9 +113,7 @@ def list_settlements(
     _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     status: str | None = Query(None, description="DRAFT/CONFIRMED/PAID/DISPUTED"),
-    year_month: str | None = Query(
-        None, description="YYYY-MM, filters by period_start"
-    ),
+    year_month: str | None = Query(None, description="YYYY-MM, filters by period_start"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[SettlementOut]:
@@ -149,11 +148,11 @@ def list_settlements(
                     "message": "year_month 格式应为 YYYY-MM",
                 },
             ) from None
-        period_lo = datetime(year_i, month_i, 1, tzinfo=timezone.utc)
+        period_lo = datetime(year_i, month_i, 1, tzinfo=UTC)
         if month_i == 12:
-            period_hi = datetime(year_i + 1, 1, 1, tzinfo=timezone.utc)
+            period_hi = datetime(year_i + 1, 1, 1, tzinfo=UTC)
         else:
-            period_hi = datetime(year_i, month_i + 1, 1, tzinfo=timezone.utc)
+            period_hi = datetime(year_i, month_i + 1, 1, tzinfo=UTC)
         stmt = stmt.where(
             SettlementStatement.period_start >= period_lo,
             SettlementStatement.period_start < period_hi,
@@ -179,9 +178,7 @@ def list_settlements(
     )
 
 
-@router.get(
-    "/settlements/{statement_id}", response_model=SettlementDetailOut
-)
+@router.get("/settlements/{statement_id}", response_model=SettlementDetailOut)
 def get_settlement(
     statement_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
@@ -191,11 +188,15 @@ def get_settlement(
     tenant_id = _require_tenant(payload)
     s, _contract, provider = _load_statement_for_tenant(db, statement_id, tenant_id)
 
-    disputes = db.execute(
-        select(DisputeRecord)
-        .where(DisputeRecord.statement_id == statement_id)
-        .order_by(DisputeRecord.id.desc())
-    ).scalars().all()
+    disputes = (
+        db.execute(
+            select(DisputeRecord)
+            .where(DisputeRecord.statement_id == statement_id)
+            .order_by(DisputeRecord.id.desc())
+        )
+        .scalars()
+        .all()
+    )
 
     base = _statement_to_out(s, provider)
     return SettlementDetailOut(
@@ -204,9 +205,7 @@ def get_settlement(
     )
 
 
-@router.patch(
-    "/settlements/{statement_id}/confirm", response_model=SettlementOut
-)
+@router.patch("/settlements/{statement_id}/confirm", response_model=SettlementOut)
 def confirm_settlement(
     statement_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
@@ -220,7 +219,7 @@ def confirm_settlement(
         raise _invalid_transition()
 
     s.status = "CONFIRMED"
-    s.confirmed_at = datetime.now(timezone.utc)
+    s.confirmed_at = datetime.now(UTC)
     db.commit()
     db.refresh(s)
     return _statement_to_out(s, provider)
@@ -241,7 +240,7 @@ def pay_settlement(
         raise _invalid_transition()
 
     s.status = "PAID"
-    s.paid_at = datetime.now(timezone.utc)
+    s.paid_at = datetime.now(UTC)
     if body.payment_proof_url is not None:
         s.payment_proof_url = body.payment_proof_url
     log_audit(

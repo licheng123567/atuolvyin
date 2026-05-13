@@ -1,4 +1,5 @@
 """Sprint 16.3 — 律所→平台介绍费账单生成服务 (PRD §20.4)。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -30,26 +31,30 @@ def aggregate_completed_orders(
             LegalConversionOrder.price_quoted,
             LegalConversionOrder.platform_fee_amount,
             LegalConversionOrder.completed_at,
-        ).where(
+        )
+        .where(
             LegalConversionOrder.law_firm_id == law_firm_id,
             LegalConversionOrder.status == "completed",
             LegalConversionOrder.completed_at >= period_start,
             LegalConversionOrder.completed_at < period_end,
-        ).order_by(LegalConversionOrder.completed_at)
+        )
+        .order_by(LegalConversionOrder.completed_at)
     ).all()
 
     lines: list[dict] = []
     total = Decimal("0")
     for r in rows:
         total += r.platform_fee_amount or Decimal("0")
-        lines.append({
-            "order_id": int(r.id),
-            "case_id": int(r.case_id),
-            "package_id": int(r.package_id),
-            "price_quoted": float(r.price_quoted),
-            "platform_fee": float(r.platform_fee_amount),
-            "completed_at": r.completed_at.isoformat() if r.completed_at else None,
-        })
+        lines.append(
+            {
+                "order_id": int(r.id),
+                "case_id": int(r.case_id),
+                "package_id": int(r.package_id),
+                "price_quoted": float(r.price_quoted),
+                "platform_fee": float(r.platform_fee_amount),
+                "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+            }
+        )
     return total, lines
 
 
@@ -98,8 +103,7 @@ def generate_invoice(
 def total_unpaid_fee(db: Session, *, law_firm_id: int) -> Decimal:
     """律所所有 CONFIRMED 但未 PAID 的账单合计金额。"""
     val = db.execute(
-        select(func.coalesce(func.sum(LegalPlatformInvoice.total_amount), 0))
-        .where(
+        select(func.coalesce(func.sum(LegalPlatformInvoice.total_amount), 0)).where(
             LegalPlatformInvoice.law_firm_id == law_firm_id,
             LegalPlatformInvoice.status == "CONFIRMED",
         )

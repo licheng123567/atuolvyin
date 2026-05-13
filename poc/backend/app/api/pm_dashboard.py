@@ -311,21 +311,32 @@ async def list_my_projects(
     role = payload.get("role", "")
 
     if role == "project_manager_property":
-        rows = db.execute(
-            select(Project).where(Project.property_pm_user_id == user_id)
-            .order_by(Project.id.desc())
-        ).scalars().all()
+        rows = (
+            db.execute(
+                select(Project)
+                .where(Project.property_pm_user_id == user_id)
+                .order_by(Project.id.desc())
+            )
+            .scalars()
+            .all()
+        )
     elif role == "project_manager_provider":
         # v1.5.5 — 服务商 PM 仅看到 active + 服务期未过的项目
         from sqlalchemy import or_
-        rows = db.execute(
-            select(Project).where(
-                Project.provider_pm_user_id == user_id,
-                Project.status == "active",
-                or_(Project.plan_end.is_(None), Project.plan_end >= func.now()),
+
+        rows = (
+            db.execute(
+                select(Project)
+                .where(
+                    Project.provider_pm_user_id == user_id,
+                    Project.status == "active",
+                    or_(Project.plan_end.is_(None), Project.plan_end >= func.now()),
+                )
+                .order_by(Project.id.desc())
             )
-            .order_by(Project.id.desc())
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
     else:
         return []
 
@@ -357,28 +368,27 @@ async def list_my_projects(
         provider_name = None
         if p.provider_id:
             from app.models.tenant import ServiceProvider
+
             provider_name = db.execute(
-                select(ServiceProvider.name).where(
-                    ServiceProvider.id == p.provider_id
-                )
+                select(ServiceProvider.name).where(ServiceProvider.id == p.provider_id)
             ).scalar_one_or_none()
 
-        cards.append(PmProjectCard(
-            project_id=p.id,
-            project_name=p.name,
-            role_in_project=(
-                "property_pm"
-                if role == "project_manager_property"
-                else "provider_pm"
-            ),
-            case_count=len(case_data),
-            receivable=round(receivable, 2),
-            received=round(received, 2),
-            promised_count=promised,
-            new_count=new_c,
-            in_progress_count=in_progress,
-            escalated_count=escalated,
-            provider_name=provider_name,
-            allow_internal_assist=p.allow_internal_assist,
-        ))
+        cards.append(
+            PmProjectCard(
+                project_id=p.id,
+                project_name=p.name,
+                role_in_project=(
+                    "property_pm" if role == "project_manager_property" else "provider_pm"
+                ),
+                case_count=len(case_data),
+                receivable=round(receivable, 2),
+                received=round(received, 2),
+                promised_count=promised,
+                new_count=new_c,
+                in_progress_count=in_progress,
+                escalated_count=escalated,
+                provider_name=provider_name,
+                allow_internal_assist=p.allow_internal_assist,
+            )
+        )
     return cards

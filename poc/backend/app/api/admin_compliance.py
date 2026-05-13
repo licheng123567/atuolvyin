@@ -7,6 +7,7 @@
 PDF 导出策略：服务端只输出结构化数据，前端用 print-friendly CSS 渲染 +
 浏览器「打印为 PDF」即可。等真实需求出现再引入 reportlab/weasyprint。
 """
+
 from __future__ import annotations
 
 from collections import Counter, defaultdict
@@ -124,9 +125,7 @@ def _compute_month_summary(
     return int(total_calls), int(total_risk), int(dnc), int(overfreq)
 
 
-@router.get(
-    "/compliance/monthly", response_model=list[ComplianceReportListItem]
-)
+@router.get("/compliance/monthly", response_model=list[ComplianceReportListItem])
 def list_monthly_reports(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
@@ -140,9 +139,7 @@ def list_monthly_reports(
     year, month = now.year, now.month
     for _ in range(months):
         ym = f"{year:04d}-{month:02d}"
-        total_calls, total_risk, dnc, _of = _compute_month_summary(
-            db, tenant_id, year, month
-        )
+        total_calls, total_risk, dnc, _of = _compute_month_summary(db, tenant_id, year, month)
         items.append(
             ComplianceReportListItem(
                 year_month=ym,
@@ -160,9 +157,7 @@ def list_monthly_reports(
     return items
 
 
-@router.get(
-    "/compliance/monthly/{year_month}", response_model=ComplianceMonthlyReport
-)
+@router.get("/compliance/monthly/{year_month}", response_model=ComplianceMonthlyReport)
 def get_monthly_report(
     year_month: Annotated[str, Path(pattern=r"^\d{4}-\d{2}$")],
     payload: Annotated[dict, Depends(get_token_payload)],
@@ -180,12 +175,16 @@ def get_monthly_report(
             detail={"code": "ERR_NOT_FOUND", "message": "租户不存在"},
         )
 
-    calls = db.execute(
-        select(CallRecord)
-        .where(CallRecord.tenant_id == tenant_id)
-        .where(CallRecord.created_at >= start)
-        .where(CallRecord.created_at < end)
-    ).scalars().all()
+    calls = (
+        db.execute(
+            select(CallRecord)
+            .where(CallRecord.tenant_id == tenant_id)
+            .where(CallRecord.created_at >= start)
+            .where(CallRecord.created_at < end)
+        )
+        .scalars()
+        .all()
+    )
 
     total_calls = len(calls)
     total_minutes = sum((c.billable_duration or 0) for c in calls) // 60
@@ -201,15 +200,13 @@ def get_monthly_report(
         )
     )
 
-    risk_rows = (
-        db.execute(
-            select(RiskEvent.level, RiskEvent.category, RiskEvent.intervention)
-            .join(CallRecord, CallRecord.id == RiskEvent.call_id)
-            .where(CallRecord.tenant_id == tenant_id)
-            .where(CallRecord.created_at >= start)
-            .where(CallRecord.created_at < end)
-        ).all()
-    )
+    risk_rows = db.execute(
+        select(RiskEvent.level, RiskEvent.category, RiskEvent.intervention)
+        .join(CallRecord, CallRecord.id == RiskEvent.call_id)
+        .where(CallRecord.tenant_id == tenant_id)
+        .where(CallRecord.created_at >= start)
+        .where(CallRecord.created_at < end)
+    ).all()
     by_level: Counter[str] = Counter()
     by_cat: dict[tuple[str, str], int] = defaultdict(int)
     interrupted = 0
