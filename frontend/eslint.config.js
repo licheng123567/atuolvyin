@@ -26,6 +26,10 @@ export default defineConfig([
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
       'no-console': 'warn',
+      // eslint-plugin-react-hooks v5 新增；项目中有合法的 useEffect→setState 初始化模式
+      // （URL→state、外部数据→form draft、debounce 重置）。降级为 warn，留待后续
+      // useSyncExternalStore / useDeferredValue 重构。
+      'react-hooks/set-state-in-effect': 'warn',
     },
   },
 ])
