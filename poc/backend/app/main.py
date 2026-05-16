@@ -167,8 +167,16 @@ async def validation_exception_handler(
     first = exc.errors()[0] if exc.errors() else {}
     # v2.2 临时日志：打印 422 来源（path/loc/收到的 body），用于真机调试
     import logging
-    body_bytes = await request.body()
-    body_preview = body_bytes[:400].decode("utf-8", errors="replace") if body_bytes else ""
+    # multipart 请求的流已被 FastAPI 解析消耗，不能再读 body；只对 JSON 请求记录原始 body
+    content_type = request.headers.get("content-type", "")
+    if "multipart/" in content_type or "application/x-www-form-urlencoded" in content_type:
+        body_preview = "<multipart/form — body not logged>"
+    else:
+        try:
+            body_bytes = await request.body()
+            body_preview = body_bytes[:400].decode("utf-8", errors="replace") if body_bytes else ""
+        except RuntimeError:
+            body_preview = "<body unavailable>"
     logging.warning(
         "VAL_422 path=%s loc=%s msg=%s body=%s",
         request.url.path, first.get("loc"), first.get("msg"), body_preview,
