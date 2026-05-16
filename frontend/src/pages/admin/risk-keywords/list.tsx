@@ -32,7 +32,7 @@ export function RiskKeywordListPage() {
   const PAGE_SIZE = 20;
 
   const { data: identity } = useGetIdentity<{ role: string }>();
-  const isPlatformSuper = identity?.role === "platform_super";
+  const isPlatformSuper = identity?.role === "superadmin";
 
   const { query } = useList<RiskKeywordItem>({
     resource: "admin/risk-keywords",

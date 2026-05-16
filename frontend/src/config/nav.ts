@@ -15,8 +15,8 @@ export interface NavSection {
   items: NavItem[];
 }
 
-// NAV_CONFIG allows UserRole keys plus legacy backward-compat strings ("workorder")
-const NAV_CONFIG: Partial<Record<UserRole | string, NavSection[]>> = {
+// NAV_CONFIG allows UserRole keys plus legacy backward-compat key ("workorder")
+const NAV_CONFIG: Partial<Record<UserRole | "workorder", NavSection[]>> = {
   // ── 物业管理员（admin.html）— scope=tenant:{id} ──────────
   admin: [
     {

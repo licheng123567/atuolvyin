@@ -38,7 +38,7 @@ export function SupervisorCaseDetailPage() {
   const canAct =
     identity?.role === "supervisor" ||
     identity?.role === "admin" ||
-    identity?.role === "platform_super";
+    identity?.role === "superadmin";
 
   if (query.isLoading) {
     return (

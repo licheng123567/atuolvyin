@@ -1,4 +1,4 @@
-// v2.1 Sprint Task 7 — 坐席设备能力列表（admin / supervisor / platform_super 可见）
+// v2.1 Sprint Task 7 — 坐席设备能力列表（admin / supervisor / superadmin 可见）
 //
 // 数据源：GET /api/v1/admin/agent-devices?page=&page_size=&capability=&q=
 // 用途：让物业管理员/督导一眼看出哪些坐席机器不支持系统级通话录音 → 实时 AI 不可用，需要换机

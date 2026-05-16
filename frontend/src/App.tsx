@@ -536,7 +536,7 @@ function App() {
             <Route path="/provider/settlements/:id" element={<ProviderSettlementDetailPage />} />
             <Route path="/provider/historical-reports" element={<ProviderHistoricalReportsPage />} />
             <Route path="/provider/projects" element={<ProviderProjectsPage />} />
-            {/* Sprint 15 — platform_super system management */}
+            {/* Sprint 15 — superadmin system management */}
             <Route path="/super/health" element={<SuperHealthPage />} />
             <Route path="/super/audit" element={<SuperAuditPage />} />
             <Route path="/super/cost" element={<SuperCostPage />} />
