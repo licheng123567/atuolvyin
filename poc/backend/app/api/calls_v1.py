@@ -295,7 +295,10 @@ async def _broadcast_call_event(db: Session, call: CallRecord, event_type: str) 
     caller = db.get(UserAccount, call.caller_user_id) if call.caller_user_id else None
     case = db.get(CollectionCase, call.case_id) if call.case_id else None
     owner = db.get(OwnerProfile, case.owner_id) if case and case.owner_id else None
-    # v1.7.0 — broadcast 到 supervisor（物业内部角色），统一明文
+    # WS 广播按 tenant_id 群发,无法逐订阅者脱敏 —— 这里固定 provider_id=None。
+    # TODO(v2.2-followup): 服务商侧督导(supervisor + provider_id)连入同一 tenant
+    # 房间时会因此收到明文业主电话;根治需在 SupervisorManager.broadcast 内按
+    # 每个订阅连接的 provider_id 逐一脱敏。
     _bc_reveal = should_reveal_owner_phone(role="supervisor", provider_id=None)
     payload = {
         "type": event_type,  # "call.started" | "call.ended" | "call.aborted"
