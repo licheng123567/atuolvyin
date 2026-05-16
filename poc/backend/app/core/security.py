@@ -149,6 +149,62 @@ def require_roles(*roles: str):
     return _check
 
 
+def require_tenant_roles(*roles: str):
+    """物业侧专用端点:角色匹配 + provider_id 必须为空(None)。
+
+    provider_id 为 None 的用户 = 物业侧组织成员或平台用户;
+    provider_id 非空的服务商侧用户即使角色名匹配也会被拒。
+    """
+
+    async def _check(
+        payload: Annotated[dict, Depends(get_token_payload)],
+        user: Annotated["UserAccount", Depends(get_current_user)],
+    ) -> "UserAccount":
+        role: str = payload.get("role", "")
+        if role not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "ERR_FORBIDDEN",
+                    "message": f"Role '{role}' is not permitted for this endpoint",
+                },
+            )
+        if payload.get("provider_id") is not None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"code": "ERR_FORBIDDEN", "message": "该端点仅限物业侧访问"},
+            )
+        return user
+
+    return _check
+
+
+def require_provider_roles(*roles: str):
+    """服务商侧专用端点:角色匹配 + provider_id 必须非空。"""
+
+    async def _check(
+        payload: Annotated[dict, Depends(get_token_payload)],
+        user: Annotated["UserAccount", Depends(get_current_user)],
+    ) -> "UserAccount":
+        role: str = payload.get("role", "")
+        if role not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "ERR_FORBIDDEN",
+                    "message": f"Role '{role}' is not permitted for this endpoint",
+                },
+            )
+        if payload.get("provider_id") is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"code": "ERR_FORBIDDEN", "message": "该端点仅限服务商侧访问"},
+            )
+        return user
+
+    return _check
+
+
 def mask_phone(phone_enc: str) -> str:
     """Decrypt AES-256 ciphertext and return masked form like 138****1234."""
     from app.core.crypto import mask_phone as _mask  # avoid circular at module level
