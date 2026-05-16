@@ -23,7 +23,7 @@ from app.core.phone_visibility import (
     is_provider_contract_active,
     should_reveal_owner_phone,
 )
-from app.core.security import get_token_payload, require_tenant_roles
+from app.core.security import get_token_payload, require_roles
 from app.core.storage import storage
 from app.models.call import AnalysisResult, CallRecord, Transcript
 from app.models.case import CollectionCase, OwnerProfile
@@ -98,7 +98,7 @@ def _get_or_create_usage(db: Session, tenant_id: int, year_month: str) -> Tenant
 async def dial_request(
     body: DialRequestIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*AGENT_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> DialRequestOut:
     user_id = int(payload.get("user_id") or 0)
@@ -323,7 +323,7 @@ async def _broadcast_call_event(db: Session, call: CallRecord, event_type: str) 
 async def dial_start(
     body: DialStartIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*AGENT_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> DialStartOut:
     """Agent App 内点「拨打」时调用。冻结 recording_mode + 检查软配额 + WS 推送 supervisor。
@@ -429,7 +429,7 @@ async def dial_start(
 async def call_heartbeat(
     call_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*AGENT_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> HeartbeatOut:
     """agent App 30s 一次心跳，证明通话还在进行。后台任务 90s 无心跳自动 abort。"""
@@ -470,7 +470,7 @@ async def respond_takeover(
     call_id: int,
     body: TakeoverResponseIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*AGENT_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> TakeoverResponseOut:
     user_id = int(payload.get("user_id") or 0)
@@ -509,7 +509,7 @@ def post_call_intent(
     call_id: int,
     body: CallIntentIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*AGENT_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> CallIntentOut:
     """Sprint 16 — 记录坐席意向动作（转主管/发支付码/转法务）。
@@ -652,7 +652,7 @@ def get_dial_info(
 @router.post("/upload", response_model=CallUploadResponse, status_code=201)
 async def upload_call(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*AGENT_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     device_id: Annotated[str, Form()],
     case_id: Annotated[int, Form()],
@@ -793,7 +793,7 @@ async def upload_call(
 @router.get("/", response_model=PaginatedResponse[CallListItem])
 def list_calls(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*AGENT_ROLES, *SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES, *SUPERVISOR_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     case_id: int | None = Query(None),
     page: int = Query(1, ge=1),
@@ -849,7 +849,7 @@ def list_calls(
 def get_call_detail(
     call_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*AGENT_ROLES, *SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES, *SUPERVISOR_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> CallDetailResponse:
     user_id = int(payload.get("user_id") or 0)
@@ -937,7 +937,7 @@ def patch_call_tag(
     call_id: int,
     body: CallTagPatch,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*AGENT_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> CallTagOut:
     user_id = int(payload.get("user_id") or 0)
@@ -1009,7 +1009,7 @@ def post_suggestion_feedback(
     suggestion_id: str,
     body: SuggestionFeedbackIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*AGENT_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     from fastapi.responses import JSONResponse

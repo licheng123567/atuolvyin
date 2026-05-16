@@ -24,7 +24,7 @@ from app.core.phone_visibility import (
     is_provider_contract_active,
     should_reveal_owner_phone,
 )
-from app.core.security import get_token_payload, require_tenant_roles
+from app.core.security import get_token_payload, require_roles, require_tenant_roles
 from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.legal_conversion import LegalConversionRequest
 from app.models.user import UserAccount
@@ -148,7 +148,7 @@ def _load_request_with_context(
 )
 def list_requests(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_tenant_roles(*VIEWER_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_roles(*VIEWER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     status: str | None = Query(None, max_length=20),
     case_id: int | None = Query(None, ge=1),

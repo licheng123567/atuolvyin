@@ -15,7 +15,7 @@ from app.core.phone_visibility import (
     is_provider_contract_active,
     should_reveal_owner_phone,
 )
-from app.core.security import get_token_payload, require_tenant_roles
+from app.core.security import get_token_payload, require_roles
 from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.legal_conversion import LegalConversionOrder, LegalConversionRequest
 from app.models.tenant import UserTenantMembership
@@ -105,7 +105,7 @@ AGENT_ROLES = ("agent",)
 @router.get("/cases", response_model=PaginatedResponse[CaseWithOwnerResponse])
 async def list_my_cases(
     payload: Annotated[dict, Depends(get_token_payload)],
-    user: Annotated[UserAccount, Depends(require_tenant_roles(*AGENT_ROLES))],
+    user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     pool_type: str | None = Query(None),
     stage: str | None = Query(None),
@@ -213,7 +213,7 @@ class AgentProjectOption(BaseModel):
 @router.get("/me/projects", response_model=list[AgentProjectOption])
 async def list_my_projects(
     payload: Annotated[dict, Depends(get_token_payload)],
-    user: Annotated[UserAccount, Depends(require_tenant_roles(*AGENT_ROLES))],
+    user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[AgentProjectOption]:
     """催收员可见的项目下拉选项（distinct project_id 来自 visible cases）。"""
@@ -238,7 +238,7 @@ async def list_my_projects(
 async def get_case_detail(
     case_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    user: Annotated[UserAccount, Depends(require_tenant_roles(*AGENT_ROLES))],
+    user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseDetailResponse:
     tenant_id = _require_tenant(payload)
@@ -294,7 +294,7 @@ async def agent_update_case_stage(
     case_id: int,
     body: CaseStageUpdate,
     payload: Annotated[dict, Depends(get_token_payload)],
-    user: Annotated[UserAccount, Depends(require_tenant_roles(*AGENT_ROLES))],
+    user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseResponse:
     """v1.6.6 — 催收员更新自己的案件阶段（带跟进备注，写入 audit log）。
@@ -353,7 +353,7 @@ def post_case_intent(
     case_id: int,
     body: _CaseIntentIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_tenant_roles(*AGENT_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> _CaseIntentOut:
     """Sprint 16 — 坐席案件级意向 stub（转主管/转法务）。
@@ -460,7 +460,7 @@ class _PaymentLinkOut(BaseModel):
 def send_payment_link(
     case_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    user: Annotated[UserAccount, Depends(require_tenant_roles(*AGENT_ROLES))],
+    user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> _PaymentLinkOut:
     """v1.6.7 — E4 一键发送缴费链接给业主（PoC：生成短链 + 写 audit log，不真实下发短信）。
@@ -564,7 +564,7 @@ def _agent_open_case_count(db: Session, *, user_id: int, tenant_id: int) -> int:
 @router.get("/me/pool-quota")
 async def get_pool_quota(
     payload: Annotated[dict, Depends(get_token_payload)],
-    user: Annotated[UserAccount, Depends(require_tenant_roles(*AGENT_ROLES))],
+    user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     """v1.6.9 — 当前持有未结案案件数 + 抢单上限（让前端公海页展示进度）。"""
@@ -583,7 +583,7 @@ async def get_pool_quota(
 async def claim_case(
     case_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    user: Annotated[UserAccount, Depends(require_tenant_roles(*AGENT_ROLES))],
+    user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseResponse:
     tenant_id = _require_tenant(payload)
@@ -636,7 +636,7 @@ async def claim_case(
 async def release_case(
     case_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    user: Annotated[UserAccount, Depends(require_tenant_roles(*AGENT_ROLES))],
+    user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseResponse:
     """v1.6.9 — 催收员把私海案件主动放回公海（仅自己持有的未结案案件可放回）。"""

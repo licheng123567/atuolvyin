@@ -19,7 +19,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_tenant_roles
+from app.core.security import get_token_payload, require_roles
 from app.models.call import AnalysisResult, CallRecord, Transcript
 from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.tenant import Tenant, TenantMinuteUsage
@@ -49,7 +49,7 @@ class AgentPerformanceOut(BaseModel):
 @router.get("/me/performance", response_model=AgentPerformanceOut)
 def get_my_performance(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_tenant_roles(*AGENT_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> AgentPerformanceOut:
     user_id = int(payload.get("user_id") or 0)
@@ -175,7 +175,7 @@ class CallHistoryItem(BaseModel):
 @router.get("/me/call-history", response_model=PaginatedResponse[CallHistoryItem])
 def list_my_call_history(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_tenant_roles(*AGENT_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     date_from: Annotated[date_type | None, Query()] = None,
     date_to: Annotated[date_type | None, Query()] = None,
@@ -288,7 +288,7 @@ class TodayKpiResp(BaseModel):
 @router.get("/me/today-kpi", response_model=TodayKpiResp)
 def get_my_today_kpi(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_tenant_roles(*AGENT_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> TodayKpiResp:
     """工作台顶部 KPI 进度条数据源。"""
@@ -381,7 +381,7 @@ def _mock_score_for_call(call_id: int) -> CallScoreItem:
 @router.get("/me/scoring-trend", response_model=ScoringTrendResp)
 def get_my_scoring_trend(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_tenant_roles(*AGENT_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ScoringTrendResp:
     """近 30 天通话评分（PoC 阶段使用 mock 算法）。"""
@@ -439,7 +439,7 @@ class ActiveCallResp(BaseModel):
 @router.get("/me/active-call", response_model=ActiveCallResp)
 def get_my_active_call(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_tenant_roles(*AGENT_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ActiveCallResp:
     """工作台轮询：返回当前催收员名下处于 dialing/live 状态的通话。

@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_tenant_roles
+from app.core.security import get_token_payload, require_roles
 from app.models.case import (  # noqa: F401  Project 用于 _get_policy
     CollectionCase,
     OwnerProfile,
@@ -126,7 +126,7 @@ def _to_out(db: Session, offer: DiscountOffer) -> DiscountOfferOut:
 def get_effective_discount_policy(
     case_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*ALL_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*ALL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     """v1.6.1 — 给定 case，返回当前生效的减免策略（项目级覆盖后）。
@@ -199,7 +199,7 @@ def create_offer(
     case_id: int,
     body: DiscountOfferCreate,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*ALL_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*ALL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> DiscountOfferOut:
     tenant_id = payload.get("tenant_id")
@@ -325,7 +325,7 @@ def create_offer(
 @router.get("/discount-offers", response_model=PaginatedResponse[DiscountOfferOut])
 def list_offers(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*ALL_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*ALL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     my_pending: Annotated[bool, Query()] = False,
     status: Annotated[str | None, Query()] = None,
@@ -366,7 +366,7 @@ def list_offers(
 def get_offer(
     offer_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*ALL_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*ALL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> DiscountOfferOut:
     tenant_id = payload.get("tenant_id")
@@ -401,7 +401,7 @@ def approve_offer(
     offer_id: int,
     body: DiscountActionRequest,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*ALL_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*ALL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> DiscountOfferOut:
     tenant_id = payload.get("tenant_id")
@@ -451,7 +451,7 @@ def reject_offer(
     offer_id: int,
     body: DiscountRejectRequest,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*ALL_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*ALL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> DiscountOfferOut:
     tenant_id = payload.get("tenant_id")
@@ -499,7 +499,7 @@ def escalate_offer(
     offer_id: int,
     body: DiscountActionRequest,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*ALL_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*ALL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> DiscountOfferOut:
     tenant_id = payload.get("tenant_id")
@@ -542,7 +542,7 @@ def escalate_offer(
 def mark_executed(
     offer_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*ALL_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*ALL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> DiscountOfferOut:
     tenant_id = payload.get("tenant_id")
