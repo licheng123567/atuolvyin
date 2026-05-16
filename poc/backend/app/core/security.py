@@ -88,6 +88,14 @@ async def get_token_payload(
         if rows:  # 有过 v1.4 登录记录
             token_hash = hashlib.sha256(token.encode()).hexdigest()
             if token_hash not in rows:
+                # v2.2 临时调试日志
+                import logging
+                logging.warning(
+                    "EVICTED user=%s got=%s want=%s",
+                    user_id,
+                    token_hash[:12],
+                    [r[:12] for r in rows],
+                )
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail={

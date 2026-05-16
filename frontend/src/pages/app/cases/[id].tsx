@@ -4,7 +4,7 @@
 import { useOne } from "@refinedev/core";
 import { useNavigate, useParams } from "react-router-dom";
 import { ChevronLeft, FileText, Phone } from "lucide-react";
-import { Bridge } from "../../../lib/jsBridge";
+import { dialCase } from "./_dial";
 import { stageBadgeClass, stageLabel, resultTagBadge } from "../../../lib/caseStage";
 import {
   formatDurationChinese,
@@ -99,20 +99,7 @@ export function MobileCaseDetailPage() {
 
   const handleDial = () => {
     if (!detail) return;
-    // v2.1 Task 6 — incompatible 设备拨号前确认
-    const cap = Bridge.getCapability();
-    if (cap.capability === "incompatible") {
-      const ok = window.confirm(
-        `您的设备 (${cap.rom || "未识别"}) 无法保存通话录音，本次通话将无 AI 分析。\n\n是否继续拨号？`,
-      );
-      if (!ok) return;
-    }
-    const phone = detail.owner.phone ?? detail.owner.phone_masked;
-    Bridge.dialCase({
-      case_id: detail.id,
-      phone,
-      owner_name: detail.owner.name,
-    });
+    dialCase(detail);
   };
 
   const handleAddNote = () => {
@@ -177,13 +164,10 @@ export function MobileCaseDetailPage() {
         </span>
       </div>
 
-      {/* ── 3 列信息卡 ── */}
+      {/* ── 3 列信息卡（颜色对齐原型：欠费红 / 月数橙 / 联系灰小字） ── */}
       <div className="detail-info-cards">
         <div className="detail-info-card">
-          <div
-            className="detail-info-card-value"
-            style={{ fontSize: 16, color: "#1A56DB" }}
-          >
+          <div className="detail-info-card-value">
             {formatYuan(detail.amount_owed)}
           </div>
           <div className="detail-info-card-label">欠费金额</div>

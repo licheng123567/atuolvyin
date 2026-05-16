@@ -129,7 +129,11 @@ class MainActivity : AppCompatActivity() {
         if (url.isNullOrBlank()) {
             showBackendUrlDialog(onSaved = next)
         } else if (AppConfig.jwtToken(this) == null) {
-            showLoginDialog()
+            // v0.5.2 — 弃用 Compose AlertDialog 登录，统一走 React /login 页面。
+            // 跳过自检直接进 HomeActivity，WebView MobileAuthGuard 检测无 JWT → 跳 /login。
+            renderHeader()
+            startActivity(Intent(this, HomeActivity::class.java))
+            finish()
         } else {
             renderHeader()
             next()
@@ -290,6 +294,12 @@ class MainActivity : AppCompatActivity() {
             if (currentTab == 0) {
                 // 密码登录
                 val pwd = pwdInput.text.toString()
+                if (phone.length != 11) {
+                    toast("请填入 11 位手机号"); return@setOnClickListener
+                }
+                if (pwd.isBlank()) {
+                    toast("请输入密码"); return@setOnClickListener
+                }
                 lifecycleScope.launch {
                     try {
                         val resp = ApiClient.get(this@MainActivity)
@@ -299,7 +309,9 @@ class MainActivity : AppCompatActivity() {
                         dialog.dismiss()
                         doSelfCheck()
                     } catch (t: Throwable) {
-                        toast("登录失败: ${t.message}")
+                        // v2.3 — 中文化错误：Retrofit HttpException 拿 errorBody 走
+                        // parseErrorMessage；网络层错误按 status / 异常类型给人话
+                        toast("登录失败：${humanizeLoginError(t)}")
                     }
                 }
             } else {
@@ -325,11 +337,45 @@ class MainActivity : AppCompatActivity() {
                             toast("登录失败：$msg")
                         }
                     } catch (t: Throwable) {
-                        toast("登录失败：${t.message}")
+                        toast("登录失败：${humanizeLoginError(t)}")
                     }
                 }
             }
         }
+    }
+
+    // ↑ OTP catch 已用同一 humanizer
+
+    /**
+     * v2.3 — 把登录路径上的异常转成中文人类化文案。
+     * 优先级：HttpException 的 errorBody.detail.message > status 默认文案 >
+     *        socket/IO 异常 = 网络问题 > 其他兜底。
+     */
+    private fun humanizeLoginError(t: Throwable): String {
+        if (t is retrofit2.HttpException) {
+            val backendMsg = try {
+                parseErrorMessage(t.response()?.errorBody()?.string())
+            } catch (_: Throwable) {
+                null
+            }
+            if (!backendMsg.isNullOrBlank() && backendMsg != "请求失败") {
+                return backendMsg
+            }
+            return when (t.code()) {
+                401 -> "账号或密码错误，请重试"
+                403 -> "无权限登录"
+                404 -> "账号不存在"
+                422 -> "输入格式不正确，请检查后重试"
+                429 -> "请求过于频繁，请稍后再试"
+                in 500..599 -> "服务器暂时不可用，请稍后重试"
+                else -> "登录失败（${t.code()}），请重试"
+            }
+        }
+        if (t is java.net.SocketTimeoutException) return "网络超时，请检查网络后重试"
+        if (t is java.net.UnknownHostException) return "无法连接到服务器，请检查后端地址或网络"
+        if (t is java.net.ConnectException) return "无法连接到服务器，请确认服务正在运行"
+        if (t is java.io.IOException) return "网络异常，请检查 WiFi/移动数据"
+        return t.message ?: "登录失败，请重试"
     }
 
     /** 后端错误体形如 {"detail": {"code": "...", "message": "..."}}；尽力提取 message。 */
@@ -418,7 +464,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun doSelfCheck() {
         renderHeader()
-        val recDirs = RecordingScanner.listDirsExisting()
+        // v2.3 Module 6 — 用三态扫描结果。permissionGranted 单独上报让后端能区分
+        // 「未授权」vs「授权但找不到目录」。前者文案应引导去授权，后者应引导手选。
+        val scan = RecordingScanner.listDirsExistingDetailed(this)
+        val recDirs = scan.existingDirs
 
         // v2.2 Module A — 优先使用用户手选目录（SAF 持久化 URI）；
         // 命中即视为录音目录可用，不再依赖静态候选清单。
@@ -437,6 +486,8 @@ class MainActivity : AppCompatActivity() {
         val dirOk = dirsExist && (Build.VERSION.SDK_INT < Build.VERSION_CODES.R
                 || Environment.isExternalStorageManager()
                 || userDirAccessible)
+        // 用户手选目录直接拿到 URI 权限 → 即使 READ_EXTERNAL_STORAGE 未授予也算 perm OK
+        val permsOk = scan.permissionGranted || userDirAccessible
 
         // v2.1 — 设备能力探测：采集 ROM/Android 字段 + 上次扫描失败标志
         val deviceInfo = DeviceCapabilityProbe.collect()
@@ -450,7 +501,7 @@ class MainActivity : AppCompatActivity() {
                     device_id = DeviceId.get(this@MainActivity),
                     recording_dir_ok = dirOk,
                     recording_toggle_on = dirsExist,
-                    permissions_ok = true,
+                    permissions_ok = permsOk,
                     manufacturer = deviceInfo.manufacturer.takeIf { it.isNotBlank() },
                     model = deviceInfo.model.takeIf { it.isNotBlank() },
                     android_version = deviceInfo.androidVersion.takeIf { it.isNotBlank() },
@@ -487,9 +538,12 @@ class MainActivity : AppCompatActivity() {
                 finish()
             } catch (t: Throwable) {
                 if (t.message?.contains("401") == true || t.message?.contains("403") == true) {
+                    // v0.5.2 — JWT 失效 / 被踢出 → 清 token 跳 HomeActivity，
+                    // WebView 自动跳 React /login。不再用 Compose AlertDialog。
                     AppConfig.clearJwtToken(this@MainActivity)
                     ApiClient.invalidate()
-                    showLoginDialog()
+                    startActivity(Intent(this@MainActivity, HomeActivity::class.java))
+                    finish()
                 } else {
                     toast("自检失败: ${t.message}")
                 }
@@ -498,15 +552,37 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderHeader() {
-        val recDirs = RecordingScanner.listDirsExisting()
+        // v2.3 Module 6 — 三态自检：区分「权限未授予」/「目录真不在候选里」/「命中」
+        val scan = RecordingScanner.listDirsExistingDetailed(this@MainActivity)
         binding.statusText.text = buildString {
             append("后端：${AppConfig.backendUrl(this@MainActivity) ?: "未配置"}\n")
             append("设备：${RecordingScanner.deviceModel()}\n")
             append(RecordingScanner.osVersion()).append("\n")
-            append("命中录音目录：${recDirs.joinToString().ifEmpty { "无（请检查系统通话录音是否开启）" }}\n")
+            // 优先看 SAF 用户手选目录；其次按 candidate dirs 三态分支
+            val userUri = AppConfig.getUserRecordingDirUri(this@MainActivity)
+            when {
+                !userUri.isNullOrBlank() -> {
+                    append("命中录音目录：（用户手选）${userUri.takeLast(60)}\n")
+                }
+                !scan.permissionGranted -> {
+                    append(
+                        "录音目录未检测：未授予存储权限。" +
+                            "请到「系统设置 → 应用 → 有证慧催 → 权限」开启存储/媒体音频权限后重试。\n",
+                    )
+                }
+                scan.existingDirs.isEmpty() -> {
+                    append(
+                        "录音目录未命中：已扫描 ${scan.candidatesChecked} 个常见目录均不在本机。" +
+                            "请点击下方「授权文件」→ 手动选择您的录音文件夹（通常名字含 \"call\" 或 \"录音\"）。\n",
+                    )
+                }
+                else -> {
+                    append("命中录音目录：${scan.existingDirs.joinToString()}\n")
+                }
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
                 && !Environment.isExternalStorageManager()) {
-                append("⚠️ 需要授予「所有文件访问权限」才能读 MIUI 录音目录\n")
+                append("⚠️ Android 11+ 建议授予「所有文件访问权限」以读取厂商录音目录\n")
             }
             // v1.6 — 把后端 self-check 的失败项可视化到 header
             if (canCall) {
@@ -525,9 +601,11 @@ class MainActivity : AppCompatActivity() {
                 adapter.submitCases(resp.items)
             } catch (t: Throwable) {
                 if (t.message?.contains("401") == true || t.message?.contains("403") == true) {
+                    // v0.5.2 — 弃用 Compose 登录，跳 HomeActivity 让 WebView 处理
                     AppConfig.clearJwtToken(this@MainActivity)
                     ApiClient.invalidate()
-                    showLoginDialog()
+                    startActivity(Intent(this@MainActivity, HomeActivity::class.java))
+                    finish()
                 } else {
                     toast("加载案件失败: ${t.message}")
                 }

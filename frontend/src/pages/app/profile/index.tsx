@@ -6,46 +6,140 @@
 //   综合评分：固定 92（TODO 接 /agent/me/scoring-trend.avg_score_30d）
 import { useState } from "react";
 import { useCustom, useGetIdentity } from "@refinedev/core";
-import { Bell, Info, Lock, Mic } from "lucide-react";
+import { Bell, Info, Lock } from "lucide-react";
 import type { AuthUser } from "../../../providers/auth-provider";
 import { Bridge, type CapabilityState } from "../../../lib/jsBridge";
 
 /**
- * v2.1 Task 6 — 个人页"录音能力" section
- * 展示当前能力等级 + ROM 标识 + guidance + 上次检测时间
+ * v2.3.1 — 录音设置内联 section（替代 v2.3 的 BottomSheet）。
+ * 一屏展示：当前模式、3 模式对比、上传目录 + 修改入口。用户反馈：弹窗看不清。
  */
-function CapabilitySection() {
+// v0.5.2 — 修正：实时录音其实是「老 Android（6–9）」可用；Android 10+ 系统加强了
+// 录音权限管控，App 拿不到通话流，只能挂断后扫描文件 → 事后上传。
+const MODES = [
+  {
+    key: "realtime",
+    label: "实时录音",
+    emoji: "🟢",
+    accent: "#10b981",
+    tagline: "通话中 AI 实时辅助话术（Android 6–9 早期 ROM 可用）",
+  },
+  {
+    key: "post_upload",
+    label: "通话后上传",
+    emoji: "🟡",
+    accent: "#f59e0b",
+    tagline: "挂断后扫描录音文件并上传（Android 10+ 系统限制录音流）",
+  },
+  {
+    key: "incompatible",
+    label: "不支持录音",
+    emoji: "🔴",
+    accent: "#ef4444",
+    tagline: "ROM 完全不允许 App 访问通话录音，无 AI 分析",
+  },
+] as const;
+
+function formatDirUri(raw: string): string {
+  if (!raw) return "";
+  try {
+    const m = raw.match(/tree\/([^/]+)(?:\/(.+))?$/);
+    if (m) {
+      const path = decodeURIComponent(m[2] ?? m[1]);
+      return "/" + path.replace(/^primary:/, "").replace(/^[^:]+:/, "");
+    }
+  } catch {
+    /* ignore */
+  }
+  return raw.length > 40 ? "…" + raw.slice(-37) : raw;
+}
+
+function RecordingSection() {
   const state: CapabilityState = Bridge.getCapability();
-  const variant =
-    state.capability === "realtime"
-      ? "green"
-      : state.capability === "post_upload"
-        ? "orange"
-        : state.capability === "incompatible"
-          ? "red"
-          : "gray";
-  const label =
-    state.capability === "realtime"
-      ? "实时可用"
-      : state.capability === "post_upload"
-        ? "事后上传"
-        : state.capability === "incompatible"
-          ? "不可用"
-          : "未检测";
+  const currentDirUri = Bridge.getRecordingDirUri();
+  const dirFriendly = formatDirUri(currentDirUri);
 
   return (
     <div className="profile-section-card">
-      <div className="profile-section-title">录音能力</div>
-      <div className={`cap-status cap-status-${variant}`}>
-        <strong>{label}</strong>
-        {state.rom && <span className="cap-rom">{state.rom}</span>}
+      <div className="profile-section-title">录音设置</div>
+      <p className="recording-section-sub">
+        模式由设备型号 + Android 版本自动决定，不可手动切换。
+      </p>
+
+      {/* 3 模式对比卡 */}
+      <div className="recording-modes">
+        {MODES.map((m) => {
+          const active = m.key === state.capability;
+          return (
+            <div
+              key={m.key}
+              className={`recording-mode-row ${active ? "active" : ""}`}
+              style={
+                active
+                  ? {
+                      borderColor: m.accent,
+                      background: `${m.accent}0d`,
+                    }
+                  : undefined
+              }
+            >
+              <span className="recording-mode-emoji">{m.emoji}</span>
+              <div className="recording-mode-text">
+                <div className="recording-mode-label">
+                  {m.label}
+                  {active && (
+                    <span
+                      className="recording-mode-current"
+                      style={{ color: m.accent, borderColor: m.accent }}
+                    >
+                      ✓ 当前
+                    </span>
+                  )}
+                </div>
+                <div className="recording-mode-tagline">{m.tagline}</div>
+              </div>
+            </div>
+          );
+        })}
       </div>
-      {state.guidance && <p className="cap-guidance">{state.guidance}</p>}
-      {state.checkedAtMs > 0 && (
-        <p className="cap-checked-at">
-          上次检测：{new Date(state.checkedAtMs).toLocaleString("zh-CN")}
+
+      {/* 设备 ROM hint + 上次检测 */}
+      {state.rom && (
+        <p className="recording-rom">
+          当前设备：{state.rom}
+          {state.checkedAtMs > 0 && (
+            <span className="recording-checked-at">
+              {" · "}
+              检测于 {new Date(state.checkedAtMs).toLocaleString("zh-CN")}
+            </span>
+          )}
         </p>
       )}
+
+      {/* v0.5.2 — 录音文件夹：当前设置 + 系统推荐目录 + 修改按钮 */}
+      <div className="recording-dir-row">
+        <div className="recording-dir-info">
+          <div className="recording-dir-label">录音文件夹</div>
+          <div className="recording-dir-value" title={currentDirUri || ""}>
+            {dirFriendly || "未设置（使用系统默认扫描）"}
+          </div>
+          <div className="recording-dir-hint">
+            {(() => {
+              const suggested = Bridge.getSuggestedRecordingDir();
+              return suggested
+                ? `本机推荐：/${suggested}（修改时会自动跳到此目录附近）`
+                : "提示：通常文件夹名含 \"call\" 或 \"录音\"";
+            })()}
+          </div>
+        </div>
+        <button
+          type="button"
+          className="recording-dir-change-btn"
+          onClick={() => Bridge.openRecordingDirPicker()}
+        >
+          修改
+        </button>
+      </div>
     </div>
   );
 }
@@ -86,6 +180,13 @@ interface SettingsItemConfig {
 export function MobileProfilePage() {
   const { data: identity } = useGetIdentity<AuthUser>();
   const [toast, setToast] = useState<string | null>(null);
+  // v0.5.2 — App 内修改密码（不跳 PC）
+  const [pwdFormOpen, setPwdFormOpen] = useState(false);
+  const [pwdOld, setPwdOld] = useState("");
+  const [pwdNew, setPwdNew] = useState("");
+  const [pwdConfirm, setPwdConfirm] = useState("");
+  const [pwdError, setPwdError] = useState<string | null>(null);
+  const [pwdSubmitting, setPwdSubmitting] = useState(false);
 
   const { query: perfQ } = useCustom<AgentPerformance>({
     url: "agent/me/performance",
@@ -113,6 +214,56 @@ export function MobileProfilePage() {
     showToast(`后端地址：${url || "未知"}`);
   };
 
+  const submitChangePassword = async () => {
+    setPwdError(null);
+    if (pwdNew.length < 8) {
+      setPwdError("新密码至少 8 位");
+      return;
+    }
+    if (pwdNew !== pwdConfirm) {
+      setPwdError("两次新密码不一致");
+      return;
+    }
+    setPwdSubmitting(true);
+    try {
+      const backend = Bridge.getBackendUrl();
+      const token = Bridge.getJwt();
+      const res = await fetch(`${backend}/api/v1/me/password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          current_password: pwdOld || null,
+          new_password: pwdNew,
+        }),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as {
+          detail?: { message?: string };
+          message?: string;
+        };
+        const msg =
+          err.detail?.message ??
+          err.message ??
+          (res.status === 403 ? "当前密码错误" : "修改失败，请重试");
+        setPwdError(msg);
+        return;
+      }
+      // 成功：关表单、清字段、提示
+      setPwdFormOpen(false);
+      setPwdOld("");
+      setPwdNew("");
+      setPwdConfirm("");
+      showToast("密码已更新");
+    } catch {
+      setPwdError("网络异常，请重试");
+    } finally {
+      setPwdSubmitting(false);
+    }
+  };
+
   const handleLogout = () => {
     const ok = window.confirm("确定要退出登录吗？");
     if (!ok) return;
@@ -122,24 +273,22 @@ export function MobileProfilePage() {
     window.location.href = "/login";
   };
 
+  // v2.3.1 — 录音模式/上传目录从这里挪到独立 RecordingSection 内联展示
   const settings: SettingsItemConfig[] = [
     {
       key: "notify",
       icon: <Bell size={16} strokeWidth={1.5} color="#9CA3AF" />,
       label: "通知设置",
-      onClick: () => showToast("TODO：通知设置"),
-    },
-    {
-      key: "recording",
-      icon: <Mic size={16} strokeWidth={1.5} color="#9CA3AF" />,
-      label: "录音模式",
-      onClick: () => showToast("TODO：录音模式"),
+      onClick: () => showToast("TODO：通知设置（待 MiPush 接入）"),
     },
     {
       key: "password",
       icon: <Lock size={16} strokeWidth={1.5} color="#9CA3AF" />,
       label: "修改密码",
-      onClick: () => showToast("TODO：修改密码"),
+      onClick: () => {
+        setPwdError(null);
+        setPwdFormOpen((v) => !v);
+      },
     },
     {
       key: "about",
@@ -187,15 +336,68 @@ export function MobileProfilePage() {
           >
             <span className="settings-item-icon">{item.icon}</span>
             <span className="settings-item-label">{item.label}</span>
+            {item.rightExtra}
             <span className="settings-item-arrow">›</span>
           </button>
         ))}
       </div>
 
+      {/* v0.5.2 — 修改密码内联表单（点击「修改密码」展开） */}
+      {pwdFormOpen && (
+        <div className="profile-section-card password-form">
+          <div className="profile-section-title">修改密码</div>
+          <input
+            type="password"
+            placeholder="当前密码（未设置可留空）"
+            value={pwdOld}
+            onChange={(e) => setPwdOld(e.target.value)}
+            autoComplete="current-password"
+            className="password-input"
+          />
+          <input
+            type="password"
+            placeholder="新密码（≥ 8 位）"
+            value={pwdNew}
+            onChange={(e) => setPwdNew(e.target.value)}
+            autoComplete="new-password"
+            className="password-input"
+          />
+          <input
+            type="password"
+            placeholder="再次输入新密码"
+            value={pwdConfirm}
+            onChange={(e) => setPwdConfirm(e.target.value)}
+            autoComplete="new-password"
+            className="password-input"
+          />
+          {pwdError && <div className="password-error">{pwdError}</div>}
+          <div className="password-actions">
+            <button
+              type="button"
+              className="password-cancel"
+              onClick={() => {
+                setPwdFormOpen(false);
+                setPwdError(null);
+              }}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className="password-submit"
+              onClick={submitChangePassword}
+              disabled={pwdSubmitting}
+            >
+              {pwdSubmitting ? "提交中…" : "确认修改"}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="mobile-section-divider" />
 
-      {/* ── v2.1 — 录音能力 section ── */}
-      <CapabilitySection />
+      {/* ── v2.3.1 — 录音设置内联 section（模式说明 + 上传目录 + 修改入口） ── */}
+      <RecordingSection />
 
       <div className="mobile-section-divider" />
 

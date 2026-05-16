@@ -4,10 +4,11 @@
 import { useList } from "@refinedev/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Search } from "lucide-react";
+import { Phone, Search } from "lucide-react";
 import { Bridge } from "../../../lib/jsBridge";
 import { stageBadgeClass, stageLabel } from "../../../lib/caseStage";
 import { relativeTimeChinese } from "../../../lib/datetime";
+import { dialCase } from "./_dial";
 
 interface OwnerInfo {
   id: number;
@@ -71,6 +72,8 @@ export function MobileCasesPage() {
   const [tab, setTab] = useState<Tab>("all");
   const [keyword, setKeyword] = useState("");
   const [page, setPage] = useState(1);
+  // v2.3 Module 1 — 项目筛选 chip。null = 全部
+  const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   // v2.2 Module B3 — 从 home 搜索图标进入时 (?focus=search) 自动 focus 搜索框
@@ -147,16 +150,35 @@ export function MobileCasesPage() {
     return items.filter((c) => stages.includes(c.stage));
   }, [rawItems, useClientFilter, currentDef.stages]);
 
+  // v2.3 — 客户端项目过滤（先按 selectedProject 缩，再按 keyword 缩）
+  const projectFiltered = useMemo<CaseItem[]>(() => {
+    if (!selectedProject) return tabFiltered;
+    return tabFiltered.filter((c) => c.project_name === selectedProject);
+  }, [tabFiltered, selectedProject]);
+
   // 客户端 keyword 过滤（统一）
   const visible = useMemo<CaseItem[]>(() => {
     const kw = keyword.trim();
-    if (!kw) return tabFiltered;
+    if (!kw) return projectFiltered;
     const low = kw.toLowerCase();
-    return tabFiltered.filter((c) => {
+    return projectFiltered.filter((c) => {
       const haystack = `${c.owner.name} ${c.owner.building ?? ""} ${c.owner.room ?? ""}`.toLowerCase();
       return haystack.includes(low);
     });
-  }, [tabFiltered, keyword]);
+  }, [projectFiltered, keyword]);
+
+  // v2.3 — 从当前 tab 数据中 distinct 出项目 chip 列表
+  // 按出现频次排序，name 缺失（null）的合并到「未分配」chip
+  const projectOptions = useMemo<{ name: string; count: number }[]>(() => {
+    const counts = new Map<string, number>();
+    for (const c of tabFiltered) {
+      const key = c.project_name ?? "未分配项目";
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [tabFiltered]);
 
   const handleOpenCase = (id: number) => {
     if (Bridge.isAndroid()) {
@@ -198,6 +220,28 @@ export function MobileCasesPage() {
           onChange={(e) => setKeyword(e.target.value)}
         />
       </div>
+
+      {/* ── v2.3.1 — 项目筛选下拉（替代 chip 行） ── */}
+      {projectOptions.length > 0 && (
+        <div className="project-filter-row">
+          <label className="project-filter-label" htmlFor="project-select">
+            项目
+          </label>
+          <select
+            id="project-select"
+            className="project-filter-select"
+            value={selectedProject ?? ""}
+            onChange={(e) => setSelectedProject(e.target.value || null)}
+          >
+            <option value="">全部 ({tabFiltered.length})</option>
+            {projectOptions.map((p) => (
+              <option key={p.name} value={p.name}>
+                {p.name} ({p.count})
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* ── Tab pill ── */}
       <div className="filter-tabs-mobile">
@@ -248,7 +292,7 @@ export function MobileCasesPage() {
             key={c.id}
             className="case-card-full"
             onClick={() => handleOpenCase(c.id)}
-            style={{ cursor: "pointer" }}
+            style={{ cursor: "pointer", position: "relative" }}
           >
             <div className="case-card-row1">
               <div className="case-card-name">{c.owner.name}</div>
@@ -263,6 +307,23 @@ export function MobileCasesPage() {
               <span className={stageBadgeClass(c.stage)} style={{ fontSize: 11 }}>
                 {stageLabel(c.stage)}
               </span>
+            </div>
+            {/* v2.3 Module 1 — 项目 badge + inline 拨号按钮 */}
+            <div className="case-card-row3">
+              <span className="case-project-badge">
+                📁 {c.project_name ?? "未分配项目"}
+              </span>
+              <button
+                type="button"
+                className="case-dial-btn"
+                aria-label={`拨打 ${c.owner.name}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dialCase(c);
+                }}
+              >
+                <Phone size={18} strokeWidth={2.2} />
+              </button>
             </div>
           </div>
         ))}

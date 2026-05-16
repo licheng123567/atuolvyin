@@ -5,6 +5,7 @@ import android.content.*
 import android.os.*
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.autoluyin.demo.webview.WebNavigationBus
 import kotlinx.coroutines.*
 import java.io.File
 import java.text.SimpleDateFormat
@@ -76,6 +77,8 @@ class CallWatcherService : Service() {
             serverCallId = resp.call_id
             Log.i(TAG, "dial-start ok call=${resp.call_id} mode=${resp.recording_mode}")
             updateNotif("通话已同步 PC 监控（${resp.recording_mode}）")
+            // v2.4 — 拨号成功 → 通知 WebView 切到 React in-call 屏（用户从系统拨号回 App 即可见）
+            WebNavigationBus.navigateTo("/app/in-call/${resp.call_id}")
             // 启动 30s 心跳循环
             heartbeatJob?.cancel()
             heartbeatJob = scope.launch {
@@ -126,6 +129,10 @@ class CallWatcherService : Service() {
             updateNotif("未找到录音，请手动补传")
             // v2.1 — 标记上次扫描失败，下次自检 capability 强制降级
             AppConfig.markRecordingScanFailed(this@CallWatcherService, true)
+            // v2.4 — 即便没找到录音也跳到 call-end 让坐席补标记（不强求录音存在）
+            if (serverCallId > 0) {
+                WebNavigationBus.navigateTo("/app/call-end/$serverCallId")
+            }
             clearState(); stopSelfDelayed(); return
         }
 
@@ -150,6 +157,8 @@ class CallWatcherService : Service() {
                 .setPackage(packageName)
                 .putExtra("call_id", resp.call_id)
                 .putExtra("case_id", caseId))
+            // v2.4 — 上传完成 → 跳 React 通话结束标记页（坐席填 result_tag/备注）
+            WebNavigationBus.navigateTo("/app/call-end/${resp.call_id}")
         } catch (t: Throwable) {
             Log.e(TAG, "upload failed", t)
             updateNotif("上传失败：${t.message}")

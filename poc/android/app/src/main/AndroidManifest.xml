@@ -8,6 +8,9 @@
     <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-permission android:name="android.permission.PROCESS_OUTGOING_CALLS" />
+    <!-- v2.4 — TelecomManager.endCall (API 28+) 需要这个 dangerous perm；低版本设备无效，
+         但保留以便高版本设备可用。MIUI 10 / Android 8.1/9 上是 no-op。 -->
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
 
     <!-- 录音文件读取（MIUI/华为等录音目录在共享存储）-->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"

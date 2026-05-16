@@ -26,7 +26,7 @@ export function MobileTimelineCard(props: MobileTimelineCardProps) {
         </span>
       </div>
       <div className="timeline-card-ai">
-        {aiSummary && aiSummary.trim().length > 0 ? aiSummary : "暂无 AI 摘要"}
+        {aiSummary && aiSummary.trim().length > 0 ? aiSummary : "—"}
       </div>
     </div>
   );

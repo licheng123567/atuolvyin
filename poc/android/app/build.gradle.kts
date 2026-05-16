@@ -13,8 +13,8 @@ android {
         applicationId = "com.autoluyin.demo"
         minSdk = 23          // v1.9.9 — 适配 MIUI 10/Android 6 测试机（PRD：通话录音目标平台）
         targetSdk = 29       // v1.9.9 — MIUI 10 兼容打包 (Android 10 API)。正式版回 33+
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 7
+        versionName = "0.5.2"
         // 后端地址不再硬编码，APK 首次启动由用户输入或扫激活码注入；
         // 见 AppConfig.kt / MainActivity.showBackendUrlDialog。
         buildConfigField("String", "MIPUSH_APP_ID", "\"\"")

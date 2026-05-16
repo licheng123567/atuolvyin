@@ -1,8 +1,12 @@
 package com.autoluyin.demo
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Environment
 import android.util.Log
+import androidx.core.content.ContextCompat
 import java.io.File
 
 /**
@@ -104,6 +108,35 @@ object RecordingScanner {
     fun listDirsExisting(): List<String> {
         val root = Environment.getExternalStorageDirectory()
         return candidateDirs().filter { File(root, it).exists() }
+    }
+
+    /**
+     * v2.3 Module 6 — 三态自检结果，让上层文案能区分「权限拒绝」vs「目录真不在候选里」。
+     *
+     * 之前 [listDirsExisting] 在两种场景下都返回空，UI 错误地报「未命中录音目录」
+     * 即使用户实际上是没授权 READ_EXTERNAL_STORAGE。
+     */
+    data class ScanResult(
+        val existingDirs: List<String>,
+        val permissionGranted: Boolean,
+        val candidatesChecked: Int,
+    )
+
+    fun listDirsExistingDetailed(ctx: Context): ScanResult {
+        val perm = if (Build.VERSION.SDK_INT >= 33) {
+            // API 33+: READ_MEDIA_AUDIO 是音频文件读权限（READ_EXTERNAL_STORAGE 已废弃）
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_MEDIA_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED
+        } else {
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_EXTERNAL_STORAGE) ==
+                PackageManager.PERMISSION_GRANTED
+        }
+        val dirs = if (perm) listDirsExisting() else emptyList()
+        return ScanResult(
+            existingDirs = dirs,
+            permissionGranted = perm,
+            candidatesChecked = candidateDirs().size,
+        )
     }
 
     private fun inWindow(f: File, input: MatchInput): Boolean {

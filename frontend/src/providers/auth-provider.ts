@@ -1,4 +1,5 @@
 import type { AuthProvider } from "@refinedev/core";
+import { Bridge } from "../lib/jsBridge";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:18000";
 const TOKEN_KEY = "autoluyin_token";
@@ -76,10 +77,24 @@ export const authProvider: AuthProvider = {
 
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as {
+          code?: string;
           message?: string;
-          detail?: { message?: string };
+          detail?: { code?: string; message?: string };
         };
-        const msg = err.detail?.message ?? err.message ?? "登录失败，请检查输入";
+        // v2.3 — 中文化错误。优先用后端 detail.message / message（已含中文）。
+        // 否则按 HTTP status 给人类化文案；最后才用 fallback。
+        const backendMsg = err.detail?.message ?? err.message;
+        const statusFallback: Record<number, string> = {
+          401: "账号或密码错误，请重试",
+          403: "无权限登录",
+          404: "账号不存在",
+          422: "输入格式不正确，请检查后重试",
+          429: "请求过于频繁，请稍后再试",
+          500: "服务器暂时不可用，请稍后重试",
+          502: "服务器暂时不可用，请稍后重试",
+          503: "服务器暂时不可用，请稍后重试",
+        };
+        const msg = backendMsg ?? statusFallback[res.status] ?? "登录失败，请重试";
         return {
           success: false,
           error: { name: "LoginError", message: msg },
@@ -108,12 +123,19 @@ export const authProvider: AuthProvider = {
           scope: data.scope,
         } satisfies AuthUser),
       );
+      // v0.5.2 — App WebView 路径：把 JWT 推回 native（CallWatcherService /
+      // ApiClient 都依赖 AppConfig.jwtToken）。浏览器 no-op。
+      Bridge.saveJwt(data.access_token);
 
       return { success: true, redirectTo: "/" };
     } catch {
+      // v2.3 — 网络层错误（fetch 失败：DNS / 服务不可达 / CORS 等）
       return {
         success: false,
-        error: { name: "NetworkError", message: "网络错误，请稍后重试" },
+        error: {
+          name: "NetworkError",
+          message: "网络异常，请检查 WiFi/移动数据后重试",
+        },
       };
     }
   },

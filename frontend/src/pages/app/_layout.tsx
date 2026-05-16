@@ -14,11 +14,23 @@ function MobileAuthGuard({ children }: MobileAuthGuardProps) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const jwt = Bridge.getJwt();
-    if (!jwt) {
-      // WebView 通常此时已被 native 注入 token；只有真正没有时才跳登录
-      navigate("/login", { replace: true });
-    }
+    // v2.2 — onPageStarted 注入 __JWT__ 与 React mount 之间可能有 1-2 帧滞后；
+    // 先 poll 300ms 兜底再跳 login（否则 WebView 永远白屏跳 PC login）。
+    let cancelled = false;
+    const tryAuth = (attempt: number) => {
+      if (cancelled) return;
+      const jwt = Bridge.getJwt();
+      if (jwt) return;
+      if (attempt >= 6) {
+        navigate("/login", { replace: true });
+        return;
+      }
+      setTimeout(() => tryAuth(attempt + 1), 50);
+    };
+    tryAuth(0);
+    return () => {
+      cancelled = true;
+    };
   }, [navigate]);
 
   return <>{children}</>;

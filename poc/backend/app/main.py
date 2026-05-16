@@ -124,7 +124,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
     ],
-    allow_origin_regex=r"http://localhost:\d+",
+    # v2.2 — 兼容 LAN dev：localhost 任意端口 + 内网 IP（10/192.168/172.16-31）
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|host\.docker\.internal)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -140,6 +141,23 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
         status_code=exc.status_code,
         content={"code": f"ERR_{exc.status_code}", "message": str(exc.detail)},
     )
+
+
+@app.middleware("http")
+async def log_unauthorized(request: Request, call_next):
+    # v2.2 调试：401 时打印 Authorization 头是否存在 + Origin
+    response = await call_next(request)
+    if response.status_code == 401 and "/agent/" in request.url.path:
+        import logging
+        auth = request.headers.get("authorization", "")
+        origin = request.headers.get("origin", "")
+        logging.warning(
+            "AUTH401 path=%s authHdr=%s origin=%s",
+            request.url.path,
+            "Bearer:" + auth[7:19] + "..." if auth.startswith("Bearer ") else f"<{auth[:20]}>",
+            origin,
+        )
+    return response
 
 
 @app.exception_handler(RequestValidationError)
@@ -164,6 +182,27 @@ async def validation_exception_handler(
             "message": f"[{loc_str}] {first.get('msg', 'Validation error')}",
         },
     )
+
+
+# v2.2 临时调试端点：让 Android stock WebView 把客户端 JS 错误 POST 上来
+# Chromium 53 没有 console 也没有 USB inspect 时，白屏只能这样捕获。
+@app.post("/api/v1/_debug/client-error")
+async def _debug_client_error(request: Request) -> dict:
+    import logging
+    try:
+        body = await request.json()
+    except Exception:
+        body = {"raw": (await request.body()).decode("utf-8", errors="replace")[:1000]}
+    logging.warning("CLIENT_JS_ERR %s", body)
+    return {"received": True}
+
+
+# 信标 GET（不触发 CORS preflight，用 Image src 调用）
+@app.get("/api/v1/_debug/client-error-beacon")
+async def _debug_client_error_beacon(request: Request) -> dict:
+    import logging
+    logging.warning("CLIENT_BEACON %s ua=%s", dict(request.query_params), request.headers.get("user-agent", "?"))
+    return {"received": True}
 
 
 # ── Routers ───────────────────────────────────────────────────
