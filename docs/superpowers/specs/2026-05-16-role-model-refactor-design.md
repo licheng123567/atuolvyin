@@ -17,6 +17,7 @@
 - seed 里 `agent_external`(外勤小王)的 membership 直接挂在物业租户下、**不带 `provider_id`**,实为「物业自有外勤」,不是服务商催收员 —— 缺真正的服务商催收员账号。
 - `provider_admin` / `project_manager_provider` 登录返回的 `scope` 是 `tenant:3` 而非 `provider:{id}`,违反 `CLAUDE.md`「服务商数据通过 `scope = provider:{id}` 隔离」的规则 —— 服务商隔离链路未打通。
 - 现状本身已存在命名不一致:`platform_super`(23 处)与 `platform_superadmin`(43 处)并存;`property_manager_*` 与 `project_manager_*` 并存。
+- 冗余字段:`UserTenantMembership.source_type`(`INTERNAL`/`PROVIDER`)与 `provider_id IS NULL` 携带完全相同的信息 —— 同一个「物业侧 vs 服务商侧」bit 在库里有两种表示。
 - 安全隐患:`auth.py` 在「用户无任何 membership」时把 `role` 默认落成 `platform_superadmin` —— 任意无 membership 的账号都会变成超管。
 
 ### 1.2 现状摘要
@@ -46,6 +47,7 @@
 | PC 前端 role 判断 / 路由 / 菜单 | 服务商法务的法务转化业务流 |
 | Android role 字面量(`Api.kt`、`AudioStreamClient.kt`) | PRD 正式章节落地(后续走 `prd-section-writer`) |
 | DB CHECK 约束(`role` / `platform_role` / `work_mode`) | |
+| 删除冗余列 `UserTenantMembership.source_type` | |
 | seed 改写 + 补服务商催收员 / 服务商督导账号 | |
 | 测试 + 相关文档同步 | |
 
@@ -101,13 +103,16 @@
 
 1. 加列 `user_account.platform_role`、`user_tenant_membership.work_mode`(均可空)。
 2. UPDATE 回填 `role` / `work_mode`(按 5.1 映射)。
+2b. 删除冗余列 `user_tenant_membership.source_type`(与 `provider_id IS NULL` 同义)。
 3. 处理平台角色:
    - 持有 `platform_ops` membership 的账号 → 回填 `platform_role='ops'` 并删除该 membership 行。
    - 持有 `platform_superadmin` / `platform_super` membership 的账号(若有)→ 回填 `platform_role='superadmin'` 并删除该 membership 行。
    - 当前**无任何 membership** 的账号 → 回填 `platform_role='superadmin'`。这是一次性数据修复(迁移后此推断规则即废止);dev seed 中仅 `13000000000` 一个此类账号。迁移脚本须打印受影响账号清单,若出现非预期的游离账号需人工确认。
 4. 加三条 CHECK 约束(4.1)。
 
-`downgrade()`:反向 —— 删 CHECK → 重建 `platform_ops` membership → role 反映射 → 删两个新列。完整可逆。
+`downgrade()`:反向 —— 删 CHECK → 重建 `platform_ops` membership → 重建 `source_type` 列并按 `provider_id` 回填 → role 反映射 → 删两个新列。完整可逆。
+
+`source_type` 的 5 处写入点(`admin.py` ×4、`provider_admin.py` ×1)与 seed 文件中的写入随重构一并清理。
 
 ### 5.3 seed 改写
 
@@ -180,3 +185,4 @@
 | 5 | DB 约束形式 | CHECK 约束(非 Postgres 原生 ENUM) |
 | 6 | 服务商法务 | 允许(`legal`+`provider_id`),职责受限,seed 不强制 |
 | 7 | 减免归属 | 财务归属 + 审批权在物业,限额内可提,记录带 `provider_id` |
+| 8 | 冗余字段 `source_type` | 一并删除,组织归属统一由 `provider_id IS NULL` 判断 |
