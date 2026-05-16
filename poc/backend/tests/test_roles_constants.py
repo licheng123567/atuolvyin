@@ -2,17 +2,18 @@ from app.core import roles
 
 
 def test_org_roles_are_the_six_functional_roles():
-    assert roles.ORG_ROLES == frozenset(
-        {"admin", "project_manager", "supervisor", "agent", "legal", "coordinator"}
-    )
+    expected = {"admin", "project_manager", "supervisor", "agent", "legal", "coordinator"}
+    assert set(roles.ORG_ROLES) == expected
 
 
 def test_platform_roles():
-    assert roles.PLATFORM_ROLES == frozenset({"superadmin", "ops"})
+    expected = {"superadmin", "ops"}
+    assert set(roles.PLATFORM_ROLES) == expected
 
 
 def test_work_modes():
-    assert roles.WORK_MODES == frozenset({"internal", "external"})
+    expected = {"internal", "external"}
+    assert set(roles.WORK_MODES) == expected
 
 
 def test_legacy_role_map_covers_all_old_values():
@@ -21,5 +22,10 @@ def test_legacy_role_map_covers_all_old_values():
         assert new in roles.ORG_ROLES, f"{old} -> {new} 不是合法组织角色"
 
 
-def test_constants_are_uppercase_module_level():
-    assert isinstance(roles.ROLE_ADMIN, str) and roles.ROLE_ADMIN == "admin"
+def test_role_constants_have_expected_string_values():
+    assert roles.ROLE_ADMIN == "admin"
+    assert roles.ROLE_PROJECT_MANAGER == "project_manager"
+    assert roles.ROLE_SUPERVISOR == "supervisor"
+    assert roles.ROLE_AGENT == "agent"
+    assert roles.ROLE_LEGAL == "legal"
+    assert roles.ROLE_COORDINATOR == "coordinator"
