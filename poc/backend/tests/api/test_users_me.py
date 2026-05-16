@@ -10,7 +10,7 @@ def ops_headers(client, seeded_user):
         "sub": str(seeded_user.id),
         "user_id": seeded_user.id,
         "tenant_id": None,
-        "role": "platform_ops",
+        "role": "ops",
         "scope": "platform",
     })
     return {"Authorization": f"Bearer {token}"}
@@ -23,7 +23,7 @@ async def test_get_me_returns_identity(client: AsyncClient, seeded_user, ops_hea
     data = resp.json()
     assert data["id"] == seeded_user.id
     assert data["name"] == seeded_user.name
-    assert data["role"] == "platform_ops"
+    assert data["role"] == "ops"
     assert data["tenant_id"] is None
     assert data["scope"] == "platform"
 

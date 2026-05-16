@@ -53,7 +53,7 @@ def test_tenant_roles_correct_role_wrong_side_403():
 def test_tenant_roles_wrong_role_403():
     user = _DummyUser(103)
     check = require_tenant_roles("admin", "supervisor")
-    payload = {"role": "agent_internal", "provider_id": None}
+    payload = {"role": "agent", "provider_id": None}
     with pytest.raises(HTTPException) as exc:
         _run(check, payload, user)
     assert exc.value.status_code == 403

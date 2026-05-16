@@ -16,8 +16,7 @@ def property_pm_auth_headers(db_session, seeded_user, seeded_tenant):
     membership = UserTenantMembership(
         user_id=seeded_user.id,
         tenant_id=seeded_tenant.id,
-        role="project_manager_property",
-        source_type="INTERNAL",
+        role="project_manager",
         is_active=True,
     )
     db_session.add(membership)
@@ -26,7 +25,7 @@ def property_pm_auth_headers(db_session, seeded_user, seeded_tenant):
         "sub": str(seeded_user.id),
         "user_id": seeded_user.id,
         "tenant_id": seeded_tenant.id,
-        "role": "project_manager_property",
+        "role": "project_manager",
         "scope": f"tenant:{seeded_tenant.id}",
     })
     return {"Authorization": f"Bearer {token}"}
@@ -66,8 +65,7 @@ def provider_pm_auth_headers(db_session, seeded_tenant):
     membership = UserTenantMembership(
         user_id=user.id,
         tenant_id=seeded_tenant.id,
-        role="project_manager_provider",
-        source_type="EXTERNAL",
+        role="project_manager",
         provider_id=provider.id,
         is_active=True,
     )
@@ -87,7 +85,8 @@ def provider_pm_auth_headers(db_session, seeded_tenant):
         "sub": str(user.id),
         "user_id": user.id,
         "tenant_id": seeded_tenant.id,
-        "role": "project_manager_provider",
+        "role": "project_manager",
+        "provider_id": provider.id,
         "scope": f"provider:{provider.id}",
     })
     return {

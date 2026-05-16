@@ -15,8 +15,7 @@ def workorder_auth_headers(seeded_user, seeded_tenant, db_session):
     membership = UserTenantMembership(
         user_id=seeded_user.id,
         tenant_id=seeded_tenant.id,
-        role="workorder",
-        source_type="INTERNAL",
+        role="coordinator",
         is_active=True,
     )
     db_session.add(membership)
@@ -25,7 +24,7 @@ def workorder_auth_headers(seeded_user, seeded_tenant, db_session):
         "sub": str(seeded_user.id),
         "user_id": seeded_user.id,
         "tenant_id": seeded_tenant.id,
-        "role": "workorder",
+        "role": "coordinator",
         "scope": f"tenant:{seeded_tenant.id}",
     })
     return {"Authorization": f"Bearer {token}"}

@@ -14,7 +14,6 @@ def _seed_admin(db_session, seeded_user, seeded_tenant):
         user_id=seeded_user.id,
         tenant_id=seeded_tenant.id,
         role="admin",
-        source_type="INTERNAL",
         is_active=True,
     ))
     db_session.flush()
@@ -225,7 +224,6 @@ def test_notify_script_disabled_writes_to_admin(
         user_id=seeded_supervisor_user.id,
         tenant_id=seeded_tenant.id,
         role="supervisor",
-        source_type="INTERNAL",
         is_active=True,
     ))
     db_session.flush()

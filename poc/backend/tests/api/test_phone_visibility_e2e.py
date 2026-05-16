@@ -70,8 +70,8 @@ def _make_external_agent(db, tenant, provider) -> tuple[UserAccount, dict[str, s
     db.add(UserTenantMembership(
         user_id=user.id,
         tenant_id=tenant.id,
-        role="agent_external",
-        source_type="EXTERNAL",
+        role="agent",
+        work_mode="external",
         provider_id=provider.id,
         is_active=True,
     ))
@@ -80,7 +80,7 @@ def _make_external_agent(db, tenant, provider) -> tuple[UserAccount, dict[str, s
         "sub": str(user.id),
         "user_id": user.id,
         "tenant_id": tenant.id,
-        "role": "agent_external",
+        "role": "agent",
         "scope": f"tenant:{tenant.id}",
         "provider_id": provider.id,
     })
@@ -100,7 +100,7 @@ def _make_platform_ops(db) -> dict[str, str]:
         "sub": str(user.id),
         "user_id": user.id,
         "tenant_id": None,
-        "role": "platform_ops",
+        "role": "ops",
         "scope": "platform",
     })
     return {"Authorization": f"Bearer {token}"}

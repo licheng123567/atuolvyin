@@ -82,8 +82,8 @@ async def test_call_intent_rejects_other_user_call(
         UserTenantMembership(
             user_id=other.id,
             tenant_id=seeded_tenant.id,
-            role="agent_internal",
-            source_type="INTERNAL",
+            role="agent",
+            work_mode="internal",
             is_active=True,
         )
     )

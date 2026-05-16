@@ -58,7 +58,7 @@ def test_ws_agent_streams_audio_receives_transcript(
         "sub": str(seeded_member_user.id),
         "user_id": seeded_member_user.id,
         "tenant_id": seeded_tenant.id,
-        "role": "agent_internal",
+        "role": "agent",
         "scope": f"tenant:{seeded_tenant.id}",
     })
 

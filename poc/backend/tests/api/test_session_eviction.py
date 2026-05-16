@@ -16,6 +16,7 @@ from httpx import AsyncClient
 def _seed_user_with_password(db_session, phone: str = "13900000099"):
     from app.core.crypto import encrypt_phone
     from app.core.security import get_password_hash
+    from app.models.tenant import Tenant, UserTenantMembership
     from app.models.user import UserAccount
     user = UserAccount(
         phone_enc=encrypt_phone(phone),
@@ -24,6 +25,23 @@ def _seed_user_with_password(db_session, phone: str = "13900000099"):
         is_active=True,
     )
     db_session.add(user); db_session.flush()
+    # resolve_identity requires at least one membership; give the user an admin role
+    tenant = Tenant(
+        name=f"踢出测试租户-{phone}",
+        admin_phone_enc=encrypt_phone(phone),
+        plan="trial",
+        is_active=True,
+    )
+    db_session.add(tenant)
+    db_session.flush()
+    membership = UserTenantMembership(
+        user_id=user.id,
+        tenant_id=tenant.id,
+        role="admin",
+        is_active=True,
+    )
+    db_session.add(membership)
+    db_session.flush()
     return user
 
 

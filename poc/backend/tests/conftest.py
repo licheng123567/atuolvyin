@@ -101,7 +101,7 @@ def ops_auth_headers(seeded_user):
         "sub": str(seeded_user.id),
         "user_id": seeded_user.id,
         "tenant_id": None,
-        "role": "platform_ops",
+        "role": "ops",
         "scope": "platform",
     })
     return {"Authorization": f"Bearer {token}"}
@@ -114,7 +114,7 @@ def super_auth_headers(seeded_user):
         "sub": str(seeded_user.id),
         "user_id": seeded_user.id,
         "tenant_id": None,
-        "role": "platform_super",
+        "role": "superadmin",
         "scope": "platform",
     })
     return {"Authorization": f"Bearer {token}"}
@@ -127,7 +127,7 @@ def superadmin_auth_headers(seeded_user):
         "sub": str(seeded_user.id),
         "user_id": seeded_user.id,
         "tenant_id": None,
-        "role": "platform_superadmin",
+        "role": "superadmin",
         "scope": "platform",
     })
     return {"Authorization": f"Bearer {token}"}
@@ -138,7 +138,7 @@ def seeded_audit_log(db_session, seeded_user, seeded_tenant):
     from app.models.audit import AuditLog
     log = AuditLog(
         actor_user_id=seeded_user.id,
-        actor_role="platform_super",
+        actor_role="superadmin",
         tenant_id=seeded_tenant.id,
         action="tenant.create",
         target_type="tenant",
@@ -191,8 +191,8 @@ def seeded_member_user(db_session, seeded_tenant):
     membership = UserTenantMembership(
         user_id=user.id,
         tenant_id=seeded_tenant.id,
-        role="agent_internal",
-        source_type="INTERNAL",
+        role="agent",
+        work_mode="internal",
         is_active=True,
     )
     db_session.add(membership)
@@ -207,7 +207,6 @@ def admin_auth_headers(seeded_user, seeded_tenant, db_session):
         user_id=seeded_user.id,
         tenant_id=seeded_tenant.id,
         role="admin",
-        source_type="INTERNAL",
         is_active=True,
     )
     db_session.add(membership)
@@ -273,7 +272,6 @@ def seeded_supervisor_user(db_session, seeded_tenant):
         user_id=user.id,
         tenant_id=seeded_tenant.id,
         role="supervisor",
-        source_type="INTERNAL",
         is_active=True,
     )
     db_session.add(membership)
@@ -288,7 +286,7 @@ def agent_auth_headers(seeded_member_user, seeded_tenant):
         "sub": str(seeded_member_user.id),
         "user_id": seeded_member_user.id,
         "tenant_id": seeded_tenant.id,
-        "role": "agent_internal",
+        "role": "agent",
         "scope": f"tenant:{seeded_tenant.id}",
     })
     return {"Authorization": f"Bearer {token}"}

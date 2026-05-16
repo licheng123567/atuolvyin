@@ -8,7 +8,7 @@ os.environ.setdefault("RISK_ANALYZER_BACKEND", "mock")
 def _platform_super_token():
     from app.core.security import create_access_token
     return create_access_token({"sub": "9999", "user_id": 9999, "tenant_id": 0,
-                                "role": "platform_super", "scope": "platform"})
+                                "role": "superadmin", "scope": "platform"})
 
 
 def _tenant_admin_token(tenant_id: int, user_id: int):
@@ -79,7 +79,7 @@ async def test_wrong_role_gets_403(client, db_session):
     """A non-admin/non-platform_super role cannot access the endpoint."""
     from app.core.security import create_access_token
     token = create_access_token({"sub": "1", "user_id": 1, "tenant_id": 1,
-                                 "role": "agent_internal", "scope": "tenant:1"})
+                                 "role": "agent", "scope": "tenant:1"})
     resp = await client.get("/api/v1/admin/risk-keywords",
                             headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 403
