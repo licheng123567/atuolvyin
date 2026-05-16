@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.phone_visibility import display_owner_phone, should_reveal_owner_phone
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.call import AnalysisResult, CallRecord, RiskEvent, Transcript
 from app.schemas.common import PaginatedResponse
 from app.schemas.review import (
@@ -76,7 +76,7 @@ def _to_review_item(
 @router.get("/reviews", response_model=PaginatedResponse[ReviewItemOut])
 def list_reviews(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*REVIEW_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*REVIEW_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -126,7 +126,7 @@ def label_review(
     call_id: int,
     body: ReviewLabelIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*REVIEW_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*REVIEW_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ReviewItemOut:
     tenant_id = _require_tenant(payload)
@@ -185,7 +185,7 @@ def label_review(
 def get_review_detail(
     call_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*REVIEW_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*REVIEW_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ReviewDetailOut:
     """Sprint 12.2 — 单条复核详情：含录音 URL + 转写 + 风控时间点列表，

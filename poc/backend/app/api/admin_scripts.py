@@ -10,7 +10,7 @@ from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.call import CallRecord, SuggestionFeedback
 from app.models.script import ScriptTemplate, ScriptTemplateVersion
 from app.schemas.common import PaginatedResponse
@@ -115,7 +115,7 @@ def _get_script_or_404(
 @router.get("/scripts", response_model=PaginatedResponse[ScriptTemplateOut])
 def list_scripts(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     q: str | None = Query(None),
     intent: str | None = Query(None),
@@ -172,7 +172,7 @@ def list_scripts(
 def create_script(
     body: ScriptTemplateCreate,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ScriptTemplateOut:
     role = payload.get("role", "")
@@ -217,7 +217,7 @@ def create_script(
 def import_scripts(
     file: Annotated[UploadFile, File(...)],
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ImportResultOut:
     import openpyxl
@@ -293,7 +293,7 @@ def update_script(
     script_id: int,
     body: ScriptTemplateUpdate,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ScriptTemplateOut:
     role = payload.get("role", "")
@@ -340,7 +340,7 @@ def update_script(
 def fork_script(
     script_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ScriptTemplateOut:
     """v1.4 S16.5 — admin 把平台预置话术 fork 成本租户私有副本。"""
@@ -383,7 +383,7 @@ def fork_script(
 def toggle_script(
     script_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ScriptTemplateOut:
     role = payload.get("role", "")
@@ -414,7 +414,7 @@ def toggle_script(
 def delete_script(
     script_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> None:
     role = payload.get("role", "")
@@ -433,7 +433,7 @@ def delete_script(
 def get_versions(
     script_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[ScriptVersionOut]:
     role = payload.get("role", "")
@@ -454,7 +454,7 @@ def get_versions(
 @router.get("/scripts/effectiveness", response_model=ScriptEffectivenessOut)
 def script_effectiveness(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     intent: str | None = Query(None),
     period_days: int = Query(30, ge=1, le=365),
@@ -571,7 +571,7 @@ def rollback_script(
     script_id: int,
     body: RollbackIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ScriptTemplateOut:
     role = payload.get("role", "")

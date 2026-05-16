@@ -25,7 +25,7 @@ from app.core.phone_visibility import (
 )
 from app.core.security import (
     get_token_payload,
-    require_roles,
+    require_tenant_roles,
 )
 from app.models.call import CallRecord
 from app.models.case import CollectionCase, OwnerProfile, Project
@@ -103,7 +103,7 @@ def _resolve_assignee_name(db: Session, user_id: int | None) -> str | None:
 @router.get("/kpi", response_model=WorkOrderKpi)
 def get_work_orders_kpi(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*WORKORDER_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*WORKORDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> WorkOrderKpi:
     """v1.9.6 — 协调员工作台顶部 4 张 KPI 卡。"""
@@ -161,7 +161,7 @@ def get_work_orders_kpi(
 @router.get("", response_model=PaginatedResponse[WorkOrderOut])
 async def list_work_orders(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*WORKORDER_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*WORKORDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     q: str | None = Query(None, max_length=100),
     status: str | None = Query(None, max_length=50),
@@ -240,7 +240,7 @@ async def list_work_orders(
 async def create_work_order(
     body: WorkOrderCreate,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*WORKORDER_CREATE_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*WORKORDER_CREATE_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> WorkOrderOut:
     tenant_id = _require_tenant(payload)
@@ -355,7 +355,7 @@ async def create_work_order(
 async def get_work_order(
     order_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*WORKORDER_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*WORKORDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> WorkOrderDetailOut:
     from app.models.work_order_follow_up import WorkOrderFollowUp
@@ -469,7 +469,7 @@ async def add_follow_up(
     order_id: int,
     body: WorkOrderFollowUpCreate,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*WORKORDER_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*WORKORDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> WorkOrderDetailOut:
     """v1.9.7 — 协调员/admin 给工单加跟进记录。"""
@@ -517,7 +517,7 @@ async def patch_work_order(
     order_id: int,
     body: WorkOrderPatch,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*WORKORDER_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*WORKORDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> WorkOrderOut:
     tenant_id = _require_tenant(payload)

@@ -20,7 +20,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.call import CallRecord, SuggestionFeedback
 from app.models.case import CollectionCase
 from app.models.script import ScriptTemplate
@@ -49,7 +49,7 @@ FUNNEL_STAGES: list[tuple[str, str]] = [
 @router.get("/reports/overview", response_model=ReportOverviewOut)
 def report_overview(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     period_days: int = Query(30, ge=1, le=365),
 ) -> ReportOverviewOut:

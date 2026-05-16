@@ -16,7 +16,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_provider_roles
 from app.models.script import ScriptTemplate
 from app.models.tenant import UserTenantMembership
 from app.schemas.common import PaginatedResponse
@@ -86,7 +86,7 @@ def _get_provider_script(
 @router.get("/scripts", response_model=PaginatedResponse[ScriptTemplateOut])
 def list_provider_scripts(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     q: str | None = Query(None),
     intent: str | None = Query(None),
@@ -134,7 +134,7 @@ def list_provider_scripts(
 def create_provider_script(
     body: ScriptTemplateCreate,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ScriptTemplateOut:
     user_id = int(payload.get("user_id") or 0)
@@ -171,7 +171,7 @@ def update_provider_script(
     script_id: int,
     body: ScriptTemplateUpdate,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ScriptTemplateOut:
     user_id = int(payload.get("user_id") or 0)
@@ -199,7 +199,7 @@ def update_provider_script(
 def toggle_provider_script(
     script_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ScriptTemplateOut:
     user_id = int(payload.get("user_id") or 0)
@@ -220,7 +220,7 @@ def toggle_provider_script(
 def delete_provider_script(
     script_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> None:
     user_id = int(payload.get("user_id") or 0)

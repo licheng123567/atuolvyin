@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.audit import PlanConfig
 from app.models.call import (
     AnalysisResult,
@@ -46,7 +46,7 @@ _PROMISE_INTENTS = ("承诺缴", "promise_made", "promised")
 @router.get("/dashboard/stats", response_model=AdminDashboardStats)
 def get_dashboard_stats(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> AdminDashboardStats:
     tenant_id = int(payload.get("tenant_id") or 0)
@@ -332,7 +332,7 @@ def _count_month_promised_by_user(
 @router.get("/dashboard/by-project", response_model=list[ProjectKpi])
 def get_dashboard_by_project(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[ProjectKpi]:
     """v1.4 — 按项目分维度看 KPI（admin/物业管理员/督导都能看）"""
@@ -438,7 +438,7 @@ def get_dashboard_by_project(
 @router.get("/dashboard/by-provider", response_model=list[ProviderKpi])
 def get_dashboard_by_provider(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[ProviderKpi]:
     """v1.5 — 按服务商分维度看 KPI（多服务商相对表现排名）。

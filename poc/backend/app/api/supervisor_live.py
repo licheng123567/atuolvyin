@@ -26,7 +26,7 @@ from app.core.phone_visibility import (
     is_provider_contract_active,
     should_reveal_owner_phone,
 )
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.call import CallRecord
 from app.models.case import CollectionCase, OwnerProfile
 from app.models.user import UserAccount
@@ -61,7 +61,7 @@ class TakeoverResp(BaseModel):
 @router.get("/live-calls", response_model=LiveCallsOut)
 def list_live_calls(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*WALL_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*WALL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> LiveCallsOut:
     tenant_id = int(payload.get("tenant_id") or 0)
@@ -125,7 +125,7 @@ async def supervisor_force_hangup(
     call_id: int,
     body: ForceHangupReq,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*WALL_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*WALL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ForceHangupResp:
     """督导手动结束某通话 (Sprint 15.2 / 15.3)。"""
@@ -176,7 +176,7 @@ async def supervisor_takeover(
     call_id: int,
     body: TakeoverReq,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*WALL_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*WALL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> TakeoverResp:
     """督导发起强制转接请求 (Sprint 15.3, PRD §11.2)。

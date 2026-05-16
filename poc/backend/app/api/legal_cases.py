@@ -25,7 +25,7 @@ from app.core.phone_visibility import (
 )
 from app.core.security import (
     get_token_payload,
-    require_roles,
+    require_tenant_roles,
 )
 from app.models.case import CollectionCase, OwnerProfile
 from app.models.user import UserAccount
@@ -92,7 +92,7 @@ def _legal_to_out(
 @router.get("/cases", response_model=PaginatedResponse[LegalCaseOut])
 async def list_legal_cases(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     q: str | None = Query(None, max_length=100),
     stage: str | None = Query(None, max_length=50),
@@ -140,7 +140,7 @@ async def list_legal_cases(
 async def create_legal_case(
     body: LegalCaseCreate,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalCaseOut:
     tenant_id = _require_tenant(payload)
@@ -182,7 +182,7 @@ async def create_legal_case(
 async def get_legal_case(
     legal_case_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalCaseDetailOut:
     tenant_id = _require_tenant(payload)
@@ -234,7 +234,7 @@ async def patch_legal_case(
     legal_case_id: int,
     body: LegalCasePatch,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalCaseOut:
     tenant_id = _require_tenant(payload)
@@ -272,7 +272,7 @@ async def patch_legal_case(
 async def download_evidence_bundle(
     legal_case_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> StreamingResponse:
     # v1.9.5 — 复用 services/evidence_bundle.py 的统一构建器

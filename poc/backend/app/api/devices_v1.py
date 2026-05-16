@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.device import DeviceProfile
 from app.models.device_capability_log import DeviceCapabilityLog
 from app.services.device_capability import derive_capability, derive_rom_label
@@ -76,7 +76,7 @@ class PushRegPatchResponse(BaseModel):
 def register_device(
     body: DeviceRegisterRequest,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> DeviceRegisterResponse:
     user_id: int = payload["user_id"]
@@ -133,7 +133,7 @@ def register_device(
 def self_check(
     body: SelfCheckRequest,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> SelfCheckResponse:
     user_id: int = payload["user_id"]
@@ -234,7 +234,7 @@ def self_check(
 def patch_push_reg(
     body: PushRegPatchRequest,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*AGENT_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> PushRegPatchResponse:
     """v1.6 — push 通道单独注册回调入口。

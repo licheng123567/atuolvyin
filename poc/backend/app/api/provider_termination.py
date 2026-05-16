@@ -24,7 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_provider_roles, require_tenant_roles
 from app.models.tenant import (
     ProviderTenantContract,
     ServiceProvider,
@@ -244,7 +244,7 @@ async def admin_request_terminate(
     provider_id: int,
     body: TerminateRequestIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> TerminationStatusOut:
     tenant_id = _admin_tenant(payload)
@@ -260,7 +260,7 @@ async def admin_request_terminate(
 async def admin_confirm_terminate(
     provider_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> TerminationStatusOut:
     tenant_id = _admin_tenant(payload)
@@ -276,7 +276,7 @@ async def admin_confirm_terminate(
 async def admin_get_termination_status(
     provider_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> TerminationStatusOut:
     tenant_id = _admin_tenant(payload)
@@ -295,7 +295,7 @@ async def provider_request_terminate(
     contract_id: int,
     body: TerminateRequestIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> TerminationStatusOut:
     user_id = int(payload.get("user_id") or 0)
@@ -311,7 +311,7 @@ async def provider_request_terminate(
 async def provider_confirm_terminate(
     contract_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> TerminationStatusOut:
     user_id = int(payload.get("user_id") or 0)
@@ -327,7 +327,7 @@ async def provider_confirm_terminate(
 async def provider_get_termination_status(
     contract_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> TerminationStatusOut:
     user_id = int(payload.get("user_id") or 0)
@@ -343,7 +343,7 @@ async def provider_get_termination_status(
 )
 async def provider_list_contracts(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[TerminationStatusOut]:
     user_id = int(payload.get("user_id") or 0)

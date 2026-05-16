@@ -25,7 +25,7 @@ from app.core.phone_visibility import (
     is_provider_contract_active,
     should_reveal_owner_phone,
 )
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.core.storage import storage
 from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.legal_conversion import LegalConversionOrder, LegalConversionRequest
@@ -103,7 +103,7 @@ def _legal_stage_for_close_reason(reason: str) -> str | None:
 @router.get("/internal-orders/kpi", response_model=LegalInternalOrderKpi)
 def get_internal_orders_kpi(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalInternalOrderKpi:
     tenant_id = _require_tenant(payload)
@@ -178,7 +178,7 @@ def get_internal_orders_kpi(
 )
 def list_internal_orders(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     tab: str = Query("pending", pattern="^(pending|closed|escalated|all)$"),
     project_id: int | None = Query(None, description="按所属项目过滤"),
@@ -296,7 +296,7 @@ def list_internal_orders(
 def get_internal_order(
     order_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalInternalOrderDetailOut:
     tenant_id = _require_tenant(payload)
@@ -420,7 +420,7 @@ def record_internal_action(
     order_id: int,
     body: LegalInternalActionCreate,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalInternalActionOut:
     tenant_id = _require_tenant(payload)
@@ -501,7 +501,7 @@ def close_internal_order(
     order_id: int,
     body: LegalInternalOrderCloseRequest,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalInternalOrderDetailOut:
     tenant_id = _require_tenant(payload)
@@ -585,7 +585,7 @@ def close_internal_order(
 def escalate_to_lawfirm(
     order_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalInternalOrderDetailOut:
     """v1.9.0 — 标记升级到律所。方案 C 才会真正派单到律所。"""
@@ -607,7 +607,7 @@ def reopen_internal_order(
     order_id: int,
     body: LegalInternalOrderReopenRequest,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalInternalOrderDetailOut:
     """v1.9.1 — closed_promised 但承诺到期未付，重新打开订单回 internal_processing。
@@ -691,7 +691,7 @@ def upload_action_attachment(
     order_id: int,
     action_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     file: UploadFile = File(...),
 ) -> LegalInternalActionOut:
@@ -778,7 +778,7 @@ def download_action_attachment(
     order_id: int,
     action_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> Response:
     tenant_id = _require_tenant(payload)
@@ -819,7 +819,7 @@ def download_action_attachment(
 def download_internal_order_evidence_bundle(
     order_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> StreamingResponse:
     """v1.9.5 — 按法务订单的关联案件打包证据（录音/转写/AI/区块链 + 法务处理流水 + 律师函附件）。"""

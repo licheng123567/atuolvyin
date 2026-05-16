@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.core.storage import storage
 from app.models.legal_document import LegalDocument
 from app.models.user import UserAccount
@@ -100,7 +100,7 @@ def _ensure_legal_case(db: Session, legal_case_id: int, tenant_id: int) -> Legal
 async def upload_document(
     legal_case_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     file: Annotated[UploadFile, File(...)],
     category: Annotated[LegalDocumentCategory, Form(...)],
@@ -174,7 +174,7 @@ async def upload_document(
 async def list_documents(
     legal_case_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     category: str | None = Query(None),
 ) -> list[LegalDocumentOut]:
@@ -206,7 +206,7 @@ async def list_documents(
 async def get_document_download(
     doc_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalDocumentDownloadOut:
     tenant_id = _tenant_id(payload)
@@ -246,7 +246,7 @@ async def get_document_download(
 async def delete_document(
     doc_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> None:
     tenant_id = _tenant_id(payload)

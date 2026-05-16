@@ -19,6 +19,7 @@ from app.core.phone_visibility import (
 from app.core.security import (
     get_token_payload,
     require_roles,
+    require_tenant_roles,
 )
 from app.models.call import AnalysisResult, CallRecord, Transcript
 from app.models.case import CollectionCase, OwnerProfile
@@ -333,7 +334,7 @@ def build_case_detail_response(
 async def import_cases(
     body: CaseImportRequest,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseImportResponse:
     tenant_id = _require_tenant(payload)
@@ -544,7 +545,7 @@ async def list_distinct_buildings(
 async def assign_cases(
     body: CaseAssignRequest,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseAssignResponse:
     tenant_id = _require_tenant(payload)
@@ -654,7 +655,7 @@ async def update_case_stage(
     body: CaseStageUpdate,
     payload: Annotated[dict, Depends(get_token_payload)],
     # v1.6.10 — supervisor 详情页跟进备注复用此 endpoint
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES, "supervisor"))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES, "supervisor"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseResponse:
     tenant_id = _require_tenant(payload)

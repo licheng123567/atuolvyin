@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.crypto import encrypt_phone, mask_phone
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.legal_internal import (
     InternalLegalLetterTemplate,
     PartnerLawFirm,
@@ -72,7 +72,7 @@ def _firm_to_out(f: PartnerLawFirm) -> PartnerLawFirmOut:
 )
 def list_partner_law_firms(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*READ_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*READ_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     only_active: bool = Query(True),
     page: int = Query(1, ge=1),
@@ -108,7 +108,7 @@ def list_partner_law_firms(
 def create_partner_law_firm(
     body: PartnerLawFirmCreate,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> PartnerLawFirmOut:
     tenant_id = _require_tenant(payload)
@@ -157,7 +157,7 @@ def update_partner_law_firm(
     firm_id: int,
     body: PartnerLawFirmUpdate,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> PartnerLawFirmOut:
     tenant_id = _require_tenant(payload)
@@ -186,7 +186,7 @@ def update_partner_law_firm(
 def delete_partner_law_firm(
     firm_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> None:
     tenant_id = _require_tenant(payload)
@@ -224,7 +224,7 @@ def _tpl_to_out(t: InternalLegalLetterTemplate) -> InternalLegalLetterTemplateOu
 )
 def list_letter_templates(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*READ_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*READ_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     only_active: bool = Query(True),
     category: str | None = Query(None, max_length=32),
@@ -265,7 +265,7 @@ def list_letter_templates(
 def create_letter_template(
     body: InternalLegalLetterTemplateCreate,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> InternalLegalLetterTemplateOut:
     tenant_id = _require_tenant(payload)
@@ -316,7 +316,7 @@ def update_letter_template(
     tpl_id: int,
     body: InternalLegalLetterTemplateUpdate,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> InternalLegalLetterTemplateOut:
     tenant_id = _require_tenant(payload)
@@ -346,7 +346,7 @@ def update_letter_template(
 def delete_letter_template(
     tpl_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> None:
     tenant_id = _require_tenant(payload)

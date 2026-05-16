@@ -20,7 +20,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.call import CallRecord, RiskEvent
 from app.models.case import CollectionCase, OwnerProfile
 from app.models.tenant import Tenant
@@ -128,7 +128,7 @@ def _compute_month_summary(
 @router.get("/compliance/monthly", response_model=list[ComplianceReportListItem])
 def list_monthly_reports(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     months: int = Query(6, ge=1, le=24),
 ) -> list[ComplianceReportListItem]:
@@ -161,7 +161,7 @@ def list_monthly_reports(
 def get_monthly_report(
     year_month: Annotated[str, Path(pattern=r"^\d{4}-\d{2}$")],
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ComplianceMonthlyReport:
     tenant_id = int(payload.get("tenant_id") or 0)

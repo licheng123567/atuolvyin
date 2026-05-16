@@ -17,7 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.case import CollectionCase, Project
 from app.models.tenant import ServiceProvider, UserTenantMembership
 from app.models.user import UserAccount
@@ -152,7 +152,7 @@ def _enrich(db: Session, p: Project) -> ProjectOut:
 @router.get("/projects", response_model=PaginatedResponse[ProjectOut])
 def list_projects(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROJECT_LIST_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*PROJECT_LIST_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -183,7 +183,7 @@ def list_projects(
 def create_project(
     body: ProjectCreateIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ProjectOut:
     tenant_id = _require_tenant(payload)
@@ -365,7 +365,7 @@ def create_project(
 def get_project(
     project_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ProjectOut:
     tenant_id = _require_tenant(payload)
@@ -385,7 +385,7 @@ def update_project(
     project_id: int,
     body: ProjectUpdateIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ProjectOut:
     tenant_id = _require_tenant(payload)
@@ -519,7 +519,7 @@ ALLOWED_CONTRACT_MIMES = {
 async def upload_project_contract(
     file: UploadFile = File(...),
     payload: Annotated[dict, Depends(get_token_payload)] = ...,
-    _admin: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))] = ...,
+    _admin: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))] = ...,
 ) -> dict:
     """物业 admin 上传项目合同（创建/编辑项目时使用），返回 object_key + filename。
 
@@ -571,7 +571,7 @@ async def upload_project_contract(
 @router.get("/projects/contract/url")
 def get_project_contract_url(
     object_key: str = Query(..., description="合同 object_key"),
-    _admin: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))] = ...,
+    _admin: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))] = ...,
 ) -> dict:
     """换取合同临时下载 URL（前端预览/下载用）。"""
     from app.core.storage import storage

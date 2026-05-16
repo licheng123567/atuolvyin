@@ -22,7 +22,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_roles, require_tenant_roles
 from app.models.case import CollectionCase
 from app.models.law_firm import LawFirm, LawFirmLawyer
 from app.models.legal_conversion import LegalConversionOrder, LegalServicePackage
@@ -119,7 +119,7 @@ def _order_to_out(
 @router.get("/legal-packages", response_model=list[LegalServicePackageOut])
 async def list_legal_packages(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[LegalServicePackageOut]:
     tenant_id = _require_tenant(payload)
@@ -136,7 +136,7 @@ async def list_legal_packages(
 async def preview_case_conversion(
     case_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ConvertCasePreviewOut:
     tenant_id = _require_tenant(payload)
@@ -250,7 +250,7 @@ async def convert_case_to_legal(
     case_id: int,
     body: ConvertCaseRequest,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalConversionOrderOut:
     tenant_id = _require_tenant(payload)
@@ -282,7 +282,7 @@ async def convert_case_to_legal(
 )
 async def list_orders(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     status: str | None = Query(None, max_length=32),
     page: int = Query(1, ge=1),
@@ -324,7 +324,7 @@ async def list_orders(
 async def get_order(
     order_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalConversionOrderOut:
     tenant_id = _require_tenant(payload)
@@ -466,7 +466,7 @@ async def complete_order(
 async def cancel_order(
     order_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalConversionOrderOut:
     tenant_id = _require_tenant(payload)
@@ -501,7 +501,7 @@ async def cancel_order(
 )
 async def list_doc_templates(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[LegalDocumentTemplateOut]:
     """列出本租户可见模板（平台默认 + 本租户覆盖），按 package_type 排序。"""
@@ -541,7 +541,7 @@ def _get_order_for_tenant(db: Session, *, order_id: int, tenant_id: int) -> Lega
 async def get_latest_doc(
     order_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalDocumentRenderOut:
     tenant_id = _require_tenant(payload)
@@ -568,7 +568,7 @@ async def get_latest_doc(
 async def render_doc(
     order_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalDocumentRenderOut:
     """生成 / 重新生成文书，每次创建新版本（version 递增）。"""
@@ -597,7 +597,7 @@ async def render_doc(
 async def list_doc_versions(
     order_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[LegalDocumentRenderOut]:
     tenant_id = _require_tenant(payload)

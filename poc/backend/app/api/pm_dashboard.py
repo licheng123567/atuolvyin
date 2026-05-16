@@ -17,7 +17,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import (
+    get_token_payload,
+    require_provider_roles,
+    require_roles,
+    require_tenant_roles,
+)
 from app.models.call import CallRecord
 from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.settlement import SettlementStatement
@@ -44,7 +49,7 @@ PROVIDER_PM_ROLES = ("project_manager",)
 @router.get("/dashboard/property", response_model=PMPropertyStats)
 async def get_property_pm_stats(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*PROPERTY_PM_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*PROPERTY_PM_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> PMPropertyStats:
     # Guard: provider-side callers (provider_id is not None in JWT) must not
@@ -164,7 +169,7 @@ async def get_property_pm_stats(
 @router.get("/dashboard/provider", response_model=PMProviderStats)
 async def get_provider_pm_stats(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*PROVIDER_PM_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_provider_roles(*PROVIDER_PM_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> PMProviderStats:
     user_id: int | None = payload.get("user_id")

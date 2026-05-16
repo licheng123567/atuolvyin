@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.core.crypto import encrypt_phone, mask_phone
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.tenant import ServiceProvider
 from app.schemas.provider import ProviderOut, ProviderRecommendIn
 from app.services.audit import log_audit
@@ -55,7 +55,7 @@ def _to_out(p: ServiceProvider) -> ProviderOut:
 async def recommend_provider(
     body: ProviderRecommendIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ProviderOut:
     tenant_id = payload.get("tenant_id")

@@ -20,7 +20,7 @@ from app.core.phone_visibility import (
     is_provider_contract_active,
     should_reveal_owner_phone,
 )
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.user import UserAccount
 
@@ -32,7 +32,7 @@ SUPERVISOR_ROLES = ("supervisor", "admin", "superadmin")
 @router.get("/escalated-cases")
 async def list_escalated_cases(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),

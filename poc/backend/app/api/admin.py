@@ -18,7 +18,7 @@ from app.core.security import (
     get_password_hash,
     get_token_payload,
     mask_phone,
-    require_roles,
+    require_tenant_roles,
 )
 from app.models.device import DeviceProfile
 from app.models.tenant import UserTenantMembership
@@ -65,7 +65,7 @@ def _user_to_response(user: UserAccount, role: str) -> UserListResponse:
 @router.get("/users", response_model=PaginatedResponse[UserListResponse])
 async def list_users(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     q: str | None = Query(None, max_length=100),
     page: int = Query(1, ge=1),
@@ -146,7 +146,7 @@ async def list_users(
 async def get_user(
     user_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> UserListResponse:
     """v1.5.5 — 单用户详情，给 admin/users/{id}/edit 用。"""
@@ -185,7 +185,7 @@ async def get_user(
 async def create_user(
     body: UserCreateByAdminRequest,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> UserListResponse:
     tenant_id: int | None = payload.get("tenant_id")
@@ -327,7 +327,7 @@ async def update_user(
     user_id: int,
     body: UserUpdateByAdminRequest,
     payload: Annotated[dict, Depends(get_token_payload)],
-    actor: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    actor: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> UserListResponse:
     """v1.5.5 — admin 编辑员工。"""
@@ -465,7 +465,7 @@ async def update_user(
 async def issue_user_otp(
     user_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    actor: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    actor: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> UserOtpIssueOut:
     """v1.5.5 — 给员工重新生成一次性首登 OTP。"""
@@ -519,7 +519,7 @@ async def issue_user_otp(
 @router.get("/devices", response_model=list[AdminDeviceItem])
 async def list_devices(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     user_id: int | None = Query(None),
 ) -> list[AdminDeviceItem]:
@@ -616,7 +616,7 @@ def _month_window(year_month: str) -> tuple[datetime, datetime]:
 @router.get("/agent-commissions", response_model=AgentCommissionList)
 async def list_agent_commissions(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     year_month: str = Query(..., pattern=r"^\d{4}-\d{2}$"),
 ) -> AgentCommissionList:
@@ -688,7 +688,7 @@ async def list_agent_commissions(
 async def get_agent_commission_detail(
     user_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     year_month: str = Query(..., pattern=r"^\d{4}-\d{2}$"),
 ) -> AgentCommissionDetail:
@@ -763,7 +763,7 @@ class CostSummaryOut(BaseModel):
 @router.get("/cost-summary", response_model=CostSummaryOut)
 async def admin_cost_summary(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     year_month: str = Query(..., pattern=r"^\d{4}-\d{2}$"),
 ) -> CostSummaryOut:
@@ -866,7 +866,7 @@ async def admin_cost_summary(
 @router.get("/audit-logs", response_model=PaginatedResponse[AuditLogOut])
 async def admin_audit_logs(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     action: str | None = Query(None, max_length=100),
     actor_user_id: int | None = Query(None, ge=1),

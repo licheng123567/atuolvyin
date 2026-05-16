@@ -18,7 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.settlement import DisputeRecord, SettlementStatement
 from app.models.tenant import ProviderTenantContract, ServiceProvider
 from app.schemas.common import PaginatedResponse
@@ -110,7 +110,7 @@ def _invalid_transition() -> HTTPException:
 @router.get("/settlements", response_model=PaginatedResponse[SettlementOut])
 def list_settlements(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     status: str | None = Query(None, description="DRAFT/CONFIRMED/PAID/DISPUTED"),
     year_month: str | None = Query(None, description="YYYY-MM, filters by period_start"),
@@ -182,7 +182,7 @@ def list_settlements(
 def get_settlement(
     statement_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> SettlementDetailOut:
     tenant_id = _require_tenant(payload)
@@ -209,7 +209,7 @@ def get_settlement(
 def confirm_settlement(
     statement_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> SettlementOut:
     tenant_id = _require_tenant(payload)
@@ -230,7 +230,7 @@ def pay_settlement(
     statement_id: int,
     body: PayIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> SettlementOut:
     tenant_id = _require_tenant(payload)
@@ -270,7 +270,7 @@ def raise_dispute(
     statement_id: int,
     body: DisputeIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> DisputeOut:
     tenant_id = _require_tenant(payload)

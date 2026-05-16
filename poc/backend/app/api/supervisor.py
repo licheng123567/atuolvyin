@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.case import CollectionCase, OwnerProfile
 from app.models.user import UserAccount
 from app.schemas.case import CaseWithOwnerResponse
@@ -23,7 +23,7 @@ SUPERVISOR_ROLES = ("supervisor",)
 @router.get("/cases", response_model=PaginatedResponse[CaseWithOwnerResponse])
 async def list_cases(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     stage: str | None = Query(None),
     pool_type: str | None = Query(None),

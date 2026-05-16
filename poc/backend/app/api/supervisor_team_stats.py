@@ -19,7 +19,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.call import CallRecord
 from app.models.case import CollectionCase
 from app.models.user import UserAccount
@@ -32,7 +32,7 @@ SUPERVISOR_ROLES = ("supervisor", "admin", "superadmin")
 @router.get("/team-stats")
 async def get_team_stats(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     period_days: int = Query(30, ge=1, le=365),
 ) -> dict:
