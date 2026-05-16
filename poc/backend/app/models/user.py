@@ -28,6 +28,8 @@ class UserAccount(Base, TimestampMixin):
     preferences: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, server_default=sa.text("'{}'::jsonb"), default=dict
     )
+    # v2.2 角色重构 — 平台身份(superadmin / ops),非平台用户为 NULL
+    platform_role: Mapped[str | None] = mapped_column(sa.String(16))
 
 
 class PlatformOpsAssignment(Base, TimestampMixin):
