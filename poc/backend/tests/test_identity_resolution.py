@@ -12,12 +12,12 @@ import uuid
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import select
 
-from app.core.identity import resolve_identity
 from app.core.crypto import encrypt_phone
+from app.core.identity import resolve_identity
 from app.models.tenant import ServiceProvider, Tenant, UserTenantMembership
 from app.models.user import UserAccount
-
 
 # ─── Inline factories ────────────────────────────────────────────────────────
 
@@ -65,8 +65,6 @@ def make_membership(db_session):
 
     def _factory(user: UserAccount, *, role: str, provider_id: int | None = None, work_mode: str | None = None):
         # Ensure a Tenant row exists (reuse or create)
-        from sqlalchemy import select
-
         tenant = db_session.execute(select(Tenant).limit(1)).scalar_one_or_none()
         if tenant is None:
             tenant = Tenant(
@@ -80,8 +78,6 @@ def make_membership(db_session):
 
         # Ensure ServiceProvider row exists when provider_id is given
         if provider_id is not None:
-            from sqlalchemy import select as sa_select
-
             sp = db_session.get(ServiceProvider, provider_id)
             if sp is None:
                 sp = ServiceProvider(

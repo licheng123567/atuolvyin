@@ -35,6 +35,9 @@ def resolve_identity(
     membership 显式传入时(如 select-membership 切换角色)直接用它;
     否则取该用户第一条有效 membership。
     """
+    # 不变量:平台用户(platform_role 非空)没有任何组织 membership
+    # (迁移删除了平台 membership 行,seed 也不给平台用户建 membership)。
+    # 因此显式传入的 membership 参数只对非平台用户生效。
     # 1. 平台身份优先
     if user.platform_role:
         return IdentityClaims(
