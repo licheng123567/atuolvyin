@@ -129,6 +129,17 @@
 - **`require_roles(...)`** 调用点全部按新 6 角色更新;凡涉及「物业侧 vs 服务商侧」的判断改用 `provider_id`。
 - **超管隐患修复**:`auth.py` 不再在「无 membership」时默认超管;超管必须显式持有 `platform_role='superadmin'`。
 
+### 6.1 越权守卫 —— `require_tenant_roles` / `require_provider_roles`(执行期发现)
+
+角色折叠(`provider_admin→admin`、`project_manager_provider/_property→project_manager`)使「物业侧 vs 服务商侧」不再由角色名携带。重构前 `admin_*.py` 等物业专用端点的 `require_roles("admin")` 天然排斥服务商(`provider_admin` 不在元组里);折叠后服务商 admin 的 `role` 变成 `admin`,会**误获整族物业管理端点的访问权** —— 系统性越权。
+
+修复:在 `app/core/security.py` 新增两个依赖:
+
+- `require_tenant_roles(*roles)` = `require_roles(*roles)` + 断言 `payload["provider_id"] is None`(仅物业侧)
+- `require_provider_roles(*roles)` = `require_roles(*roles)` + 断言 `payload["provider_id"] is not None`(仅服务商侧)
+
+判定规则(机械、可对 git 核验,**不改变行为**):逐个端点比对重构前 `require_roles` 元组 —— 元组**不含** `provider_admin`/`project_manager_provider` 的端点是物业专用,改用 `require_tenant_roles`;原本服务商专用的改用 `require_provider_roles`;两侧皆可的保持 `require_roles`。目标是**精确还原重构前的访问范围**。
+
 ## 7. 三端字面量替换
 
 | 端 | 范围 | 量级 |
