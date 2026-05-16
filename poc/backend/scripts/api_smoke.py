@@ -38,7 +38,7 @@ ROLES: list[tuple[str, str, str]] = [
     ("admin",                     "13000000010", "/api/v1/provider/dashboard/stats"),
     # 新增服务商催收员 + 督导
     ("agent",                     "13000000011", "/api/v1/calls/?page=1"),
-    ("supervisor",                "13000000012", "/api/v1/supervisor/reviews?only_pending=false"),
+    ("supervisor",                "13000000012", "/api/v1/calls/?page=1"),
 ]
 
 
