@@ -31,6 +31,13 @@ class UserAccount(Base, TimestampMixin):
     # v2.2 角色重构 — 平台身份(superadmin / ops),非平台用户为 NULL
     platform_role: Mapped[str | None] = mapped_column(sa.String(16))
 
+    __table_args__ = (
+        sa.CheckConstraint(
+            "platform_role IS NULL OR platform_role IN ('superadmin','ops')",
+            name="ck_user_account_platform_role",
+        ),
+    )
+
 
 class PlatformOpsAssignment(Base, TimestampMixin):
     __tablename__ = "platform_ops_assignment"

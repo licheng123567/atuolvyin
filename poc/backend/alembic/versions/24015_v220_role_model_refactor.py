@@ -15,9 +15,9 @@ down_revision: str | None = "24014v210"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-_ROLE_CK = "ck_membership_role"
-_PLATFORM_CK = "ck_account_platform_role"
-_WORK_MODE_CK = "ck_membership_work_mode"
+_ROLE_CK = "ck_user_tenant_membership_role"
+_PLATFORM_CK = "ck_user_account_platform_role"
+_WORK_MODE_CK = "ck_user_tenant_membership_work_mode"
 
 
 def upgrade() -> None:

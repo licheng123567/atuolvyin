@@ -126,3 +126,14 @@ class UserTenantMembership(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True)
 
     tenant: Mapped[Tenant] = relationship(back_populates="memberships")
+
+    __table_args__ = (
+        sa.CheckConstraint(
+            "role IN ('admin','project_manager','supervisor','agent','legal','coordinator')",
+            name="ck_user_tenant_membership_role",
+        ),
+        sa.CheckConstraint(
+            "(role = 'agent') = (work_mode IS NOT NULL)",
+            name="ck_user_tenant_membership_work_mode",
+        ),
+    )
