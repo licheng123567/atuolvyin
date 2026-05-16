@@ -25,6 +25,7 @@ from app.core.phone_visibility import (
 )
 from app.core.security import (
     get_token_payload,
+    require_roles,
     require_tenant_roles,
 )
 from app.models.call import CallRecord
@@ -240,7 +241,7 @@ async def list_work_orders(
 async def create_work_order(
     body: WorkOrderCreate,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_tenant_roles(*WORKORDER_CREATE_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_roles(*WORKORDER_CREATE_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> WorkOrderOut:
     tenant_id = _require_tenant(payload)
