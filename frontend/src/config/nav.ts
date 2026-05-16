@@ -1,4 +1,6 @@
 // 1:1 还原 ui/*.html sidebar 分组与图标
+// Note: agent nav and admin nav are scope-dependent (see getNavSections).
+// project_manager shares the same nav regardless of scope.
 import type { UserRole } from "../types";
 
 export interface NavItem {
@@ -13,8 +15,9 @@ export interface NavSection {
   items: NavItem[];
 }
 
-const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
-  // ── 物业管理员（admin.html）─────────────────────────────
+// NAV_CONFIG allows UserRole keys plus legacy backward-compat strings ("workorder")
+const NAV_CONFIG: Partial<Record<UserRole | string, NavSection[]>> = {
+  // ── 物业管理员（admin.html）— scope=tenant:{id} ──────────
   admin: [
     {
       title: "工作台",
@@ -120,23 +123,17 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
     },
   ],
 
-  // ── 内部坐席（agent-pc.html）───────────────────────────
-  agent_internal: [
+  // ── 催收员（agent-pc.html）─────────────────────────────
+  // Internal/external work_mode distinction handled at runtime via work_mode field.
+  // Internal agents get full workstation; external agents primarily use the App.
+  // Scope-based nav selection is done in getNavSections.
+  agent: [
     {
       items: [
         { label: "工作台", path: "/agent/workstation", icon: "Headphones" },
         { label: "我的案件", path: "/agent/cases", icon: "ClipboardList" },
         { label: "通话记录", path: "/agent/call-history", icon: "PhoneCall" },
         { label: "个人信息", path: "/agent/profile", icon: "User" },
-      ],
-    },
-  ],
-
-  // ── 外部兼职坐席（PC 走 Help 引导）─────────────────────
-  agent_external: [
-    {
-      items: [
-        { label: "下载 App 拨号", path: "/help/app", icon: "Smartphone" },
       ],
     },
   ],
@@ -172,40 +169,21 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
   ],
 
   // ── 项目经理（物业 / 服务商，project-manager.html）─────
-  project_manager_property: [
+  // Both property-side and provider-side project_managers share this key.
+  // Property-side (scope=tenant:{id}) has live-wall access; provider-side does not.
+  // Scope-based filtering is done in getNavSections.
+  project_manager: [
     {
       items: [
         { label: "项目总览", path: "/pm/dashboard", icon: "LayoutDashboard" },
+        // live-wall is only shown for property-side PMs (scope=tenant:*) — see getNavSections
         { label: "实时通话墙", path: "/supervisor/live-wall", icon: "RadioTower" },
-      ],
-    },
-  ],
-  project_manager_provider: [
-    {
-      items: [
-        { label: "项目总览", path: "/pm/dashboard", icon: "LayoutDashboard" },
-      ],
-    },
-  ],
-
-  // ── 服务商管理员（provider-admin.html）─────────────────
-  provider_admin: [
-    {
-      items: [
-        { label: "总览", path: "/provider/dashboard", icon: "LayoutDashboard" },
-        { label: "我的项目", path: "/provider/projects", icon: "FolderKanban" },
-        { label: "合作租户", path: "/provider/tenants", icon: "Building2" },
-        { label: "团队管理", path: "/provider/team", icon: "Users" },
-        { label: "团队绩效", path: "/provider/team-performance", icon: "TrendingUp" },
-        { label: "话术库", path: "/provider/scripts", icon: "MessageSquare" },
-        { label: "收入结算", path: "/provider/settlements", icon: "Receipt" },
-        { label: "历史报表", path: "/provider/historical-reports", icon: "Archive" },
       ],
     },
   ],
 
   // ── 平台运营（platform-ops.html）──────────────────────
-  platform_ops: [
+  ops: [
     {
       title: "租户管理",
       items: [
@@ -238,31 +216,7 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
   ],
 
   // ── 平台超管（platform-superadmin.html）────────────────
-  platform_superadmin: [
-    {
-      title: "运营",
-      items: [
-        { label: "租户管理", path: "/ops/tenants", icon: "Building2" },
-        { label: "服务商管理", path: "/ops/providers", icon: "Briefcase" },
-        { label: "结算总览", path: "/ops/settlements", icon: "Receipt" },
-        { label: "律所池", path: "/ops/law-firms", icon: "Building2" },
-        { label: "法务工作台", path: "/ops/legal-workstation", icon: "Scale" },
-        { label: "系统公告", path: "/ops/announcements", icon: "Megaphone" },
-      ],
-    },
-    {
-      title: "系统管理",
-      items: [
-        { label: "系统健康", path: "/super/health", icon: "Activity" },
-        { label: "审计日志", path: "/super/audit", icon: "FileText" },
-        { label: "成本看板", path: "/super/cost", icon: "TrendingUp" },
-        { label: "套餐配置", path: "/super/plans", icon: "Package" },
-        { label: "LLM Prompts", path: "/super/llm-prompts", icon: "Brain" },
-        { label: "区块链配置", path: "/super/blockchain-config", icon: "Link2" },
-      ],
-    },
-  ],
-  platform_super: [
+  superadmin: [
     {
       title: "运营",
       items: [
@@ -288,17 +242,62 @@ const NAV_CONFIG: Partial<Record<UserRole, NavSection[]>> = {
   ],
 };
 
+// Provider-side admin nav (scope = provider:{id}):
+// admin role with provider scope gets the provider dashboard menu
+const PROVIDER_ADMIN_NAV: NavSection[] = [
+  {
+    items: [
+      { label: "总览", path: "/provider/dashboard", icon: "LayoutDashboard" },
+      { label: "我的项目", path: "/provider/projects", icon: "FolderKanban" },
+      { label: "合作租户", path: "/provider/tenants", icon: "Building2" },
+      { label: "团队管理", path: "/provider/team", icon: "Users" },
+      { label: "团队绩效", path: "/provider/team-performance", icon: "TrendingUp" },
+      { label: "话术库", path: "/provider/scripts", icon: "MessageSquare" },
+      { label: "收入结算", path: "/provider/settlements", icon: "Receipt" },
+      { label: "历史报表", path: "/provider/historical-reports", icon: "Archive" },
+    ],
+  },
+];
+
+// Project manager nav for provider-side (no live-wall access)
+const PM_PROVIDER_NAV: NavSection[] = [
+  {
+    items: [
+      { label: "项目总览", path: "/pm/dashboard", icon: "LayoutDashboard" },
+    ],
+  },
+];
+
 // 「下载 App」对所有角色都展示（modal 关掉后还能找到）
-// agent_external 已经在主菜单里有，避免重复
 const HELP_SECTION: NavSection = {
   title: "帮助",
   items: [{ label: "下载 App", path: "/help/app", icon: "Smartphone" }],
 };
 
-export function getNavSections(role: UserRole | string): NavSection[] {
+/**
+ * Returns sidebar nav sections for a given role and scope.
+ * - admin role: scope=provider:{id} → provider dashboard nav; otherwise property admin nav
+ * - project_manager: scope=provider:{id} → provider PM nav (no live-wall); otherwise property PM nav
+ * - agent: always the agent nav (work_mode internal/external is not used for menu gating)
+ * @param role - the user's role string
+ * @param scope - the user's scope string (e.g. "tenant:1", "provider:2", "platform")
+ */
+export function getNavSections(role: UserRole | string, scope?: string): NavSection[] {
+  const s = scope ?? "";
+
+  // admin: provider-side vs property-side is scope-driven
+  if (role === "admin") {
+    const base = s.startsWith("provider:") ? PROVIDER_ADMIN_NAV : (NAV_CONFIG.admin ?? [{ items: [{ label: "控制台", path: "/" }] }]);
+    return [...base, HELP_SECTION];
+  }
+
+  // project_manager: provider-side loses live-wall
+  if (role === "project_manager") {
+    const base = s.startsWith("provider:") ? PM_PROVIDER_NAV : (NAV_CONFIG.project_manager ?? [{ items: [{ label: "控制台", path: "/" }] }]);
+    return [...base, HELP_SECTION];
+  }
+
   const base =
     NAV_CONFIG[role as UserRole] ?? [{ items: [{ label: "控制台", path: "/" }] }];
-  // agent_external 主菜单已包含 /help/app，不再重复
-  if (role === "agent_external") return base;
   return [...base, HELP_SECTION];
 }

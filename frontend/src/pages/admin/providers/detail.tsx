@@ -41,7 +41,8 @@ interface TerminationStatus {
 }
 
 const ROLE_LABEL: Record<string, string> = {
-  agent_external: "外部催收员",
+  // agent covers both internal and external; work_mode distinguishes them
+  agent: "催收员",
   legal: "法务专员",
 };
 

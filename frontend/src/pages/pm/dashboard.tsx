@@ -237,9 +237,16 @@ export function PMDashboardPage() {
   const { data: identity, isLoading: identityLoading } =
     useGetIdentity<AuthUser>();
   const role = identity?.role ?? "";
+  const scope = identity?.scope ?? "";
 
-  const isProperty = role === "project_manager_property" || role === "admin";
-  const isProvider = role === "project_manager_provider";
+  // project_manager on provider-side (scope=provider:{id}) → ProviderView
+  // project_manager on property-side (scope=tenant:{id}) → PropertyView
+  // admin also has access to PropertyView
+  const isProvider =
+    role === "project_manager" && scope.startsWith("provider:");
+  const isProperty =
+    (role === "project_manager" && !scope.startsWith("provider:")) ||
+    role === "admin";
 
   if (identityLoading) {
     return <div className="p-6 text-neutral-500">加载中…</div>;

@@ -51,14 +51,13 @@ const CAPABILITY_BADGE: Record<string, { label: string; cls: string }> = {
 const ROLE_LABEL: Record<string, string> = {
   admin: "管理员",
   supervisor: "督导",
-  agent_internal: "内部催收员",
-  agent_external: "兼职坐席",
+  agent: "催收员",
   legal: "法务对接人",
   workorder: "协调员",
   coordinator: "协调员",
-  project_manager_property: "项目经理",
-  project_manager_provider: "项目经理",
-  provider_admin: "服务商管理员",
+  project_manager: "项目经理",
+  superadmin: "平台超管",
+  ops: "平台运营",
 };
 
 export function AdminAgentDevicesPage() {

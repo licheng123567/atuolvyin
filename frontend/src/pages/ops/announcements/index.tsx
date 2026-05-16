@@ -15,9 +15,9 @@ interface AnnouncementItem {
 
 const AUDIENCE_PRESETS = [
   { value: "all", label: "全部用户" },
-  { value: "role:admin", label: "物业管理员" },
+  { value: "role:admin", label: "管理员" },
   { value: "role:supervisor", label: "主管/督导" },
-  { value: "role:agent_internal", label: "内部催收员" },
+  { value: "role:agent", label: "催收员" },
   { value: "role:legal", label: "法务专员" },
 ];
 

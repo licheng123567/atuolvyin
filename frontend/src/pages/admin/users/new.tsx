@@ -17,13 +17,13 @@ interface CreateUserResponse {
   phone_full?: string | null;
 }
 
-// v1.5.6 — 物业内部角色（不含 project_manager_provider；那是服务商组织角色）
+// v1.5.6 — 物业内部角色（scope=tenant:{id}；不含 provider-side admin，那是服务商组织角色）
 const ALLOWED_ROLES = [
   { value: "supervisor", label: "督导（实时质检 + 团队组长）" },
-  { value: "agent_internal", label: "内部催收员（拨打电话 / 跟进案件）" },
+  { value: "agent", label: "催收员（拨打电话 / 跟进案件）" },
   { value: "coordinator", label: "协调员（接服务商工单 + 调度物业各职能）" },
   { value: "legal", label: "法务对接人（审核转法务 + 跟律所沟通）" },
-  { value: "project_manager_property", label: "项目负责人（按项目跟进）" },
+  { value: "project_manager", label: "项目负责人（按项目跟进）" },
 ];
 
 export function UserNewPage() {

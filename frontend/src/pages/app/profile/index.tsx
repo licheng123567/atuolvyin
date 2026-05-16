@@ -160,8 +160,8 @@ interface AgentPerformance {
 }
 
 const ROLE_LABEL: Record<string, string> = {
-  agent_internal: "内部催收员",
-  agent_external: "外部催收员",
+  // agent role covers both internal and external (work_mode distinguishes them)
+  agent: "催收员",
   supervisor: "督导",
   admin: "管理员",
 };

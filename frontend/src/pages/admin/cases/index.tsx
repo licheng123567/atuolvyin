@@ -96,9 +96,7 @@ export function CaseListPage() {
   const providerIdParam = searchParams.get("provider_id");
   const providerIdFilter = providerIdParam ? Number(providerIdParam) : null;
   const { data: identity } = useGetIdentity<AuthUser>();
-  const isPM =
-    identity?.role === "project_manager_property" ||
-    identity?.role === "project_manager_provider";
+  const isPM = identity?.role === "project_manager";
 
   const [keyword, setKeyword] = useState(searchParams.get("keyword") ?? "");
   const [stage, setStage] = useState("");
@@ -187,13 +185,12 @@ export function CaseListPage() {
     (rawAgents as unknown as PaginatedResponse<AgentItem>)?.items ??
     (rawAgents as AgentItem[] | undefined) ??
     [];
-  // v1.5.6 — 物业 admin 只能分配给内部催收员（外勤由服务商内部分配）
-  // 但筛选下拉仍可显示外部坐席，方便看「外勤负责的案件」
-  const agentsAll = allAgents.filter(
-    (a) => a.role === "agent_internal" || a.role === "agent_external",
-  );
+  // v1.5.6 — 物业 admin 分配给 agent 角色（内部/外部由 work_mode 区分，已收敛到单一角色）
+  const agentsAll = allAgents.filter((a) => a.role === "agent");
   const agents = agentsAll;
-  const internalAgents = allAgents.filter((a) => a.role === "agent_internal");
+  // For assignment, all agents with the "agent" role are candidates.
+  // TODO: if work_mode is exposed by /admin/users, filter to work_mode=internal for admin-side assignment
+  const internalAgents = allAgents.filter((a) => a.role === "agent");
 
   const { mutate: assignCases, mutation: assignMutation } = useCreate();
   const assigning = assignMutation.isPending;

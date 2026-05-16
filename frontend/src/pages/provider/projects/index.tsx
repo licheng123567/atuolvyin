@@ -158,7 +158,8 @@ function AssignPmModal({
     (rawTeam as unknown as PaginatedResponse<TeamMember>)?.items ??
     (rawTeam as TeamMember[] | undefined) ??
     [];
-  const pmCandidates = teamItems.filter((m) => m.role === "project_manager_provider");
+  // project_manager on provider-side (scope=provider:{id}); backend /provider/team filters by provider
+  const pmCandidates = teamItems.filter((m) => m.role === "project_manager");
 
   const handleSave = () => {
     if (pmId === "") {

@@ -19,15 +19,15 @@ function pct(v: number | null): string {
 }
 
 const ROLE_LABEL: Record<string, string> = {
-  provider_admin: "服务商管理员",
-  project_manager_provider: "项目经理",
-  agent_external: "外勤催收员",
-  agent_internal: "内勤催收员",
+  // admin with scope=provider:{id} is the "provider admin"
+  admin: "管理员",
+  project_manager: "项目经理",
+  // agent covers both internal and external work_mode
+  agent: "催收员",
   supervisor: "督导",
   legal: "法务对接人",
-  admin: "物业管理员",
-  coordinator: "物业协调员",
-  workorder: "物业协调员",
+  coordinator: "协调员",
+  workorder: "协调员",
 };
 
 const TOP_N = 10;

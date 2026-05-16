@@ -70,9 +70,7 @@ export function CaseKanbanPage() {
   const invalidate = useInvalidate();
   const { mutate: patchStage } = useCustomMutation();
   const { data: identity } = useGetIdentity<AuthUser>();
-  const isPM =
-    identity?.role === "project_manager_property" ||
-    identity?.role === "project_manager_provider";
+  const isPM = identity?.role === "project_manager";
 
   const [searchParams, setSearchParams] = useSearchParams();
   const projectIdParam = searchParams.get("project_id");

@@ -39,27 +39,25 @@ interface IssueOtpResponse {
 const ROLE_BADGE_CLASS: Record<string, string> = {
   admin: "ds-badge ds-badge-purple",
   supervisor: "ds-badge ds-badge-orange",
-  agent_internal: "ds-badge ds-badge-blue",
-  agent_external: "ds-badge ds-badge-blue",
+  agent: "ds-badge ds-badge-blue",
   legal: "ds-badge ds-badge-purple",
   workorder: "ds-badge ds-badge-gray",
   coordinator: "ds-badge ds-badge-gray",
-  project_manager_property: "ds-badge ds-badge-purple",
-  project_manager_provider: "ds-badge ds-badge-purple",
-  provider_admin: "ds-badge ds-badge-purple",
+  project_manager: "ds-badge ds-badge-purple",
+  superadmin: "ds-badge ds-badge-purple",
+  ops: "ds-badge ds-badge-gray",
 };
 
 const ROLE_LABEL: Record<string, string> = {
   admin: "管理员",
   supervisor: "督导",
-  agent_internal: "催收员",
-  agent_external: "兼职坐席",
+  agent: "催收员",
   legal: "法务对接人",
   workorder: "协调员",
   coordinator: "协调员",
-  project_manager_property: "项目经理",
-  project_manager_provider: "项目经理",
-  provider_admin: "服务商管理员",
+  project_manager: "项目经理",
+  superadmin: "平台超管",
+  ops: "平台运营",
 };
 
 export function UserListPage() {
@@ -101,8 +99,8 @@ export function UserListPage() {
   const total = data?.total ?? 0;
   const isLoading = query.isLoading;
 
-  // v1.5.6 — 移除外勤 tab：物业 admin 只看内部员工
-  const internal = allItems.filter((u) => u.role !== "agent_external");
+  // v1.5.6 — 物业 admin 看内部员工（scope=tenant:{id}）；agent 角色已统一，work_mode 区分内外勤
+  const internal = allItems;
   const visible = roleFilter
     ? internal.filter((u) => u.role === roleFilter)
     : internal;
@@ -149,10 +147,10 @@ export function UserListPage() {
           >
             <option value="">全部角色</option>
             <option value="supervisor">督导</option>
-            <option value="agent_internal">内部催收员</option>
+            <option value="agent">催收员</option>
             <option value="coordinator">协调员</option>
             <option value="legal">法务对接人</option>
-            <option value="project_manager_property">项目经理</option>
+            <option value="project_manager">项目经理</option>
             <option value="admin">管理员</option>
           </select>
         </div>

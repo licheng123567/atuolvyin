@@ -46,15 +46,15 @@ const ACTION_LABEL: Record<string, string> = {
 };
 
 const ROLE_LABEL: Record<string, string> = {
-  admin: "物业管理员",
+  admin: "管理员",
   supervisor: "督导",
-  agent_internal: "内勤催收员",
+  agent: "催收员",
   legal: "法务",
   coordinator: "协调员",
   workorder: "协调员",
-  project_manager_property: "项目经理",
-  platform_super: "平台超管",
-  platform_ops: "平台运营",
+  project_manager: "项目经理",
+  superadmin: "平台超管",
+  ops: "平台运营",
 };
 
 export function AdminAuditLogPage() {

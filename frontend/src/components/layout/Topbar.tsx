@@ -7,22 +7,20 @@ import type { AuthUser } from "../../providers/auth-provider";
 import { NotificationBell } from "../notifications/NotificationBell";
 import { AlertNotificationCenter } from "../supervisor/AlertNotificationCenter";
 
-const SUPERVISOR_ROLES = new Set(["supervisor", "admin", "platform_super"]);
+const SUPERVISOR_ROLES = new Set(["supervisor", "admin", "superadmin"]);
 
 const ROLE_LABELS: Record<string, string> = {
-  platform_superadmin: "平台超管",
-  platform_super: "平台超管",
-  platform_ops: "平台运营员",
-  provider_admin: "服务商管理员",
-  admin: "物业管理员",
+  superadmin: "平台超管",
+  ops: "平台运营员",
+  // admin: scope-dependent label resolved at render time
+  admin: "管理员",
   supervisor: "督导",
-  agent_internal: "内部催收员",
-  agent_external: "外勤催收员",
+  // agent: internal/external distinction now from work_mode, not role
+  agent: "催收员",
   legal: "法务对接人",
   workorder: "协调员",
   coordinator: "协调员",
-  project_manager_property: "项目负责人",
-  project_manager_provider: "项目负责人",
+  project_manager: "项目负责人",
 };
 
 interface MembershipItem {
@@ -36,19 +34,15 @@ interface MembershipItem {
 }
 
 const ROLE_BADGE_BG: Record<string, { bg: string; color: string }> = {
-  platform_superadmin: { bg: "#fdf2f8", color: "#be185d" },
-  platform_super: { bg: "#fdf2f8", color: "#be185d" },
-  platform_ops: { bg: "#f3e8ff", color: "#7e22ce" },
-  provider_admin: { bg: "#fef3c7", color: "#b45309" },
+  superadmin: { bg: "#fdf2f8", color: "#be185d" },
+  ops: { bg: "#f3e8ff", color: "#7e22ce" },
   admin: { bg: "#dbeafe", color: "#1d4ed8" },
   supervisor: { bg: "#cffafe", color: "#0e7490" },
-  agent_internal: { bg: "#ecfccb", color: "#3f6212" },
-  agent_external: { bg: "#ecfccb", color: "#3f6212" },
+  agent: { bg: "#ecfccb", color: "#3f6212" },
   legal: { bg: "#ddd6fe", color: "#5b21b6" },
   workorder: { bg: "#ffedd5", color: "#9a3412" },
   coordinator: { bg: "#ffedd5", color: "#9a3412" },
-  project_manager_property: { bg: "#e0e7ff", color: "#3730a3" },
-  project_manager_provider: { bg: "#e0e7ff", color: "#3730a3" },
+  project_manager: { bg: "#e0e7ff", color: "#3730a3" },
 };
 
 export function Topbar() {

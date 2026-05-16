@@ -125,7 +125,7 @@ export function SupervisorLegalConversionApprovalsPage() {
   }
 
   const role = identity?.role ?? "";
-  const isAdmin = role === "admin" || role === "platform_super" || role === "platform_superadmin";
+  const isAdmin = role === "admin" || role === "superadmin";
 
   return (
     <div>

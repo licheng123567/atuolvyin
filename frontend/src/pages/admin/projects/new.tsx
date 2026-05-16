@@ -96,9 +96,11 @@ export function AdminProjectNewPage() {
     (usersRaw as unknown as PaginatedResponse<UserItem>)?.items ??
     (usersRaw as UserItem[] | undefined) ??
     [];
-  const propertyPMs = allUsers.filter((u) => u.role === "project_manager_property");
+  // project_manager on property-side (scope=tenant:{id}) is the "property PM"
+  // The backend /admin/users endpoint filters by tenant, so all project_managers here are property-side
+  const propertyPMs = allUsers.filter((u) => u.role === "project_manager");
   const supervisors = allUsers.filter((u) => u.role === "supervisor");
-  const agents = allUsers.filter((u) => u.role === "agent_internal");
+  const agents = allUsers.filter((u) => u.role === "agent");
   const coordinators = allUsers.filter((u) => u.role === "coordinator" || u.role === "workorder");
   const legals = allUsers.filter((u) => u.role === "legal");
 

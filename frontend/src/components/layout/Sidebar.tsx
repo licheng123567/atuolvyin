@@ -7,18 +7,17 @@ import type { AuthUser } from "../../providers/auth-provider";
 import { getNavSections } from "../../config/nav";
 
 const ROLE_LABELS: Record<string, string> = {
-  platform_superadmin: "平台超管",
-  platform_super: "平台超管",
-  platform_ops: "平台运营员",
-  provider_admin: "服务商管理员",
-  admin: "物业管理员",
+  superadmin: "平台超管",
+  ops: "平台运营员",
+  // admin: label is scope-dependent, resolved at render time
+  admin: "管理员",
   supervisor: "主管/督导",
-  agent_internal: "催收员（内部）",
-  agent_external: "催收员（兼职）",
+  // agent: work_mode (internal/external) is not shown in sidebar label
+  agent: "催收员",
   legal: "法务专员",
   workorder: "工单处理员",
-  project_manager_property: "项目负责人（物业）",
-  project_manager_provider: "项目负责人（服务商）",
+  coordinator: "协调员",
+  project_manager: "项目负责人",
 };
 
 type LucideMap = Record<string, React.ElementType>;
@@ -34,7 +33,7 @@ export function Sidebar() {
   const location = useLocation();
 
   const initials = user?.name?.slice(0, 1) ?? "?";
-  const sections = user ? getNavSections(user.role) : [];
+  const sections = user ? getNavSections(user.role, user.scope) : [];
 
   return (
     <aside
