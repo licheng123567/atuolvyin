@@ -32,7 +32,7 @@ data class CaseItem(
 @JsonClass(generateAdapter = true)
 data class OwnerInfo(
     val name: String,
-    val phone: String?,       // non-null for agent_internal
+    val phone: String?,       // non-null for agent (work_mode=internal)
     val phone_masked: String,
     val building: String?,
     val room: String?,
