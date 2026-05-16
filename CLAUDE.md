@@ -3,7 +3,7 @@
 ## 项目概述
 
 物业外呼录音 + 云端 ASR 系统。两个催收场景：物业费催收、业委会投票邀请。
-SaaS 多租户，11 个角色，PC（Refine.dev + shadcn/ui）+ Android（Kotlin）+ 后端（FastAPI + PostgreSQL）。
+SaaS 多租户，6 个组织角色 + 2 个平台角色（四维正交模型，见多租户关键规则），PC（Refine.dev + shadcn/ui）+ Android（Kotlin）+ 后端（FastAPI + PostgreSQL）。
 
 ## 权威文档（读代码前先读这里）
 
@@ -114,6 +114,23 @@ autoluyin/
 - 所有数据库查询必须带 `tenant_id` 条件（不允许全表扫描）
 - 服务商（provider）的数据通过 `scope = provider:{id}` 隔离
 - 跨租户操作只有平台超管角色可执行
+
+### 角色模型（v2.2 四维正交，`feature/role-model-refactor` 已落地）
+
+**四个维度：**
+- `UserAccount.platform_role` ∈ {`superadmin`, `ops`} 或 `NULL` — 平台身份（平台用户无 membership）
+- `UserTenantMembership.role` ∈ {`admin`, `project_manager`, `supervisor`, `agent`, `legal`, `coordinator`} — 6 个组织职能角色
+- `UserTenantMembership.provider_id` — `NULL` = 物业侧；非 `NULL` = 服务商侧（**组织归属唯一依据**，旧 `source_type` 列已删除）
+- `UserTenantMembership.work_mode` ∈ {`internal`, `external`} — 仅 `agent` 角色非 `NULL`，其余为 `NULL`
+
+**端点鉴权守卫（`app/core/security.py`）：**
+- `require_tenant_roles(*roles)` — 物业专用端点（断言 `provider_id IS NULL`）
+- `require_provider_roles(*roles)` — 服务商专用端点（断言 `provider_id IS NOT NULL`）
+- `require_roles(*roles)` — 跨两侧端点（凡角色元组含 `agent` 必须用此，不得用前两者）
+
+**后端角色常量单一事实源：`app/core/roles.py`** — 禁止在其他文件散落角色字面量。
+
+> 旧 11 角色枚举（`agent_internal`、`agent_external`、`provider_admin`、`project_manager_property`、`project_manager_provider`、`platform_super`、`platform_superadmin`、`platform_ops` 等）已全部废弃，禁止在新代码中使用。映射详见 `docs/superpowers/specs/2026-05-16-role-model-refactor-design.md` §5.1。
 
 ## 测试要求（零妥协）
 
