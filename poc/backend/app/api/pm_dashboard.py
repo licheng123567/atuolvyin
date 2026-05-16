@@ -47,6 +47,19 @@ async def get_property_pm_stats(
     _user: Annotated[UserAccount, Depends(require_roles(*PROPERTY_PM_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> PMPropertyStats:
+    # Guard: provider-side callers (provider_id is not None in JWT) must not
+    # receive property-side data.  Mirror the symmetric guard in
+    # get_provider_pm_stats, which returns empty stats for property-side callers.
+    if payload.get("provider_id") is not None:
+        return PMPropertyStats(
+            active_cases_count=0,
+            recovered_amount_month=0.0,
+            pending_workorders=0,
+            escalated_legal_cases=0,
+            agent_count=0,
+            top_overdue=[],
+        )
+
     tenant_id: int | None = payload.get("tenant_id")
     if not tenant_id:
         # Without a tenant we cannot scope; return empty stats rather than 500.

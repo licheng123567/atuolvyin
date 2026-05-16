@@ -40,6 +40,7 @@ def _notify_users_for_project(db, project: Project, *, title: str, body: str, se
             select(UserTenantMembership.user_id).where(
                 UserTenantMembership.tenant_id == project.tenant_id,
                 UserTenantMembership.role == "admin",
+                UserTenantMembership.provider_id.is_(None),
                 UserTenantMembership.is_active.is_(True),
             )
         )
