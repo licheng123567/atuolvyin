@@ -20,7 +20,7 @@ from app.models.user import UserAccount
 
 router = APIRouter()
 
-SUPER_ROLES = ("platform_super", "platform_superadmin")
+SUPER_ROLES = ("superadmin",)
 
 
 class TenantUsageItem(BaseModel):

@@ -54,7 +54,7 @@ from app.services.legal_document_render import render_for_order
 router = APIRouter()
 
 ADMIN_ROLES = ("admin",)
-PLATFORM_OPS_ROLES = ("platform_ops", "platform_super", "platform_superadmin")
+PLATFORM_OPS_ROLES = ("ops", "superadmin")
 
 
 def _require_tenant(payload: dict) -> int:

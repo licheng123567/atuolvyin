@@ -50,12 +50,10 @@ _OFFER_TYPE_LABELS = {
 }
 
 ALL_ROLES = (
-    "agent_internal",
-    "agent_external",
+    "agent",
     "supervisor",
     "admin",
-    "platform_super",
-    "platform_superadmin",
+    "superadmin",
 )
 
 

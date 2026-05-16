@@ -26,14 +26,14 @@ from app.models.user import UserAccount
 
 router = APIRouter()
 
-ADMIN_ROLES = ("admin", "platform_superadmin")
+ADMIN_ROLES = ("admin", "superadmin")
 
 
 class ProjectMemberItem(BaseModel):
     user_id: int
     name: str
     role_in_project: str  # supervisor | agent
-    membership_role: str  # supervisor | agent_internal
+    membership_role: str  # supervisor | agent
     is_active: bool
 
 
@@ -116,7 +116,7 @@ def add_members(
 
     expected_membership_role = {
         "supervisor": "supervisor",
-        "agent": "agent_internal",
+        "agent": "agent",
     }
 
     added = 0

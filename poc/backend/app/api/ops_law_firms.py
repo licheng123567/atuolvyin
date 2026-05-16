@@ -38,7 +38,7 @@ from app.schemas.law_firm import (
 
 router = APIRouter()
 
-OPS_ROLES = ("platform_ops", "platform_super", "platform_superadmin")
+OPS_ROLES = ("ops", "superadmin")
 
 
 def _firm_with_lawyers(db: Session, firm: LawFirm) -> LawFirmOut:

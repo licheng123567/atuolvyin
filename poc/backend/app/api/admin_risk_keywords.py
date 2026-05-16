@@ -14,7 +14,7 @@ from app.schemas.risk import RiskKeywordCreate, RiskKeywordOut, RiskKeywordUpdat
 
 router = APIRouter()
 
-_ALLOWED_ROLES = {"admin", "platform_super"}
+_ALLOWED_ROLES = {"admin", "superadmin"}
 _MAX_PAGE_SIZE = 100  # cap per-page rows to limit memory usage
 
 
@@ -86,7 +86,7 @@ async def create_risk_keyword(
             )
         effective_tenant = caller_tenant_id
     else:
-        effective_tenant = body.tenant_id  # platform_super may use None
+        effective_tenant = body.tenant_id  # superadmin may use None
 
     kw = RiskKeyword(
         tenant_id=effective_tenant,

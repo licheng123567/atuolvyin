@@ -27,7 +27,7 @@ from app.schemas.script import (
 
 router = APIRouter()
 
-ADMIN_ROLES = ("admin", "platform_superadmin")
+ADMIN_ROLES = ("admin", "superadmin")
 
 VALID_INTENTS = frozenset({"房屋质量", "经济困难", "服务不满", "联系困难", "其他"})
 
@@ -86,10 +86,10 @@ def _get_script_or_404(
     """Load script. Read 可见平台 + 本租户私有；写仅限本租户私有（admin）。
 
     v1.4 S16.5：屏蔽 admin 改/删平台预置（之前是 bug）。
-    platform_superadmin 仍可改平台预置。
+    superadmin 仍可改平台预置。
     """
     stmt = select(ScriptTemplate).where(ScriptTemplate.id == script_id)
-    if role != "platform_superadmin":
+    if role != "superadmin":
         stmt = stmt.where(
             or_(ScriptTemplate.tenant_id == tenant_id, ScriptTemplate.tenant_id.is_(None))
         )
@@ -101,7 +101,7 @@ def _get_script_or_404(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail={"code": "ERR_NOT_FOUND", "message": "话术不存在"},
         )
-    if for_write and role != "platform_superadmin" and script.tenant_id is None:
+    if for_write and role != "superadmin" and script.tenant_id is None:
         raise HTTPException(
             status_code=http_status.HTTP_403_FORBIDDEN,
             detail={
@@ -128,7 +128,7 @@ def list_scripts(
     tenant_id = int(payload.get("tenant_id") or 0)
 
     stmt = select(ScriptTemplate)
-    if role != "platform_superadmin":
+    if role != "superadmin":
         stmt = stmt.where(
             or_(ScriptTemplate.tenant_id == tenant_id, ScriptTemplate.tenant_id.is_(None))
         )
@@ -181,7 +181,7 @@ def create_script(
 
     # v1.5.7 — 校验 project_id 属本租户
     project_id_to_set: int | None = None
-    if body.project_id is not None and role != "platform_superadmin":
+    if body.project_id is not None and role != "superadmin":
         from app.models.case import Project
 
         ok = db.execute(
@@ -195,7 +195,7 @@ def create_script(
         project_id_to_set = body.project_id
 
     script = ScriptTemplate(
-        tenant_id=None if role == "platform_superadmin" else tenant_id,
+        tenant_id=None if role == "superadmin" else tenant_id,
         project_id=project_id_to_set,
         title=body.title,
         scene=body.scene,
@@ -223,7 +223,7 @@ def import_scripts(
     import openpyxl
 
     role = payload.get("role", "")
-    tenant_id = int(payload.get("tenant_id") or 0) if role != "platform_superadmin" else None
+    tenant_id = int(payload.get("tenant_id") or 0) if role != "superadmin" else None
     user_id = int(payload.get("user_id") or 0)
 
     contents = file.file.read()
@@ -314,7 +314,7 @@ def update_script(
         script.notes = body.notes
     # v1.5.7 — 项目级范围可改：明确传 project_id（含 null）即更新
     if "project_id" in body.model_fields_set:
-        if body.project_id is not None and role != "platform_superadmin":
+        if body.project_id is not None and role != "superadmin":
             from app.models.case import Project
 
             ok = db.execute(
@@ -348,7 +348,7 @@ def fork_script(
     tenant_id = int(payload.get("tenant_id") or 0)
     user_id = int(payload.get("user_id") or 0)
 
-    if role == "platform_superadmin":
+    if role == "superadmin":
         raise HTTPException(
             status_code=http_status.HTTP_400_BAD_REQUEST,
             detail={"code": "ERR_NOT_APPLICABLE", "message": "超管直接编辑平台预置即可"},
@@ -472,7 +472,7 @@ def script_effectiveness(
     cutoff = datetime.now(UTC) - timedelta(days=period_days)
 
     template_stmt = select(ScriptTemplate)
-    if role != "platform_superadmin":
+    if role != "superadmin":
         template_stmt = template_stmt.where(
             or_(ScriptTemplate.tenant_id == tenant_id, ScriptTemplate.tenant_id.is_(None))
         )
@@ -504,7 +504,7 @@ def script_effectiveness(
         .where(SuggestionFeedback.created_at >= cutoff)
         .group_by(SuggestionFeedback.script_template_id)
     )
-    if role != "platform_superadmin":
+    if role != "superadmin":
         feedback_stmt = feedback_stmt.where(CallRecord.tenant_id == tenant_id)
 
     agg: dict[int, tuple[int, int, int, int]] = {

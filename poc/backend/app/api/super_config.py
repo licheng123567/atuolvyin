@@ -33,7 +33,7 @@ from app.schemas.platform import (
 
 router = APIRouter()
 
-SUPER_ROLES = ("platform_super", "platform_superadmin")
+SUPER_ROLES = ("superadmin",)
 
 
 def _user_id(payload: dict) -> int:

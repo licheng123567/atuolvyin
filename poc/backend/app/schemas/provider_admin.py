@@ -92,7 +92,7 @@ class TeamMemberCreateIn(BaseModel):
     password: str = Field(..., min_length=8, max_length=72)
     role: str = Field(
         ...,
-        pattern=r"^(supervisor|agent_internal|agent_external)$",
+        pattern=r"^(supervisor|agent|project_manager)$",
     )
     tenant_id: int
 

@@ -61,7 +61,7 @@ QR_TOKEN_TTL_MIN = 10
 
 router = APIRouter()
 
-AGENT_ROLES = ("agent_internal", "agent_external")
+AGENT_ROLES = ("agent",)
 SUPERVISOR_ROLES = ("supervisor", "admin")
 ALLOWED_AUDIO_FORMATS = {"mp3", "m4a", "amr", "wav", "aac", "ogg"}
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
@@ -415,7 +415,7 @@ async def dial_start(
     db.commit()
     db.refresh(call)
 
-    # 6. WS 广播 supervisor / admin / project_manager_property
+    # 6. WS 广播 supervisor / admin / project_manager
     try:
         await _broadcast_call_event(db, call, "call.started")
     except Exception as exc:

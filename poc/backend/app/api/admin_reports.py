@@ -35,7 +35,7 @@ from app.schemas.report import (
 
 router = APIRouter()
 
-ADMIN_ROLES = ("admin", "platform_superadmin")
+ADMIN_ROLES = ("admin", "superadmin")
 
 FUNNEL_STAGES: list[tuple[str, str]] = [
     ("new", "新案"),

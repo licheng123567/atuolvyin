@@ -229,7 +229,6 @@ async def create_user(
             user_id=existing_user.id,
             tenant_id=tenant_id,
             role=body.role,
-            source_type="INTERNAL",
             is_active=True,
         )
         db.add(membership)
@@ -267,7 +266,6 @@ async def create_user(
             user_id=new_user.id,
             tenant_id=tenant_id,
             role=body.role,
-            source_type="INTERNAL",
             is_active=True,
         )
         db.add(membership)
@@ -297,7 +295,6 @@ async def create_user(
                     user_id=new_user.id,
                     tenant_id=tenant_id,
                     role=r,
-                    source_type="INTERNAL",
                     is_active=True,
                 )
             )
@@ -415,7 +412,6 @@ async def update_user(
                     user_id=target.id,
                     tenant_id=tenant_id,
                     role=r,
-                    source_type="INTERNAL",
                     is_active=True,
                 )
             )
@@ -639,13 +635,14 @@ async def list_agent_commissions(
 
     period_start, period_end = _month_window(year_month)
 
-    # 拉本租户所有 active agent_internal
+    # 拉本租户所有 active agent（内部，work_mode=internal）
     agents = db.execute(
         select(UserAccount, UserTenantMembership)
         .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
         .where(
             UserTenantMembership.tenant_id == tenant_id,
-            UserTenantMembership.role == "agent_internal",
+            UserTenantMembership.role == "agent",
+            UserTenantMembership.work_mode == "internal",
             UserTenantMembership.is_active.is_(True),
             UserAccount.is_active.is_(True),
         )
@@ -811,7 +808,8 @@ async def admin_cost_summary(
             .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
             .where(
                 UserTenantMembership.tenant_id == tenant_id,
-                UserTenantMembership.role == "agent_internal",
+                UserTenantMembership.role == "agent",
+                UserTenantMembership.work_mode == "internal",
                 UserTenantMembership.is_active.is_(True),
                 UserAccount.is_active.is_(True),
             )

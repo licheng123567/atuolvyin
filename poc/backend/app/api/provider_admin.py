@@ -64,7 +64,7 @@ PERFORMANCE_DEFAULT_DAYS = 30
 
 router = APIRouter()
 
-PROVIDER_ROLES = ("provider_admin",)
+PROVIDER_ROLES = ("admin",)  # provider-side admin; guarded by provider_id != None in _resolve_provider_id
 
 
 # ── helpers ──────────────────────────────────────────────────────────
@@ -351,7 +351,6 @@ async def create_team_member(
         user_id=new_user.id,
         tenant_id=body.tenant_id,
         role=body.role,
-        source_type="PROVIDER",
         provider_id=provider_id,
         is_active=True,
     )
@@ -975,12 +974,12 @@ async def assign_provider_pm(
             detail={"code": "ERR_NOT_FOUND", "message": "项目不存在或不属本服务商"},
         )
 
-    # 校验 user_id 是本服务商的 pm_provider 角色
+    # 校验 user_id 是本服务商的 project_manager 角色（provider_id 已限定服务商侧）
     pm_membership = db.execute(
         select(UserTenantMembership).where(
             UserTenantMembership.user_id == body.user_id,
             UserTenantMembership.provider_id == provider_id,
-            UserTenantMembership.role == "project_manager_provider",
+            UserTenantMembership.role == "project_manager",
             UserTenantMembership.is_active.is_(True),
         )
     ).scalar_one_or_none()

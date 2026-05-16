@@ -36,7 +36,7 @@ from app.services.legal_invoice import generate_invoice, total_unpaid_fee
 
 router = APIRouter()
 
-OPS_ROLES = ("platform_ops", "platform_super", "platform_superadmin")
+OPS_ROLES = ("ops", "superadmin")
 
 
 def _order_to_out(order: LegalConversionOrder, package_name: str | None) -> LegalConversionOrderOut:

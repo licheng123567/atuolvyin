@@ -39,7 +39,7 @@ class RiskKeywordCreate(BaseModel):
     speaker: str
     level: str
     keyword: str
-    tenant_id: int | None = None  # None = platform preset; only platform_super may set
+    tenant_id: int | None = None  # None = platform preset; only superadmin may set
 
 
 class RiskKeywordUpdate(BaseModel):

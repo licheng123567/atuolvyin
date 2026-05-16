@@ -27,7 +27,7 @@ from app.services.audit import log_audit
 
 router = APIRouter()
 
-ADMIN_ROLES = ("admin", "platform_superadmin")
+ADMIN_ROLES = ("admin", "superadmin")
 # v1.9.7 — 法务 / 协调员 / 督导也可读项目列表（用于「按项目过滤」下拉框）
 PROJECT_LIST_ROLES = ADMIN_ROLES + ("legal", "coordinator", "workorder", "supervisor")
 
@@ -194,7 +194,8 @@ def create_project(
             select(UserTenantMembership).where(
                 UserTenantMembership.user_id == body.property_pm_user_id,
                 UserTenantMembership.tenant_id == tenant_id,
-                UserTenantMembership.role == "project_manager_property",
+                UserTenantMembership.role == "project_manager",
+                UserTenantMembership.provider_id.is_(None),  # property-side PM only
             )
         ).scalar_one_or_none()
         if m is None:
@@ -329,7 +330,7 @@ def create_project(
                 )
             )
         for uid in body.agent_user_ids:
-            _validate_member_role(uid, "agent_internal")
+            _validate_member_role(uid, "agent")
             db.add(
                 ProjectMember(
                     project_id=p.id,

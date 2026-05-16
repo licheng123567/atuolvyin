@@ -40,10 +40,10 @@ from .admin_legal_conversion import build_legal_conversion_order
 
 router = APIRouter()
 
-# 审批人角色：督导 / admin / platform_super
-REVIEWER_ROLES = ("supervisor", "admin", "platform_super", "platform_superadmin")
+# 审批人角色：督导 / admin / superadmin
+REVIEWER_ROLES = ("supervisor", "admin", "superadmin")
 # 申请人角色：催收员
-REQUESTER_ROLES = ("agent_internal", "agent_external")
+REQUESTER_ROLES = ("agent",)
 # 列表查看者：审批人 + 申请人（自己的）
 VIEWER_ROLES = REVIEWER_ROLES + REQUESTER_ROLES
 

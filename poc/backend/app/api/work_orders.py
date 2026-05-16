@@ -48,9 +48,9 @@ from app.services.audit import log_audit
 router = APIRouter()
 
 WORKORDER_ROLES = ("workorder", "coordinator", "admin", "supervisor")
-# v1.9.8 — 协调员/督导/admin 只处理工单，不再允许创建；建工单必须从案件发起（agent_internal）
+# v1.9.8 — 协调员/督导/admin 只处理工单，不再允许创建；建工单必须从案件发起（agent）
 # 工单必须关联案件（case_id 强制非空）
-WORKORDER_CREATE_ROLES = ("agent_internal", "admin")  # admin 保留兜底建单能力（运维）
+WORKORDER_CREATE_ROLES = ("agent", "admin")  # admin 保留兜底建单能力（运维）
 
 
 def _require_tenant(payload: dict) -> int:

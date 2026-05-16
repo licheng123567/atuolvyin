@@ -30,7 +30,7 @@ from .admin_scripts import _to_out, _write_snapshot
 
 router = APIRouter()
 
-PROVIDER_ROLES = ("provider_admin",)
+PROVIDER_ROLES = ("admin",)  # provider-side admin; access guarded by _provider_id_for checking provider_id
 VALID_INTENTS = frozenset({"房屋质量", "经济困难", "服务不满", "联系困难", "其他"})
 
 
@@ -39,7 +39,8 @@ def _provider_id_for(db: Session, user_id: int) -> int:
         db.execute(
             select(UserTenantMembership).where(
                 UserTenantMembership.user_id == user_id,
-                UserTenantMembership.role == "provider_admin",
+                UserTenantMembership.role == "admin",
+                UserTenantMembership.provider_id.isnot(None),
             )
         )
         .scalars()

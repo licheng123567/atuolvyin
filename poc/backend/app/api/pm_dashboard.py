@@ -37,8 +37,8 @@ from app.schemas.pm import (
 
 router = APIRouter()
 
-PROPERTY_PM_ROLES = ("project_manager_property", "admin")
-PROVIDER_PM_ROLES = ("project_manager_provider",)
+PROPERTY_PM_ROLES = ("project_manager", "admin")
+PROVIDER_PM_ROLES = ("project_manager",)
 
 
 @router.get("/dashboard/property", response_model=PMPropertyStats)
@@ -110,7 +110,7 @@ async def get_property_pm_stats(
         db.execute(
             select(func.count(UserTenantMembership.id)).where(
                 UserTenantMembership.tenant_id == tenant_id,
-                UserTenantMembership.role.in_(("agent_internal", "agent_external")),
+                UserTenantMembership.role == "agent",
                 UserTenantMembership.is_active.is_(True),
             )
         ).scalar()
@@ -217,7 +217,7 @@ async def get_provider_pm_stats(
         db.execute(
             select(func.count(UserTenantMembership.id)).where(
                 UserTenantMembership.provider_id == provider_id,
-                UserTenantMembership.role.in_(("agent_internal", "agent_external")),
+                UserTenantMembership.role == "agent",
                 UserTenantMembership.is_active.is_(True),
             )
         ).scalar()
@@ -302,15 +302,22 @@ async def list_my_projects(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[
         UserAccount,
-        Depends(require_roles("project_manager_property", "project_manager_provider")),
+        Depends(require_roles("project_manager")),
     ],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[PmProjectCard]:
-    """返回当前 PM 管理的所有项目（卡片列表）。一人多项目场景。"""
-    user_id = int(payload.get("user_id") or 0)
-    role = payload.get("role", "")
+    """返回当前 PM 管理的所有项目（卡片列表）。一人多项目场景。
 
-    if role == "project_manager_property":
+    property vs provider 由 provider_id 区分：
+      - provider_id is None  → 物业侧 PM（看 property_pm_user_id）
+      - provider_id is not None → 服务商侧 PM（看 provider_pm_user_id，仅 active 项目）
+    """
+    user_id = int(payload.get("user_id") or 0)
+    provider_id = payload.get("provider_id")  # None = property side, int = provider side
+
+    if provider_id is None:
+        # 物业侧 PM
+        role_in_project_label = "property_pm"
         rows = (
             db.execute(
                 select(Project)
@@ -320,10 +327,11 @@ async def list_my_projects(
             .scalars()
             .all()
         )
-    elif role == "project_manager_provider":
-        # v1.5.5 — 服务商 PM 仅看到 active + 服务期未过的项目
+    else:
+        # 服务商侧 PM — v1.5.5 仅看 active + 服务期未过的项目
         from sqlalchemy import or_
 
+        role_in_project_label = "provider_pm"
         rows = (
             db.execute(
                 select(Project)
@@ -337,8 +345,7 @@ async def list_my_projects(
             .scalars()
             .all()
         )
-    else:
-        return []
+    # role is "project_manager" for both sides; distinction is via provider_id
 
     cards: list[PmProjectCard] = []
     for p in rows:
@@ -377,9 +384,7 @@ async def list_my_projects(
             PmProjectCard(
                 project_id=p.id,
                 project_name=p.name,
-                role_in_project=(
-                    "property_pm" if role == "project_manager_property" else "provider_pm"
-                ),
+                role_in_project=role_in_project_label,
                 case_count=len(case_data),
                 receivable=round(receivable, 2),
                 received=round(received, 2),

@@ -160,7 +160,7 @@ def team_performance(
         select(UserAccount.id, UserAccount.name)
         .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
         .where(UserTenantMembership.tenant_id == tenant_id)
-        .where(UserTenantMembership.role.in_(("agent_internal", "agent_external")))
+        .where(UserTenantMembership.role == "agent")
         .where(UserTenantMembership.is_active.is_(True))
     ).all()
     agent_ids = [r.id for r in agent_rows]

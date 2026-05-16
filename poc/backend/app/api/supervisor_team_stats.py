@@ -26,7 +26,7 @@ from app.models.user import UserAccount
 
 router = APIRouter()
 
-SUPERVISOR_ROLES = ("supervisor", "admin", "platform_superadmin")
+SUPERVISOR_ROLES = ("supervisor", "admin", "superadmin")
 
 
 @router.get("/team-stats")
@@ -125,7 +125,7 @@ async def get_team_stats(
     }
 
     # ── 3. 团队成员排名 ─────────────────────────────────────
-    # 按 caller_user_id 聚合，限本租户内 agent_internal / agent_external 角色
+    # 按 caller_user_id 聚合，限本租户内 agent 角色
     agg_rows = db.execute(
         select(
             CallRecord.caller_user_id,

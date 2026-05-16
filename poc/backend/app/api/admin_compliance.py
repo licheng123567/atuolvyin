@@ -32,7 +32,7 @@ from app.schemas.compliance import (
 
 router = APIRouter()
 
-ADMIN_ROLES = ("admin", "platform_superadmin")
+ADMIN_ROLES = ("admin", "superadmin")
 
 # Allowed daytime window for outbound calls (Beijing local, but stored UTC).
 # Calls happening outside [09:00, 21:00] UTC+8 == [01:00, 13:00] UTC are flagged.

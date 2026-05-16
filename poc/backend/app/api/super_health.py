@@ -36,7 +36,7 @@ from app.ws.connection_manager import get_connection_manager
 
 router = APIRouter()
 
-SUPER_ROLES = ("platform_super", "platform_superadmin")
+SUPER_ROLES = ("superadmin",)
 
 
 def _classify_latency(latency_ms: int) -> str:

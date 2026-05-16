@@ -14,7 +14,7 @@ from app.schemas.script import SuggestionConfigOut, SuggestionConfigUpdate
 
 router = APIRouter()
 
-ADMIN_ROLES = ("admin", "platform_superadmin")
+ADMIN_ROLES = ("admin", "superadmin")
 _DEFAULTS = SuggestionConfigOut(sensitivity=3, max_per_push=3)
 
 

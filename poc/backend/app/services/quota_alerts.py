@@ -5,7 +5,7 @@
   - 95%   → severity=warn
   - 100%  → severity=critical
 
-接收人：本租户所有 admin + 平台运营员（platform_ops 通过 PlatformOpsAssignment 找到）。
+接收人：本租户所有 admin + 平台运营员（ops 通过 PlatformOpsAssignment 找到）。
 
 跨阈值判定：previous_used 和 current_used 中只有一方已过阈值时才发；
 保证同一阈值不会重复触发。

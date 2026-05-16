@@ -166,7 +166,7 @@ def get_dashboard_stats(
         .join(UserTenantMembership, UserAccount.id == UserTenantMembership.user_id)
         .where(
             UserTenantMembership.tenant_id == tenant_id,
-            UserTenantMembership.role.in_(["agent_internal", "agent_external"]),
+            UserTenantMembership.role == "agent",
             UserTenantMembership.is_active.is_(True),
         )
     ).all()

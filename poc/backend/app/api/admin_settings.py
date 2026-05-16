@@ -27,7 +27,7 @@ from app.services.audit import log_audit
 
 router = APIRouter()
 
-ADMIN_ROLES = ("admin", "platform_superadmin")
+ADMIN_ROLES = ("admin", "superadmin")
 
 DEFAULTS = TenantSettingsOut(
     recording_mode="auto",

@@ -40,8 +40,8 @@ REQUEST_PARTY_PROPERTY = 1
 REQUEST_PARTY_PROVIDER = 2
 CONFIRM_TIMEOUT_DAYS = 7
 
-ADMIN_ROLES = ("admin", "platform_superadmin")
-PROVIDER_ADMIN_ROLES = ("provider_admin",)
+ADMIN_ROLES = ("admin", "superadmin")
+PROVIDER_ADMIN_ROLES = ("admin",)  # provider-side admin; access guarded by _load_contract_provider_side checking provider_id
 
 admin_router = APIRouter()
 provider_router = APIRouter()
@@ -99,7 +99,8 @@ def _load_contract_provider_side(
         db.execute(
             select(UserTenantMembership).where(
                 UserTenantMembership.user_id == user_id,
-                UserTenantMembership.role == "provider_admin",
+                UserTenantMembership.role == "admin",
+                UserTenantMembership.provider_id.isnot(None),
             )
         )
         .scalars()
@@ -350,7 +351,8 @@ async def provider_list_contracts(
         db.execute(
             select(UserTenantMembership).where(
                 UserTenantMembership.user_id == user_id,
-                UserTenantMembership.role == "provider_admin",
+                UserTenantMembership.role == "admin",
+                UserTenantMembership.provider_id.isnot(None),
             )
         )
         .scalars()

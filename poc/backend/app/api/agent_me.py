@@ -28,7 +28,7 @@ from app.schemas.common import PaginatedResponse
 
 router = APIRouter()
 
-AGENT_ROLES = ("agent_internal", "agent_external")
+AGENT_ROLES = ("agent",)
 
 
 class AgentPerformanceOut(BaseModel):

@@ -25,7 +25,7 @@ from app.services.audit import log_audit
 
 router = APIRouter()
 
-ADMIN_ROLES = ("admin", "platform_superadmin")
+ADMIN_ROLES = ("admin", "superadmin")
 
 
 def _to_out(p: ServiceProvider) -> ProviderOut:

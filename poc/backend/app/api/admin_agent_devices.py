@@ -10,7 +10,7 @@ membership 拿姓名/角色。
 权限：
   - admin / supervisor → 看本租户全部坐席（v2.1 暂不区分 supervisor 子组，
     沿用 admin_dashboard 现有「supervisor 看本租户全部」语义）
-  - platform_superadmin → 看全租户
+  - superadmin → 看全租户
   - 其他角色 → 403
 
 筛选：
@@ -41,8 +41,8 @@ from app.schemas.common import PaginatedResponse
 
 router = APIRouter()
 
-ALLOWED_ROLES = ("admin", "platform_superadmin", "supervisor")
-PLATFORM_ROLES = ("platform_superadmin",)
+ALLOWED_ROLES = ("admin", "superadmin", "supervisor")
+PLATFORM_ROLES = ("superadmin",)
 
 _STATUS_LABEL = {
     "realtime": "实时可用",
