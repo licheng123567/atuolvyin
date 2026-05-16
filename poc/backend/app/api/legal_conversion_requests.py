@@ -208,7 +208,7 @@ def list_requests(
     # v1.7.0 — 列表层一次决策：申请审批流由 supervisor/admin 审，物业内部默认明文
     role = payload.get("role", "")
     contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
-    owner_phone_reveal = should_reveal_owner_phone(role=role, contract_active=contract_active)
+    owner_phone_reveal = should_reveal_owner_phone(role=role, provider_id=payload.get("provider_id"), contract_active=contract_active)
     items = [
         _row_to_out(
             request_row=r,
@@ -311,6 +311,7 @@ def approve_request(
         reviewer_name=reviewer_name,
         owner_phone_reveal=should_reveal_owner_phone(
             role=role,
+            provider_id=payload.get("provider_id"),
             contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
         ),
     )
@@ -376,6 +377,7 @@ def reject_request(
         reviewer_name=reviewer_name,
         owner_phone_reveal=should_reveal_owner_phone(
             role=role,
+            provider_id=payload.get("provider_id"),
             contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
         ),
     )

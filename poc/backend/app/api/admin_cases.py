@@ -280,6 +280,7 @@ def build_case_detail_response(
                 project_active = _proj.plan_end >= datetime.now(UTC)
         owner_phone_reveal = should_reveal_owner_phone(
             role=viewer_role,
+            provider_id=viewer_provider_id,
             contract_active=contract_active,
             project_active=project_active,
         )
@@ -500,7 +501,7 @@ async def list_cases(
     ).all()
 
     # v1.7.0 — admin/PM/supervisor 都属物业内部，永远明文；列表层一次决策复用
-    owner_phone_reveal = should_reveal_owner_phone(role=role)
+    owner_phone_reveal = should_reveal_owner_phone(role=role, provider_id=payload.get("provider_id"))
 
     return PaginatedResponse(
         items=[

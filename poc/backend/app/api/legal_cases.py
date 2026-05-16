@@ -60,13 +60,15 @@ def _legal_to_out(
     phone_enc: str | None,
     *,
     viewer_role: str = "",
+    viewer_provider_id: int | None = None,
     contract_active: bool = False,
 ) -> LegalCaseOut:
-    """v1.7.0 — owner_phone_masked 字段值动态：legal 看 stage 是否在 active 集合，
+    """v2.2 — owner_phone_masked 字段值动态：legal 看 stage 是否在 active 集合，
     内部物业/admin 永远明文，平台永远脱敏。
     """
     reveal = should_reveal_owner_phone(
         role=viewer_role,
+        provider_id=viewer_provider_id,
         contract_active=contract_active,
         legal_case_stage=lc.stage,
     )
@@ -119,7 +121,7 @@ async def list_legal_cases(
     role = payload.get("role", "")
     contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
     items = [
-        _legal_to_out(lc, name, phone_enc, viewer_role=role, contract_active=contract_active)
+        _legal_to_out(lc, name, phone_enc, viewer_role=role, viewer_provider_id=payload.get("provider_id"), contract_active=contract_active)
         for lc, name, phone_enc in rows
     ]
     return PaginatedResponse(
@@ -171,6 +173,7 @@ async def create_legal_case(
         owner.name if owner else None,
         owner.phone_enc if owner else None,
         viewer_role=payload.get("role", ""),
+        viewer_provider_id=payload.get("provider_id"),
         contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
     )
 
@@ -198,6 +201,7 @@ async def get_legal_case(
     contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
     reveal = should_reveal_owner_phone(
         role=role,
+        provider_id=payload.get("provider_id"),
         contract_active=contract_active,
         legal_case_stage=lc.stage,
     )
@@ -207,6 +211,7 @@ async def get_legal_case(
         owner.name if owner else None,
         owner.phone_enc if owner else None,
         viewer_role=role,
+        viewer_provider_id=payload.get("provider_id"),
         contract_active=contract_active,
     )
 
@@ -255,6 +260,7 @@ async def patch_legal_case(
         owner.name if owner else None,
         owner.phone_enc if owner else None,
         viewer_role=payload.get("role", ""),
+        viewer_provider_id=payload.get("provider_id"),
         contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
     )
 
@@ -291,6 +297,7 @@ async def download_evidence_bundle(
 
     reveal = should_reveal_owner_phone(
         role=payload.get("role", ""),
+        provider_id=payload.get("provider_id"),
         contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
         legal_case_stage=lc.stage,
     )

@@ -397,6 +397,7 @@ async def get_work_order(
                 owner.phone_enc,
                 reveal=should_reveal_owner_phone(
                     role=payload.get("role", ""),
+                    provider_id=payload.get("provider_id"),
                     contract_active=is_provider_contract_active(
                         db, tenant_id, payload.get("provider_id")
                     ),

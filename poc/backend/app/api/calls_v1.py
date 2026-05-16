@@ -136,6 +136,7 @@ async def dial_request(
     # v1.7.0 — 拨号请求侧：按 agent 角色 + 合同决定 phone_masked 字段是明文还是脱敏
     _agent_reveal = should_reveal_owner_phone(
         role=payload.get("role", ""),
+        provider_id=payload.get("provider_id"),
         contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
     )
     owner_phone_masked = (
@@ -295,7 +296,7 @@ async def _broadcast_call_event(db: Session, call: CallRecord, event_type: str) 
     case = db.get(CollectionCase, call.case_id) if call.case_id else None
     owner = db.get(OwnerProfile, case.owner_id) if case and case.owner_id else None
     # v1.7.0 — broadcast 到 supervisor（物业内部角色），统一明文
-    _bc_reveal = should_reveal_owner_phone(role="supervisor")
+    _bc_reveal = should_reveal_owner_phone(role="supervisor", provider_id=None)
     payload = {
         "type": event_type,  # "call.started" | "call.ended" | "call.aborted"
         "call_id": call.id,
@@ -822,6 +823,7 @@ def list_calls(
     # v1.7.0 — 通话列表按当前查看者角色 + 合同决定 callee_phone_masked 字段值
     _list_reveal = should_reveal_owner_phone(
         role=role,
+        provider_id=payload.get("provider_id"),
         contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
     )
     items = [
@@ -909,6 +911,7 @@ def get_call_detail(
     # v1.7.0 — 通话详情按当前查看者角色 + 合同决定 callee_phone_masked 字段值
     _detail_reveal = should_reveal_owner_phone(
         role=role,
+        provider_id=payload.get("provider_id"),
         contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
     )
     return CallDetailResponse(

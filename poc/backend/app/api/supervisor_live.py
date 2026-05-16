@@ -87,7 +87,7 @@ def list_live_calls(
     # v1.7.0 — supervisor / admin / project_manager_property 都是物业内部
     role = payload.get("role", "")
     contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
-    owner_phone_reveal = should_reveal_owner_phone(role=role, contract_active=contract_active)
+    owner_phone_reveal = should_reveal_owner_phone(role=role, provider_id=payload.get("provider_id"), contract_active=contract_active)
 
     now = datetime.now(UTC)
     items: list[LiveCallItem] = []

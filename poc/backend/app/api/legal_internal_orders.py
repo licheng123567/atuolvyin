@@ -194,7 +194,7 @@ def list_internal_orders(
     reveal = (
         True
         if role == "legal"
-        else should_reveal_owner_phone(role=role, contract_active=contract_active)
+        else should_reveal_owner_phone(role=role, provider_id=payload.get("provider_id"), contract_active=contract_active)
     )
 
     stmt = (
@@ -326,7 +326,7 @@ def get_internal_order(
     reveal = (
         True
         if role == "legal"
-        else should_reveal_owner_phone(role=role, contract_active=contract_active)
+        else should_reveal_owner_phone(role=role, provider_id=payload.get("provider_id"), contract_active=contract_active)
     )
 
     action_rows = (
@@ -844,6 +844,7 @@ def download_internal_order_evidence_bundle(
     # 法务处理订单上下文 → 永远展示明文电话（与详情页一致）
     reveal = role == "legal" or should_reveal_owner_phone(
         role=role,
+        provider_id=payload.get("provider_id"),
         contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
     )
 
