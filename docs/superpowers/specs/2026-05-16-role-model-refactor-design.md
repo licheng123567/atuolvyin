@@ -140,6 +140,8 @@
 
 判定规则(机械、可对 git 核验,**不改变行为**):逐个端点比对重构前 `require_roles` 元组 —— 元组**不含** `provider_admin`/`project_manager_provider` 的端点是物业专用,改用 `require_tenant_roles`;原本服务商专用的改用 `require_provider_roles`;两侧皆可的保持 `require_roles`。目标是**精确还原重构前的访问范围**。
 
+**例外 —— `agent` 角色跨两侧**:外勤催收员由服务商派遣,其 membership `provider_id` 非空;内勤为空。`agent` 角色因此同时覆盖 `provider_id` 空与非空两种,且重构前 `agent_*` 端点从不按 `provider_id` 过滤。凡角色元组含 `agent` 的端点一律保持 `require_roles`,不可用 `require_tenant_roles`(否则全体外勤被 403)。
+
 ## 7. 三端字面量替换
 
 | 端 | 范围 | 量级 |
