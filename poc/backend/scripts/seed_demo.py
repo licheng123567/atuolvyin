@@ -100,6 +100,7 @@ def _upsert_membership(
     role: str,
     *,
     provider_id: int | None = None,
+    work_mode: str | None = None,
 ) -> None:
     # 同一 user 在同一 tenant 可能有多条 membership（如同时是督导+催收+协调员）
     existing = db.execute(
@@ -116,7 +117,7 @@ def _upsert_membership(
         user_id=user.id,
         tenant_id=tenant.id,
         role=role,
-        source_type="INTERNAL",
+        work_mode=work_mode,
         provider_id=provider_id,
         is_active=True,
     )
@@ -618,7 +619,7 @@ def _upsert_internal_order(
             tenant_id=tenant.id,
             case_id=case.id,
             requester_user_id=requester.id,
-            requester_role="agent_internal",
+            requester_role="agent",
             status="approved",
             related_order_id=order.id,
             reviewer_user_id=creator.id,
@@ -680,6 +681,7 @@ def _upsert_legal_order(
         .where(LegalConversionOrder.tenant_id == tenant.id)
         .where(LegalConversionOrder.case_id == case.id)
         .where(LegalConversionOrder.package_id == package.id)
+        .where(LegalConversionOrder.status == status)
     ).scalar_one_or_none()
     if existing:
         return existing
@@ -830,6 +832,11 @@ def main() -> None:
         super_user, _ = _upsert_user(db, "13000000000", "平台超管")
         ops_user, _ = _upsert_user(db, "13000000001", "运营员")
 
+        # 设置平台账号的 platform_role（平台身份在账号上，无 membership）
+        super_user.platform_role = "superadmin"
+        ops_user.platform_role = "ops"
+        db.flush()
+
         # 租户用户
         admin_user, _ = _upsert_user(db, "13000000002", "物业管理员")
         supervisor_user, _ = _upsert_user(db, "13000000003", "督导小李")
@@ -843,29 +850,39 @@ def main() -> None:
         pm_provider_user, _ = _upsert_user(db, "13000000009", "项目经理（服务商）")
         provider_admin_user, _ = _upsert_user(db, "13000000010", "服务商管理员")
 
+        # 新增服务商侧催收员 + 督导
+        provider_agent_user, _ = _upsert_user(db, "13000000011", "服务商催收员小孙")
+        provider_supervisor_user, _ = _upsert_user(db, "13000000012", "服务商督导小钱")
+
         # 3. Memberships
-        # platform_super: no tenant membership (auth.py defaults to platform_superadmin)
-        # platform_ops: needs membership to get role=platform_ops from login
-        _upsert_membership(db, ops_user, tenant, "platform_ops")
+        # platform_super + platform_ops: 平台账号，platform_role 已在账号上设置，无 membership
         _upsert_membership(db, admin_user, tenant, "admin")
         _upsert_membership(db, supervisor_user, tenant, "supervisor")
         # v1.6.10 — 督导小李同时拥有催收员身份（多角色切换演示）
-        _upsert_membership(db, supervisor_user, tenant, "agent_internal")
-        _upsert_membership(db, agent_internal_user, tenant, "agent_internal")
-        _upsert_membership(db, agent_external_user, tenant, "agent_external")
+        _upsert_membership(db, supervisor_user, tenant, "agent", work_mode="internal")
+        _upsert_membership(db, agent_internal_user, tenant, "agent", work_mode="internal")
+        _upsert_membership(db, agent_external_user, tenant, "agent", work_mode="external")
         _upsert_membership(db, legal_user, tenant, "legal")
         _upsert_membership(db, workorder_user, tenant, "coordinator")
-        _upsert_membership(db, pm_property_user, tenant, "project_manager_property")
+        _upsert_membership(db, pm_property_user, tenant, "project_manager")
 
         # 3b. ServiceProvider + Contract (for provider_admin & pm_provider)
         provider = _upsert_provider(db)
         contract = _upsert_provider_contract(db, tenant, provider)
         _upsert_settlement(db, contract)
         _upsert_membership(
-            db, pm_provider_user, tenant, "project_manager_provider", provider_id=provider.id
+            db, pm_provider_user, tenant, "project_manager", provider_id=provider.id
         )
         _upsert_membership(
-            db, provider_admin_user, tenant, "provider_admin", provider_id=provider.id
+            db, provider_admin_user, tenant, "admin", provider_id=provider.id
+        )
+        # 新增服务商催收员 + 督导 membership
+        _upsert_membership(
+            db, provider_agent_user, tenant, "agent",
+            provider_id=provider.id, work_mode="external",
+        )
+        _upsert_membership(
+            db, provider_supervisor_user, tenant, "supervisor", provider_id=provider.id
         )
 
         # 3c. 项目（v1.4 — Project 成为一等公民；v1.6 加合同 + v1.6.1 减免覆盖演示）

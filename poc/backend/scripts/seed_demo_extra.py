@@ -85,11 +85,15 @@ def upsert_user(db, phone: str, name: str) -> tuple[UserAccount, bool]:
     return u, True
 
 
-def upsert_membership(db, user: UserAccount, tenant: Tenant, role: str) -> None:
+def upsert_membership(
+    db, user: UserAccount, tenant: Tenant, role: str,
+    *, work_mode: str | None = None,
+) -> None:
     existing = db.execute(
         select(UserTenantMembership).where(
             UserTenantMembership.user_id == user.id,
             UserTenantMembership.tenant_id == tenant.id,
+            UserTenantMembership.role == role,
         )
     ).scalar_one_or_none()
     if existing:
@@ -98,7 +102,7 @@ def upsert_membership(db, user: UserAccount, tenant: Tenant, role: str) -> None:
         user_id=user.id,
         tenant_id=tenant.id,
         role=role,
-        source_type="INTERNAL",
+        work_mode=work_mode,
         is_active=True,
     )
     db.add(m)
@@ -439,7 +443,7 @@ def main() -> None:
         agents: list[UserAccount] = []
         for phone, name in EXTRA_AGENTS:
             u, _ = upsert_user(db, phone, name)
-            upsert_membership(db, u, tenant, "agent_internal")
+            upsert_membership(db, u, tenant, "agent", work_mode="internal")
             agents.append(u)
 
         # 3. 12 个新业主 + 案件
@@ -562,7 +566,7 @@ def main() -> None:
         if agents and cases:
             maybe_create_work_order(
                 db, tenant, cases[1][0], agents[0],
-                "业主反映电梯长期故障，请物业现场处理后再联系", "open", "high"
+                "业主反映电梯长期故障，请物业现场处理后再联系", "open", "urgent"
             )
             maybe_create_work_order(
                 db, tenant, cases[5][0], agents[1],
