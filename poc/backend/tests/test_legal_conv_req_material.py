@@ -37,6 +37,7 @@ def test_legal_conversion_request_material_round_trip(
     assert got is not None
     assert got.request_id == req.id
     assert got.tenant_id == seeded_tenant.id
+    assert got.object_key == "legal_conv_req_materials/1/1/abc.pdf"
     assert got.filename == "证据材料.pdf"
     assert got.content_type == "application/pdf"
     assert got.size_bytes == 2048
