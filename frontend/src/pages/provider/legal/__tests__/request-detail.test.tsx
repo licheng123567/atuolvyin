@@ -155,7 +155,7 @@ describe("ProviderLegalRequestDetailPage", () => {
 
     renderPage();
 
-    const bigFile = new File(["x".repeat(1)], "big.pdf", { type: "application/pdf" });
+    const bigFile = new File(["x"], "big.pdf", { type: "application/pdf" });
     // Override size property since File constructor ignores content size for this check
     Object.defineProperty(bigFile, "size", { value: 21 * 1024 * 1024 });
 
@@ -193,5 +193,43 @@ describe("ProviderLegalRequestDetailPage", () => {
       expect(screen.getByText("上传炸了")).toBeDefined();
     });
     expect(mockRefetch).not.toHaveBeenCalled();
+  });
+
+  it("clears inline error message on subsequent successful upload", async () => {
+    const mockRefetch = vi.fn().mockResolvedValue(undefined);
+    // First upload fails, second succeeds
+    vi.mocked(uploadRequestMaterial)
+      .mockRejectedValueOnce(new Error("上传炸了"))
+      .mockResolvedValueOnce({
+        id: 100, request_id: 7, filename: "重试.pdf", content_type: "application/pdf",
+        size_bytes: 256, uploaded_by: 5, created_at: "2026-05-17T10:00:00",
+      });
+    vi.mocked(useProviderLegalRequest).mockReturnValue({
+      detail: BASE_DETAIL,
+      isLoading: false,
+      isError: false,
+      refetch: mockRefetch,
+    });
+
+    renderPage();
+
+    const input = document.querySelector<HTMLInputElement>("input[type='file']");
+    if (!input) throw new Error("file input not found");
+
+    // First upload — triggers the error
+    fireEvent.change(input, {
+      target: { files: [new File(["x"], "first.pdf", { type: "application/pdf" })] },
+    });
+    await waitFor(() => {
+      expect(screen.getByText("上传炸了")).toBeDefined();
+    });
+
+    // Second upload — error should be cleared immediately
+    fireEvent.change(input, {
+      target: { files: [new File(["x"], "重试.pdf", { type: "application/pdf" })] },
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("上传炸了")).toBeNull();
+    });
   });
 });
