@@ -66,6 +66,7 @@ PERFORMANCE_DEFAULT_DAYS = 30
 router = APIRouter()
 
 PROVIDER_ROLES = ("admin",)  # provider-side admin; guarded by provider_id != None in _resolve_provider_id
+PROVIDER_PM_ROLES = ("project_manager", "admin")  # §9.2-D2 — PM 也可改项目佣金率
 
 
 # ── helpers ──────────────────────────────────────────────────────────
@@ -1039,9 +1040,7 @@ async def set_project_commission_rate(
     project_id: int,
     body: ProjectCommissionRateIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[
-        object, Depends(require_provider_roles("project_manager", "admin"))
-    ],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_PM_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     """§9.2-D2 — 服务商 PM/admin 设置本家项目的服务商催收员佣金率。"""
