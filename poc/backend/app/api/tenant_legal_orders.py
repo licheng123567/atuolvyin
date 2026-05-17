@@ -19,7 +19,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.legal_conversion import LegalConversionOrder
 from app.services.legal_order_enrich import enrich_order
 
@@ -31,7 +31,7 @@ LEGAL_ROLES = ("legal",)
 @router.get("/orders")
 def list_tenant_legal_orders(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     status: Annotated[str | None, Query()] = None,
     page: Annotated[int, Query(ge=1)] = 1,
@@ -67,7 +67,7 @@ def list_tenant_legal_orders(
 def get_tenant_legal_order(
     order_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     tenant_id = payload.get("tenant_id")

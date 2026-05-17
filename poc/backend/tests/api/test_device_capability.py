@@ -210,7 +210,7 @@ async def test_admin_lists_agent_devices(
     )
     assert item["latest_capability"] == "realtime"
     assert item["status_label"] == "实时可用"
-    assert item["role"] == "agent_internal"
+    assert item["role"] == "agent"
     assert item["user_name"]  # 非空
 
 

@@ -322,7 +322,8 @@ def main() -> None:
             .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
             .where(
                 UserTenantMembership.tenant_id == tenant.id,
-                UserTenantMembership.role == "project_manager_property",
+                UserTenantMembership.role == "project_manager",
+                UserTenantMembership.provider_id.is_(None),
             )
         ).scalars().first()
 
@@ -331,14 +332,18 @@ def main() -> None:
             .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
             .where(
                 UserTenantMembership.tenant_id == tenant.id,
-                UserTenantMembership.role == "project_manager_provider",
+                UserTenantMembership.role == "project_manager",
+                UserTenantMembership.provider_id.isnot(None),
             )
         ).scalars().first()
 
         provider_admin = db.execute(
             select(UserAccount)
             .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
-            .where(UserTenantMembership.role == "provider_admin")
+            .where(
+                UserTenantMembership.role == "admin",
+                UserTenantMembership.provider_id.isnot(None),
+            )
         ).scalars().first()
 
         # 主签约服务商（聚英）
@@ -403,7 +408,8 @@ def main() -> None:
             select(UserAccount).where(UserAccount.name == "督导小李")
         ).scalar_one_or_none()
         if supervisor_user:
-            for extra_role in ["agent_internal", "coordinator"]:
+            # agent membership with work_mode=internal
+            for extra_role, extra_work_mode in [("agent", "internal"), ("coordinator", None)]:
                 exists = db.execute(
                     select(UserTenantMembership).where(
                         UserTenantMembership.user_id == supervisor_user.id,
@@ -416,42 +422,27 @@ def main() -> None:
                         user_id=supervisor_user.id,
                         tenant_id=tenant.id,
                         role=extra_role,
-                        source_type="INTERNAL",
+                        work_mode=extra_work_mode,
                         is_active=True,
                     ))
                     print(f"[membership +] 督导小李 +{extra_role}")
             db.flush()
 
-        # ── 3b. v1.5.6 — 给所有项目绑定协调员 + 法务对接人 ───
-        # 任意项目（自办 + 外包）都必须有这两个 ProjectMember 行
-        coordinator_user = db.execute(
-            select(UserAccount)
-            .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
-            .where(
-                UserTenantMembership.tenant_id == tenant.id,
-                UserTenantMembership.role.in_(["coordinator", "workorder"]),
-                UserTenantMembership.is_active.is_(True),
-            )
-        ).scalars().first()
-        legal_user = db.execute(
-            select(UserAccount)
-            .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
-            .where(
-                UserTenantMembership.tenant_id == tenant.id,
-                UserTenantMembership.role == "legal",
-                UserTenantMembership.is_active.is_(True),
-            )
-        ).scalars().first()
+        # ── 3b. v1.5.6 — 给所有项目绑定 supervisor 成员 ───
+        # project_member.role_in_project 只允许 supervisor / agent（DB CHECK 约束）
+        supervisor_user = db.execute(
+            select(UserAccount).where(UserAccount.name == "督导小李")
+        ).scalar_one_or_none()
         for proj in all_projects:
             for uid, role in [
-                (coordinator_user.id if coordinator_user else None, "coordinator"),
-                (legal_user.id if legal_user else None, "legal"),
+                (supervisor_user.id if supervisor_user else None, "supervisor"),
             ]:
                 if uid is None:
                     continue
                 exists = db.execute(
                     select(ProjectMember).where(
                         ProjectMember.project_id == proj.id,
+                        ProjectMember.user_id == uid,
                         ProjectMember.role_in_project == role,
                         ProjectMember.is_active.is_(True),
                     )
@@ -534,9 +525,10 @@ def main() -> None:
             .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
             .where(
                 UserTenantMembership.tenant_id == tenant.id,
-                UserTenantMembership.role.in_(("agent_internal", "agent_external")),
+                UserTenantMembership.role == "agent",
                 UserTenantMembership.is_active.is_(True),
             )
+            .distinct()
         ).scalars().all()
 
         new_cases = db.execute(
@@ -566,7 +558,7 @@ def main() -> None:
                     log_audit(
                         db,
                         actor_user_id=a.id,
-                        actor_role="agent_internal",
+                        actor_role="agent",
                         tenant_id=tenant.id,
                         action="case.stage_changed",
                         target_type="case",

@@ -30,7 +30,7 @@ from app.schemas.plan import (
 
 router = APIRouter()
 
-SUPER_ROLES = ("platform_super", "platform_superadmin")
+SUPER_ROLES = ("superadmin",)
 
 
 def _load_plan(db: Session, plan_id: int) -> PlanConfig:

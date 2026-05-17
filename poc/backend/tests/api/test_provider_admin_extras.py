@@ -56,8 +56,7 @@ def seeded_provider_membership(
     m = UserTenantMembership(
         user_id=seeded_provider_admin_user.id,
         tenant_id=seeded_tenant.id,
-        role="provider_admin",
-        source_type="PROVIDER",
+        role="admin",
         provider_id=seeded_provider.id,
         is_active=True,
     )
@@ -77,7 +76,8 @@ def provider_auth_headers(
             "sub": str(seeded_provider_admin_user.id),
             "user_id": seeded_provider_admin_user.id,
             "tenant_id": None,
-            "role": "provider_admin",
+            "role": "admin",
+            "provider_id": seeded_provider.id,
             "scope": f"provider:{seeded_provider.id}",
         }
     )
@@ -137,8 +137,8 @@ def seeded_provider_team_member(
     m = UserTenantMembership(
         user_id=user.id,
         tenant_id=seeded_tenant.id,
-        role="agent_external",
-        source_type="EXTERNAL",
+        role="agent",
+        work_mode="external",
         provider_id=seeded_provider.id,
         is_active=True,
     )

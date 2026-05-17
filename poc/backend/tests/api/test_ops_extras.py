@@ -194,7 +194,7 @@ async def test_my_audit_logs_only_returns_own_actions(
     db_session.add(
         AuditLog(
             actor_user_id=seeded_user.id,
-            actor_role="platform_ops",
+            actor_role="ops",
             tenant_id=None,
             action="me.test",
             target_type="x",
@@ -204,7 +204,7 @@ async def test_my_audit_logs_only_returns_own_actions(
     db_session.add(
         AuditLog(
             actor_user_id=other.id,
-            actor_role="platform_super",
+            actor_role="superadmin",
             tenant_id=None,
             action="other.test",
             target_type="x",

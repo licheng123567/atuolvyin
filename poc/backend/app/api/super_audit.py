@@ -21,7 +21,7 @@ from app.schemas.common import PaginatedResponse
 
 router = APIRouter()
 
-SUPER_ROLES = ("platform_super", "platform_superadmin")
+SUPER_ROLES = ("superadmin",)
 
 
 @router.get("/audit-logs", response_model=PaginatedResponse[AuditLogOut])

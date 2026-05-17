@@ -60,7 +60,7 @@ class OwnerInfo(BaseModel):
 
     id: int
     name: str
-    phone: str | None = None  # decrypted, only for agent_internal
+    phone: str | None = None  # decrypted, only for agent with work_mode=internal
     phone_masked: str
     building: str | None
     room: str | None
@@ -159,7 +159,7 @@ class CaseDetailResponse(BaseModel):
     owner: OwnerInfo
     assigned_to: int | None
     assigned_role: str | None = (
-        None  # v1.4 — 协作来源 badge：agent_internal / agent_external / null
+        None  # v1.4 — 协作来源 badge：agent(internal) / agent(external) / null
     )
     pool_type: str
     stage: str

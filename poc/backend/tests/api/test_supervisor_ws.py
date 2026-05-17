@@ -21,7 +21,7 @@ def _supervisor_token(db_session, seeded_tenant):
 
     from app.models.tenant import UserTenantMembership
     mem = UserTenantMembership(tenant_id=seeded_tenant.id, user_id=user.id, role="supervisor",
-                               source_type="INTERNAL", is_active=True)
+                               is_active=True)
     db_session.add(mem)
     db_session.flush()
 
@@ -81,7 +81,7 @@ def test_supervisor_ws_rejects_agent_role(db_session, seeded_tenant, seeded_memb
         "sub": str(seeded_member_user.id),
         "user_id": seeded_member_user.id,
         "tenant_id": seeded_tenant.id,
-        "role": "agent_internal",
+        "role": "agent",
         "scope": f"tenant:{seeded_tenant.id}",
     })
     app.dependency_overrides[get_db] = override_db

@@ -18,7 +18,7 @@ def test_case_import_invalid_phone():
 
 
 def test_user_create_strips_whitespace():
-    req = UserCreateRequest(name="  李四  ", phone="13900139001", role="agent_internal")
+    req = UserCreateRequest(name="  李四  ", phone="13900139001", role="agent")
     assert req.name == "李四"
 
 

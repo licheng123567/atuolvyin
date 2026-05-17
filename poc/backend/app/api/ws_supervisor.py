@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 _SUPERVISOR_ROLES = {
     "supervisor",
     "admin",
-    "project_manager_property",
+    "project_manager",
 }  # Sprint 14.2 — 实时通话墙观察者
 
 

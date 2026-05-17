@@ -24,7 +24,7 @@ from app.core.phone_visibility import (
     is_provider_contract_active,
     should_reveal_owner_phone,
 )
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_roles, require_tenant_roles
 from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.legal_conversion import LegalConversionRequest
 from app.models.user import UserAccount
@@ -40,10 +40,10 @@ from .admin_legal_conversion import build_legal_conversion_order
 
 router = APIRouter()
 
-# 审批人角色：督导 / admin / platform_super
-REVIEWER_ROLES = ("supervisor", "admin", "platform_super", "platform_superadmin")
+# 审批人角色：督导 / admin / superadmin
+REVIEWER_ROLES = ("supervisor", "admin", "superadmin")
 # 申请人角色：催收员
-REQUESTER_ROLES = ("agent_internal", "agent_external")
+REQUESTER_ROLES = ("agent",)
 # 列表查看者：审批人 + 申请人（自己的）
 VIEWER_ROLES = REVIEWER_ROLES + REQUESTER_ROLES
 
@@ -208,7 +208,7 @@ def list_requests(
     # v1.7.0 — 列表层一次决策：申请审批流由 supervisor/admin 审，物业内部默认明文
     role = payload.get("role", "")
     contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
-    owner_phone_reveal = should_reveal_owner_phone(role=role, contract_active=contract_active)
+    owner_phone_reveal = should_reveal_owner_phone(role=role, provider_id=payload.get("provider_id"), contract_active=contract_active)
     items = [
         _row_to_out(
             request_row=r,
@@ -237,7 +237,7 @@ def approve_request(
     request_id: int,
     body: ApproveLegalConversionRequestBody,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*REVIEWER_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*REVIEWER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalConversionRequestOut:
     tenant_id = _require_tenant(payload)
@@ -311,6 +311,7 @@ def approve_request(
         reviewer_name=reviewer_name,
         owner_phone_reveal=should_reveal_owner_phone(
             role=role,
+            provider_id=payload.get("provider_id"),
             contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
         ),
     )
@@ -324,7 +325,7 @@ def reject_request(
     request_id: int,
     body: RejectLegalConversionRequestBody,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*REVIEWER_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*REVIEWER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalConversionRequestOut:
     tenant_id = _require_tenant(payload)
@@ -376,6 +377,7 @@ def reject_request(
         reviewer_name=reviewer_name,
         owner_phone_reveal=should_reveal_owner_phone(
             role=role,
+            provider_id=payload.get("provider_id"),
             contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
         ),
     )

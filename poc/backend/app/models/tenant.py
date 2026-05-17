@@ -115,13 +115,25 @@ class UserTenantMembership(Base, TimestampMixin):
         sa.BigInteger, sa.ForeignKey("tenant.id"), nullable=False
     )
     role: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    source_type: Mapped[str] = mapped_column(sa.Text, nullable=False, default="INTERNAL")
     provider_id: Mapped[int | None] = mapped_column(
         sa.BigInteger, sa.ForeignKey("service_provider.id")
     )
+    # v2.2 角色重构 — 催收员工作方式;非空当且仅当 role='agent'
+    work_mode: Mapped[str | None] = mapped_column(sa.String(16))
     quota: Mapped[int | None] = mapped_column(sa.Integer)
     expire_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     access_hours: Mapped[str | None] = mapped_column(sa.Text)  # "09:00-18:00"
     is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True)
 
     tenant: Mapped[Tenant] = relationship(back_populates="memberships")
+
+    __table_args__ = (
+        sa.CheckConstraint(
+            "role IN ('admin','project_manager','supervisor','agent','legal','coordinator')",
+            name="ck_user_tenant_membership_role",
+        ),
+        sa.CheckConstraint(
+            "(role = 'agent') = (work_mode IS NOT NULL)",
+            name="ck_user_tenant_membership_work_mode",
+        ),
+    )

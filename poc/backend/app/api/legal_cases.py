@@ -25,7 +25,7 @@ from app.core.phone_visibility import (
 )
 from app.core.security import (
     get_token_payload,
-    require_roles,
+    require_tenant_roles,
 )
 from app.models.case import CollectionCase, OwnerProfile
 from app.models.user import UserAccount
@@ -60,13 +60,15 @@ def _legal_to_out(
     phone_enc: str | None,
     *,
     viewer_role: str = "",
+    viewer_provider_id: int | None = None,
     contract_active: bool = False,
 ) -> LegalCaseOut:
-    """v1.7.0 — owner_phone_masked 字段值动态：legal 看 stage 是否在 active 集合，
+    """v2.2 — owner_phone_masked 字段值动态：legal 看 stage 是否在 active 集合，
     内部物业/admin 永远明文，平台永远脱敏。
     """
     reveal = should_reveal_owner_phone(
         role=viewer_role,
+        provider_id=viewer_provider_id,
         contract_active=contract_active,
         legal_case_stage=lc.stage,
     )
@@ -90,7 +92,7 @@ def _legal_to_out(
 @router.get("/cases", response_model=PaginatedResponse[LegalCaseOut])
 async def list_legal_cases(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     q: str | None = Query(None, max_length=100),
     stage: str | None = Query(None, max_length=50),
@@ -119,7 +121,7 @@ async def list_legal_cases(
     role = payload.get("role", "")
     contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
     items = [
-        _legal_to_out(lc, name, phone_enc, viewer_role=role, contract_active=contract_active)
+        _legal_to_out(lc, name, phone_enc, viewer_role=role, viewer_provider_id=payload.get("provider_id"), contract_active=contract_active)
         for lc, name, phone_enc in rows
     ]
     return PaginatedResponse(
@@ -138,7 +140,7 @@ async def list_legal_cases(
 async def create_legal_case(
     body: LegalCaseCreate,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalCaseOut:
     tenant_id = _require_tenant(payload)
@@ -171,6 +173,7 @@ async def create_legal_case(
         owner.name if owner else None,
         owner.phone_enc if owner else None,
         viewer_role=payload.get("role", ""),
+        viewer_provider_id=payload.get("provider_id"),
         contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
     )
 
@@ -179,7 +182,7 @@ async def create_legal_case(
 async def get_legal_case(
     legal_case_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalCaseDetailOut:
     tenant_id = _require_tenant(payload)
@@ -198,6 +201,7 @@ async def get_legal_case(
     contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
     reveal = should_reveal_owner_phone(
         role=role,
+        provider_id=payload.get("provider_id"),
         contract_active=contract_active,
         legal_case_stage=lc.stage,
     )
@@ -207,6 +211,7 @@ async def get_legal_case(
         owner.name if owner else None,
         owner.phone_enc if owner else None,
         viewer_role=role,
+        viewer_provider_id=payload.get("provider_id"),
         contract_active=contract_active,
     )
 
@@ -229,7 +234,7 @@ async def patch_legal_case(
     legal_case_id: int,
     body: LegalCasePatch,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalCaseOut:
     tenant_id = _require_tenant(payload)
@@ -255,6 +260,7 @@ async def patch_legal_case(
         owner.name if owner else None,
         owner.phone_enc if owner else None,
         viewer_role=payload.get("role", ""),
+        viewer_provider_id=payload.get("provider_id"),
         contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
     )
 
@@ -266,7 +272,7 @@ async def patch_legal_case(
 async def download_evidence_bundle(
     legal_case_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> StreamingResponse:
     # v1.9.5 — 复用 services/evidence_bundle.py 的统一构建器
@@ -291,6 +297,7 @@ async def download_evidence_bundle(
 
     reveal = should_reveal_owner_phone(
         role=payload.get("role", ""),
+        provider_id=payload.get("provider_id"),
         contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
         legal_case_stage=lc.stage,
     )

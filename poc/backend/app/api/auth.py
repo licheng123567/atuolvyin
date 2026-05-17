@@ -10,9 +10,9 @@ from sqlalchemy.orm import Session
 
 from app.core.crypto import encrypt_phone
 from app.core.db import get_db
+from app.core.identity import resolve_identity
 from app.core.security import create_access_token, verify_password
 from app.models.active_session import ActiveSession
-from app.models.tenant import Tenant, UserTenantMembership
 from app.models.user import UserAccount
 from app.schemas.auth import LoginRequest, TokenResponse
 
@@ -37,30 +37,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
             },
         )
 
-    # MVP — seed 数据每个用户单 membership；多 membership 选择器属 v2.x 范畴 (PRD §5)
-    membership = db.execute(
-        select(UserTenantMembership)
-        .where(
-            UserTenantMembership.user_id == user.id,
-            UserTenantMembership.is_active.is_(True),
-        )
-        .limit(1)
-    ).scalar_one_or_none()
-
-    tenant_id: int | None = None
-    tenant_name: str | None = None
-    role = "platform_superadmin"
-    scope = "platform"
-    provider_id: int | None = None  # v1.7.0 — 服务商角色用于电话可见性合同查
-
-    if membership:
-        tenant_id = membership.tenant_id
-        role = membership.role
-        scope = f"tenant:{membership.tenant_id}"
-        provider_id = membership.provider_id
-        tenant_name = db.execute(
-            select(Tenant.name).where(Tenant.id == membership.tenant_id)
-        ).scalar_one_or_none()
+    claims = resolve_identity(db, user)
 
     user.last_login_at = datetime.now(UTC)
 
@@ -68,10 +45,10 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
         {
             "sub": str(user.id),
             "user_id": user.id,
-            "tenant_id": tenant_id,
-            "role": role,
-            "scope": scope,
-            "provider_id": provider_id,
+            "tenant_id": claims.tenant_id,
+            "role": claims.role,
+            "scope": claims.scope,
+            "provider_id": claims.provider_id,
         }
     )
 
@@ -94,8 +71,8 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
         access_token=token,
         user_id=user.id,
         name=user.name,
-        role=role,
-        tenant_id=tenant_id,
-        tenant_name=tenant_name,
-        scope=scope,
+        role=claims.role,
+        tenant_id=claims.tenant_id,
+        tenant_name=claims.tenant_name,
+        scope=claims.scope,
     )

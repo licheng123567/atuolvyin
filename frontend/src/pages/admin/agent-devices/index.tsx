@@ -1,4 +1,4 @@
-// v2.1 Sprint Task 7 — 坐席设备能力列表（admin / supervisor / platform_super 可见）
+// v2.1 Sprint Task 7 — 坐席设备能力列表（admin / supervisor / superadmin 可见）
 //
 // 数据源：GET /api/v1/admin/agent-devices?page=&page_size=&capability=&q=
 // 用途：让物业管理员/督导一眼看出哪些坐席机器不支持系统级通话录音 → 实时 AI 不可用，需要换机
@@ -51,14 +51,13 @@ const CAPABILITY_BADGE: Record<string, { label: string; cls: string }> = {
 const ROLE_LABEL: Record<string, string> = {
   admin: "管理员",
   supervisor: "督导",
-  agent_internal: "内部催收员",
-  agent_external: "兼职坐席",
+  agent: "催收员",
   legal: "法务对接人",
   workorder: "协调员",
   coordinator: "协调员",
-  project_manager_property: "项目经理",
-  project_manager_provider: "项目经理",
-  provider_admin: "服务商管理员",
+  project_manager: "项目经理",
+  superadmin: "平台超管",
+  ops: "平台运营",
 };
 
 export function AdminAgentDevicesPage() {

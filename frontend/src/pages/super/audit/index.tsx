@@ -26,19 +26,15 @@ const ACTION_OPTIONS = [
 
 // 角色英文 → 中文（与 admin/users 保持一致）
 const ROLE_LABEL: Record<string, string> = {
-  platform_super: "平台超管",
-  platform_superadmin: "平台超管",
-  platform_ops: "平台运营",
-  admin: "物业管理员",
+  superadmin: "平台超管",
+  ops: "平台运营",
+  admin: "管理员",
   supervisor: "督导",
-  agent_internal: "内勤催收员",
-  agent_external: "外勤催收员",
+  agent: "催收员",
   legal: "法务对接人",
-  coordinator: "物业协调员",
-  workorder: "物业协调员",
-  project_manager_property: "项目经理（物业）",
-  project_manager_provider: "项目经理（服务商）",
-  provider_admin: "服务商管理员",
+  coordinator: "协调员",
+  workorder: "协调员",
+  project_manager: "项目经理",
   owner: "业主",
 };
 

@@ -28,7 +28,7 @@ from app.schemas.common import PaginatedResponse
 
 router = APIRouter()
 
-AGENT_ROLES = ("agent_internal", "agent_external")
+AGENT_ROLES = ("agent",)
 
 
 class AgentPerformanceOut(BaseModel):
@@ -457,7 +457,7 @@ def get_my_active_call(
     tenant_id = int(payload.get("tenant_id") or 0)
     role = payload.get("role", "")
     contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
-    owner_phone_reveal = should_reveal_owner_phone(role=role, contract_active=contract_active)
+    owner_phone_reveal = should_reveal_owner_phone(role=role, provider_id=payload.get("provider_id"), contract_active=contract_active)
     if not user_id or not tenant_id:
         raise HTTPException(
             status_code=http_status.HTTP_401_UNAUTHORIZED,

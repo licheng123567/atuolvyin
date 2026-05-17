@@ -18,7 +18,7 @@ from app.services.device_capability import derive_capability, derive_rom_label
 
 router = APIRouter()
 
-AGENT_ROLES = ("agent_internal", "agent_external")
+AGENT_ROLES = ("agent",)
 
 
 class DeviceRegisterRequest(BaseModel):

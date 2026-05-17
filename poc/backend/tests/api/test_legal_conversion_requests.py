@@ -72,7 +72,7 @@ async def test_agent_submit_transfer_legal_creates_request(
     r = rows[0]
     assert r.status == "pending"
     assert r.requester_user_id == seeded_member_user.id
-    assert r.requester_role == "agent_internal"
+    assert r.requester_role == "agent"
     assert r.reason == "业主明确拒绝缴费已 3 次"
     assert r.tenant_id == case.tenant_id
 
@@ -160,8 +160,8 @@ async def test_agent_only_sees_own_requests(
         UserTenantMembership(
             user_id=other_user.id,
             tenant_id=seeded_tenant.id,
-            role="agent_internal",
-            source_type="INTERNAL",
+            role="agent",
+            work_mode="internal",
             is_active=True,
         )
     )
@@ -182,7 +182,7 @@ async def test_agent_only_sees_own_requests(
             tenant_id=seeded_tenant.id,
             case_id=other_case.id,
             requester_user_id=other_user.id,
-            requester_role="agent_internal",
+            requester_role="agent",
             reason="他的理由",
             status="pending",
         )

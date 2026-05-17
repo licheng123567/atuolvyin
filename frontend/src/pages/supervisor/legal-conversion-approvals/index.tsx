@@ -1,4 +1,4 @@
-// v1.6.8 — 法务转化申请审批 inbox（督导 / admin / platform_super 共用）
+// v1.6.8 — 法务转化申请审批 inbox（督导 / admin / superadmin 共用）
 // 后端 endpoint：GET /api/v1/legal-conversion-requests
 //                 POST /api/v1/legal-conversion-requests/{id}/approve
 //                 POST /api/v1/legal-conversion-requests/{id}/reject
@@ -125,7 +125,7 @@ export function SupervisorLegalConversionApprovalsPage() {
   }
 
   const role = identity?.role ?? "";
-  const isAdmin = role === "admin" || role === "platform_super" || role === "platform_superadmin";
+  const isAdmin = role === "admin" || role === "superadmin";
 
   return (
     <div>

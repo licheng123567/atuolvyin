@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.supervisor_shift import SupervisorShift, SupervisorShiftSwapRequest
 from app.models.user import UserAccount
 
@@ -69,7 +69,7 @@ def _ensure_seed_week(db: Session, tenant_id: int) -> None:
 @router.get("/shifts")
 async def list_shifts(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     tenant_id = payload.get("tenant_id")
@@ -142,7 +142,7 @@ async def list_shifts(
 async def save_shifts(
     body: dict,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     """body = {"shifts": [{"date": "2026-05-08", "morning": "...", "afternoon": "...", "evening": "..."}]}"""
@@ -205,7 +205,7 @@ async def save_shifts(
 async def submit_swap_request(
     body: dict,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     """body = {"date": "...", "slot": "...", "swap_with": "督导张敏"}"""
@@ -272,7 +272,7 @@ async def submit_swap_request(
 @router.get("/shifts/swap-requests")
 async def list_swap_requests(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[dict]:
     tenant_id = payload.get("tenant_id")

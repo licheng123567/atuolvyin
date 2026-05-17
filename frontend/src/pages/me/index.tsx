@@ -22,19 +22,16 @@ interface LoginHistoryItem {
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  admin: "物业管理员",
+  admin: "管理员",
   supervisor: "督导",
-  agent_internal: "内部催收员",
-  agent_external: "外勤催收员（服务商）",
+  // agent covers both internal and external work_mode
+  agent: "催收员",
   legal: "法务对接人",
   workorder: "协调员",
   coordinator: "协调员",
-  project_manager_property: "项目负责人（物业）",
-  project_manager_provider: "项目负责人（服务商）",
-  provider_admin: "服务商管理员",
-  platform_superadmin: "平台超管",
-  platform_super: "平台超管",
-  platform_ops: "平台运营员",
+  project_manager: "项目负责人",
+  superadmin: "平台超管",
+  ops: "平台运营员",
 };
 
 export function MePage() {

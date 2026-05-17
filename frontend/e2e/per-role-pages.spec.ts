@@ -16,7 +16,7 @@ interface RoleCase {
 
 const ROLE_CASES: RoleCase[] = [
   {
-    name: "platform_super",
+    name: "superadmin",
     phone: "13000000000",
     pages: [
       { path: "/super/health", expectText: /系统健康|health/i },
@@ -26,7 +26,7 @@ const ROLE_CASES: RoleCase[] = [
     ],
   },
   {
-    name: "platform_ops",
+    name: "ops",
     phone: "13000000001",
     pages: [
       { path: "/ops/tenants", expectText: /租户/ },
@@ -55,7 +55,7 @@ const ROLE_CASES: RoleCase[] = [
     ],
   },
   {
-    name: "agent_internal",
+    name: "agent (internal)",
     phone: "13000000004",
     pages: [
       { path: "/agent/cases", expectText: /案件/ },
@@ -69,34 +69,44 @@ const ROLE_CASES: RoleCase[] = [
     ],
   },
   {
-    name: "workorder",
+    name: "coordinator",
     phone: "13000000007",
     pages: [
       { path: "/workorder/orders", expectText: /工单/ },
     ],
   },
   {
-    name: "project_manager_property",
+    name: "project_manager (tenant)",
     phone: "13000000008",
     pages: [
       { path: "/pm/dashboard", expectText: /项目|看板/ },
     ],
   },
   {
-    name: "project_manager_provider",
+    name: "project_manager (provider)",
     phone: "13000000009",
     pages: [
       { path: "/pm/dashboard", expectText: /项目|看板/ },
     ],
   },
   {
-    name: "provider_admin",
+    name: "admin (provider)",
     phone: "13000000010",
     pages: [
       { path: "/provider/dashboard", expectText: /服务商|看板/ },
       { path: "/provider/team", expectText: /团队/ },
     ],
   },
+  // 13000000011: provider-side external agent — shares the /agent/cases route with property agents
+  {
+    name: "agent (provider external)",
+    phone: "13000000011",
+    pages: [
+      { path: "/agent/cases", expectText: /案件/ },
+    ],
+  },
+  // 13000000012: provider-side supervisor — no provider-supervisor-specific pages exist yet
+  // (property /supervisor/* pages would 403 for provider scope); added to smoke login test only.
 ];
 
 async function dismissAppIntroIfPresent(page: Page) {

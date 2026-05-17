@@ -19,6 +19,7 @@ from app.core.phone_visibility import (
 from app.core.security import (
     get_token_payload,
     require_roles,
+    require_tenant_roles,
 )
 from app.models.call import AnalysisResult, CallRecord, Transcript
 from app.models.case import CollectionCase, OwnerProfile
@@ -45,8 +46,7 @@ ADMIN_ROLES = ("admin",)
 # v1.4 — 项目经理可读 admin/cases（看自己管的项目案件）但不可写
 # v1.5 — 督导可读自己被加入项目的案件
 READ_ROLES = ADMIN_ROLES + (
-    "project_manager_property",
-    "project_manager_provider",
+    "project_manager",
     "supervisor",
 )
 
@@ -121,7 +121,7 @@ def build_case_detail_response(
     包含：业主信息 / 通话列表 / 时间线 / 项目信息 / 服务团队（电话+法务）/ 协作来源 role。
 
     Args:
-        include_phone_plain: 仅 agent_internal 传 True，把手机号明文加入业主信息（用于实际拨号）。
+        include_phone_plain: 仅 agent(internal) 传 True，把手机号明文加入业主信息（用于实际拨号）。
         viewer_role: v1.7.0 — 当前查看者角色，用于 phone_masked 字段动态决定明文/脱敏。
             None 时默认脱敏（兼容老调用方）。
         viewer_provider_id: v1.7.0 — 当前查看者所属服务商 id（仅服务商角色需要），用于查合同状态。
@@ -198,15 +198,16 @@ def build_case_detail_response(
     assigned_role: str | None = None
     if case.assigned_to is not None:
         m = db.execute(
-            select(UserTenantMembership.role)
+            select(UserTenantMembership.work_mode)
             .where(
                 UserTenantMembership.user_id == case.assigned_to,
                 UserTenantMembership.tenant_id == tenant_id,
-                UserTenantMembership.role.in_(("agent_internal", "agent_external")),
+                UserTenantMembership.role == "agent",
             )
             .limit(1)
         ).scalar_one_or_none()
-        assigned_role = m
+        # Preserve old badge format for frontend compatibility; None if not an agent
+        assigned_role = f"agent_{m}" if m else None
 
     # 法务团队（最近一条非 cancelled 的转化订单）
     legal_law_firm_name: str | None = None
@@ -280,6 +281,7 @@ def build_case_detail_response(
                 project_active = _proj.plan_end >= datetime.now(UTC)
         owner_phone_reveal = should_reveal_owner_phone(
             role=viewer_role,
+            provider_id=viewer_provider_id,
             contract_active=contract_active,
             project_active=project_active,
         )
@@ -332,7 +334,7 @@ def build_case_detail_response(
 async def import_cases(
     body: CaseImportRequest,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseImportResponse:
     tenant_id = _require_tenant(payload)
@@ -500,7 +502,7 @@ async def list_cases(
     ).all()
 
     # v1.7.0 — admin/PM/supervisor 都属物业内部，永远明文；列表层一次决策复用
-    owner_phone_reveal = should_reveal_owner_phone(role=role)
+    owner_phone_reveal = should_reveal_owner_phone(role=role, provider_id=payload.get("provider_id"))
 
     return PaginatedResponse(
         items=[
@@ -543,19 +545,20 @@ async def list_distinct_buildings(
 async def assign_cases(
     body: CaseAssignRequest,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseAssignResponse:
     tenant_id = _require_tenant(payload)
 
-    # v1.6.10 — 用户可能有多个 membership（如督导兼催收员）；分配只看 agent_internal 那条
+    # v1.6.10 — 用户可能有多个 membership（如督导兼催收员）；分配只看 internal agent 那条
     member = db.execute(
         select(UserTenantMembership)
         .where(
             UserTenantMembership.user_id == body.assign_to,
             UserTenantMembership.tenant_id == tenant_id,
             UserTenantMembership.is_active.is_(True),
-            UserTenantMembership.role == "agent_internal",
+            UserTenantMembership.role == "agent",
+            UserTenantMembership.work_mode == "internal",
         )
         .limit(1)
     ).scalar_one_or_none()
@@ -565,8 +568,8 @@ async def assign_cases(
             detail={"code": "ERR_USER_NOT_IN_TENANT", "message": "指定用户不在本租户"},
         )
 
-    # v1.5.6 — 组织边界：物业 admin 只能分给内部催收员；外勤由服务商内部分配
-    if member.role != "agent_internal":
+    # v1.5.6 — 组织边界：物业 admin 只能分给内部催收员（work_mode=internal）；外勤由服务商内部分配
+    if member.work_mode != "internal":
         raise HTTPException(
             status_code=http_status.HTTP_400_BAD_REQUEST,
             detail={
@@ -652,7 +655,7 @@ async def update_case_stage(
     body: CaseStageUpdate,
     payload: Annotated[dict, Depends(get_token_payload)],
     # v1.6.10 — supervisor 详情页跟进备注复用此 endpoint
-    _user: Annotated[UserAccount, Depends(require_roles(*ADMIN_ROLES, "supervisor"))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES, "supervisor"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseResponse:
     tenant_id = _require_tenant(payload)

@@ -25,7 +25,7 @@ async def test_list_audit_logs_filter_by_action(
     from app.models.audit import AuditLog
     other = AuditLog(
         actor_user_id=seeded_audit_log.actor_user_id,
-        actor_role="platform_super",
+        actor_role="superadmin",
         tenant_id=seeded_audit_log.tenant_id,
         action="tenant.disable",
         target_type="tenant",

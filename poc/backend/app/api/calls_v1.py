@@ -61,7 +61,7 @@ QR_TOKEN_TTL_MIN = 10
 
 router = APIRouter()
 
-AGENT_ROLES = ("agent_internal", "agent_external")
+AGENT_ROLES = ("agent",)
 SUPERVISOR_ROLES = ("supervisor", "admin")
 ALLOWED_AUDIO_FORMATS = {"mp3", "m4a", "amr", "wav", "aac", "ogg"}
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
@@ -136,6 +136,7 @@ async def dial_request(
     # v1.7.0 — 拨号请求侧：按 agent 角色 + 合同决定 phone_masked 字段是明文还是脱敏
     _agent_reveal = should_reveal_owner_phone(
         role=payload.get("role", ""),
+        provider_id=payload.get("provider_id"),
         contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
     )
     owner_phone_masked = (
@@ -294,8 +295,11 @@ async def _broadcast_call_event(db: Session, call: CallRecord, event_type: str) 
     caller = db.get(UserAccount, call.caller_user_id) if call.caller_user_id else None
     case = db.get(CollectionCase, call.case_id) if call.case_id else None
     owner = db.get(OwnerProfile, case.owner_id) if case and case.owner_id else None
-    # v1.7.0 — broadcast 到 supervisor（物业内部角色），统一明文
-    _bc_reveal = should_reveal_owner_phone(role="supervisor")
+    # WS 广播按 tenant_id 群发,无法逐订阅者脱敏 —— 这里固定 provider_id=None。
+    # TODO(v2.2-followup): 服务商侧督导(supervisor + provider_id)连入同一 tenant
+    # 房间时会因此收到明文业主电话;根治需在 SupervisorManager.broadcast 内按
+    # 每个订阅连接的 provider_id 逐一脱敏。
+    _bc_reveal = should_reveal_owner_phone(role="supervisor", provider_id=None)
     payload = {
         "type": event_type,  # "call.started" | "call.ended" | "call.aborted"
         "call_id": call.id,
@@ -411,7 +415,7 @@ async def dial_start(
     db.commit()
     db.refresh(call)
 
-    # 6. WS 广播 supervisor / admin / project_manager_property
+    # 6. WS 广播 supervisor / admin / project_manager
     try:
         await _broadcast_call_event(db, call, "call.started")
     except Exception as exc:
@@ -822,6 +826,7 @@ def list_calls(
     # v1.7.0 — 通话列表按当前查看者角色 + 合同决定 callee_phone_masked 字段值
     _list_reveal = should_reveal_owner_phone(
         role=role,
+        provider_id=payload.get("provider_id"),
         contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
     )
     items = [
@@ -909,6 +914,7 @@ def get_call_detail(
     # v1.7.0 — 通话详情按当前查看者角色 + 合同决定 callee_phone_masked 字段值
     _detail_reveal = should_reveal_owner_phone(
         role=role,
+        provider_id=payload.get("provider_id"),
         contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
     )
     return CallDetailResponse(

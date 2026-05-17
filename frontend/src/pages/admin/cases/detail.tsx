@@ -26,9 +26,7 @@ export function AdminCaseDetailPage() {
 
   // v1.4 — PM 角色只读：admin/cases 路由放宽给 PM，但隐藏写操作
   const { data: identity } = useGetIdentity<AuthUser>();
-  const isPM =
-    identity?.role === "project_manager_property" ||
-    identity?.role === "project_manager_provider";
+  const isPM = identity?.role === "project_manager";
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
@@ -49,10 +47,7 @@ export function AdminCaseDetailPage() {
   const agentsAll: AdminUser[] = Array.isArray(agentsRaw)
     ? (agentsRaw as AdminUser[])
     : ((agentsRaw as unknown as { items?: AdminUser[] })?.items ?? []);
-  const agents = agentsAll.filter(
-    (u: AdminUser) =>
-      u.role === "agent_internal" || u.role === "agent_external",
-  );
+  const agents = agentsAll.filter((u: AdminUser) => u.role === "agent");
 
   const { mutate: assignCase, mutation: assignMutation } = useCustomMutation();
   const assigning = assignMutation.isPending;
@@ -296,7 +291,8 @@ export function AdminCaseDetailPage() {
                         <span
                           style={{ fontSize: 11.5, color: "#9ca3af", marginLeft: 8 }}
                         >
-                          ({agent.role === "agent_internal" ? "内部" : "外部"})
+                          {/* TODO: show work_mode (internal/external) once /admin/users exposes work_mode field */}
+                          (催收员)
                         </span>
                       </button>
                     </li>

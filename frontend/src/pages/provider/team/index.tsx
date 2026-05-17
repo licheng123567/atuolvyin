@@ -27,26 +27,27 @@ interface ProviderTenant {
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  provider_admin: "服务商管理员",
+  // admin with scope=provider:{id} is the "provider admin"
+  admin: "服务商管理员",
   legal: "法务专员",
   workorder: "工单处理员",
-  agent_internal: "内部催收员",
-  agent_external: "兼职催收员",
+  // agent covers both internal and external work_mode
+  agent: "催收员",
   supervisor: "通话质量督导",
-  project_manager_provider: "项目负责人（服务商）",
+  project_manager: "项目负责人",
 };
 
 const CREATABLE_ROLES = [
-  { value: "agent_internal", label: "内部催收员" },
-  { value: "agent_external", label: "兼职催收员" },
+  // work_mode (internal/external) is set separately; role is just "agent"
+  // TODO: expose work_mode field in create-member API to let provider admin set internal/external
+  { value: "agent", label: "催收员" },
   { value: "supervisor", label: "通话质量督导" },
 ];
 
 const ROLE_BADGE_CLASS: Record<string, string> = {
-  provider_admin: "ds-badge ds-badge-purple",
+  admin: "ds-badge ds-badge-purple",
   supervisor: "ds-badge ds-badge-blue",
-  agent_internal: "ds-badge ds-badge-green",
-  agent_external: "ds-badge ds-badge-orange",
+  agent: "ds-badge ds-badge-green",
 };
 
 export function ProviderTeamPage() {
@@ -224,7 +225,7 @@ function CreateMemberModal({ onClose, onSuccess }: CreateMemberModalProps) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("Demo@123!");
-  const [role, setRole] = useState("agent_external");
+  const [role, setRole] = useState("agent");
   const [tenantId, setTenantId] = useState<number | "">("");
   const [error, setError] = useState<string | null>(null);
 

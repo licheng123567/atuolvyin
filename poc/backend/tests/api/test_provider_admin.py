@@ -53,8 +53,7 @@ def seeded_provider_membership(
     m = UserTenantMembership(
         user_id=seeded_provider_admin_user.id,
         tenant_id=seeded_tenant.id,  # required NOT NULL — uses seed tenant
-        role="provider_admin",
-        source_type="PROVIDER",
+        role="admin",
         provider_id=seeded_provider.id,
         is_active=True,
     )
@@ -74,7 +73,8 @@ def provider_auth_headers(
             "sub": str(seeded_provider_admin_user.id),
             "user_id": seeded_provider_admin_user.id,
             "tenant_id": None,
-            "role": "provider_admin",
+            "role": "admin",
+            "provider_id": seeded_provider.id,
             "scope": f"provider:{seeded_provider.id}",
         }
     )
@@ -157,7 +157,6 @@ def seeded_provider_team(
         user_id=teammate.id,
         tenant_id=seeded_tenant.id,
         role="legal",
-        source_type="PROVIDER",
         provider_id=seeded_provider.id,
         is_active=True,
     )
@@ -197,40 +196,41 @@ async def test_dashboard_returns_provider_kpi(
 
 
 @pytest.mark.asyncio
-async def test_dashboard_404_when_no_provider_membership(
+async def test_dashboard_403_when_property_side_token(
     client, db_session, seeded_user, seeded_tenant
 ):
-    """A user with no provider membership cannot use the provider endpoints."""
+    """v2.2 角色重构：require_provider_roles 先于业务逻辑检查 provider_id；
+    没有 provider_id 的 token（物业侧）访问 /provider/ 端点直接 403 ERR_FORBIDDEN，
+    而不是之前的 404 ERR_NO_PROVIDER（业务层）。"""
     from app.core.security import create_access_token
     from app.models.tenant import UserTenantMembership
 
-    # Give the seed user a non-provider membership so role=provider_admin auth passes
     m = UserTenantMembership(
         user_id=seeded_user.id,
         tenant_id=seeded_tenant.id,
-        role="provider_admin",
-        source_type="INTERNAL",
+        role="admin",
         provider_id=None,
         is_active=True,
     )
     db_session.add(m)
     db_session.flush()
 
+    # Token has no provider_id → require_provider_roles sees property-side → 403
     token = create_access_token(
         {
             "sub": str(seeded_user.id),
             "user_id": seeded_user.id,
             "tenant_id": seeded_tenant.id,
-            "role": "provider_admin",
-            "scope": "provider:none",
+            "role": "admin",
+            "scope": f"tenant:{seeded_tenant.id}",
         }
     )
     resp = await client.get(
         "/api/v1/provider/dashboard/stats",
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert resp.status_code == 404
-    assert resp.json()["code"] == "ERR_NO_PROVIDER"
+    assert resp.status_code == 403
+    assert resp.json()["code"] == "ERR_FORBIDDEN"
 
 
 @pytest.mark.asyncio
@@ -281,8 +281,8 @@ async def test_team_list_filtered_by_provider(
         UserTenantMembership(
             user_id=noise.id,
             tenant_id=seeded_tenant.id,
-            role="agent_internal",
-            source_type="INTERNAL",
+            role="agent",
+            work_mode="internal",
             provider_id=None,
             is_active=True,
         )

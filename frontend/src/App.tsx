@@ -124,34 +124,45 @@ import { SuperCostPage } from "./pages/super/cost";
 import { SuperPlansPage } from "./pages/super/plans";
 import type { AuthUser } from "./providers/auth-provider";
 
-const SUPERVISOR_ROLES = new Set(["supervisor", "admin", "platform_super"]);
+const SUPERVISOR_ROLES = new Set(["supervisor", "admin", "superadmin"]);
 
+// Home redirect: for roles that have scope-dependent home pages,
+// RoleHomeRedirect reads scope from identity to decide the correct page.
+// admin with scope=provider:{id} → /provider/dashboard
+// project_manager with scope=provider:{id} → /pm/dashboard (provider view)
+// project_manager with scope=tenant:{id} → /pm/dashboard (property view)
 const ROLE_HOME: Record<string, string> = {
-  platform_superadmin: "/ops/tenants",
-  platform_super: "/ops/tenants",
-  platform_ops: "/ops/tenants",
-  admin: "/admin/projects",
+  superadmin: "/ops/tenants",
+  ops: "/ops/tenants",
+  // admin: scope-dependent — handled in RoleHomeRedirect below
   supervisor: "/supervisor/workspace",
-  agent_internal: "/agent/cases",
-  agent_external: "/agent/cases",
+  agent: "/agent/cases",
   legal: "/legal/internal-orders",
   workorder: "/workorder/orders",
   coordinator: "/workorder/orders",
-  project_manager_property: "/pm/dashboard",
-  project_manager_provider: "/pm/dashboard",
-  provider_admin: "/provider/dashboard",
+  project_manager: "/pm/dashboard",
 };
 
 function RoleHomeRedirect() {
-  const { data, isLoading } = useGetIdentity<{ role: string }>();
+  const { data, isLoading } = useGetIdentity<{ role: string; scope?: string }>();
   if (isLoading) return null;
-  const target = data?.role ? ROLE_HOME[data.role] : null;
+  const role = data?.role;
+  const scope = data?.scope ?? "";
+
+  // admin role: property-side (tenant:{id}) → /admin/projects
+  //             provider-side (provider:{id}) → /provider/dashboard
+  if (role === "admin") {
+    const target = scope.startsWith("provider:") ? "/provider/dashboard" : "/admin/projects";
+    return <Navigate to={target} replace />;
+  }
+
+  const target = role ? ROLE_HOME[role] : null;
   if (!target) {
     return (
       <div className="text-[var(--color-neutral-900)]">
         <h1 className="text-2xl font-semibold mb-2">欢迎使用有证慧催</h1>
         <p className="text-sm text-[var(--color-neutral-600)]">
-          未识别到角色（{data?.role ?? "未知"}），请联系管理员。
+          未识别到角色（{role ?? "未知"}），请联系管理员。
         </p>
       </div>
     );
@@ -173,8 +184,7 @@ function AuthenticatedShell() {
 
 // Sprint 14.3 — 首登 App 引导（v1.5.6 — 仅对催收员显示）
 const APP_INTRO_ROLES = new Set([
-  "agent_internal",
-  "agent_external",
+  "agent",
 ]);
 
 function AppIntroModalGate() {
@@ -526,7 +536,7 @@ function App() {
             <Route path="/provider/settlements/:id" element={<ProviderSettlementDetailPage />} />
             <Route path="/provider/historical-reports" element={<ProviderHistoricalReportsPage />} />
             <Route path="/provider/projects" element={<ProviderProjectsPage />} />
-            {/* Sprint 15 — platform_super system management */}
+            {/* Sprint 15 — superadmin system management */}
             <Route path="/super/health" element={<SuperHealthPage />} />
             <Route path="/super/audit" element={<SuperAuditPage />} />
             <Route path="/super/cost" element={<SuperCostPage />} />

@@ -10,7 +10,7 @@ membership 拿姓名/角色。
 权限：
   - admin / supervisor → 看本租户全部坐席（v2.1 暂不区分 supervisor 子组，
     沿用 admin_dashboard 现有「supervisor 看本租户全部」语义）
-  - platform_superadmin → 看全租户
+  - superadmin → 看全租户
   - 其他角色 → 403
 
 筛选：
@@ -33,7 +33,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.device_capability_log import DeviceCapabilityLog
 from app.models.tenant import UserTenantMembership
 from app.models.user import UserAccount
@@ -41,8 +41,8 @@ from app.schemas.common import PaginatedResponse
 
 router = APIRouter()
 
-ALLOWED_ROLES = ("admin", "platform_superadmin", "supervisor")
-PLATFORM_ROLES = ("platform_superadmin",)
+ALLOWED_ROLES = ("admin", "superadmin", "supervisor")
+PLATFORM_ROLES = ("superadmin",)
 
 _STATUS_LABEL = {
     "realtime": "实时可用",
@@ -74,7 +74,7 @@ class AgentDeviceItem(BaseModel):
 )
 def list_agent_devices(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ALLOWED_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ALLOWED_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),

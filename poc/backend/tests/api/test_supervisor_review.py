@@ -242,7 +242,6 @@ async def test_label_review_404_for_other_tenant(
         user_id=other_user.id,
         tenant_id=other_tenant.id,
         role="supervisor",
-        source_type="INTERNAL",
         is_active=True,
     ))
     db_session.flush()

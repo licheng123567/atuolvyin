@@ -40,6 +40,7 @@ def _notify_users_for_project(db, project: Project, *, title: str, body: str, se
             select(UserTenantMembership.user_id).where(
                 UserTenantMembership.tenant_id == project.tenant_id,
                 UserTenantMembership.role == "admin",
+                UserTenantMembership.provider_id.is_(None),
                 UserTenantMembership.is_active.is_(True),
             )
         )
@@ -49,13 +50,13 @@ def _notify_users_for_project(db, project: Project, *, title: str, body: str, se
     for uid in property_admin_ids:
         recipients.append((int(uid), int(project.tenant_id)))
 
-    # 找服务商方接收人：项目 provider_id 对应的 provider_admin
+    # 找服务商方接收人：项目 provider_id 对应的服务商侧 admin（provider_id != None）
     if project.provider_id is not None:
         provider_admin_ids = (
             db.execute(
                 select(UserTenantMembership.user_id).where(
                     UserTenantMembership.provider_id == project.provider_id,
-                    UserTenantMembership.role == "provider_admin",
+                    UserTenantMembership.role == "admin",
                     UserTenantMembership.is_active.is_(True),
                 )
             )

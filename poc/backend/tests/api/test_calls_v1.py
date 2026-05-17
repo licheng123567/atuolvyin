@@ -213,8 +213,8 @@ async def test_get_call_detail_wrong_user_returns_403(
     m = UserTenantMembership(
         user_id=other.id,
         tenant_id=seeded_tenant.id,
-        role="agent_internal",
-        source_type="INTERNAL",
+        role="agent",
+        work_mode="internal",
         is_active=True,
     )
     db_session.add(m)
@@ -223,7 +223,7 @@ async def test_get_call_detail_wrong_user_returns_403(
         "sub": str(other.id),
         "user_id": other.id,
         "tenant_id": seeded_tenant.id,
-        "role": "agent_internal",
+        "role": "agent",
         "scope": f"tenant:{seeded_tenant.id}",
     })
     other_headers = {"Authorization": f"Bearer {token}"}

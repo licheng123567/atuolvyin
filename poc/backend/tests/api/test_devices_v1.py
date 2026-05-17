@@ -20,8 +20,8 @@ def _make_other_user(db_session, tenant):
         UserTenantMembership(
             user_id=u.id,
             tenant_id=tenant.id,
-            role="agent_internal",
-            source_type="INTERNAL",
+            role="agent",
+            work_mode="internal",
             is_active=True,
         )
     )

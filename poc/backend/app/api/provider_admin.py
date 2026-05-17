@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 
 from app.core.crypto import encrypt_phone, mask_phone
 from app.core.db import get_db
-from app.core.security import get_password_hash, get_token_payload, require_roles
+from app.core.security import get_password_hash, get_token_payload, require_provider_roles
 from app.models.call import CallRecord
 from app.models.case import CollectionCase, OwnerProfile
 from app.models.settlement import DisputeRecord, SettlementStatement
@@ -64,7 +64,7 @@ PERFORMANCE_DEFAULT_DAYS = 30
 
 router = APIRouter()
 
-PROVIDER_ROLES = ("provider_admin",)
+PROVIDER_ROLES = ("admin",)  # provider-side admin; guarded by provider_id != None in _resolve_provider_id
 
 
 # ── helpers ──────────────────────────────────────────────────────────
@@ -150,7 +150,7 @@ def _team_member_to_out(
 @router.get("/dashboard/stats", response_model=ProviderDashboardStats)
 async def get_provider_dashboard(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ProviderDashboardStats:
     user_id = _user_id_from_payload(payload)
@@ -254,7 +254,7 @@ async def get_provider_dashboard(
 @router.get("/tenants", response_model=PaginatedResponse[ProviderTenantOut])
 async def list_partner_tenants(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     q: str | None = Query(None, max_length=100),
     status: str | None = Query(None, pattern=r"^(active|expired)$"),
@@ -308,7 +308,7 @@ async def list_partner_tenants(
 async def create_team_member(
     body: TeamMemberCreateIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ProviderTeamMemberOut:
     user_id = _user_id_from_payload(payload)
@@ -351,7 +351,6 @@ async def create_team_member(
         user_id=new_user.id,
         tenant_id=body.tenant_id,
         role=body.role,
-        source_type="PROVIDER",
         provider_id=provider_id,
         is_active=True,
     )
@@ -364,7 +363,7 @@ async def create_team_member(
 @router.get("/team", response_model=PaginatedResponse[ProviderTeamMemberOut])
 async def list_team_members(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -396,7 +395,7 @@ async def list_team_members(
 async def get_team_member(
     member_user_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ProviderTeamMemberDetailOut:
     user_id = _user_id_from_payload(payload)
@@ -432,7 +431,7 @@ async def toggle_team_member_active(
     member_user_id: int,
     body: TeamActiveIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ProviderTeamMemberOut:
     user_id = _user_id_from_payload(payload)
@@ -474,7 +473,7 @@ async def toggle_team_member_active(
 @router.get("/settlements", response_model=PaginatedResponse[ProviderSettlementOut])
 async def list_provider_settlements(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     status: str | None = Query(None, description="DRAFT/CONFIRMED/PAID/DISPUTED"),
     year_month: str | None = Query(None, description="YYYY-MM, filters by period_start"),
@@ -539,7 +538,7 @@ async def list_provider_settlements(
 async def get_provider_settlement(
     statement_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ProviderSettlementDetailOut:
     user_id = _user_id_from_payload(payload)
@@ -593,7 +592,7 @@ async def submit_dispute(
     statement_id: int,
     body: ProviderDisputeIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ProviderDisputeOut:
     user_id = _user_id_from_payload(payload)
@@ -645,7 +644,7 @@ async def submit_dispute(
 @router.get("/team-performance", response_model=list[ProviderMemberPerformance])
 async def get_team_performance(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     period_days: int = Query(PERFORMANCE_DEFAULT_DAYS, ge=1, le=365),
 ) -> list[ProviderMemberPerformance]:
@@ -737,7 +736,7 @@ async def get_member_commission(
     member_user_id: int,
     year_month: Annotated[str, Query(pattern=r"^\d{4}-\d{2}$")],
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ProviderMemberCommission:
     user_id = _user_id_from_payload(payload)
@@ -807,7 +806,7 @@ async def get_member_commission(
 @router.get("/projects/expiring")
 async def list_expiring_projects(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     """v1.5.5 — 服务商端总览 banner 用：30 天内即将到期的项目计数 + 列表。"""
@@ -838,7 +837,7 @@ async def list_expiring_projects(
 @router.get("/historical-reports")
 async def list_historical_reports(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     """v1.5.5 D2 — 到期 30 天内的项目聚合报表（仅展示数字、不可下钻）。"""
@@ -905,7 +904,7 @@ async def list_historical_reports(
 @router.get("/projects")
 async def list_provider_projects(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     """v1.5.6 — 服务商工作台「我的项目」列表（仅 active + 服务期未过）。"""
@@ -954,7 +953,7 @@ async def assign_provider_pm(
     project_id: int,
     body: AssignProviderPmIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*PROVIDER_ROLES))],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     """v1.5.6 — 服务商 admin 指派本家项目经理给项目。"""
@@ -975,12 +974,12 @@ async def assign_provider_pm(
             detail={"code": "ERR_NOT_FOUND", "message": "项目不存在或不属本服务商"},
         )
 
-    # 校验 user_id 是本服务商的 pm_provider 角色
+    # 校验 user_id 是本服务商的 project_manager 角色（provider_id 已限定服务商侧）
     pm_membership = db.execute(
         select(UserTenantMembership).where(
             UserTenantMembership.user_id == body.user_id,
             UserTenantMembership.provider_id == provider_id,
-            UserTenantMembership.role == "project_manager_provider",
+            UserTenantMembership.role == "project_manager",
             UserTenantMembership.is_active.is_(True),
         )
     ).scalar_one_or_none()

@@ -146,8 +146,9 @@ export function AdminPoolPage() {
     (rawAgents as unknown as PaginatedResponse<UserItem>)?.items ??
     (agentsResult.data as UserItem[] | undefined) ??
     [];
-  // v1.5.6 — 物业 admin 只能分给内部催收员（外勤由服务商管理）
-  const agents = allUsers.filter((u) => u.role === "agent_internal");
+  // v1.5.6 — 物业 admin 分配给 agent 角色（内部/外部由 work_mode 区分，已统一到单一 agent 角色）
+  // TODO: once /admin/users exposes work_mode, filter to work_mode=internal for property-side assignment
+  const agents = allUsers.filter((u) => u.role === "agent");
 
   const { mutate: assign } = useCustomMutation();
 
@@ -425,11 +426,7 @@ export function AdminPoolPage() {
                     {agents.map((a) => (
                       <option key={a.id} value={a.id}>
                         {a.name}
-                        {a.role === "agent_internal"
-                          ? "（内部）"
-                          : a.role === "agent_external"
-                            ? "（外部）"
-                            : ""}
+                        {/* TODO: show work_mode (internal/external) once /admin/users exposes work_mode */}
                       </option>
                     ))}
                   </select>

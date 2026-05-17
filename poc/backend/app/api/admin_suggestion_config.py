@@ -8,20 +8,20 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.script import TenantSuggestionConfig
 from app.schemas.script import SuggestionConfigOut, SuggestionConfigUpdate
 
 router = APIRouter()
 
-ADMIN_ROLES = ("admin", "platform_superadmin")
+ADMIN_ROLES = ("admin", "superadmin")
 _DEFAULTS = SuggestionConfigOut(sensitivity=3, max_per_push=3)
 
 
 @router.get("/suggestion-config", response_model=SuggestionConfigOut)
 def get_config(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> SuggestionConfigOut:
     tenant_id = int(payload.get("tenant_id") or 0)
@@ -37,7 +37,7 @@ def get_config(
 def put_config(
     body: SuggestionConfigUpdate,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> SuggestionConfigOut:
     tenant_id = int(payload.get("tenant_id") or 0)

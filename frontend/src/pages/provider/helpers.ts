@@ -1,8 +1,8 @@
 // frontend/src/pages/provider/helpers.ts
 //
-// Pure helpers shared across the provider_admin pages
-// (dashboard / tenants / team / settlements). Side-effect-free so they can
-// be unit-tested without React context.
+// Pure helpers shared across the provider-side admin pages
+// (admin role with scope=provider:{id}: dashboard / tenants / team / settlements).
+// Side-effect-free so they can be unit-tested without React context.
 
 export type ContractStatus = "active" | "expired" | "terminated" | string;
 

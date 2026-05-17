@@ -31,7 +31,6 @@ def workorder_auth_headers(db_session, seeded_user, seeded_tenant):
         user_id=seeded_user.id,
         tenant_id=seeded_tenant.id,
         role="admin",
-        source_type="INTERNAL",
         is_active=True,
     )
     db_session.add(membership)

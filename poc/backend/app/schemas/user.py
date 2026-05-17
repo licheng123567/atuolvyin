@@ -41,7 +41,7 @@ class UserCreateByAdminRequest(BaseModel):
     password: str | None = Field(None, min_length=8, max_length=72)
     role: str = Field(
         ...,
-        pattern=r"^(supervisor|agent_internal|legal|workorder|coordinator|project_manager_property)$",
+        pattern=r"^(supervisor|agent|legal|coordinator|project_manager)$",
     )
     # v1.5.6 — 一人多角色：可选额外角色（默认空，与 role 字段构成完整 membership 集）
     extra_roles: list[str] = Field(default_factory=list)
@@ -74,7 +74,7 @@ class UserUpdateByAdminRequest(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=50)
     role: str | None = Field(
         None,
-        pattern=r"^(supervisor|agent_internal|legal|workorder|coordinator|project_manager_property)$",
+        pattern=r"^(supervisor|agent|legal|coordinator|project_manager)$",
     )
     # v1.5.6 — 一人多角色：完整覆盖该用户在本租户的 membership 列表
     # 传入则按列表 reconcile（新增/失活）；不传则只更新单 role / 不动 membership

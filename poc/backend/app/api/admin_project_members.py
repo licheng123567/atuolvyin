@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.case import Project
 from app.models.project_member import ProjectMember
 from app.models.tenant import UserTenantMembership
@@ -26,14 +26,14 @@ from app.models.user import UserAccount
 
 router = APIRouter()
 
-ADMIN_ROLES = ("admin", "platform_superadmin")
+ADMIN_ROLES = ("admin", "superadmin")
 
 
 class ProjectMemberItem(BaseModel):
     user_id: int
     name: str
     role_in_project: str  # supervisor | agent
-    membership_role: str  # supervisor | agent_internal
+    membership_role: str  # supervisor | agent
     is_active: bool
 
 
@@ -74,7 +74,7 @@ def _require_tenant_project(db: Session, payload: dict, project_id: int) -> Proj
 def list_members(
     project_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[ProjectMemberItem]:
     p = _require_tenant_project(db, payload, project_id)
@@ -109,14 +109,14 @@ def add_members(
     project_id: int,
     body: AddMembersIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict[str, int]:
     p = _require_tenant_project(db, payload, project_id)
 
     expected_membership_role = {
         "supervisor": "supervisor",
-        "agent": "agent_internal",
+        "agent": "agent",
     }
 
     added = 0
@@ -166,7 +166,7 @@ def remove_member(
     user_id: int,
     role_in_project: Literal["supervisor", "agent"],
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> None:
     _require_tenant_project(db, payload, project_id)

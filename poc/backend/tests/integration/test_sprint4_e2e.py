@@ -70,7 +70,7 @@ def test_full_call_assistance_flow(db_session, e2e_setup):
         "sub": str(user.id),
         "user_id": user.id,
         "tenant_id": tenant.id,
-        "role": "agent_internal",
+        "role": "agent",
         "scope": f"tenant:{tenant.id}",
     })
     auth_headers = {"Authorization": f"Bearer {token}"}

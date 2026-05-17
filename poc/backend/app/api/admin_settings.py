@@ -20,14 +20,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.settings import TenantSettings
 from app.schemas.settings import TenantSettingsOut, TenantSettingsUpdate
 from app.services.audit import log_audit
 
 router = APIRouter()
 
-ADMIN_ROLES = ("admin", "platform_superadmin")
+ADMIN_ROLES = ("admin", "superadmin")
 
 DEFAULTS = TenantSettingsOut(
     recording_mode="auto",
@@ -77,7 +77,7 @@ def _to_out(s: TenantSettings) -> TenantSettingsOut:
 @router.get("/settings", response_model=TenantSettingsOut)
 def get_settings(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> TenantSettingsOut:
     tenant_id = int(payload.get("tenant_id") or 0)
@@ -91,7 +91,7 @@ def get_settings(
 def patch_settings(
     body: TenantSettingsUpdate,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> TenantSettingsOut:
     tenant_id = int(payload.get("tenant_id") or 0)

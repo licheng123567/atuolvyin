@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.core.crypto import mask_phone
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.tenant import (
     ProviderTenantContract,
     ServiceProvider,
@@ -44,7 +44,7 @@ from app.services.audit import log_audit
 
 router = APIRouter()
 
-ADMIN_ROLES = ("admin", "platform_superadmin")
+ADMIN_ROLES = ("admin", "superadmin")
 
 
 def _tenant_id(payload: dict) -> int:
@@ -63,7 +63,7 @@ def _tenant_id(payload: dict) -> int:
 @router.get("/providers", response_model=list[AdminProviderListItem])
 async def list_signed_providers(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     q: str | None = Query(None, max_length=100),
     status: str | None = Query(None, pattern=r"^(active|paused|terminated)$"),
@@ -122,7 +122,7 @@ async def list_signed_providers(
 @router.get("/providers/available", response_model=list[AdminAvailableProviderItem])
 async def list_available_providers(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     q: str | None = Query(None, max_length=100),
 ) -> list[AdminAvailableProviderItem]:
@@ -160,7 +160,7 @@ async def list_available_providers(
 async def invite_provider(
     body: AdminProviderInviteIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> AdminProviderContractOut:
     tenant_id = _tenant_id(payload)
@@ -244,7 +244,7 @@ async def patch_contract(
     provider_id: int,
     body: AdminProviderContractPatchIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> AdminProviderContractOut:
     tenant_id = _tenant_id(payload)
@@ -312,7 +312,7 @@ async def patch_contract(
 async def list_provider_members(
     provider_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[AdminProviderMemberOut]:
     tenant_id = _tenant_id(payload)
@@ -363,7 +363,7 @@ async def patch_provider_member(
     user_id: int,
     body: AdminProviderMemberPatchIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ADMIN_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*ADMIN_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> AdminProviderMemberOut:
     tenant_id = _tenant_id(payload)

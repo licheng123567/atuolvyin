@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.case import CollectionCase, OwnerProfile
 from app.models.legal_conversion import LegalConversionOrder
 from app.schemas.case import CaseDetailResponse
@@ -35,7 +35,7 @@ SUPERVISOR_ROLES = ("supervisor", "admin", "legal", "coordinator", "workorder")
 async def get_case_detail(
     case_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseDetailResponse:
     tenant_id = payload.get("tenant_id")

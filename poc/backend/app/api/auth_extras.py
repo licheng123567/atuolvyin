@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.core.crypto import encrypt_phone
 from app.core.db import get_db
+from app.core.identity import resolve_identity
 from app.core.security import (
     create_access_token,
     get_password_hash,
@@ -42,7 +43,7 @@ router = APIRouter()
 OTP_TTL_SECONDS = 5 * 60
 OTP_RATE_LIMIT_SECONDS = 60
 OTP_DEV_RETURN = os.getenv("OTP_DEV_RETURN", "true").lower() == "true"
-ADMIN_LIKE_ROLES = {"admin", "platform_superadmin"}
+ADMIN_LIKE_ROLES = {"admin"}
 
 
 def _phone_validator(v: str) -> str:
@@ -140,39 +141,17 @@ class PasswordResetConfirmIn(BaseModel):
 
 
 def _issue_token(db: Session, user: UserAccount, device_type: str) -> TokenResponse:
-    membership = db.execute(
-        select(UserTenantMembership)
-        .where(
-            UserTenantMembership.user_id == user.id,
-            UserTenantMembership.is_active.is_(True),
-        )
-        .limit(1)
-    ).scalar_one_or_none()
-
-    tenant_id: int | None = None
-    tenant_name: str | None = None
-    role = "platform_superadmin"
-    scope = "platform"
-    provider_id: int | None = None  # v1.7.0
-
-    if membership:
-        tenant_id = membership.tenant_id
-        role = membership.role
-        scope = f"tenant:{membership.tenant_id}"
-        provider_id = membership.provider_id
-        tenant_name = db.execute(
-            select(Tenant.name).where(Tenant.id == membership.tenant_id)
-        ).scalar_one_or_none()
+    claims = resolve_identity(db, user)
 
     user.last_login_at = datetime.now(UTC)
     token = create_access_token(
         {
             "sub": str(user.id),
             "user_id": user.id,
-            "tenant_id": tenant_id,
-            "role": role,
-            "scope": scope,
-            "provider_id": provider_id,
+            "tenant_id": claims.tenant_id,
+            "role": claims.role,
+            "scope": claims.scope,
+            "provider_id": claims.provider_id,
         }
     )
     token_hash = hashlib.sha256(token.encode()).hexdigest()
@@ -190,10 +169,10 @@ def _issue_token(db: Session, user: UserAccount, device_type: str) -> TokenRespo
         access_token=token,
         user_id=user.id,
         name=user.name,
-        role=role,
-        tenant_id=tenant_id,
-        tenant_name=tenant_name,
-        scope=scope,
+        role=claims.role,
+        tenant_id=claims.tenant_id,
+        tenant_name=claims.tenant_name,
+        scope=claims.scope,
     )
 
 
@@ -544,24 +523,16 @@ def select_membership(
             detail={"code": "ERR_USER_NOT_FOUND", "message": "用户不存在"},
         )
 
-    tenant_id = membership.tenant_id
-    role = membership.role
-    scope = f"tenant:{tenant_id}" if tenant_id else "platform"
-    provider_id = membership.provider_id  # v1.7.0
-    tenant_name = None
-    if tenant_id:
-        tenant_name = db.execute(
-            select(Tenant.name).where(Tenant.id == tenant_id)
-        ).scalar_one_or_none()
+    claims = resolve_identity(db, user, membership=membership)
 
     token = create_access_token(
         {
             "sub": str(user.id),
             "user_id": user.id,
-            "tenant_id": tenant_id,
-            "role": role,
-            "scope": scope,
-            "provider_id": provider_id,
+            "tenant_id": claims.tenant_id,
+            "role": claims.role,
+            "scope": claims.scope,
+            "provider_id": claims.provider_id,
         }
     )
     # 同步 active_session（按 device_type）
@@ -589,8 +560,8 @@ def select_membership(
         access_token=token,
         user_id=user.id,
         name=user.name,
-        role=role,
-        tenant_id=tenant_id,
-        tenant_name=tenant_name,
-        scope=scope,
+        role=claims.role,
+        tenant_id=claims.tenant_id,
+        tenant_name=claims.tenant_name,
+        scope=claims.scope,
     )

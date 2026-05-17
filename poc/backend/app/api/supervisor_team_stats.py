@@ -19,20 +19,20 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.call import CallRecord
 from app.models.case import CollectionCase
 from app.models.user import UserAccount
 
 router = APIRouter()
 
-SUPERVISOR_ROLES = ("supervisor", "admin", "platform_superadmin")
+SUPERVISOR_ROLES = ("supervisor", "admin", "superadmin")
 
 
 @router.get("/team-stats")
 async def get_team_stats(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     period_days: int = Query(30, ge=1, le=365),
 ) -> dict:
@@ -125,7 +125,7 @@ async def get_team_stats(
     }
 
     # ── 3. 团队成员排名 ─────────────────────────────────────
-    # 按 caller_user_id 聚合，限本租户内 agent_internal / agent_external 角色
+    # 按 caller_user_id 聚合，限本租户内 agent 角色
     agg_rows = db.execute(
         select(
             CallRecord.caller_user_id,

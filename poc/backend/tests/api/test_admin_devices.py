@@ -50,8 +50,8 @@ async def test_list_devices_filter_by_user_id(
         UserTenantMembership(
             user_id=other.id,
             tenant_id=seeded_tenant.id,
-            role="agent_internal",
-            source_type="INTERNAL",
+            role="agent",
+            work_mode="internal",
             is_active=True,
         )
     )
@@ -111,8 +111,8 @@ async def test_list_devices_cross_tenant_invisible(
         UserTenantMembership(
             user_id=other_user.id,
             tenant_id=other_tenant.id,
-            role="agent_internal",
-            source_type="INTERNAL",
+            role="agent",
+            work_mode="internal",
             is_active=True,
         )
     )

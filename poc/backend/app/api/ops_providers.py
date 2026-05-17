@@ -41,7 +41,7 @@ from app.services.audit import log_audit
 
 router = APIRouter()
 
-OPS_ROLES = ("platform_ops", "platform_superadmin", "platform_super")
+OPS_ROLES = ("ops", "superadmin")
 
 
 def _provider_to_out(

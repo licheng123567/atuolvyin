@@ -88,7 +88,7 @@ def test_risk_event_broadcast_on_keyword_hit(
         "sub": str(seeded_member_user.id),
         "user_id": seeded_member_user.id,
         "tenant_id": seeded_tenant.id,
-        "role": "agent_internal",
+        "role": "agent",
         "scope": f"tenant:{seeded_tenant.id}",
     })
 

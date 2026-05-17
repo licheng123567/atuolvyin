@@ -32,31 +32,34 @@ from app.services.audit import log_audit
 from .admin_cases import _case_row_to_response, _require_tenant, build_case_detail_response
 
 
-def _agent_provider_id(db: Session, user_id: int, tenant_id: int) -> int | None:
-    """Return the provider_id for an agent_external; None for agent_internal."""
-    m = (
+def _agent_membership(db: Session, user_id: int, tenant_id: int) -> UserTenantMembership | None:
+    """Return the agent's membership row for this tenant."""
+    return (
         db.execute(
             sa.select(UserTenantMembership).where(
                 UserTenantMembership.user_id == user_id,
                 UserTenantMembership.tenant_id == tenant_id,
+                UserTenantMembership.role == "agent",
             )
         )
         .scalars()
         .first()
     )
-    return m.provider_id if m and m.provider_id else None
 
 
 def _build_visible_case_filter(db: Session, user_id: int, tenant_id: int, role: str):
     """Build SQLAlchemy WHERE clause for cases visible to the agent.
 
-    内勤：私海（自己的）+ 公海（无项目 OR 项目无服务商 OR 项目允许协助）
-    外勤：私海（自己的）+ 公海（项目 provider_id == 我的 provider_id）
+    内勤（work_mode=internal）：私海（自己的）+ 公海（无项目 OR 项目无服务商 OR 项目允许协助）
+    外勤（work_mode=external）：私海（自己的）+ 公海（项目 provider_id == 我的 provider_id）
     """
     own_clause = CollectionCase.assigned_to == user_id
 
-    if role == "agent_external":
-        provider_id = _agent_provider_id(db, user_id, tenant_id)
+    m = _agent_membership(db, user_id, tenant_id)
+    work_mode = m.work_mode if m else None
+    provider_id = m.provider_id if m else None
+
+    if work_mode == "external":
         if provider_id is None:
             return own_clause
         # 外勤可见：自己的 OR 公海 + 本服务商负责的「服务期内 active」项目
@@ -96,7 +99,7 @@ def _build_visible_case_filter(db: Session, user_id: int, tenant_id: int, role: 
 
 router = APIRouter()
 
-AGENT_ROLES = ("agent_internal", "agent_external")
+AGENT_ROLES = ("agent",)
 
 
 @router.get("/cases", response_model=PaginatedResponse[CaseWithOwnerResponse])
@@ -181,10 +184,10 @@ async def list_my_cases(
         ).all():
             project_name_map[pid] = pname
 
-    # v1.7.0 — agent_internal 永远明文；agent_external 看合同有效性（项目级 plan_end 暂不入列表，
+    # v1.7.0 — agent(internal) 永远明文；agent(external) 看合同有效性（项目级 plan_end 暂不入列表，
     # 单条详情页再细查；列表层只看合同总开关）
     contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
-    owner_phone_reveal = should_reveal_owner_phone(role=role, contract_active=contract_active)
+    owner_phone_reveal = should_reveal_owner_phone(role=role, provider_id=payload.get("provider_id"), contract_active=contract_active)
 
     return PaginatedResponse(
         items=[
@@ -271,14 +274,16 @@ async def get_case_detail(
             detail={"code": "ERR_FORBIDDEN", "message": "无权访问此案件"},
         )
 
-    # v1.6.6 — 复用 admin 同款 helper；agent_internal 拿到明文手机号用于拨号
+    # v1.6.6 — 复用 admin 同款 helper；work_mode=internal 拿到明文手机号用于拨号
     # v1.7.0 — 传 viewer 角色让 phone_masked 字段动态决定明文 / 脱敏
+    mem = _agent_membership(db, user.id, tenant_id)
+    is_internal = mem.work_mode == "internal" if mem else False
     return build_case_detail_response(
         db,
         case,
         owner,
         tenant_id=tenant_id,
-        include_phone_plain=(role == "agent_internal"),
+        include_phone_plain=is_internal,
         viewer_role=role,
         viewer_provider_id=payload.get("provider_id"),
     )

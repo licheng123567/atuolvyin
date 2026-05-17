@@ -106,8 +106,8 @@ def signed_provider_member(
     m = UserTenantMembership(
         user_id=user.id,
         tenant_id=seeded_tenant.id,
-        role="agent_external",
-        source_type="EXTERNAL",
+        role="agent",
+        work_mode="external",
         provider_id=approved_provider.id,
         quota=100,
         access_hours="09:00-18:00",
@@ -367,7 +367,7 @@ async def test_list_provider_members_includes_quota_and_phone_mask(
     assert m["phone_masked"] == "138****2222"
     assert m["quota"] == 100
     assert m["access_hours"] == "09:00-18:00"
-    assert m["role"] == "agent_external"
+    assert m["role"] == "agent"
 
 
 @pytest.mark.asyncio

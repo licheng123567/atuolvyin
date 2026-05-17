@@ -9,17 +9,19 @@ interface Role {
 }
 
 const ROLES: Role[] = [
-  { name: "platform_superadmin", phone: "13000000000", expectedText: "平台超管" },
-  { name: "platform_ops", phone: "13000000001", expectedText: "运营员" },
+  { name: "superadmin", phone: "13000000000", expectedText: "平台超管" },
+  { name: "ops", phone: "13000000001", expectedText: "运营员" },
   { name: "admin", phone: "13000000002", expectedText: "物业管理员" },
   { name: "supervisor", phone: "13000000003", expectedText: "督导小李" },
-  { name: "agent_internal", phone: "13000000004", expectedText: "内勤小张" },
-  { name: "agent_external", phone: "13000000005", expectedText: "外勤小王" },
+  { name: "agent (internal)", phone: "13000000004", expectedText: "内勤小张" },
+  { name: "agent (external)", phone: "13000000005", expectedText: "外勤小王" },
   { name: "legal", phone: "13000000006", expectedText: "法务老周" },
-  { name: "workorder", phone: "13000000007", expectedText: "工单小赵" },
-  { name: "project_manager_property", phone: "13000000008", expectedText: "项目经理" },
-  { name: "project_manager_provider", phone: "13000000009", expectedText: "项目经理" },
-  { name: "provider_admin", phone: "13000000010", expectedText: "服务商管理员" },
+  { name: "coordinator", phone: "13000000007", expectedText: "协调员小赵" },
+  { name: "project_manager (tenant)", phone: "13000000008", expectedText: "项目经理" },
+  { name: "project_manager (provider)", phone: "13000000009", expectedText: "项目经理" },
+  { name: "admin (provider)", phone: "13000000010", expectedText: "服务商管理员" },
+  { name: "agent (provider external)", phone: "13000000011", expectedText: "服务商催收员小孙" },
+  { name: "supervisor (provider)", phone: "13000000012", expectedText: "服务商督导小钱" },
 ];
 
 /**
@@ -71,7 +73,7 @@ test.describe("Login page — visual baseline", () => {
   });
 });
 
-test.describe("11 角色登录 + 主页加载", () => {
+test.describe("13 角色登录 + 主页加载", () => {
   for (const role of ROLES) {
     test(`${role.name} (${role.phone}) 登录后应加载到主区`, async ({ page }) => {
       await login(page, role.phone);

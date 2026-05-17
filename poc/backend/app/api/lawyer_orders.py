@@ -6,7 +6,7 @@ POST   /api/v1/lawyer/orders/{id}/upload-document     律师上传文书 (mock�
 POST   /api/v1/lawyer/orders/{id}/complete            律师标记完成 → completed + 触发分账
 GET    /api/v1/lawyer/me                              当前律师 + 律所基本信息
 
-身份解析：登录用户经 require_roles('legal') 后，从 law_firm_membership 表查 role_in_firm='lawyer'
+身份解析：登录用户经 require_tenant_roles('legal') 后，从 law_firm_membership 表查 role_in_firm='lawyer'
 的活跃记录决定本人是哪位律师。
 """
 
@@ -21,7 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.law_firm import LawFirm, LawFirmLawyer
 from app.models.law_firm_membership import LawFirmMembership
 from app.models.legal_conversion import LegalConversionOrder
@@ -65,7 +65,7 @@ def _resolve_lawyer(db: Session, user_id: int) -> tuple[LawFirmMembership, LawFi
 @router.get("/orders")
 async def list_my_orders(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     status: Annotated[str | None, Query()] = None,
     page: Annotated[int, Query(ge=1)] = 1,
@@ -94,7 +94,7 @@ async def list_my_orders(
 async def get_my_order(
     order_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     user_id = int(payload["user_id"])
@@ -113,7 +113,7 @@ async def upload_document(
     order_id: int,
     body: dict,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     """body = {"doc_type": str, "filename": str, "object_key": str}
@@ -167,7 +167,7 @@ async def upload_document(
 async def complete_my_order(
     order_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     user_id = int(payload["user_id"])
@@ -198,7 +198,7 @@ async def complete_my_order(
 @router.get("/me", response_model=dict)
 async def get_lawyer_context(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*LEGAL_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*LEGAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     user_id = int(payload["user_id"])

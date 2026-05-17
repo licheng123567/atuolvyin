@@ -20,19 +20,19 @@ from app.core.phone_visibility import (
     is_provider_contract_active,
     should_reveal_owner_phone,
 )
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.user import UserAccount
 
 router = APIRouter()
 
-SUPERVISOR_ROLES = ("supervisor", "admin", "platform_superadmin")
+SUPERVISOR_ROLES = ("supervisor", "admin", "superadmin")
 
 
 @router.get("/escalated-cases")
 async def list_escalated_cases(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -73,10 +73,10 @@ async def list_escalated_cases(
         .limit(page_size)
     ).all()
 
-    # v1.7.0 — supervisor / admin / platform_super 是物业内部 / 平台角色，统一决策
+    # v1.7.0 — supervisor / admin / superadmin 是物业内部 / 平台角色，统一决策
     role = payload.get("role", "")
     contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
-    owner_phone_reveal = should_reveal_owner_phone(role=role, contract_active=contract_active)
+    owner_phone_reveal = should_reveal_owner_phone(role=role, provider_id=payload.get("provider_id"), contract_active=contract_active)
 
     items = []
     for case, owner, project_name, agent_name in rows:

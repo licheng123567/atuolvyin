@@ -17,7 +17,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_tenant_roles
 from app.models.call import CallRecord, RiskEvent
 from app.models.case import CollectionCase
 from app.models.tenant import UserTenantMembership
@@ -50,7 +50,7 @@ def _tenant_id(payload: dict) -> int:
 @router.get("/risk-events", response_model=list[RiskEventTimelineItem])
 def list_risk_events(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     level: str | None = Query(None, pattern=r"^L[1-3]$"),
     period_days: int = Query(7, ge=1, le=90),
@@ -95,7 +95,7 @@ def annotate_risk_event(
     event_id: int,
     body: RiskEventNoteIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> RiskEventTimelineItem:
     tenant_id = _tenant_id(payload)
@@ -145,7 +145,7 @@ def annotate_risk_event(
 @router.get("/team-performance", response_model=TeamPerformanceOut)
 def team_performance(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     period_days: int = Query(7, ge=1, le=90),
 ) -> TeamPerformanceOut:
@@ -160,7 +160,7 @@ def team_performance(
         select(UserAccount.id, UserAccount.name)
         .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
         .where(UserTenantMembership.tenant_id == tenant_id)
-        .where(UserTenantMembership.role.in_(("agent_internal", "agent_external")))
+        .where(UserTenantMembership.role == "agent")
         .where(UserTenantMembership.is_active.is_(True))
     ).all()
     agent_ids = [r.id for r in agent_rows]

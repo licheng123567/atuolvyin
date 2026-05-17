@@ -9,18 +9,33 @@ def agent_internal_auth_headers(seeded_member_user, seeded_tenant):
         "sub": str(seeded_member_user.id),
         "user_id": seeded_member_user.id,
         "tenant_id": seeded_tenant.id,
-        "role": "agent_internal",
+        "role": "agent",
         "scope": f"tenant:{seeded_tenant.id}",
     })
     return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
-def external_agent_user(db_session, seeded_tenant):
+def external_provider_and_agent(db_session, seeded_tenant):
+    """Create a ServiceProvider + an agent member linked to it.
+
+    Under the new role model, 'external' phone masking is driven by provider_id
+    being non-None in the JWT; without a provider the user is treated as property-side.
+    """
     from app.core.crypto import encrypt_phone
     from app.core.security import get_password_hash
-    from app.models.tenant import UserTenantMembership
+    from app.models.tenant import ServiceProvider, UserTenantMembership
     from app.models.user import UserAccount
+
+    provider = ServiceProvider(
+        name="外包催收公司",
+        provider_type="collection",
+        admin_phone_enc=encrypt_phone("13700009999"),
+        is_active=True,
+        audit_status="approved",
+    )
+    db_session.add(provider)
+    db_session.flush()
 
     user = UserAccount(
         phone_enc=encrypt_phone("13700007777"),
@@ -33,22 +48,31 @@ def external_agent_user(db_session, seeded_tenant):
     db_session.add(UserTenantMembership(
         user_id=user.id,
         tenant_id=seeded_tenant.id,
-        role="agent_external",
-        source_type="EXTERNAL",
+        role="agent",
+        work_mode="external",
+        provider_id=provider.id,
         is_active=True,
     ))
     db_session.flush()
+    return user, provider
+
+
+@pytest.fixture
+def external_agent_user(external_provider_and_agent):
+    user, _provider = external_provider_and_agent
     return user
 
 
 @pytest.fixture
-def external_agent_headers(external_agent_user, seeded_tenant):
+def external_agent_headers(external_provider_and_agent, seeded_tenant):
     from app.core.security import create_access_token
+    user, provider = external_provider_and_agent
     token = create_access_token({
-        "sub": str(external_agent_user.id),
-        "user_id": external_agent_user.id,
+        "sub": str(user.id),
+        "user_id": user.id,
         "tenant_id": seeded_tenant.id,
-        "role": "agent_external",
+        "role": "agent",
+        "provider_id": provider.id,
         "scope": f"tenant:{seeded_tenant.id}",
     })
     return {"Authorization": f"Bearer {token}"}

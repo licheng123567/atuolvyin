@@ -1,9 +1,101 @@
-# 账号体系（v1.4 已交付 + v1.5 演进）
+# 账号体系
 
-> 本文档反映 **v1.4 已上线** 的账号与登录体系，并标注 v1.5 后续演进项。
+> 本文档包含两个部分：
+> 1. **§ v2.2 角色模型重构**（当前有效设计，Tasks 1-10 已落地）
+> 2. **§ v1.4 / v1.5 历史内容**（已被 v2.2 重构取代，仅作历史参考，其中的 11 角色枚举已废弃）
+
+---
+
+## v2.2 角色模型重构
+
+> 实施于 `feature/role-model-refactor`，2026-05-16。设计权威文档：`docs/superpowers/specs/2026-05-16-role-model-refactor-design.md`。
+
+### 四维正交模型
+
+旧 11 角色枚举被拆分为四个正交维度，零冗余：
+
+| 维度 | 落点 | 取值 |
+|------|------|------|
+| 平台身份 | `UserAccount.platform_role` | `superadmin` / `ops` / `NULL` |
+| 组织职能 | `UserTenantMembership.role` | `admin` / `project_manager` / `supervisor` / `agent` / `legal` / `coordinator` |
+| 组织归属 | `UserTenantMembership.provider_id` | `NULL` = 物业侧 / 非 `NULL` = 服务商侧 |
+| 工作方式 | `UserTenantMembership.work_mode` | `internal` / `external`（仅 `agent` 角色；其余为 `NULL`） |
+
+平台用户（`platform_role` 非 `NULL`）**无** tenant membership；JWT `scope` = `platform`。
+物业侧用户 `provider_id = NULL`；JWT `scope` = `tenant:{tenant_id}`。
+服务商侧用户 `provider_id` 非 `NULL`；JWT `scope` = `provider:{provider_id}`。
+
+> 冗余字段 `UserTenantMembership.source_type`（旧 `INTERNAL`/`PROVIDER`）已随重构删除；组织归属统一由 `provider_id IS NULL` 判断。
+
+### 衍生组合（零新增角色名）
+
+| 业务身份 | role | provider_id | work_mode |
+|---------|------|-------------|-----------|
+| 物业管理员 | `admin` | NULL | NULL |
+| 物业项目经理 | `project_manager` | NULL | NULL |
+| 物业督导 | `supervisor` | NULL | NULL |
+| 物业内勤催收员 | `agent` | NULL | `internal` |
+| 物业外勤催收员 | `agent` | NULL | `external` |
+| 物业法务 | `legal` | NULL | NULL |
+| 物业工单协调员 | `coordinator` | NULL | NULL |
+| 服务商管理员 | `admin` | set | NULL |
+| 服务商项目经理 | `project_manager` | set | NULL |
+| 服务商督导 | `supervisor` | set | NULL |
+| 服务商催收员 | `agent` | set | `external` |
+| 服务商法务（可选）| `legal` | set | NULL |
+| 服务商工单协调员 | `coordinator` | set | NULL |
+
+### 旧 11 角色 → 新模型映射
+
+| 旧角色名（已废弃） | 新 role | provider_id | work_mode | platform_role |
+|-----------------|---------|-------------|-----------|---------------|
+| `admin` | `admin` | 不变（NULL）| NULL | — |
+| `provider_admin` | `admin` | 不变（非空）| NULL | — |
+| `supervisor` | `supervisor` | NULL | NULL | — |
+| `agent_internal` | `agent` | NULL | `internal` | — |
+| `agent_external` | `agent` | NULL | `external` | — |
+| `legal` | `legal` | NULL | NULL | — |
+| `coordinator` / `workorder` | `coordinator` | NULL | NULL | — |
+| `project_manager_property` | `project_manager` | NULL | NULL | — |
+| `project_manager_provider` | `project_manager` | 不变（非空）| NULL | — |
+| `platform_ops`（membership 删除）| — | — | — | `ops` |
+| `platform_superadmin` / `platform_super` | — | — | — | `superadmin` |
+
+### Demo 账号（seed 密码统一 `Demo@123!`）
+
+| 描述 | 手机号 | platform_role | role | provider_id | work_mode |
+|------|--------|--------------|------|-------------|-----------|
+| 平台超管 | 13000000000 | `superadmin` | — | — | — |
+| 运营员 | 13000000001 | `ops` | — | — | — |
+| 物业管理员 | 13000000002 | NULL | `admin` | NULL | NULL |
+| 督导小李 | 13000000003 | NULL | `supervisor` | NULL | NULL |
+| 内勤小张 | 13000000004 | NULL | `agent` | NULL | `internal` |
+| 外勤小王 | 13000000005 | NULL | `agent` | NULL | `external` |
+| 法务老周 | 13000000006 | NULL | `legal` | NULL | NULL |
+| 协调员小赵 | 13000000007 | NULL | `coordinator` | NULL | NULL |
+| 项目经理（物业）| 13000000008 | NULL | `project_manager` | NULL | NULL |
+| 项目经理（服务商）| 13000000009 | NULL | `project_manager` | set | NULL |
+| 服务商管理员 | 13000000010 | NULL | `admin` | set | NULL |
+| 服务商催收员小孙 | 13000000011 | NULL | `agent` | set | `external` |
+| 服务商督导小钱 | 13000000012 | NULL | `supervisor` | set | NULL |
+
+### 端点鉴权守卫
+
+- `require_tenant_roles(*roles)` — 仅物业侧（`provider_id IS NULL`），用于物业专用端点
+- `require_provider_roles(*roles)` — 仅服务商侧（`provider_id IS NOT NULL`），用于服务商专用端点
+- `require_roles(*roles)` — 不过滤归属侧，用于 `agent` 角色跨两侧的端点（凡角色元组含 `agent` 的端点必须用此守卫）
+
+后端角色常量单一事实源：`app/core/roles.py`（禁止在其他文件散落角色字面量）。
+
+---
+
+## 历史内容（v1.4 已交付 + v1.5 演进）
+
+> **注意**：以下内容描述的是 v2.2 重构之前的账号与角色体系（旧 11 角色枚举）。相关角色名已废弃，仅作历史参考。当前有效设计见上方 § v2.2 角色模型重构。
+
 > 起源：v1.4 用户提问 — 平台 / 物业 / 服务商 / 项目服务人员各采用什么账号体系？
 
-## 现状（v1.4）
+## 现状（v1.4）【已被 v2.2 重构取代，以下内容仅作参考】
 
 `UserAccount` 表登录凭证字段（migration `22006v14`）：
 
@@ -54,9 +146,9 @@ PC 登录页提供 **2 种 tab**（所有角色统一同一入口）：
 | 主管 / 内勤 / 法务 / 工单 / PM | 手机+OTP | 手机+密码 |
 | 外勤（仅 App） | 手机+OTP | 手机+密码 |
 
-## v1.5 演进项（设计完整稿）
+## v1.5 演进项（设计完整稿）【历史路线图，部分已被 v2.2 重构覆盖】
 
-> 以下为 v1.4 未实施部分，作为 v1.5 路线图。
+> 以下为 v1.4 未实施部分，作为 v1.5 路线图。v2.2 角色重构已处理其中的组织归属、服务商侧角色等问题；`project_scope` / 离职 worker 等内容仍在后续待实施。
 
 ### 三层账号体系
 

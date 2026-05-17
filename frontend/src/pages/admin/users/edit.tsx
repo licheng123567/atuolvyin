@@ -31,13 +31,13 @@ interface IssueOtpResponse {
   otp: string | null;
 }
 
-// v1.5.6 — 物业内部角色（与 new.tsx 同步）
+// v1.5.6 — 物业内部角色（与 new.tsx 同步，scope=tenant:{id}）
 const ALLOWED_ROLES = [
   { value: "supervisor", label: "督导" },
-  { value: "agent_internal", label: "内部催收员" },
+  { value: "agent", label: "催收员" },
   { value: "coordinator", label: "协调员" },
   { value: "legal", label: "法务对接人" },
-  { value: "project_manager_property", label: "项目负责人" },
+  { value: "project_manager", label: "项目负责人" },
 ];
 
 export function UserEditPage() {

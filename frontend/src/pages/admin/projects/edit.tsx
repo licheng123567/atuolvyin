@@ -149,8 +149,9 @@ export function AdminProjectEditPage() {
     (usersRaw as unknown as PaginatedResponse<UserItem>)?.items ??
     (usersRaw as UserItem[] | undefined) ??
     [];
+  // project_manager on property-side (scope=tenant:{id}); backend /admin/users filters by tenant
   const propertyPMs = allUsers.filter(
-    (u) => u.role === "project_manager_property",
+    (u) => u.role === "project_manager",
   );
   const coordinators = allUsers.filter(
     (u) => u.role === "coordinator" || u.role === "workorder",
