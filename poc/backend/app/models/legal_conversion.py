@@ -171,3 +171,38 @@ class LegalConversionRequest(Base, TimestampMixin):
         sa.Index("ix_legal_conv_req_tenant_status", "tenant_id", "status"),
         sa.Index("ix_legal_conv_req_case", "case_id"),
     )
+
+
+class LegalConversionRequestMaterial(Base, TimestampMixin):
+    """§9.1 — 服务商法务为某「法务转化请求」上传的补充材料附件。
+
+    归属经 request → case → project.provider_id 推导，故不设 provider_id 列。
+    """
+
+    __tablename__ = "legal_conversion_request_material"
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    request_id: Mapped[int] = mapped_column(
+        sa.BigInteger,
+        sa.ForeignKey("legal_conversion_request.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    tenant_id: Mapped[int] = mapped_column(
+        sa.BigInteger,
+        sa.ForeignKey("tenant.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    object_key: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    filename: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    content_type: Mapped[str | None] = mapped_column(sa.Text)
+    size_bytes: Mapped[int | None] = mapped_column(sa.Integer)
+    uploaded_by: Mapped[int] = mapped_column(
+        sa.BigInteger,
+        sa.ForeignKey("user_account.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        sa.Index("ix_legal_conv_req_material_request", "request_id"),
+        sa.Index("ix_legal_conv_req_material_tenant", "tenant_id"),
+    )
