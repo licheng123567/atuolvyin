@@ -41,4 +41,12 @@ describe("ProviderLegalRequestsPage", () => {
     render(<MemoryRouter><ProviderLegalRequestsPage /></MemoryRouter>);
     expect(screen.getByText("暂无转化请求")).toBeDefined();
   });
+
+  it("shows error state", () => {
+    vi.mocked(useProviderLegalRequests).mockReturnValue({
+      items: [], total: 0, isLoading: false, isError: true,
+    });
+    render(<MemoryRouter><ProviderLegalRequestsPage /></MemoryRouter>);
+    expect(screen.getByText("加载失败")).toBeDefined();
+  });
 });
