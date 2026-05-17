@@ -103,11 +103,20 @@ def test_supervisor_ws_rejects_agent_role(db_session, seeded_tenant, seeded_memb
         app.dependency_overrides.clear()
 
 
-def _provider_supervisor_token(db_session, seeded_tenant):
-    """造一个服务商侧督导（membership.provider_id 非空、无有效合同），返回 (user, token)。"""
+def _provider_supervisor_token(db_session, seeded_tenant, *, with_active_contract: bool = False):
+    """造一个服务商侧督导（membership.provider_id 非空），返回 (user, token)。
+
+    with_active_contract=True 时额外建一条有效 ProviderTenantContract。
+    """
+    from datetime import UTC, datetime
+
     from app.core.crypto import encrypt_phone
     from app.core.security import create_access_token, get_password_hash
-    from app.models.tenant import ServiceProvider, UserTenantMembership
+    from app.models.tenant import (
+        ProviderTenantContract,
+        ServiceProvider,
+        UserTenantMembership,
+    )
     from app.models.user import UserAccount
 
     provider = ServiceProvider(
@@ -136,6 +145,18 @@ def _provider_supervisor_token(db_session, seeded_tenant):
     )
     db_session.add(mem)
     db_session.flush()
+
+    if with_active_contract:
+        contract = ProviderTenantContract(
+            tenant_id=seeded_tenant.id,
+            provider_id=provider.id,
+            signed_at=datetime.now(UTC),
+            service_types=["collection"],
+            status="active",
+            expires_at=None,
+        )
+        db_session.add(contract)
+        db_session.flush()
 
     token = create_access_token({
         "sub": str(user.id),
@@ -188,5 +209,29 @@ def test_provider_supervisor_no_contract_snapshot_is_masked(db_session, seeded_t
                 assert room is not None and len(room) == 1
                 conn = next(iter(room.values()))
                 assert conn.can_see_plaintext is False
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_provider_supervisor_active_contract_sees_plaintext(db_session, seeded_tenant):
+    """服务商侧督导、有有效合同 → 握手快照 can_see_plaintext=True。"""
+    from app.main import app
+    from app.core.db import get_db
+    from app.risk.supervisor_manager import get_supervisor_manager
+
+    def override_db():
+        yield db_session
+
+    _, token = _provider_supervisor_token(
+        db_session, seeded_tenant, with_active_contract=True
+    )
+    app.dependency_overrides[get_db] = override_db
+    try:
+        with TestClient(app) as cli:
+            with cli.websocket_connect(f"/ws/supervisor?token={token}"):
+                room = get_supervisor_manager()._rooms.get(seeded_tenant.id)
+                assert room is not None and len(room) == 1
+                conn = next(iter(room.values()))
+                assert conn.can_see_plaintext is True
     finally:
         app.dependency_overrides.clear()

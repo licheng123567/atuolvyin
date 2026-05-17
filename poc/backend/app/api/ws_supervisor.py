@@ -55,6 +55,7 @@ async def ws_supervisor(
     # §9.3 —— 握手时算「该连接能否看明文业主电话」快照。
     # provider_id 为 None = 物业内部，永远明文；非空 = 服务商侧，按合同有效性快照决定。
     # 权衡（见设计文档 §4）：合同有效性只在连接时查一次；中途解约的脱敏延迟到下次重连。
+    # 角色重构后所有 token 必带 provider_id；缺失=物业侧是安全默认（fail-open 仅放宽给物业内部）。
     provider_id = payload.get("provider_id")
     if provider_id is None:
         can_see_plaintext = True
