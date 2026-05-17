@@ -114,9 +114,8 @@ def _auth(token: str) -> dict:
 
 def test_list_cases_rejects_property_side_legal(api, db_session, seeded_tenant):
     """物业侧 legal（provider_id 空）访问 /provider/legal/* → 403。"""
-    from app.core.security import create_access_token
     from app.core.crypto import encrypt_phone
-    from app.core.security import get_password_hash
+    from app.core.security import create_access_token, get_password_hash
     from app.models.tenant import UserTenantMembership
     from app.models.user import UserAccount
 
@@ -183,3 +182,36 @@ def test_get_case_detail_cross_provider_404(api, db_session, seeded_tenant):
                                provider_name="服务商B", owner_phone="13755556666")
     resp = api.get(f"/api/v1/provider/legal/cases/{env_b.case.id}", headers=_auth(env_a.token))
     assert resp.status_code == 404
+
+
+def test_list_cases_rejects_provider_side_non_legal(api, db_session, seeded_tenant):
+    """服务商侧非 legal 角色（如服务商催收员）访问 /provider/legal/* → 403。"""
+    from app.core.crypto import encrypt_phone
+    from app.core.security import create_access_token, get_password_hash
+    from app.models.tenant import ServiceProvider, UserTenantMembership
+    from app.models.user import UserAccount
+
+    provider = ServiceProvider(
+        name="服务商X", provider_type="collection",
+        admin_phone_enc=encrypt_phone("13900000099"),
+    )
+    db_session.add(provider)
+    db_session.flush()
+    u = UserAccount(
+        name="服务商催收员", phone_enc=encrypt_phone("13700000099"),
+        password_hash=get_password_hash("pw"), is_active=True,
+    )
+    db_session.add(u)
+    db_session.flush()
+    db_session.add(UserTenantMembership(
+        tenant_id=seeded_tenant.id, user_id=u.id, role="agent",
+        provider_id=provider.id, work_mode="external", is_active=True,
+    ))
+    db_session.flush()
+    token = create_access_token({
+        "sub": str(u.id), "user_id": u.id, "tenant_id": seeded_tenant.id,
+        "role": "agent", "provider_id": provider.id,
+        "scope": f"tenant:{seeded_tenant.id}",
+    })
+    resp = api.get("/api/v1/provider/legal/cases", headers=_auth(token))
+    assert resp.status_code == 403
