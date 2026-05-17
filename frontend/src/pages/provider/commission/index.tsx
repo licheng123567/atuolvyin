@@ -9,6 +9,7 @@ interface CommissionLineItem {
   owner_name: string;
   paid_amount: string;
   paid_at: string | null;
+  commission_rate: string;
 }
 
 interface CommissionOut {
@@ -71,9 +72,9 @@ export function ProviderMemberCommissionPage() {
       {data && (
         <>
           <div className="grid grid-cols-3 gap-4">
-            <Kpi label="计算基数（已缴费）" value={`¥${data.base_amount}`} />
+            <Kpi label="实收基数（扣减免）" value={`¥${data.base_amount}`} />
             <Kpi
-              label="佣金费率"
+              label="加权有效率"
               value={`${(data.commission_rate * 100).toFixed(1)}%`}
             />
             <Kpi
@@ -97,7 +98,10 @@ export function ProviderMemberCommissionPage() {
                     业主
                   </th>
                   <th className="px-4 py-2 text-right font-medium text-[var(--color-neutral-600)]">
-                    缴费金额
+                    实收金额
+                  </th>
+                  <th className="px-4 py-2 text-right font-medium text-[var(--color-neutral-600)]">
+                    项目佣金率
                   </th>
                   <th className="px-4 py-2 text-left font-medium text-[var(--color-neutral-600)]">
                     缴费时间
@@ -107,7 +111,7 @@ export function ProviderMemberCommissionPage() {
               <tbody className="divide-y divide-[var(--color-neutral-100)]">
                 {data.items.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-[var(--color-neutral-400)]">
+                    <td colSpan={5} className="px-4 py-8 text-center text-[var(--color-neutral-400)]">
                       该月无已缴费案件
                     </td>
                   </tr>
@@ -118,6 +122,9 @@ export function ProviderMemberCommissionPage() {
                     <td className="px-4 py-2">{it.owner_name}</td>
                     <td className="px-4 py-2 text-right font-medium">
                       ¥{it.paid_amount}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      {(Number(it.commission_rate) * 100).toFixed(1)}%
                     </td>
                     <td className="px-4 py-2 text-[var(--color-neutral-500)]">
                       {it.paid_at?.slice(0, 19).replace("T", " ") ?? "—"}
