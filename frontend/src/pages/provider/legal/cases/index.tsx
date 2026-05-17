@@ -6,6 +6,7 @@ import { PaginationBar } from "../../../../components/ui/PaginationBar";
 import { SearchInput } from "../../../../components/ui/SearchInput";
 import { useDebouncedValue } from "../../../../hooks/useDebouncedValue";
 import { useProviderLegalCases } from "../api";
+import { TableStateRow } from "../TableStateRow";
 
 const PAGE_SIZE = 20;
 
@@ -61,26 +62,10 @@ export function ProviderLegalCasesPage() {
             </tr>
           </thead>
           <tbody>
-            {isLoading && (
-              <tr>
-                <td colSpan={6} style={{ textAlign: "center", padding: 32, color: "var(--color-neutral-400)" }}>
-                  加载中…
-                </td>
-              </tr>
-            )}
-            {isError && !isLoading && (
-              <tr>
-                <td colSpan={6} style={{ textAlign: "center", padding: 32, color: "var(--color-neutral-400)" }}>
-                  加载失败
-                </td>
-              </tr>
-            )}
+            {isLoading && <TableStateRow colSpan={6}>加载中…</TableStateRow>}
+            {isError && !isLoading && <TableStateRow colSpan={6}>加载失败</TableStateRow>}
             {!isLoading && !isError && filteredItems.length === 0 && (
-              <tr>
-                <td colSpan={6} style={{ textAlign: "center", padding: 32, color: "var(--color-neutral-400)" }}>
-                  {keyword ? "无匹配结果" : "暂无案件"}
-                </td>
-              </tr>
+              <TableStateRow colSpan={6}>{keyword ? "无匹配结果" : "暂无案件"}</TableStateRow>
             )}
             {!isLoading && !isError && filteredItems.map((c) => (
               <tr key={c.case_id}>

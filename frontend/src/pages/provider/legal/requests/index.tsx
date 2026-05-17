@@ -4,6 +4,7 @@ import { ClipboardList } from "lucide-react";
 import { useState } from "react";
 import { PaginationBar } from "../../../../components/ui/PaginationBar";
 import { useProviderLegalRequests } from "../api";
+import { TableStateRow } from "../TableStateRow";
 import { STATUS_META, UNKNOWN_STATUS_META } from "./status-meta";
 
 const PAGE_SIZE = 20;
@@ -40,26 +41,10 @@ export function ProviderLegalRequestsPage() {
             </tr>
           </thead>
           <tbody>
-            {isLoading && (
-              <tr>
-                <td colSpan={7} style={{ textAlign: "center", padding: 32, color: "var(--color-neutral-400)" }}>
-                  加载中…
-                </td>
-              </tr>
-            )}
-            {isError && !isLoading && (
-              <tr>
-                <td colSpan={7} style={{ textAlign: "center", padding: 32, color: "var(--color-neutral-400)" }}>
-                  加载失败
-                </td>
-              </tr>
-            )}
+            {isLoading && <TableStateRow colSpan={7}>加载中…</TableStateRow>}
+            {isError && !isLoading && <TableStateRow colSpan={7}>加载失败</TableStateRow>}
             {!isLoading && !isError && items.length === 0 && (
-              <tr>
-                <td colSpan={7} style={{ textAlign: "center", padding: 32, color: "var(--color-neutral-400)" }}>
-                  暂无转化请求
-                </td>
-              </tr>
+              <TableStateRow colSpan={7}>暂无转化请求</TableStateRow>
             )}
             {!isLoading && !isError && items.map((r) => {
               const meta = STATUS_META[r.status];
