@@ -63,6 +63,13 @@ export function ApprovalDetailPage({ backTo, approverRole: _ }: Props) {
               <span style={{ fontWeight: 600 }}>{offer.discount_pct}%</span>
             } />
             <Field label="有效期至" value={offer.expires_at?.slice(0, 10) ?? "—"} />
+            <Field label="来源" value={
+              offer.provider_id == null ? (
+                <span className="ds-badge" style={{ background: "#F3F4F6", color: "#4B5563" }}>物业内勤</span>
+              ) : (
+                <span className="ds-badge ds-badge-blue">服务商 · {offer.provider_name ?? `#${offer.provider_id}`}</span>
+              )
+            } />
           </div>
 
           <div style={{ marginTop: 16, padding: 12, background: "#f9fafb", borderRadius: 6 }}>

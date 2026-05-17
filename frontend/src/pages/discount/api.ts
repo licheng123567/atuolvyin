@@ -6,6 +6,8 @@ export interface DiscountOfferDTO {
   id: number;
   tenant_id: number;
   case_id: number;
+  provider_id: number | null;
+  provider_name: string | null;
   applicant_user_id: number | null;
   applicant_role: "agent" | "supervisor";
   applicant_name: string | null;

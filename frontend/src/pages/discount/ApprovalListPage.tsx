@@ -127,6 +127,7 @@ export function ApprovalListPage({ approverRole, approverName: _approverName, de
             <tr>
               <th>申请号</th>
               <th>业主 / 房号</th>
+              <th>来源</th>
               <th>类型</th>
               <th>原金额 → 业主同意</th>
               <th>折扣</th>
@@ -138,7 +139,7 @@ export function ApprovalListPage({ approverRole, approverName: _approverName, de
           </thead>
           <tbody>
             {visibleItems.length === 0 && (
-              <tr><td colSpan={9} style={{ textAlign: "center", padding: 32, color: "var(--color-neutral-400)" }}>
+              <tr><td colSpan={10} style={{ textAlign: "center", padding: 32, color: "var(--color-neutral-400)" }}>
                 暂无审批
               </td></tr>
             )}
@@ -148,6 +149,13 @@ export function ApprovalListPage({ approverRole, approverName: _approverName, de
                 <tr key={o.id}>
                   <td style={{ color: "var(--color-primary)", fontFamily: "monospace" }}>#{o.id}</td>
                   <td><strong>{o.case_owner ?? "—"}</strong> / {o.case_building ?? ""}</td>
+                  <td>
+                    {o.provider_id == null ? (
+                      <span className="ds-badge" style={{ background: "#F3F4F6", color: "#4B5563" }}>物业内勤</span>
+                    ) : (
+                      <span className="ds-badge ds-badge-blue">服务商 · {o.provider_name ?? `#${o.provider_id}`}</span>
+                    )}
+                  </td>
                   <td>{o.offer_type_label}{o.installment_months ? `（${o.installment_months} 期）` : ""}</td>
                   <td>
                     <span style={{ color: "var(--color-neutral-500)", textDecoration: "line-through" }}>¥{Number(o.original_amount).toLocaleString("zh-CN")}</span>
