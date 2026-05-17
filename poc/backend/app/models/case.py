@@ -79,6 +79,10 @@ class Project(Base, TimestampMixin):
     late_fee_waive_supervisor_max_pct: Mapped[int | None] = mapped_column(sa.SmallInteger)
     late_fee_waive_disabled: Mapped[bool | None] = mapped_column(sa.Boolean)
 
+    # §9.2 D1/D2 — 项目级佣金率（NUMERIC(6,4)，NULL 时回退系统默认 0.05）
+    internal_agent_commission_rate: Mapped[sa.Numeric | None] = mapped_column(sa.Numeric(6, 4))
+    provider_agent_commission_rate: Mapped[sa.Numeric | None] = mapped_column(sa.Numeric(6, 4))
+
     __table_args__ = (
         sa.CheckConstraint(
             "charge_period IS NULL OR charge_period IN ('monthly','quarterly','semiannual','annual')",

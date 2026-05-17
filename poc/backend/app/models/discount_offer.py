@@ -41,6 +41,12 @@ class DiscountOffer(Base, TimestampMixin):
         nullable=False,
         index=True,
     )
+    # §9.2-A — 减免归属：NULL = 物业内勤发起；非 NULL = 服务商催收员发起，值为其服务商 id
+    provider_id: Mapped[int | None] = mapped_column(
+        sa.BigInteger,
+        sa.ForeignKey("service_provider.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     applicant_user_id: Mapped[int] = mapped_column(
         sa.BigInteger,
         sa.ForeignKey("user_account.id", ondelete="SET NULL"),
