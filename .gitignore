@@ -52,6 +52,9 @@ poc/android/.idea/
 # Claude Code
 .claude/
 
+# Superpowers brainstorm visual companion
+.superpowers/
+
 # Git worktrees (Sprint 实施隔离)
 .worktrees/
 
