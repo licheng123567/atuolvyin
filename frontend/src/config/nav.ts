@@ -75,6 +75,7 @@ const NAV_CONFIG: Partial<Record<UserRole | "workorder", NavSection[]>> = {
         { label: "合作律所", path: "/admin/partner-law-firms", icon: "Building2" },
         { label: "律师函模板", path: "/admin/internal-letter-templates", icon: "FileText" },
         { label: "减免大额审批", path: "/admin/discount-approvals", icon: "BadgePercent" },
+        { label: "内勤提成", path: "/admin/agent-commissions", icon: "Wallet" },
         { label: "审计日志", path: "/admin/audit-logs", icon: "ScrollText" },
         { label: "系统配置", path: "/admin/settings", icon: "Settings" },
       ],
