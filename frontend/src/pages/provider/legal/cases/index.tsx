@@ -2,6 +2,9 @@
 import { useGo } from "@refinedev/core";
 import { Scale } from "lucide-react";
 import { useMemo, useState } from "react";
+import { PaginationBar } from "../../../../components/ui/PaginationBar";
+import { SearchInput } from "../../../../components/ui/SearchInput";
+import { useDebouncedValue } from "../../../../hooks/useDebouncedValue";
 import { useProviderLegalCases } from "../api";
 
 const PAGE_SIZE = 20;
@@ -10,25 +13,19 @@ export function ProviderLegalCasesPage() {
   const go = useGo();
   const [page, setPage] = useState(1);
   const [keyword, setKeyword] = useState("");
+  const debouncedKw = useDebouncedValue(keyword, 300);
 
   const { items, total, isLoading, isError } = useProviderLegalCases({ page, pageSize: PAGE_SIZE });
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
   const filteredItems = useMemo(() => {
-    const kw = keyword.trim().toLowerCase();
+    const kw = debouncedKw.trim().toLowerCase();
     if (!kw) return items;
     return items.filter((c) => {
       const ownerMatch = (c.owner_name ?? "").toLowerCase().includes(kw);
       const roomMatch = `${c.building ?? ""}${c.room ?? ""}`.toLowerCase().includes(kw);
       return ownerMatch || roomMatch;
     });
-  }, [items, keyword]);
-
-  function handleKeywordChange(v: string) {
-    setKeyword(v);
-    setPage(1);
-  }
+  }, [items, debouncedKw]);
 
   return (
     <div>
@@ -43,13 +40,11 @@ export function ProviderLegalCasesPage() {
       </div>
 
       <div style={{ marginBottom: 12 }}>
-        <input
-          className="form-control"
-          type="text"
-          placeholder="搜索业主 / 房号"
+        <SearchInput
           value={keyword}
-          onChange={(e) => handleKeywordChange(e.target.value)}
-          style={{ width: 240 }}
+          onChange={(v) => { setKeyword(v); setPage(1); }}
+          placeholder="搜索业主 / 房号"
+          width={240}
         />
       </div>
 
@@ -118,29 +113,12 @@ export function ProviderLegalCasesPage() {
           </tbody>
         </table>
 
-        {total > PAGE_SIZE && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, justifyContent: "flex-end" }}>
-            <button
-              type="button"
-              className="ds-btn ds-btn-secondary ds-btn-sm"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-            >
-              上一页
-            </button>
-            <span style={{ fontSize: 13, color: "var(--color-neutral-600)" }}>
-              {page} / {totalPages}
-            </span>
-            <button
-              type="button"
-              className="ds-btn ds-btn-secondary ds-btn-sm"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-            >
-              下一页
-            </button>
-          </div>
-        )}
+        <PaginationBar
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={total}
+          onPageChange={setPage}
+        />
       </div>
     </div>
   );
