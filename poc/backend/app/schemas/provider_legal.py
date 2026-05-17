@@ -51,3 +51,23 @@ class ProviderLegalConversionRequestCreate(BaseModel):
     """服务商法务发起法务转化请求入参。"""
 
     reason: str | None = Field(None, max_length=2000)
+
+
+class ProviderLegalRequestOut(BaseModel):
+    """服务商法务的法务转化请求 —— 列表项 / 创建结果。"""
+
+    id: int
+    tenant_id: int
+    case_id: int
+    owner_name: str | None = None
+    project_id: int | None = None
+    project_name: str | None = None
+    amount_owed: Decimal | None = None
+    reason: str | None = None
+    status: str
+    reviewer_note: str | None = None
+    reviewed_at: datetime | None = None
+    related_order_id: int | None = None
+    order_status: str | None = None
+    created_at: datetime
+    updated_at: datetime

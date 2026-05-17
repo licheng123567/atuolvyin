@@ -20,12 +20,19 @@ from app.core.roles import ROLE_LEGAL
 from app.core.security import get_token_payload, require_provider_roles
 from app.models.call import CallRecord
 from app.models.case import CollectionCase, OwnerProfile, Project
+from app.models.legal_conversion import (
+    LegalConversionOrder,
+    LegalConversionRequest,
+)
 from app.models.user import UserAccount
 from app.schemas.common import PaginatedResponse
 from app.schemas.provider_legal import (
     ProviderLegalCaseDetail,
     ProviderLegalCaseListItem,
+    ProviderLegalConversionRequestCreate,
+    ProviderLegalRequestOut,
 )
+from app.services.audit import log_audit
 
 router = APIRouter()
 
@@ -160,3 +167,110 @@ def get_case(
         call_count=call_count,
         last_call_at=last_call_at,
     )
+
+
+def _request_to_out(db: Session, req: LegalConversionRequest) -> ProviderLegalRequestOut:
+    """把 LegalConversionRequest 组装成 ProviderLegalRequestOut（含订单高阶状态）。"""
+    case = db.get(CollectionCase, req.case_id)
+    owner = db.get(OwnerProfile, case.owner_id) if case else None
+    project = db.get(Project, case.project_id) if case and case.project_id else None
+    order_status: str | None = None
+    if req.related_order_id is not None:
+        order = db.get(LegalConversionOrder, req.related_order_id)
+        order_status = order.status if order else None
+    return ProviderLegalRequestOut(
+        id=req.id,
+        tenant_id=req.tenant_id,
+        case_id=req.case_id,
+        owner_name=owner.name if owner else None,
+        project_id=case.project_id if case else None,
+        project_name=project.name if project else None,
+        amount_owed=case.amount_owed if case else None,
+        reason=req.reason,
+        status=req.status,
+        reviewer_note=req.reviewer_note,
+        reviewed_at=req.reviewed_at,
+        related_order_id=req.related_order_id,
+        order_status=order_status,
+        created_at=req.created_at,
+        updated_at=req.updated_at,
+    )
+
+
+@router.post(
+    "/cases/{case_id}/conversion-request",
+    response_model=ProviderLegalRequestOut,
+    status_code=http_status.HTTP_201_CREATED,
+)
+def create_conversion_request(
+    case_id: int,
+    body: ProviderLegalConversionRequestCreate,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_provider_roles(ROLE_LEGAL))],
+    db: Annotated[Session, Depends(get_db)],
+) -> ProviderLegalRequestOut:
+    tenant_id, provider_id, user_id = _ctx(payload)
+    case = db.execute(
+        select(CollectionCase).where(
+            CollectionCase.id == case_id,
+            _provider_legal_case_filter(tenant_id, provider_id),
+        )
+    ).scalar_one_or_none()
+    if case is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
+        )
+    active_order = db.execute(
+        select(LegalConversionOrder).where(
+            LegalConversionOrder.case_id == case_id,
+            LegalConversionOrder.status.in_(("pending", "dispatched", "in_service")),
+        )
+    ).scalar_one_or_none()
+    if active_order is not None:
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail={
+                "code": "ERR_LEGAL_ORDER_EXISTS",
+                "message": "该案件已存在进行中的法务转化订单",
+            },
+        )
+    pending_req = db.execute(
+        select(LegalConversionRequest).where(
+            LegalConversionRequest.case_id == case_id,
+            LegalConversionRequest.status == "pending",
+        )
+    ).scalar_one_or_none()
+    if pending_req is not None:
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail={
+                "code": "ERR_REQUEST_PENDING",
+                "message": "该案件已有待审批的转法务申请",
+            },
+        )
+    req = LegalConversionRequest(
+        tenant_id=tenant_id,
+        case_id=case_id,
+        requester_user_id=user_id,
+        requester_role=ROLE_LEGAL,
+        reason=body.reason,
+        status="pending",
+    )
+    db.add(req)
+    db.flush()
+    log_audit(
+        db,
+        actor_user_id=user_id,
+        actor_role=ROLE_LEGAL,
+        tenant_id=tenant_id,
+        action="legal_conversion_request.created",
+        target_type="legal_conversion_request",
+        target_id=req.id,
+        payload={"case_id": case_id, "reason": body.reason}
+        if body.reason
+        else {"case_id": case_id},
+    )
+    db.commit()
+    db.refresh(req)
+    return _request_to_out(db, req)

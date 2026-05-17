@@ -215,3 +215,81 @@ def test_list_cases_rejects_provider_side_non_legal(api, db_session, seeded_tena
     })
     resp = api.get("/api/v1/provider/legal/cases", headers=_auth(token))
     assert resp.status_code == 403
+
+
+def test_create_conversion_request(api, db_session, seeded_tenant):
+    env = _seed_provider_env(db_session, seeded_tenant,
+                             provider_name="服务商A", owner_phone="13712345678")
+    resp = api.post(
+        f"/api/v1/provider/legal/cases/{env.case.id}/conversion-request",
+        json={"reason": "业主长期拒缴，建议走法务"},
+        headers=_auth(env.token),
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["case_id"] == env.case.id
+    assert body["status"] == "pending"
+    assert body["reason"] == "业主长期拒缴，建议走法务"
+    assert body["order_status"] is None
+
+    from app.models.legal_conversion import LegalConversionRequest
+    req = db_session.get(LegalConversionRequest, body["id"])
+    assert req is not None
+    assert req.requester_role == "legal"
+    assert req.requester_user_id == env.user.id
+
+
+def test_create_conversion_request_cross_provider_404(api, db_session, seeded_tenant):
+    env_a = _seed_provider_env(db_session, seeded_tenant,
+                               provider_name="服务商A", owner_phone="13712345678")
+    env_b = _seed_provider_env(db_session, seeded_tenant,
+                               provider_name="服务商B", owner_phone="13755556666")
+    resp = api.post(
+        f"/api/v1/provider/legal/cases/{env_b.case.id}/conversion-request",
+        json={"reason": "x"},
+        headers=_auth(env_a.token),
+    )
+    assert resp.status_code == 404
+
+
+def test_create_conversion_request_duplicate_pending_409(api, db_session, seeded_tenant):
+    env = _seed_provider_env(db_session, seeded_tenant,
+                             provider_name="服务商A", owner_phone="13712345678")
+    first = api.post(
+        f"/api/v1/provider/legal/cases/{env.case.id}/conversion-request",
+        json={"reason": "第一次"}, headers=_auth(env.token),
+    )
+    assert first.status_code == 201
+    second = api.post(
+        f"/api/v1/provider/legal/cases/{env.case.id}/conversion-request",
+        json={"reason": "第二次"}, headers=_auth(env.token),
+    )
+    assert second.status_code == 409
+    assert second.json()["code"] == "ERR_REQUEST_PENDING"
+
+
+def test_create_conversion_request_active_order_409(api, db_session, seeded_tenant):
+    env = _seed_provider_env(db_session, seeded_tenant,
+                             provider_name="服务商A", owner_phone="13712345678")
+    from decimal import Decimal
+
+    from app.models.legal_conversion import LegalConversionOrder, LegalServicePackage
+    pkg = LegalServicePackage(
+        tenant_id=None, slug="lawyer_letter", package_type="lawyer_letter",
+        name="律师函", price=Decimal("199.00"), platform_fee_rate=Decimal("0.30"),
+    )
+    db_session.add(pkg)
+    db_session.flush()
+    order = LegalConversionOrder(
+        tenant_id=seeded_tenant.id, case_id=env.case.id, status="in_service",
+        package_id=pkg.id, price_quoted=Decimal("199.00"),
+        platform_fee_amount=Decimal("59.70"),
+    )
+    db_session.add(order)
+    db_session.flush()
+    resp = api.post(
+        f"/api/v1/provider/legal/cases/{env.case.id}/conversion-request",
+        json={"reason": "x"}, headers=_auth(env.token),
+    )
+    assert resp.status_code == 409
+    assert resp.json()["code"] == "ERR_LEGAL_ORDER_EXISTS"
