@@ -13,6 +13,7 @@ import {
   useApproveOffer, useDiscountOffers, useEscalateOffer, useRejectOffer,
   type DiscountOfferDTO,
 } from "./api";
+import { SourceBadge } from "./SourceBadge";
 
 const PAGE_SIZE = 20;
 
@@ -150,11 +151,7 @@ export function ApprovalListPage({ approverRole, approverName: _approverName, de
                   <td style={{ color: "var(--color-primary)", fontFamily: "monospace" }}>#{o.id}</td>
                   <td><strong>{o.case_owner ?? "—"}</strong> / {o.case_building ?? ""}</td>
                   <td>
-                    {o.provider_id == null ? (
-                      <span className="ds-badge" style={{ background: "#F3F4F6", color: "#4B5563" }}>物业内勤</span>
-                    ) : (
-                      <span className="ds-badge ds-badge-blue">服务商 · {o.provider_name ?? `#${o.provider_id}`}</span>
-                    )}
+                    <SourceBadge providerId={o.provider_id} providerName={o.provider_name} />
                   </td>
                   <td>{o.offer_type_label}{o.installment_months ? `（${o.installment_months} 期）` : ""}</td>
                   <td>

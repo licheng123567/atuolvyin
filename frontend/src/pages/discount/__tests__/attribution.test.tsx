@@ -18,8 +18,9 @@ vi.mock("../api", () => ({
     items: [
       { ...baseOffer, id: 1, provider_id: null, provider_name: null },
       { ...baseOffer, id: 2, provider_id: 5, provider_name: "信达催收" },
+      { ...baseOffer, id: 3, provider_id: 7, provider_name: null },
     ],
-    total: 2, isLoading: false, refetch: vi.fn(),
+    total: 3, isLoading: false, refetch: vi.fn(),
   }),
   useApproveOffer: () => ({ approve: vi.fn(), isPending: false }),
   useRejectOffer: () => ({ reject: vi.fn(), isPending: false }),
@@ -27,7 +28,7 @@ vi.mock("../api", () => ({
 }));
 
 vi.mock("../../../hooks/useDiscountPolicy", () => ({
-  useDiscountPolicy: () => ({ autoThreshold: 10, supervisorMax: 30, disabled: false }),
+  useDiscountPolicy: () => ({ autoThreshold: 10, supervisorMax: 30, disabled: false, isLoading: false }),
 }));
 
 vi.mock("../../../components/ui/HelpPanel", () => ({
@@ -49,5 +50,18 @@ describe("减免归属来源展示", () => {
     );
     expect(screen.getByText("物业内勤")).toBeDefined();
     expect(screen.getByText(/信达催收/)).toBeDefined();
+  });
+
+  it("falls back to #providerId when provider_name is null", () => {
+    render(
+      <MemoryRouter>
+        <ApprovalListPage
+          approverRole="supervisor"
+          approverName="测试督导"
+          detailBasePath="/supervisor/discount-approvals"
+        />
+      </MemoryRouter>
+    );
+    expect(screen.getByText(/#7/)).toBeDefined();
   });
 });
