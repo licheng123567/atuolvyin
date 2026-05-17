@@ -171,6 +171,7 @@
 - 物业费债权人是物业公司,**诉讼主体与终审决定权始终在物业法务 / 物业委托的律所**(`LawFirm` 实体)。
 - 服务商法务**可选** —— 小服务商无法务时,催收员直接发起法务转化请求给物业法务。seed 不强制造此账号。
 - 概念区分:「服务商法务(角色)」与「法务类服务商 / 律所(组织实体,`ServiceProvider.provider_type='legal'` 或 `LawFirm`)」是两回事,不可混淆。
+- ✅ **已实现(2026-05-16)**：新增 `/api/v1/provider/legal/*` 路由(`require_provider_roles("legal")`)，服务商法务可只读浏览本服务商项目下案件、上传补充材料、发起法务转化请求、跟进请求+订单高阶状态；审批/内部订单处理/律所派单仍物业专属。详见 `docs/superpowers/specs/2026-05-16-provider-legal-boundary-design.md`。
 
 ### 9.2 减免归属
 
