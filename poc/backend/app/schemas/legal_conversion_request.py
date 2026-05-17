@@ -79,3 +79,10 @@ class LegalConversionRequestMaterialDownloadOut(BaseModel):
     content_type: str | None = None
     size_bytes: int | None = None
     expires_in_sec: int = 3600
+
+
+class LegalConversionRequestDetailOut(LegalConversionRequestOut):
+    """物业审批人看到的请求详情 —— 在 inbox 列表项基础上带补充材料 + 订单高阶状态。"""
+
+    order_status: str | None = None
+    materials: list[LegalConversionRequestMaterialOut] = []

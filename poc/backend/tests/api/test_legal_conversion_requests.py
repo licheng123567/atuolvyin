@@ -142,7 +142,6 @@ async def test_agent_only_sees_own_requests(
 ):
     """另一个 agent 创建的 request 不应出现在 agent_auth_headers 用户的列表里。"""
     from app.core.crypto import encrypt_phone
-    from app.core.security import create_access_token
     from app.models.case import CollectionCase
     from app.models.legal_conversion import LegalConversionRequest
     from app.models.tenant import UserTenantMembership
@@ -403,3 +402,101 @@ async def test_cross_tenant_request_returns_404(
         headers=headers,
     )
     assert resp.status_code == 404
+
+
+def _seed_request_with_material(db_session, seeded_tenant, seeded_case, uploader_id):
+    """建一个 pending 请求 + 一条补充材料，返回 (request, material)。"""
+    from app.models.legal_conversion import (
+        LegalConversionRequest,
+        LegalConversionRequestMaterial,
+    )
+    req = LegalConversionRequest(
+        tenant_id=seeded_tenant.id, case_id=seeded_case.id,
+        requester_user_id=uploader_id, requester_role="legal", status="pending",
+    )
+    db_session.add(req)
+    db_session.flush()
+    mat = LegalConversionRequestMaterial(
+        request_id=req.id, tenant_id=seeded_tenant.id,
+        object_key=f"legal_conv_req_materials/{seeded_tenant.id}/{req.id}/x.pdf",
+        filename="服务商材料.pdf", content_type="application/pdf",
+        size_bytes=128, uploaded_by=uploader_id,
+    )
+    db_session.add(mat)
+    db_session.flush()
+    return req, mat
+
+
+def test_property_reviewer_sees_request_detail_with_materials(
+    db_session, seeded_tenant, seeded_case, seeded_supervisor_user, supervisor_auth_headers
+):
+    from starlette.testclient import TestClient
+
+    from app.core.db import get_db
+    from app.main import app
+
+    req, mat = _seed_request_with_material(
+        db_session, seeded_tenant, seeded_case, seeded_supervisor_user.id
+    )
+
+    def _override():
+        yield db_session
+
+    app.dependency_overrides[get_db] = _override
+    try:
+        with TestClient(app) as cli:
+            detail = cli.get(
+                f"/api/v1/legal-conversion-requests/{req.id}",
+                headers=supervisor_auth_headers,
+            )
+            assert detail.status_code == 200, detail.text
+            body = detail.json()
+            assert body["id"] == req.id
+            assert len(body["materials"]) == 1
+            assert body["materials"][0]["filename"] == "服务商材料.pdf"
+
+            dl = cli.get(
+                f"/api/v1/legal-conversion-requests/{req.id}/materials/{mat.id}",
+                headers=supervisor_auth_headers,
+            )
+            assert dl.status_code == 200, dl.text
+            assert dl.json()["download_url"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_property_request_detail_cross_tenant_404(
+    db_session, seeded_tenant, seeded_case, seeded_supervisor_user, supervisor_auth_headers
+):
+    from starlette.testclient import TestClient
+
+    from app.core.crypto import encrypt_phone
+    from app.core.db import get_db
+    from app.main import app
+    from app.models.legal_conversion import LegalConversionRequest
+    from app.models.tenant import Tenant
+
+    other = Tenant(name="别家物业", admin_phone_enc=encrypt_phone("13800000000"),
+                    plan="trial", is_active=True)
+    db_session.add(other)
+    db_session.flush()
+    foreign_req = LegalConversionRequest(
+        tenant_id=other.id, case_id=seeded_case.id,
+        requester_user_id=seeded_supervisor_user.id, requester_role="legal", status="pending",
+    )
+    db_session.add(foreign_req)
+    db_session.flush()
+
+    def _override():
+        yield db_session
+
+    app.dependency_overrides[get_db] = _override
+    try:
+        with TestClient(app) as cli:
+            resp = cli.get(
+                f"/api/v1/legal-conversion-requests/{foreign_req.id}",
+                headers=supervisor_auth_headers,
+            )
+            assert resp.status_code == 404
+    finally:
+        app.dependency_overrides.clear()

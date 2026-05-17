@@ -25,12 +25,20 @@ from app.core.phone_visibility import (
     should_reveal_owner_phone,
 )
 from app.core.security import get_token_payload, require_roles, require_tenant_roles
+from app.core.storage import storage
 from app.models.case import CollectionCase, OwnerProfile, Project
-from app.models.legal_conversion import LegalConversionRequest
+from app.models.legal_conversion import (
+    LegalConversionOrder,
+    LegalConversionRequest,
+    LegalConversionRequestMaterial,
+)
 from app.models.user import UserAccount
 from app.schemas.common import PaginatedResponse
 from app.schemas.legal_conversion_request import (
     ApproveLegalConversionRequestBody,
+    LegalConversionRequestDetailOut,
+    LegalConversionRequestMaterialDownloadOut,
+    LegalConversionRequestMaterialOut,
     LegalConversionRequestOut,
     RejectLegalConversionRequestBody,
 )
@@ -380,4 +388,107 @@ def reject_request(
             provider_id=payload.get("provider_id"),
             contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
         ),
+    )
+
+
+@router.get(
+    "/legal-conversion-requests/{request_id}",
+    response_model=LegalConversionRequestDetailOut,
+)
+def get_request_detail(
+    request_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*REVIEWER_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> LegalConversionRequestDetailOut:
+    """§9.1 — 物业审批人看请求详情 + 服务商法务上传的补充材料。"""
+    tenant_id = _require_tenant(payload)
+    request_row = db.get(LegalConversionRequest, request_id)
+    if request_row is None or request_row.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "申请不存在"},
+        )
+    (
+        request_row,
+        case,
+        owner,
+        project_name,
+        requester_name,
+        reviewer_name,
+    ) = _load_request_with_context(db, request_id, tenant_id)
+    contract_active = is_provider_contract_active(
+        db, tenant_id, payload.get("provider_id")
+    )
+    owner_phone_reveal = should_reveal_owner_phone(
+        role=payload.get("role", ""),
+        provider_id=payload.get("provider_id"),
+        contract_active=contract_active,
+    )
+    base = _row_to_out(
+        request_row=request_row,
+        case=case,
+        owner=owner,
+        project_name=project_name,
+        requester_name=requester_name,
+        reviewer_name=reviewer_name,
+        owner_phone_reveal=owner_phone_reveal,
+    )
+    order_status: str | None = None
+    if request_row.related_order_id is not None:
+        order = db.get(LegalConversionOrder, request_row.related_order_id)
+        order_status = order.status if order else None
+    materials = (
+        db.execute(
+            select(LegalConversionRequestMaterial)
+            .where(LegalConversionRequestMaterial.request_id == request_id)
+            .order_by(LegalConversionRequestMaterial.id)
+        )
+        .scalars()
+        .all()
+    )
+    return LegalConversionRequestDetailOut(
+        **base.model_dump(),
+        order_status=order_status,
+        materials=[
+            LegalConversionRequestMaterialOut.model_validate(m) for m in materials
+        ],
+    )
+
+
+@router.get(
+    "/legal-conversion-requests/{request_id}/materials/{material_id}",
+    response_model=LegalConversionRequestMaterialDownloadOut,
+)
+def download_request_material(
+    request_id: int,
+    material_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*REVIEWER_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> LegalConversionRequestMaterialDownloadOut:
+    """§9.1 — 物业审批人下载服务商法务上传的补充材料。"""
+    tenant_id = _require_tenant(payload)
+    material = db.get(LegalConversionRequestMaterial, material_id)
+    if (
+        material is None
+        or material.request_id != request_id
+        or material.tenant_id != tenant_id
+    ):
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "材料不存在"},
+        )
+    try:
+        url = storage.get_url(material.object_key)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=http_status.HTTP_502_BAD_GATEWAY,
+            detail={"code": "ERR_STORAGE_FAILURE", "message": "无法生成下载链接"},
+        ) from exc
+    return LegalConversionRequestMaterialDownloadOut(
+        download_url=url,
+        filename=material.filename,
+        content_type=material.content_type,
+        size_bytes=material.size_bytes,
     )
