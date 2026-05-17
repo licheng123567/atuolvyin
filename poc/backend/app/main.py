@@ -38,6 +38,7 @@ from app.api import (
     legal_conversion_requests,
     legal_documents,
     legal_internal_orders,
+    provider_legal,
     legal_workstation,
     ops,
     ops_extras,
@@ -311,6 +312,9 @@ app.include_router(admin_compliance.router, prefix="/api/v1/admin", tags=["admin
 app.include_router(admin_settings.router, prefix="/api/v1/admin", tags=["admin-settings"])
 app.include_router(legal_cases.router, prefix="/api/v1/legal", tags=["legal"])
 app.include_router(legal_documents.router, prefix="/api/v1/legal", tags=["legal-documents"])
+app.include_router(
+    provider_legal.router, prefix="/api/v1/provider/legal", tags=["provider-legal"]
+)
 app.include_router(work_orders.router, prefix="/api/v1/workorders", tags=["workorders"])
 app.include_router(pm_dashboard.router, prefix="/api/v1/pm", tags=["pm"])
 app.include_router(provider_admin.router, prefix="/api/v1/provider", tags=["provider"])

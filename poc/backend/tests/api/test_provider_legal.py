@@ -1,0 +1,185 @@
+"""§9.1 — 服务商法务端点测试。"""
+from __future__ import annotations
+
+from types import SimpleNamespace
+
+import pytest
+from starlette.testclient import TestClient
+
+
+def _seed_provider_env(db_session, tenant, *, provider_name, owner_phone, project_status="active"):
+    """建 provider + project(provider_id) + owner + case + provider-legal 用户 + token。
+
+    返回 SimpleNamespace(provider, project, owner, case, user, token)。
+    """
+    from datetime import UTC, datetime, timedelta
+    from decimal import Decimal
+
+    from app.core.crypto import encrypt_phone
+    from app.core.security import create_access_token, get_password_hash
+    from app.models.case import CollectionCase, OwnerProfile, Project
+    from app.models.tenant import ServiceProvider, UserTenantMembership
+    from app.models.user import UserAccount
+
+    provider = ServiceProvider(
+        name=provider_name,
+        provider_type="legal",
+        admin_phone_enc=encrypt_phone("13900000000"),
+    )
+    db_session.add(provider)
+    db_session.flush()
+
+    project = Project(
+        tenant_id=tenant.id,
+        name=f"{provider_name}-项目",
+        provider_id=provider.id,
+        status=project_status,
+        plan_end=datetime.now(UTC) + timedelta(days=90),
+    )
+    db_session.add(project)
+    db_session.flush()
+
+    owner = OwnerProfile(
+        tenant_id=tenant.id,
+        name="业主测试",
+        phone_enc=encrypt_phone(owner_phone),
+        building="2栋",
+        room="202",
+    )
+    db_session.add(owner)
+    db_session.flush()
+
+    case = CollectionCase(
+        tenant_id=tenant.id,
+        project_id=project.id,
+        owner_id=owner.id,
+        pool_type="public",
+        stage="new",
+        amount_owed=Decimal("5000.00"),
+        months_overdue=4,
+        priority_score=900,
+    )
+    db_session.add(case)
+    db_session.flush()
+
+    user = UserAccount(
+        name=f"{provider_name}-法务",
+        phone_enc=encrypt_phone(owner_phone),
+        password_hash=get_password_hash("pw"),
+        is_active=True,
+    )
+    db_session.add(user)
+    db_session.flush()
+
+    mem = UserTenantMembership(
+        tenant_id=tenant.id,
+        user_id=user.id,
+        role="legal",
+        provider_id=provider.id,
+        is_active=True,
+    )
+    db_session.add(mem)
+    db_session.flush()
+
+    token = create_access_token({
+        "sub": str(user.id),
+        "user_id": user.id,
+        "tenant_id": tenant.id,
+        "role": "legal",
+        "provider_id": provider.id,
+        "scope": f"tenant:{tenant.id}",
+    })
+    return SimpleNamespace(
+        provider=provider, project=project, owner=owner, case=case, user=user, token=token
+    )
+
+
+@pytest.fixture
+def api(db_session):
+    from app.core.db import get_db
+    from app.main import app
+
+    def _override():
+        yield db_session
+
+    app.dependency_overrides[get_db] = _override
+    with TestClient(app) as cli:
+        yield cli
+    app.dependency_overrides.clear()
+
+
+def _auth(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_list_cases_rejects_property_side_legal(api, db_session, seeded_tenant):
+    """物业侧 legal（provider_id 空）访问 /provider/legal/* → 403。"""
+    from app.core.security import create_access_token
+    from app.core.crypto import encrypt_phone
+    from app.core.security import get_password_hash
+    from app.models.tenant import UserTenantMembership
+    from app.models.user import UserAccount
+
+    u = UserAccount(name="物业法务", phone_enc=encrypt_phone("13700000001"),
+                    password_hash=get_password_hash("pw"), is_active=True)
+    db_session.add(u)
+    db_session.flush()
+    db_session.add(UserTenantMembership(
+        tenant_id=seeded_tenant.id, user_id=u.id, role="legal", is_active=True))
+    db_session.flush()
+    token = create_access_token({
+        "sub": str(u.id), "user_id": u.id, "tenant_id": seeded_tenant.id,
+        "role": "legal", "scope": f"tenant:{seeded_tenant.id}",
+    })
+    resp = api.get("/api/v1/provider/legal/cases", headers=_auth(token))
+    assert resp.status_code == 403
+
+
+def test_list_cases_returns_own_provider_cases(api, db_session, seeded_tenant):
+    """服务商法务只看到本服务商项目下的案件。"""
+    env = _seed_provider_env(db_session, seeded_tenant,
+                             provider_name="服务商A", owner_phone="13712345678")
+    resp = api.get("/api/v1/provider/legal/cases", headers=_auth(env.token))
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["total"] == 1
+    item = body["items"][0]
+    assert item["case_id"] == env.case.id
+    assert item["project_id"] == env.project.id
+    # 电话脱敏
+    assert item["owner_phone_masked"] == "137****5678"
+
+
+def test_list_cases_cross_provider_isolation(api, db_session, seeded_tenant):
+    """服务商A 的法务看不到服务商B 的案件。"""
+    env_a = _seed_provider_env(db_session, seeded_tenant,
+                               provider_name="服务商A", owner_phone="13712345678")
+    _seed_provider_env(db_session, seeded_tenant,
+                       provider_name="服务商B", owner_phone="13755556666")
+    resp = api.get("/api/v1/provider/legal/cases", headers=_auth(env_a.token))
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["items"][0]["case_id"] == env_a.case.id
+
+
+def test_get_case_detail(api, db_session, seeded_tenant):
+    env = _seed_provider_env(db_session, seeded_tenant,
+                             provider_name="服务商A", owner_phone="13712345678")
+    resp = api.get(f"/api/v1/provider/legal/cases/{env.case.id}", headers=_auth(env.token))
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["case_id"] == env.case.id
+    assert body["owner_phone_masked"] == "137****5678"
+    assert body["stage"] == "new"
+    assert body["call_count"] == 0
+
+
+def test_get_case_detail_cross_provider_404(api, db_session, seeded_tenant):
+    """服务商A 的法务取服务商B 的案件 → 404。"""
+    env_a = _seed_provider_env(db_session, seeded_tenant,
+                               provider_name="服务商A", owner_phone="13712345678")
+    env_b = _seed_provider_env(db_session, seeded_tenant,
+                               provider_name="服务商B", owner_phone="13755556666")
+    resp = api.get(f"/api/v1/provider/legal/cases/{env_b.case.id}", headers=_auth(env_a.token))
+    assert resp.status_code == 404
