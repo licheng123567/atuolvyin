@@ -112,3 +112,26 @@ async def test_agent_commission_full_waiver_zero_collected(
     assert item["paid_case_count"] == 1
     assert Decimal(item["base_amount"]) == Decimal("0.00")
     assert Decimal(item["commission"]) == Decimal("0.00")
+
+
+@pytest.mark.asyncio
+async def test_agent_commission_detail_per_case_rate_and_discount(
+    client, db_session, seeded_tenant, seeded_owner, seeded_member_user, admin_auth_headers
+):
+    p = _project(db_session, seeded_tenant.id, "明细佣金项目", Decimal("0.0800"))
+    c1 = _paid_case(
+        db_session, seeded_tenant.id, seeded_owner.id, seeded_member_user.id, p.id, "1000.00"
+    )
+    _executed_offer(db_session, seeded_tenant.id, c1.id, "600.00")  # 实收 600
+
+    resp = await client.get(
+        f"/api/v1/admin/agent-commissions/{seeded_member_user.id}?year_month=2026-05",
+        headers=admin_auth_headers,
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert Decimal(str(body["base_amount"])) == Decimal("600.00")
+    assert Decimal(str(body["commission"])) == Decimal("48.00")  # 600 × 0.08
+    item = next(it for it in body["items"] if it["case_id"] == c1.id)
+    assert Decimal(str(item["paid_amount"])) == Decimal("600.00")
+    assert Decimal(str(item["commission_rate"])) == Decimal("0.0800")

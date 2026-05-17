@@ -584,6 +584,7 @@ class AgentCommissionLineItem(BaseModel):
     owner_name: str
     paid_amount: Decimal
     paid_at: datetime
+    commission_rate: Decimal  # §9.2 — 该案所属项目的内勤佣金率
 
 
 class AgentCommissionDetail(BaseModel):
@@ -721,8 +722,6 @@ async def get_agent_commission_detail(
     """v1.5.6 — 单个内部催收员当月提成明细（每个 paid 案件一行）。"""
     from decimal import Decimal as D
 
-    from app.models.case import CollectionCase, OwnerProfile
-
     tenant_id: int | None = payload.get("tenant_id")
     if not tenant_id:
         raise HTTPException(
@@ -736,6 +735,9 @@ async def get_agent_commission_detail(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail={"code": "ERR_NOT_FOUND", "message": "用户不存在"},
         )
+
+    from app.models.case import CollectionCase, OwnerProfile, Project
+    from app.services.commission import executed_discount_amounts, internal_agent_rate
 
     period_start, period_end = _month_window(year_month)
     rows = db.execute(
@@ -751,22 +753,39 @@ async def get_agent_commission_detail(
         .order_by(CollectionCase.updated_at.desc())
     ).all()
 
-    items = [
-        AgentCommissionLineItem(
-            case_id=c.id,
-            owner_name=o.name,
-            paid_amount=D(str(c.amount_owed or 0)),
-            paid_at=c.updated_at,
+    executed = executed_discount_amounts(db, tenant_id, [c.id for c, _o in rows])
+    project_cache: dict[int, Project | None] = {}
+
+    def _project(project_id: int | None) -> Project | None:
+        if project_id is None:
+            return None
+        if project_id not in project_cache:
+            project_cache[project_id] = db.get(Project, project_id)
+        return project_cache[project_id]
+
+    items: list[AgentCommissionLineItem] = []
+    base = D("0")
+    commission = D("0")
+    for c, o in rows:
+        collected = executed[c.id] if c.id in executed else D(str(c.amount_owed or 0))
+        rate = internal_agent_rate(_project(c.project_id))
+        base += collected
+        commission += (collected * rate).quantize(D("0.01"))
+        items.append(
+            AgentCommissionLineItem(
+                case_id=c.id,
+                owner_name=o.name,
+                paid_amount=collected,
+                paid_at=c.updated_at,
+                commission_rate=rate,
+            )
         )
-        for c, o in rows
-    ]
-    base = sum((it.paid_amount for it in items), D("0"))
-    commission = (base * D(str(INTERNAL_AGENT_COMMISSION_RATE))).quantize(D("0.01"))
+    effective_rate = float(commission / base) if base > 0 else INTERNAL_AGENT_COMMISSION_RATE
     return AgentCommissionDetail(
         user_id=target.id,
         name=target.name,
         year_month=year_month,
-        commission_rate=INTERNAL_AGENT_COMMISSION_RATE,
+        commission_rate=effective_rate,
         base_amount=base,
         commission=commission,
         items=items,
