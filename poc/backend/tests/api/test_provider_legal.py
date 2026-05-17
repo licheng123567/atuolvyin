@@ -371,3 +371,38 @@ def test_upload_material_cross_provider_404(api, db_session, seeded_tenant):
         headers=_auth(env_a.token),
     )
     assert resp.status_code == 404
+
+
+def test_download_material_cross_provider_404(api, db_session, seeded_tenant):
+    """服务商A 不能下载服务商B 请求下的材料。"""
+    env_a = _seed_provider_env(db_session, seeded_tenant,
+                               provider_name="服务商A", owner_phone="13712345678")
+    env_b = _seed_provider_env(db_session, seeded_tenant,
+                               provider_name="服务商B", owner_phone="13755556666")
+    req_b = _create_request(db_session, env_b)
+    up = api.post(
+        f"/api/v1/provider/legal/conversion-requests/{req_b.id}/materials",
+        files={"file": ("证据.pdf", b"%PDF-1.4", "application/pdf")},
+        headers=_auth(env_b.token),
+    )
+    assert up.status_code == 201
+    mat_id = up.json()["id"]
+    resp = api.get(
+        f"/api/v1/provider/legal/conversion-requests/{req_b.id}/materials/{mat_id}",
+        headers=_auth(env_a.token),
+    )
+    assert resp.status_code == 404
+
+
+def test_upload_material_invalid_mime_422(api, db_session, seeded_tenant):
+    """不允许的 MIME 类型 → 422 ERR_INVALID_MIME。"""
+    env = _seed_provider_env(db_session, seeded_tenant,
+                             provider_name="服务商A", owner_phone="13712345678")
+    req = _create_request(db_session, env)
+    resp = api.post(
+        f"/api/v1/provider/legal/conversion-requests/{req.id}/materials",
+        files={"file": ("bad.exe", b"MZ\x90\x00", "application/x-msdownload")},
+        headers=_auth(env.token),
+    )
+    assert resp.status_code == 422
+    assert resp.json()["code"] == "ERR_INVALID_MIME"

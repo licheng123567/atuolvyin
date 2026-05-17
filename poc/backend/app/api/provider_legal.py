@@ -354,6 +354,7 @@ async def upload_material(
         )
     filename = file.filename or f"material_{uuid.uuid4().hex[:8]}"
     ext = filename.rsplit(".", 1)[-1] if "." in filename else "bin"
+    ext = "".join(c for c in ext if c.isalnum())[:10] or "bin"
     object_key = f"legal_conv_req_materials/{tenant_id}/{request_id}/{uuid.uuid4().hex}.{ext}"
     try:
         storage.put_object(object_key, raw, mime or "application/octet-stream")
