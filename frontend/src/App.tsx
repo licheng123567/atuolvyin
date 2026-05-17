@@ -112,6 +112,10 @@ import { SupervisorShiftsPage } from "./pages/supervisor/shifts";
 import { SupervisorTrainingPage } from "./pages/supervisor/training";
 import { ProviderDashboardPage } from "./pages/provider/dashboard";
 import { ProviderHistoricalReportsPage } from "./pages/provider/historical-reports";
+import { ProviderLegalCasesPage } from "./pages/provider/legal/cases";
+import { ProviderLegalCaseDetailPage } from "./pages/provider/legal/cases/[id]";
+import { ProviderLegalRequestsPage } from "./pages/provider/legal/requests";
+import { ProviderLegalRequestDetailPage } from "./pages/provider/legal/requests/[id]";
 import { ProviderProjectsPage } from "./pages/provider/projects";
 import { ProviderScriptListPage } from "./pages/provider/scripts";
 import { ProviderTenantsPage } from "./pages/provider/tenants";
@@ -536,6 +540,11 @@ function App() {
             <Route path="/provider/settlements/:id" element={<ProviderSettlementDetailPage />} />
             <Route path="/provider/historical-reports" element={<ProviderHistoricalReportsPage />} />
             <Route path="/provider/projects" element={<ProviderProjectsPage />} />
+            {/* §9 — 服务商法务 (provider legal) */}
+            <Route path="/provider/legal/cases" element={<ProviderLegalCasesPage />} />
+            <Route path="/provider/legal/cases/:id" element={<ProviderLegalCaseDetailPage />} />
+            <Route path="/provider/legal/requests" element={<ProviderLegalRequestsPage />} />
+            <Route path="/provider/legal/requests/:id" element={<ProviderLegalRequestDetailPage />} />
             {/* Sprint 15 — superadmin system management */}
             <Route path="/super/health" element={<SuperHealthPage />} />
             <Route path="/super/audit" element={<SuperAuditPage />} />

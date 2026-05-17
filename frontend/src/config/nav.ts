@@ -268,6 +268,17 @@ const PM_PROVIDER_NAV: NavSection[] = [
   },
 ];
 
+// §9.1 — 服务商法务 nav（scope=provider:{id}）
+const LEGAL_PROVIDER_NAV: NavSection[] = [
+  {
+    title: "我的工作",
+    items: [
+      { label: "法务案件", path: "/provider/legal/cases", icon: "Scale" },
+      { label: "转化请求", path: "/provider/legal/requests", icon: "ClipboardList" },
+    ],
+  },
+];
+
 // 「下载 App」对所有角色都展示（modal 关掉后还能找到）
 const HELP_SECTION: NavSection = {
   title: "帮助",
@@ -295,6 +306,11 @@ export function getNavSections(role: UserRole | string, scope?: string): NavSect
   if (role === "project_manager") {
     const base = s.startsWith("provider:") ? PM_PROVIDER_NAV : (NAV_CONFIG.project_manager ?? [{ items: [{ label: "控制台", path: "/" }] }]);
     return [...base, HELP_SECTION];
+  }
+
+  // legal: provider-side gets provider legal nav; property-side gets property legal nav
+  if (role === "legal" && s.startsWith("provider:")) {
+    return [...LEGAL_PROVIDER_NAV, HELP_SECTION];
   }
 
   const base =
