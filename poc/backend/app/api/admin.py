@@ -827,7 +827,9 @@ async def admin_cost_summary(
     )
     provider_ids = {pid for _s, pid in settle_rows if pid}
 
-    # 应发员工提成：复用 list_agent_commissions 算法
+    # 应发员工提成（粗口径）：原始 amount_owed × 固定 INTERNAL_AGENT_COMMISSION_RATE。
+    # 注意：§9.2 后 list_agent_commissions 已改为「逐案实收(扣减免)×项目率」，本汇总
+    # 未跟随（spec §9.2 范围仅含 list 端点）；二者对同月内勤佣金总额会有差异，§9.2b 再对齐。
     agents = (
         db.execute(
             select(UserAccount.id)
