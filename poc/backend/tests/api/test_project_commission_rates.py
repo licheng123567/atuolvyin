@@ -157,3 +157,50 @@ async def test_d2_provider_agent_role_403(client, db_session, seeded_tenant):
     )
     assert resp.status_code == 403
     assert resp.json()["code"] == "ERR_FORBIDDEN"
+
+
+# ── D2：LIST 端点新字段 ────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_d2_list_provider_projects_includes_commission_rate(
+    client, db_session, seeded_tenant
+) -> None:
+    """GET /api/v1/provider/projects 返回 items 里包含 provider_agent_commission_rate 字段。
+
+    - 有佣金率的项目：字段为对应字符串值。
+    - 无佣金率的项目：字段为 None。
+
+    list_provider_projects 的 PROVIDER_ROLES 限制 "admin"，故用 role="admin" 建 token。
+    """
+    headers, provider_id = _provider_pm_headers(
+        db_session, seeded_tenant.id, name_suffix="05", role="admin"
+    )
+    # 项目 A：有 provider_agent_commission_rate
+    project_with_rate = _project(
+        db_session, seeded_tenant.id, "D2 LIST 有佣金率项目", provider_id=provider_id
+    )
+    project_with_rate.provider_agent_commission_rate = Decimal("0.0800")
+    db_session.flush()
+
+    # 项目 B：无 provider_agent_commission_rate（保持 null）
+    project_no_rate = _project(
+        db_session, seeded_tenant.id, "D2 LIST 无佣金率项目", provider_id=provider_id
+    )
+
+    resp = await client.get(
+        "/api/v1/provider/projects",
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    items: list[dict] = resp.json()["items"]
+    ids_returned = {item["project_id"] for item in items}
+
+    assert project_with_rate.id in ids_returned
+    assert project_no_rate.id in ids_returned
+
+    item_with_rate = next(i for i in items if i["project_id"] == project_with_rate.id)
+    item_no_rate = next(i for i in items if i["project_id"] == project_no_rate.id)
+
+    assert Decimal(str(item_with_rate["provider_agent_commission_rate"])) == Decimal("0.0800")
+    assert item_no_rate["provider_agent_commission_rate"] is None

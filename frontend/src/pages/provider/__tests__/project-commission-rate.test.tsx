@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { useCustom, useCustomMutation, useList } from "@refinedev/core";
+
+// vi.hoisted ensures the mock factory runs before module imports
+const mockMutate = vi.hoisted(() => vi.fn());
 
 vi.mock("@refinedev/core", () => ({
   useCustom: vi.fn(),
@@ -9,6 +11,7 @@ vi.mock("@refinedev/core", () => ({
   useList: vi.fn(),
 }));
 
+import { useCustom, useCustomMutation, useList } from "@refinedev/core";
 import { ProviderProjectsPage } from "../../provider/projects/index";
 
 const mockItems = [
@@ -44,7 +47,7 @@ function setupMocks() {
   } as ReturnType<typeof useCustom>);
 
   vi.mocked(useCustomMutation).mockReturnValue({
-    mutate: vi.fn(),
+    mutate: mockMutate,
     mutation: { isPending: false },
   } as unknown as ReturnType<typeof useCustomMutation>);
 
@@ -105,5 +108,59 @@ describe("服务商项目 — D2 佣金率列", () => {
     const buttons = screen.getAllByText(/设置佣金率/);
     fireEvent.click(buttons[0]);
     expect(screen.getByText(/设置服务商佣金率/)).toBeDefined();
+  });
+
+  it("提交换算：填 8 点保存，mutate 入参 provider_agent_commission_rate === 0.08", () => {
+    mockMutate.mockReset();
+    setupMocks();
+    render(
+      <MemoryRouter>
+        <ProviderProjectsPage />
+      </MemoryRouter>,
+    );
+    // open modal for first project (翠竹苑, rate=null — but any project works)
+    const buttons = screen.getAllByText(/设置佣金率/);
+    fireEvent.click(buttons[0]);
+
+    // fill in percentage input
+    const input = screen.getByRole("spinbutton");
+    fireEvent.change(input, { target: { value: "8" } });
+
+    // click save
+    fireEvent.click(screen.getByText("保存"));
+
+    expect(mockMutate).toHaveBeenCalledTimes(1);
+    const callArgs = mockMutate.mock.calls[0][0] as {
+      values: { provider_agent_commission_rate: number };
+    };
+    expect(callArgs.values.provider_agent_commission_rate).toBeCloseTo(0.08, 10);
+  });
+
+  it("onError 展示：mutate 触发 onError 时，错误 message 显示在弹窗内", () => {
+    mockMutate.mockReset();
+    mockMutate.mockImplementation(
+      (
+        _payload: unknown,
+        options?: { onError?: (e: unknown) => void },
+      ) => {
+        options?.onError?.({
+          response: { data: { message: "项目不存在或不属本服务商" } },
+        });
+      },
+    );
+    setupMocks();
+    render(
+      <MemoryRouter>
+        <ProviderProjectsPage />
+      </MemoryRouter>,
+    );
+    const buttons = screen.getAllByText(/设置佣金率/);
+    fireEvent.click(buttons[0]);
+
+    const input = screen.getByRole("spinbutton");
+    fireEvent.change(input, { target: { value: "8" } });
+    fireEvent.click(screen.getByText("保存"));
+
+    expect(screen.getByText("项目不存在或不属本服务商")).toBeDefined();
   });
 });

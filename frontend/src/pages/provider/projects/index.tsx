@@ -206,7 +206,7 @@ function AssignPmModal({
       {
         onSuccess: () => onSuccess(),
         onError: (e) => {
-          const msg = (e as { response?: { data?: { detail?: { message?: string } } } }).response?.data?.detail?.message;
+          const msg = (e as { response?: { data?: { message?: string } } }).response?.data?.message;
           setErrMsg(msg ?? "指派失败");
         },
       },
@@ -282,6 +282,10 @@ function CommissionRateModal({
   const { mutate: save, mutation } = useCustomMutation();
 
   const handleSave = () => {
+    if (pct !== "" && !Number.isFinite(Number(pct))) {
+      setErrMsg("请输入有效数字");
+      return;
+    }
     if (pct !== "" && (Number(pct) < 0 || Number(pct) > 100)) {
       setErrMsg("佣金率须在 0–100% 之间");
       return;
@@ -300,8 +304,8 @@ function CommissionRateModal({
         onSuccess: () => onSuccess(),
         onError: (e) => {
           const msg = (
-            e as { response?: { data?: { detail?: { message?: string } } } }
-          ).response?.data?.detail?.message;
+            e as { response?: { data?: { message?: string } } }
+          ).response?.data?.message;
           setErrMsg(msg ?? "设置失败");
         },
       },
