@@ -52,7 +52,7 @@ export function AgentCommissionDetailPage() {
             内勤提成明细 · {data.name}
           </h1>
           <p className="text-sm text-[var(--color-neutral-500)]">
-            {ym} · 逐案「实收 × 项目内勤佣金率」
+            {ym} · 逐案『实收 × 项目内勤佣金率』
           </p>
         </div>
       </div>
