@@ -1,6 +1,6 @@
-// v1.5.6 — 服务商工作台「我的项目」：列表 + 指派项目经理
+// v1.5.7 — 服务商工作台「我的项目」：列表 + 指派项目经理 + 设置佣金率
 import { useCustom, useCustomMutation, useList } from "@refinedev/core";
-import { Building2, FolderKanban, UserCheck, X } from "lucide-react";
+import { Building2, FolderKanban, Percent, UserCheck, X } from "lucide-react";
 import { useState } from "react";
 import { SearchableSelect } from "../../../components/ui/SearchableSelect";
 import type { PaginatedResponse } from "../../../types";
@@ -13,6 +13,7 @@ interface ProviderProjectItem {
   plan_end: string | null;
   provider_pm_user_id: number | null;
   provider_pm_name: string | null;
+  provider_agent_commission_rate: string | null;
 }
 
 interface ProviderProjectsResp {
@@ -41,6 +42,7 @@ export function ProviderProjectsPage() {
   const items = query.data?.data?.items ?? [];
 
   const [assignFor, setAssignFor] = useState<ProviderProjectItem | null>(null);
+  const [rateFor, setRateFor] = useState<ProviderProjectItem | null>(null);
 
   return (
     <div>
@@ -64,20 +66,21 @@ export function ProviderProjectsPage() {
               <th>合作物业</th>
               <th>服务期</th>
               <th>项目经理</th>
+              <th>服务商佣金率</th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody>
             {query.isLoading && (
               <tr>
-                <td colSpan={5} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                <td colSpan={6} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
                   加载中…
                 </td>
               </tr>
             )}
             {!query.isLoading && items.length === 0 && (
               <tr>
-                <td colSpan={5} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                <td colSpan={6} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
                   暂无合作项目
                 </td>
               </tr>
@@ -106,13 +109,30 @@ export function ProviderProjectsPage() {
                     <span style={{ color: "#e02424", fontSize: 12 }}>未指派</span>
                   )}
                 </td>
-                <td>
+                <td style={{ fontSize: 13 }}>
+                  {p.provider_agent_commission_rate == null ? (
+                    <span style={{ color: "#9ca3af", fontSize: 12 }}>继承默认 5%</span>
+                  ) : (
+                    <span style={{ fontWeight: 500 }}>
+                      {(Number(p.provider_agent_commission_rate) * 100).toFixed(1)}%
+                    </span>
+                  )}
+                </td>
+                <td style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   <button
                     type="button"
                     className="ds-btn ds-btn-ghost ds-btn-sm"
                     onClick={() => setAssignFor(p)}
                   >
                     {p.provider_pm_user_id ? "重新指派" : "指派项目经理"}
+                  </button>
+                  <button
+                    type="button"
+                    className="ds-btn ds-btn-ghost ds-btn-sm"
+                    onClick={() => setRateFor(p)}
+                  >
+                    <Percent className="inline w-3 h-3" style={{ verticalAlign: "-2px", marginRight: 2 }} />
+                    设置佣金率
                   </button>
                 </td>
               </tr>
@@ -127,6 +147,16 @@ export function ProviderProjectsPage() {
           onClose={() => setAssignFor(null)}
           onSuccess={() => {
             setAssignFor(null);
+            refetch();
+          }}
+        />
+      )}
+      {rateFor && (
+        <CommissionRateModal
+          project={rateFor}
+          onClose={() => setRateFor(null)}
+          onSuccess={() => {
+            setRateFor(null);
             refetch();
           }}
         />
@@ -227,6 +257,113 @@ function AssignPmModal({
             onClick={handleSave}
           >
             {mutation.isPending ? "保存中…" : "确认指派"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CommissionRateModal({
+  project,
+  onClose,
+  onSuccess,
+}: {
+  project: ProviderProjectItem;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const initialPct =
+    project.provider_agent_commission_rate != null
+      ? (Number(project.provider_agent_commission_rate) * 100).toFixed(2)
+      : "";
+  const [pct, setPct] = useState<string>(initialPct);
+  const [errMsg, setErrMsg] = useState("");
+  const { mutate: save, mutation } = useCustomMutation();
+
+  const handleSave = () => {
+    if (pct !== "" && (Number(pct) < 0 || Number(pct) > 100)) {
+      setErrMsg("佣金率须在 0–100% 之间");
+      return;
+    }
+    setErrMsg("");
+    save(
+      {
+        url: `provider/projects/${project.project_id}/commission-rate`,
+        method: "patch",
+        values: {
+          provider_agent_commission_rate:
+            pct === "" ? null : Number(pct) / 100,
+        },
+      },
+      {
+        onSuccess: () => onSuccess(),
+        onError: (e) => {
+          const msg = (
+            e as { response?: { data?: { detail?: { message?: string } } } }
+          ).response?.data?.detail?.message;
+          setErrMsg(msg ?? "设置失败");
+        },
+      },
+    );
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        className="ds-modal"
+        style={{ maxWidth: 400 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-header">
+          <span className="modal-title">设置服务商佣金率</span>
+          <button type="button" className="modal-close" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </div>
+        <div
+          className="modal-body"
+          style={{ display: "flex", flexDirection: "column", gap: 12 }}
+        >
+          <div style={{ fontSize: 13, color: "#6b7280" }}>
+            项目：<strong style={{ color: "#374151" }}>{project.project_name}</strong>
+          </div>
+          <div>
+            <label className="form-label">服务商催收员佣金率（%）</label>
+            <input
+              type="number"
+              className="form-control"
+              min={0}
+              max={100}
+              step={0.01}
+              value={pct}
+              placeholder="留空则继承默认 5%"
+              onChange={(e) => setPct(e.target.value)}
+              style={{ width: "100%" }}
+            />
+            <div className="form-hint" style={{ color: "#9ca3af" }}>
+              填写百分比数值，如 10 表示 10%。留空则使用系统默认（5%）。
+            </div>
+          </div>
+          {errMsg && (
+            <div style={{ color: "#e02424", fontSize: 13 }}>{errMsg}</div>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button
+            type="button"
+            className="ds-btn ds-btn-secondary"
+            onClick={onClose}
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            className="ds-btn ds-btn-primary"
+            disabled={mutation.isPending}
+            onClick={handleSave}
+          >
+            {mutation.isPending ? "保存中…" : "保存"}
           </button>
         </div>
       </div>

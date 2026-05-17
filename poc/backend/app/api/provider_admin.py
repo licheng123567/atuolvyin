@@ -977,6 +977,11 @@ async def list_provider_projects(
                 "plan_end": p.plan_end.isoformat() if p.plan_end else None,
                 "provider_pm_user_id": p.provider_pm_user_id,
                 "provider_pm_name": pm_name,
+                "provider_agent_commission_rate": (
+                    str(p.provider_agent_commission_rate)
+                    if p.provider_agent_commission_rate is not None
+                    else None
+                ),
             }
         )
     return {"items": items}
