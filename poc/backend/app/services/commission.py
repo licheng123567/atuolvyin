@@ -18,9 +18,13 @@ from app.models.discount_offer import DiscountOffer
 DEFAULT_COMMISSION_RATE = Decimal("0.05")
 
 
-def executed_discount_amounts(db: Session, case_ids: list[int]) -> dict[int, Decimal]:
+def executed_discount_amounts(
+    db: Session, tenant_id: int, case_ids: list[int]
+) -> dict[int, Decimal]:
     """case_id → 业主实收额，仅含有 status='executed' 减免的案件。
 
+    tenant_id：按 tenant_id 限定租户范围，确保多租户隔离并命中
+    ix_discount_offer_tenant_status 复合索引。
     §9.2-C：减免部分不计佣金 —— 已执行减免的案件，实收 = 该减免的
     proposed_amount（业主实际缴的钱）。无已执行减免的案件不在返回 dict 内，
     调用方回退 amount_owed。多条 executed（罕见）→ 按 id 升序遍历，最新 id 胜出。
@@ -30,6 +34,7 @@ def executed_discount_amounts(db: Session, case_ids: list[int]) -> dict[int, Dec
     rows = db.execute(
         select(DiscountOffer.case_id, DiscountOffer.proposed_amount)
         .where(
+            DiscountOffer.tenant_id == tenant_id,
             DiscountOffer.case_id.in_(case_ids),
             DiscountOffer.status == "executed",
         )

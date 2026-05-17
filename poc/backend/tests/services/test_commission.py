@@ -28,10 +28,10 @@ def _offer(db_session, tenant_id, case_id, *, proposed, status):
     return offer
 
 
-def test_executed_discount_amounts_empty_list(db_session):
+def test_executed_discount_amounts_empty_list(db_session, seeded_tenant):
     from app.services.commission import executed_discount_amounts
 
-    assert executed_discount_amounts(db_session, []) == {}
+    assert executed_discount_amounts(db_session, seeded_tenant.id, []) == {}
 
 
 def test_executed_discount_amounts_returns_proposed_for_executed(
@@ -40,7 +40,7 @@ def test_executed_discount_amounts_returns_proposed_for_executed(
     from app.services.commission import executed_discount_amounts
 
     _offer(db_session, seeded_tenant.id, seeded_case.id, proposed="600.00", status="executed")
-    result = executed_discount_amounts(db_session, [seeded_case.id])
+    result = executed_discount_amounts(db_session, seeded_tenant.id, [seeded_case.id])
     assert result == {seeded_case.id: Decimal("600.00")}
 
 
@@ -50,7 +50,7 @@ def test_executed_discount_amounts_skips_non_executed(
     from app.services.commission import executed_discount_amounts
 
     _offer(db_session, seeded_tenant.id, seeded_case.id, proposed="600.00", status="approved")
-    assert executed_discount_amounts(db_session, [seeded_case.id]) == {}
+    assert executed_discount_amounts(db_session, seeded_tenant.id, [seeded_case.id]) == {}
 
 
 def test_executed_discount_amounts_latest_wins(db_session, seeded_tenant, seeded_case):
@@ -58,7 +58,7 @@ def test_executed_discount_amounts_latest_wins(db_session, seeded_tenant, seeded
 
     _offer(db_session, seeded_tenant.id, seeded_case.id, proposed="600.00", status="executed")
     _offer(db_session, seeded_tenant.id, seeded_case.id, proposed="550.00", status="executed")
-    result = executed_discount_amounts(db_session, [seeded_case.id])
+    result = executed_discount_amounts(db_session, seeded_tenant.id, [seeded_case.id])
     assert result == {seeded_case.id: Decimal("550.00")}
 
 
