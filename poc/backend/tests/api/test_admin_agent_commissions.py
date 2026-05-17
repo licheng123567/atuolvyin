@@ -90,3 +90,26 @@ async def test_agent_commission_per_case_rate_and_discount(
     assert Decimal(item["commission"]) == Decimal("148.00")
     assert Decimal(str(body["total_base"])) == Decimal("2600.00")
     assert Decimal(str(body["total_commission"])) == Decimal("148.00")
+
+
+@pytest.mark.asyncio
+async def test_agent_commission_full_waiver_zero_collected(
+    client, db_session, seeded_tenant, seeded_owner, seeded_member_user, admin_auth_headers
+):
+    """§9.2-C 回归：全额减免（实收 0）的案件，佣金基数贡献为 0，不按原欠款发佣金。"""
+    p = _project(db_session, seeded_tenant.id, "全额减免项目", Decimal("0.0800"))
+    c = _paid_case(
+        db_session, seeded_tenant.id, seeded_owner.id, seeded_member_user.id, p.id, "1000.00"
+    )
+    _executed_offer(db_session, seeded_tenant.id, c.id, "0.00")  # 全额减免，业主实缴 0
+
+    resp = await client.get(
+        "/api/v1/admin/agent-commissions?year_month=2026-05", headers=admin_auth_headers
+    )
+    assert resp.status_code == 200, resp.text
+    item = next(
+        it for it in resp.json()["items"] if it["user_id"] == seeded_member_user.id
+    )
+    assert item["paid_case_count"] == 1
+    assert Decimal(item["base_amount"]) == Decimal("0.00")
+    assert Decimal(item["commission"]) == Decimal("0.00")

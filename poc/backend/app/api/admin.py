@@ -683,7 +683,7 @@ async def list_agent_commissions(
         base = D("0")
         commission = D("0")
         for case_id, amount_owed, project_id in rows:
-            collected = executed.get(case_id) or D(str(amount_owed or 0))
+            collected = executed[case_id] if case_id in executed else D(str(amount_owed or 0))
             rate = internal_agent_rate(_project(project_id))
             base += collected
             commission += (collected * rate).quantize(D("0.01"))
