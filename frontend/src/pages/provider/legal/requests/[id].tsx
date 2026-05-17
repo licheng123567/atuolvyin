@@ -9,22 +9,12 @@ import {
   getMaterialDownloadUrl,
   type ProviderLegalRequestMaterial,
 } from "../api";
+import { STATUS_META, UNKNOWN_STATUS_META } from "./status-meta";
 
-// ─── 审批状态 Badge（与 requests/index.tsx 保持一致）─────────────────────
-interface StatusMeta {
-  label: string;
-  background: string;
-  color: string;
-}
+// ─── 文件大小上限 ─────────────────────────────────────────────────────────────
+const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
 
-const STATUS_META: Record<string, StatusMeta> = {
-  pending:   { label: "待审批", background: "#FEF3C7", color: "#D97706" },
-  approved:  { label: "已通过", background: "#DCFCE7", color: "#057A55" },
-  rejected:  { label: "已驳回", background: "#FEE2E2", color: "#E02424" },
-  cancelled: { label: "已取消", background: "#F3F4F6", color: "#4B5563" },
-};
-
-// ─── 工具函数 ─────────────────────────────────────────────────────────────
+// ─── 工具函数 ─────────────────────────────────────────────────────────────────
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -40,7 +30,7 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-// ─── 主页面 ───────────────────────────────────────────────────────────────
+// ─── 主页面 ───────────────────────────────────────────────────────────────────
 export function ProviderLegalRequestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const requestId = Number(id);
@@ -85,13 +75,20 @@ export function ProviderLegalRequestDetailPage() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      alert("文件超过 20MB 上限");
+      e.target.value = "";
+      return;
+    }
+
     setUploading(true);
     try {
       await uploadRequestMaterial(requestId, file);
-      refetch();
+      await refetch();
     } catch (err) {
-      const e = err as { message?: string };
-      alert(e.message ?? "上传失败");
+      const uploadErr = err as { message?: string };
+      alert(uploadErr.message ?? "上传失败");
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -103,8 +100,8 @@ export function ProviderLegalRequestDetailPage() {
       const url = await getMaterialDownloadUrl(requestId, m.id);
       window.open(url, "_blank");
     } catch (err) {
-      const e = err as { message?: string };
-      alert(e.message ?? "获取下载链接失败");
+      const downloadErr = err as { message?: string };
+      alert(downloadErr.message ?? "获取下载链接失败");
     }
   };
 
@@ -134,7 +131,7 @@ export function ProviderLegalRequestDetailPage() {
         ) : (
           <span
             className="ds-badge"
-            style={{ background: "#F3F4F6", color: "#4B5563" }}
+            style={{ background: UNKNOWN_STATUS_META.background, color: UNKNOWN_STATUS_META.color }}
           >
             {detail.status}
           </span>
@@ -160,7 +157,7 @@ export function ProviderLegalRequestDetailPage() {
             />
             <Field
               label="提交时间"
-              value={detail.created_at?.slice(0, 10) ?? "—"}
+              value={detail.created_at.slice(0, 10)}
             />
           </div>
           <div style={{ marginTop: 12 }}>
@@ -220,7 +217,7 @@ export function ProviderLegalRequestDetailPage() {
                 fontSize: 13,
               }}
             >
-              拖拽文件到此处，或点击上传（PDF / 图片，单文件 ≤ 20MB）
+              点击右上角『上传材料』按钮上传（PDF / 图片，单文件 ≤ 20MB）
             </div>
           ) : (
             <div className="table-wrap">
@@ -240,7 +237,7 @@ export function ProviderLegalRequestDetailPage() {
                       <td>
                         {m.size_bytes != null ? formatFileSize(m.size_bytes) : "—"}
                       </td>
-                      <td>{m.created_at?.slice(0, 10) ?? "—"}</td>
+                      <td>{m.created_at.slice(0, 10)}</td>
                       <td>
                         <button
                           type="button"

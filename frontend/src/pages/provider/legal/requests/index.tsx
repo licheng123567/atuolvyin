@@ -4,21 +4,9 @@ import { ClipboardList } from "lucide-react";
 import { useState } from "react";
 import { PaginationBar } from "../../../../components/ui/PaginationBar";
 import { useProviderLegalRequests } from "../api";
+import { STATUS_META, UNKNOWN_STATUS_META } from "./status-meta";
 
 const PAGE_SIZE = 20;
-
-interface StatusMeta {
-  label: string;
-  background: string;
-  color: string;
-}
-
-const STATUS_META: Record<string, StatusMeta> = {
-  pending: { label: "待审批", background: "#FEF3C7", color: "#D97706" },
-  approved: { label: "已通过", background: "#DCFCE7", color: "#057A55" },
-  rejected: { label: "已驳回", background: "#FEE2E2", color: "#E02424" },
-  cancelled: { label: "已取消", background: "#F3F4F6", color: "#4B5563" },
-};
 
 export function ProviderLegalRequestsPage() {
   const go = useGo();
@@ -103,7 +91,7 @@ export function ProviderLegalRequestsPage() {
                     ) : (
                       <span
                         className="ds-badge"
-                        style={{ background: "#F3F4F6", color: "#4B5563" }}
+                        style={{ background: UNKNOWN_STATUS_META.background, color: UNKNOWN_STATUS_META.color }}
                       >
                         {r.status}
                       </span>
@@ -116,7 +104,7 @@ export function ProviderLegalRequestsPage() {
                       <span className="ds-badge ds-badge-blue">{r.order_status}</span>
                     )}
                   </td>
-                  <td>{r.created_at?.slice(0, 10) ?? "—"}</td>
+                  <td>{r.created_at.slice(0, 10)}</td>
                   <td>
                     <button
                       type="button"
