@@ -53,6 +53,8 @@ export function AdminProjectNewPage() {
   const [lateFeeAutoThreshold, setLateFeeAutoThreshold] = useState("");
   const [lateFeeSupervisorMax, setLateFeeSupervisorMax] = useState("");
   const [lateFeeDisabled, setLateFeeDisabled] = useState<"" | "true" | "false">("");
+  // §9.2 — 内勤催收员佣金率（百分比录入，提交时除以 100 转为 0-1 小数）
+  const [internalCommRate, setInternalCommRate] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   async function uploadContract(file: File) {
@@ -166,6 +168,8 @@ export function AdminProjectNewPage() {
       late_fee_waive_auto_approve_threshold_pct: lateFeeAutoThreshold === "" ? null : Number(lateFeeAutoThreshold),
       late_fee_waive_supervisor_max_pct: lateFeeSupervisorMax === "" ? null : Number(lateFeeSupervisorMax),
       late_fee_waive_disabled: lateFeeDisabled === "" ? null : lateFeeDisabled === "true",
+      // §9.2 — 内勤催收员佣金率（÷100 转为 0-1 小数）
+      internal_agent_commission_rate: internalCommRate === "" ? null : Number(internalCommRate) / 100,
     };
     if (mode === "outsourced") {
       values.provider_id = providerId;
@@ -574,6 +578,22 @@ export function AdminProjectNewPage() {
                 style={{ minHeight: 60 }}
               />
             </div>
+          </div>
+
+          {/* §9.2 — 内勤催收员佣金率 */}
+          <div className="form-group">
+            <label className="form-label">内勤催收员佣金率 (%)</label>
+            <input
+              className="form-control"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={internalCommRate}
+              onChange={(e) => setInternalCommRate(e.target.value)}
+              placeholder="例：5"
+            />
+            <div className="form-hint">留空 = 继承系统默认 5%</div>
           </div>
 
           {/* v1.6.1 / 1.6.2 — 项目级减免策略覆盖（拆分为两类） */}

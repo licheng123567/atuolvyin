@@ -53,6 +53,9 @@ interface ProjectDetail {
   late_fee_waive_auto_approve_threshold_pct: number | null;
   late_fee_waive_supervisor_max_pct: number | null;
   late_fee_waive_disabled: boolean | null;
+  // §9.2 — 佣金率
+  internal_agent_commission_rate: number | null;
+  provider_agent_commission_rate: number | null;
 }
 
 function toDateInput(iso: string | null): string {
@@ -101,6 +104,8 @@ export function AdminProjectEditPage() {
   const [lateFeeAutoThreshold, setLateFeeAutoThreshold] = useState("");
   const [lateFeeSupervisorMax, setLateFeeSupervisorMax] = useState("");
   const [lateFeeDisabled, setLateFeeDisabled] = useState<"" | "true" | "false">("");
+  // §9.2 — 内勤催收员佣金率（百分比录入，提交时除以 100）
+  const [internalCommRate, setInternalCommRate] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [confirmRelease, setConfirmRelease] = useState(false);
@@ -224,6 +229,12 @@ export function AdminProjectEditPage() {
             ? "true"
             : "false",
       );
+      // §9.2 — 内勤佣金率：后端 0-1 小数 → ×100 显示为百分比
+      setInternalCommRate(
+        project.internal_agent_commission_rate == null
+          ? ""
+          : String(project.internal_agent_commission_rate * 100),
+      );
       setInitialized(true);
     }
   }, [project, initialized]);
@@ -284,6 +295,9 @@ export function AdminProjectEditPage() {
             lateFeeSupervisorMax === "" ? null : Number(lateFeeSupervisorMax),
           late_fee_waive_disabled:
             lateFeeDisabled === "" ? null : lateFeeDisabled === "true",
+          // §9.2 — 内勤催收员佣金率（÷100 转为 0-1 小数）
+          internal_agent_commission_rate:
+            internalCommRate === "" ? null : Number(internalCommRate) / 100,
         },
       },
       {
@@ -626,6 +640,29 @@ export function AdminProjectEditPage() {
                 onChange={(e) => setChargeNotes(e.target.value)}
                 style={{ minHeight: 60 }}
               />
+            </div>
+          </div>
+
+          {/* §9.2 — 内勤催收员佣金率 */}
+          <div className="form-group">
+            <label className="form-label">内勤催收员佣金率 (%)</label>
+            <input
+              className="form-control"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={internalCommRate}
+              onChange={(e) => setInternalCommRate(e.target.value)}
+              placeholder="例：5"
+            />
+            <div className="form-hint">留空 = 继承系统默认 5%</div>
+            <div className="form-hint" style={{ color: "#6b7280" }}>
+              服务商佣金率：
+              {project.provider_agent_commission_rate == null
+                ? "继承默认 5%"
+                : `${(project.provider_agent_commission_rate * 100).toFixed(2)}%`}
+              （由服务商设置，物业不可改）
             </div>
           </div>
 
