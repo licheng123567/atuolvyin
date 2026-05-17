@@ -55,3 +55,27 @@ class RejectLegalConversionRequestBody(BaseModel):
     """督导/admin 驳回申请：必填驳回理由。"""
 
     reason: str = Field(..., min_length=1, max_length=2000)
+
+
+class LegalConversionRequestMaterialOut(BaseModel):
+    """法务转化请求的补充材料元数据。"""
+
+    id: int
+    request_id: int
+    filename: str
+    content_type: str | None = None
+    size_bytes: int | None = None
+    uploaded_by: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class LegalConversionRequestMaterialDownloadOut(BaseModel):
+    """补充材料下载链接。"""
+
+    download_url: str
+    filename: str
+    content_type: str | None = None
+    size_bytes: int | None = None
+    expires_in_sec: int = 3600

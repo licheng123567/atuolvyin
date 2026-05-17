@@ -6,10 +6,11 @@ Project.provider_id 推导。物业侧 legal 端点不受影响。
 """
 from __future__ import annotations
 
+import uuid
 from typing import Annotated
 
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi import status as http_status
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
@@ -18,14 +19,20 @@ from app.core.db import get_db
 from app.core.phone_visibility import display_owner_phone, should_reveal_owner_phone
 from app.core.roles import ROLE_LEGAL
 from app.core.security import get_token_payload, require_provider_roles
+from app.core.storage import storage
 from app.models.call import CallRecord
 from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.legal_conversion import (
     LegalConversionOrder,
     LegalConversionRequest,
+    LegalConversionRequestMaterial,
 )
 from app.models.user import UserAccount
 from app.schemas.common import PaginatedResponse
+from app.schemas.legal_conversion_request import (
+    LegalConversionRequestMaterialDownloadOut,
+    LegalConversionRequestMaterialOut,
+)
 from app.schemas.provider_legal import (
     ProviderLegalCaseDetail,
     ProviderLegalCaseListItem,
@@ -35,6 +42,15 @@ from app.schemas.provider_legal import (
 from app.services.audit import log_audit
 
 router = APIRouter()
+
+MAX_MATERIAL_SIZE = 50 * 1024 * 1024  # 50 MB
+ALLOWED_MIME_PREFIXES = (
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument",
+    "image/",
+    "text/",
+)
 
 
 def _ctx(payload: dict) -> tuple[int, int, int]:
@@ -274,3 +290,122 @@ def create_conversion_request(
     db.commit()
     db.refresh(req)
     return _request_to_out(db, req)
+
+
+def _load_provider_request(
+    db: Session, request_id: int, tenant_id: int, provider_id: int
+) -> LegalConversionRequest:
+    """加载请求并校验其案件在本服务商作用域内；不在则 404。"""
+    req = db.execute(
+        select(LegalConversionRequest)
+        .join(CollectionCase, CollectionCase.id == LegalConversionRequest.case_id)
+        .where(
+            LegalConversionRequest.id == request_id,
+            LegalConversionRequest.tenant_id == tenant_id,
+            _provider_legal_case_filter(tenant_id, provider_id),
+        )
+    ).scalar_one_or_none()
+    if req is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "请求不存在"},
+        )
+    return req
+
+
+@router.post(
+    "/conversion-requests/{request_id}/materials",
+    response_model=LegalConversionRequestMaterialOut,
+    status_code=http_status.HTTP_201_CREATED,
+)
+async def upload_material(
+    request_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_provider_roles(ROLE_LEGAL))],
+    db: Annotated[Session, Depends(get_db)],
+    file: Annotated[UploadFile, File(...)],
+) -> LegalConversionRequestMaterialOut:
+    tenant_id, provider_id, user_id = _ctx(payload)
+    req = _load_provider_request(db, request_id, tenant_id, provider_id)
+    if req.status != "pending":
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail={
+                "code": "ERR_REQUEST_NOT_PENDING",
+                "message": "请求已审批，材料已锁定",
+            },
+        )
+    mime = file.content_type or ""
+    if mime and not any(mime.startswith(p) for p in ALLOWED_MIME_PREFIXES):
+        raise HTTPException(
+            status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "ERR_INVALID_MIME", "message": f"不支持的文件类型: {mime}"},
+        )
+    raw = await file.read()
+    if len(raw) == 0:
+        raise HTTPException(
+            status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "ERR_EMPTY_FILE", "message": "上传文件为空"},
+        )
+    if len(raw) > MAX_MATERIAL_SIZE:
+        raise HTTPException(
+            status_code=http_status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail={"code": "ERR_FILE_TOO_LARGE", "message": "文件超过 50MB 限制"},
+        )
+    filename = file.filename or f"material_{uuid.uuid4().hex[:8]}"
+    ext = filename.rsplit(".", 1)[-1] if "." in filename else "bin"
+    object_key = f"legal_conv_req_materials/{tenant_id}/{request_id}/{uuid.uuid4().hex}.{ext}"
+    try:
+        storage.put_object(object_key, raw, mime or "application/octet-stream")
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=http_status.HTTP_502_BAD_GATEWAY,
+            detail={"code": "ERR_STORAGE_FAILURE", "message": "文件存储失败"},
+        ) from exc
+    material = LegalConversionRequestMaterial(
+        request_id=request_id,
+        tenant_id=tenant_id,
+        object_key=object_key,
+        filename=filename,
+        content_type=mime or None,
+        size_bytes=len(raw),
+        uploaded_by=user_id,
+    )
+    db.add(material)
+    db.commit()
+    db.refresh(material)
+    return LegalConversionRequestMaterialOut.model_validate(material)
+
+
+@router.get(
+    "/conversion-requests/{request_id}/materials/{material_id}",
+    response_model=LegalConversionRequestMaterialDownloadOut,
+)
+def download_material(
+    request_id: int,
+    material_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_provider_roles(ROLE_LEGAL))],
+    db: Annotated[Session, Depends(get_db)],
+) -> LegalConversionRequestMaterialDownloadOut:
+    tenant_id, provider_id, _ = _ctx(payload)
+    _load_provider_request(db, request_id, tenant_id, provider_id)
+    material = db.get(LegalConversionRequestMaterial, material_id)
+    if material is None or material.request_id != request_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "材料不存在"},
+        )
+    try:
+        url = storage.get_url(material.object_key)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=http_status.HTTP_502_BAD_GATEWAY,
+            detail={"code": "ERR_STORAGE_FAILURE", "message": "无法生成下载链接"},
+        ) from exc
+    return LegalConversionRequestMaterialDownloadOut(
+        download_url=url,
+        filename=material.filename,
+        content_type=material.content_type,
+        size_bytes=material.size_bytes,
+    )

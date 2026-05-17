@@ -293,3 +293,81 @@ def test_create_conversion_request_active_order_409(api, db_session, seeded_tena
     )
     assert resp.status_code == 409
     assert resp.json()["code"] == "ERR_LEGAL_ORDER_EXISTS"
+
+
+def _create_request(db_session, env):
+    """直接建一个 pending 的 LegalConversionRequest，返回它。"""
+    from app.models.legal_conversion import LegalConversionRequest
+    req = LegalConversionRequest(
+        tenant_id=env.case.tenant_id, case_id=env.case.id,
+        requester_user_id=env.user.id, requester_role="legal", status="pending",
+    )
+    db_session.add(req)
+    db_session.flush()
+    return req
+
+
+def test_upload_and_download_material(api, db_session, seeded_tenant):
+    env = _seed_provider_env(db_session, seeded_tenant,
+                             provider_name="服务商A", owner_phone="13712345678")
+    req = _create_request(db_session, env)
+    up = api.post(
+        f"/api/v1/provider/legal/conversion-requests/{req.id}/materials",
+        files={"file": ("证据.pdf", b"%PDF-1.4 fake", "application/pdf")},
+        headers=_auth(env.token),
+    )
+    assert up.status_code == 201, up.text
+    mat = up.json()
+    assert mat["request_id"] == req.id
+    assert mat["filename"] == "证据.pdf"
+    assert mat["size_bytes"] == len(b"%PDF-1.4 fake")
+
+    dl = api.get(
+        f"/api/v1/provider/legal/conversion-requests/{req.id}/materials/{mat['id']}",
+        headers=_auth(env.token),
+    )
+    assert dl.status_code == 200, dl.text
+    assert dl.json()["download_url"]
+    assert dl.json()["filename"] == "证据.pdf"
+
+
+def test_upload_material_empty_file_422(api, db_session, seeded_tenant):
+    env = _seed_provider_env(db_session, seeded_tenant,
+                             provider_name="服务商A", owner_phone="13712345678")
+    req = _create_request(db_session, env)
+    resp = api.post(
+        f"/api/v1/provider/legal/conversion-requests/{req.id}/materials",
+        files={"file": ("empty.pdf", b"", "application/pdf")},
+        headers=_auth(env.token),
+    )
+    assert resp.status_code == 422
+    assert resp.json()["code"] == "ERR_EMPTY_FILE"
+
+
+def test_upload_material_non_pending_409(api, db_session, seeded_tenant):
+    env = _seed_provider_env(db_session, seeded_tenant,
+                             provider_name="服务商A", owner_phone="13712345678")
+    req = _create_request(db_session, env)
+    req.status = "approved"
+    db_session.flush()
+    resp = api.post(
+        f"/api/v1/provider/legal/conversion-requests/{req.id}/materials",
+        files={"file": ("证据.pdf", b"%PDF-1.4", "application/pdf")},
+        headers=_auth(env.token),
+    )
+    assert resp.status_code == 409
+    assert resp.json()["code"] == "ERR_REQUEST_NOT_PENDING"
+
+
+def test_upload_material_cross_provider_404(api, db_session, seeded_tenant):
+    env_a = _seed_provider_env(db_session, seeded_tenant,
+                               provider_name="服务商A", owner_phone="13712345678")
+    env_b = _seed_provider_env(db_session, seeded_tenant,
+                               provider_name="服务商B", owner_phone="13755556666")
+    req_b = _create_request(db_session, env_b)
+    resp = api.post(
+        f"/api/v1/provider/legal/conversion-requests/{req_b.id}/materials",
+        files={"file": ("证据.pdf", b"%PDF-1.4", "application/pdf")},
+        headers=_auth(env_a.token),
+    )
+    assert resp.status_code == 404
