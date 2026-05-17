@@ -144,7 +144,7 @@ class ProviderMemberPerformance(BaseModel):
 class CommissionLineItem(BaseModel):
     case_id: int
     owner_name: str
-    paid_amount: Decimal
+    paid_amount: Decimal  # §9.2 — 扣已执行减免后的业主实收额
     paid_at: datetime | None
     commission_rate: Decimal  # §9.2 — 该案所属项目的服务商佣金率
 
@@ -153,9 +153,9 @@ class ProviderMemberCommission(BaseModel):
     user_id: int
     name: str
     year_month: str
-    commission_rate: float  # e.g. 0.05 = 5%
-    base_amount: Decimal  # sum of paid amounts for this user / month
-    commission: Decimal  # base_amount * rate
+    commission_rate: float  # §9.2 — 加权有效率 = commission / base_amount
+    base_amount: Decimal  # 该成员当月各案实收额之和
+    commission: Decimal  # 逐案 (实收 × 项目率) 求和
     items: list[CommissionLineItem]
 
 
