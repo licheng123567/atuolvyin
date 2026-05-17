@@ -19,6 +19,8 @@ _SUPERVISOR_ROLES = {
     "admin",
     "project_manager",
 }  # Sprint 14.2 — 实时通话墙观察者
+# 注：legal 不在此集合 —— 握手快照无案件语境，无法对 legal 算 legal_case_stage；
+# 若未来要让 legal 接入，须在 should_reveal_owner_phone 调用处补 legal_case_stage。
 
 
 @router.websocket("/ws/supervisor")
