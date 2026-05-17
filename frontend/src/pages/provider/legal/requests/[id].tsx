@@ -38,6 +38,7 @@ export function ProviderLegalRequestDetailPage() {
   const { detail, isLoading, isError, refetch } = useProviderLegalRequest(requestId);
 
   const [uploading, setUploading] = useState(false);
+  const [errMsg, setErrMsg] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (isLoading) {
@@ -76,8 +77,10 @@ export function ProviderLegalRequestDetailPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setErrMsg("");
+
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      alert("文件超过 20MB 上限");
+      setErrMsg("文件超过 20MB 上限");
       e.target.value = "";
       return;
     }
@@ -88,7 +91,7 @@ export function ProviderLegalRequestDetailPage() {
       await refetch();
     } catch (err) {
       const uploadErr = err as { message?: string };
-      alert(uploadErr.message ?? "上传失败");
+      setErrMsg(uploadErr.message ?? "上传失败");
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -96,12 +99,13 @@ export function ProviderLegalRequestDetailPage() {
   };
 
   const handleDownload = async (m: ProviderLegalRequestMaterial) => {
+    setErrMsg("");
     try {
       const url = await getMaterialDownloadUrl(requestId, m.id);
       window.open(url, "_blank");
     } catch (err) {
       const downloadErr = err as { message?: string };
-      alert(downloadErr.message ?? "获取下载链接失败");
+      setErrMsg(downloadErr.message ?? "获取下载链接失败");
     }
   };
 
@@ -205,6 +209,12 @@ export function ProviderLegalRequestDetailPage() {
               onChange={(e) => { void handleFileChange(e); }}
             />
           </div>
+
+          {errMsg && (
+            <div style={{ color: "var(--color-danger)", fontSize: 13, marginBottom: 8 }}>
+              {errMsg}
+            </div>
+          )}
 
           {detail.materials.length === 0 ? (
             <div

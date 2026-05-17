@@ -144,7 +144,7 @@ describe("ProviderLegalRequestDetailPage", () => {
     });
   });
 
-  it("does not upload and shows alert when file exceeds 20MB", async () => {
+  it("does not upload and shows inline error when file exceeds 20MB", async () => {
     const mockRefetch = vi.fn();
     vi.mocked(useProviderLegalRequest).mockReturnValue({
       detail: BASE_DETAIL,
@@ -152,8 +152,6 @@ describe("ProviderLegalRequestDetailPage", () => {
       isError: false,
       refetch: mockRefetch,
     });
-
-    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => undefined);
 
     renderPage();
 
@@ -167,11 +165,33 @@ describe("ProviderLegalRequestDetailPage", () => {
     fireEvent.change(input, { target: { files: [bigFile] } });
 
     await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith("文件超过 20MB 上限");
+      expect(screen.getByText("文件超过 20MB 上限")).toBeDefined();
     });
     expect(vi.mocked(uploadRequestMaterial)).not.toHaveBeenCalled();
     expect(mockRefetch).not.toHaveBeenCalled();
+  });
 
-    alertSpy.mockRestore();
+  it("shows inline error message when upload fails", async () => {
+    const mockRefetch = vi.fn();
+    vi.mocked(uploadRequestMaterial).mockRejectedValue(new Error("上传炸了"));
+    vi.mocked(useProviderLegalRequest).mockReturnValue({
+      detail: BASE_DETAIL,
+      isLoading: false,
+      isError: false,
+      refetch: mockRefetch,
+    });
+
+    renderPage();
+
+    const file = new File(["x"], "test.pdf", { type: "application/pdf" });
+    const input = document.querySelector<HTMLInputElement>("input[type='file']");
+    if (!input) throw new Error("file input not found");
+
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText("上传炸了")).toBeDefined();
+    });
+    expect(mockRefetch).not.toHaveBeenCalled();
   });
 });
