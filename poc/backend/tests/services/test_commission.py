@@ -1,4 +1,5 @@
 """§9.2 Task 4 — app/services/commission.py 单元测试。"""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -44,9 +45,7 @@ def test_executed_discount_amounts_returns_proposed_for_executed(
     assert result == {seeded_case.id: Decimal("600.00")}
 
 
-def test_executed_discount_amounts_skips_non_executed(
-    db_session, seeded_tenant, seeded_case
-):
+def test_executed_discount_amounts_skips_non_executed(db_session, seeded_tenant, seeded_case):
     from app.services.commission import executed_discount_amounts
 
     _offer(db_session, seeded_tenant.id, seeded_case.id, proposed="600.00", status="approved")

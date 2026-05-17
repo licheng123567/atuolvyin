@@ -180,6 +180,7 @@
 - **来源标记 = `provider_id`**:减免记录带上发起人的 `provider_id`,用于结算分析与风控归因 —— 这正是角色模型必须打通 `provider_id` 的业务理由之一。
 - **结算风控**:服务商按回收金额抽佣会诱发「过度减免快速成单」的利益冲突;故佣金基数按**实收金额**算,**减免部分不计佣金**;减免授权额度是必须的风控闸门。
 - 减免额度机制、审批流、佣金算法均为后续独立需求。
+- ✅ **已实现(2026-05-17)**：`DiscountOffer` 加 `provider_id` 归属；减免 approve/reject/escalate 收紧为物业侧专属(`require_tenant_roles`)；两处佣金（内勤 `admin.py` / 服务商 `provider_admin.py`）改为逐案「实收金额(扣已执行减免)×项目级佣金率」；项目级内勤/服务商佣金率各由物业/服务商在本侧端点配置。详见 `docs/superpowers/specs/2026-05-16-discount-attribution-commission-design.md`。
 
 ### 9.3 WS 广播业主电话脱敏(重构暴露的遗留项)
 

@@ -1,4 +1,5 @@
 """§9.2 Task 7 — D1 物业改内勤率 / D2 服务商改服务商率。"""
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -132,9 +133,7 @@ async def test_d2_cross_provider_404(client, db_session, seeded_tenant):
 
 
 @pytest.mark.asyncio
-async def test_d2_property_side_token_403(
-    client, db_session, seeded_tenant, admin_auth_headers
-):
+async def test_d2_property_side_token_403(client, db_session, seeded_tenant, admin_auth_headers):
     project = _project(db_session, seeded_tenant.id, "D2 物业越权项目")
     resp = await client.patch(
         f"/api/v1/provider/projects/{project.id}/commission-rate",

@@ -1,4 +1,5 @@
 """§9.2 Task 3 — 减免 approve/reject/escalate 收紧为物业侧专属。"""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -78,9 +79,7 @@ def _provider_supervisor_headers(db_session, tenant_id):
 
 
 @pytest.mark.asyncio
-async def test_provider_supervisor_cannot_approve(
-    client, db_session, seeded_tenant, seeded_case
-):
+async def test_provider_supervisor_cannot_approve(client, db_session, seeded_tenant, seeded_case):
     offer = _pending_offer(db_session, seeded_tenant.id, seeded_case.id)
     headers = _provider_supervisor_headers(db_session, seeded_tenant.id)
     resp = await client.post(
@@ -91,9 +90,7 @@ async def test_provider_supervisor_cannot_approve(
 
 
 @pytest.mark.asyncio
-async def test_provider_supervisor_cannot_reject(
-    client, db_session, seeded_tenant, seeded_case
-):
+async def test_provider_supervisor_cannot_reject(client, db_session, seeded_tenant, seeded_case):
     offer = _pending_offer(db_session, seeded_tenant.id, seeded_case.id)
     headers = _provider_supervisor_headers(db_session, seeded_tenant.id)
     resp = await client.post(
@@ -106,9 +103,7 @@ async def test_provider_supervisor_cannot_reject(
 
 
 @pytest.mark.asyncio
-async def test_provider_supervisor_cannot_escalate(
-    client, db_session, seeded_tenant, seeded_case
-):
+async def test_provider_supervisor_cannot_escalate(client, db_session, seeded_tenant, seeded_case):
     offer = _pending_offer(db_session, seeded_tenant.id, seeded_case.id)
     headers = _provider_supervisor_headers(db_session, seeded_tenant.id)
     resp = await client.post(

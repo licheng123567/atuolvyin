@@ -1,4 +1,5 @@
 """§9.2 Task 6 — /provider/team/{id}/commission 逐案实收×服务商项目率。"""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -132,9 +133,7 @@ def _seed(db_session, seeded_tenant, seeded_owner):
 
 
 @pytest.mark.asyncio
-async def test_provider_member_commission_per_case(
-    client, db_session, seeded_tenant, seeded_owner
-):
+async def test_provider_member_commission_per_case(client, db_session, seeded_tenant, seeded_owner):
     headers, member_id = _seed(db_session, seeded_tenant, seeded_owner)
 
     resp = await client.get(

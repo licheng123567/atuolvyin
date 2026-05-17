@@ -1,4 +1,5 @@
 """§9.2 Task 2 — 减免归属：create 写 provider_id + DiscountOfferOut 透出。"""
+
 from __future__ import annotations
 
 import pytest
@@ -81,9 +82,7 @@ async def test_provider_agent_offer_carries_provider_id(
 
 
 @pytest.mark.asyncio
-async def test_property_agent_offer_provider_id_null(
-    client, seeded_case, agent_auth_headers
-):
+async def test_property_agent_offer_provider_id_null(client, seeded_case, agent_auth_headers):
     resp = await client.post(
         f"/api/v1/cases/{seeded_case.id}/discount-offers",
         json=_BODY,

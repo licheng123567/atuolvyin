@@ -687,9 +687,7 @@ async def list_agent_commissions(
             rate = internal_agent_rate(_project(project_id))
             base += collected
             commission += (collected * rate).quantize(D("0.01"))
-        effective_rate = (
-            float(commission / base) if base > 0 else INTERNAL_AGENT_COMMISSION_RATE
-        )
+        effective_rate = float(commission / base) if base > 0 else INTERNAL_AGENT_COMMISSION_RATE
         items.append(
             AgentCommissionItem(
                 user_id=u.id,

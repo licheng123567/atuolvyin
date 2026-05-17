@@ -1,4 +1,5 @@
 """§9.2 Task 5 — /admin/agent-commissions 逐案按项目率 + 扣减免。"""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -107,9 +108,7 @@ async def test_agent_commission_full_waiver_zero_collected(
         "/api/v1/admin/agent-commissions?year_month=2026-05", headers=admin_auth_headers
     )
     assert resp.status_code == 200, resp.text
-    item = next(
-        it for it in resp.json()["items"] if it["user_id"] == seeded_member_user.id
-    )
+    item = next(it for it in resp.json()["items"] if it["user_id"] == seeded_member_user.id)
     assert item["paid_case_count"] == 1
     assert Decimal(item["base_amount"]) == Decimal("0.00")
     assert Decimal(item["commission"]) == Decimal("0.00")

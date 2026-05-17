@@ -1,4 +1,5 @@
 """§9.2 Task 1 — DiscountOffer.provider_id + Project 佣金率两列 round-trip。"""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta

@@ -65,7 +65,9 @@ PERFORMANCE_DEFAULT_DAYS = 30
 
 router = APIRouter()
 
-PROVIDER_ROLES = ("admin",)  # provider-side admin; guarded by provider_id != None in _resolve_provider_id
+PROVIDER_ROLES = (
+    "admin",
+)  # provider-side admin; guarded by provider_id != None in _resolve_provider_id
 PROVIDER_PM_ROLES = ("project_manager", "admin")  # §9.2-D2 — PM 也可改项目佣金率
 
 
@@ -810,9 +812,7 @@ async def get_member_commission(
     base = Decimal("0")
     commission = Decimal("0")
     for c, o in case_rows:
-        collected = (
-            executed[c.id] if c.id in executed else Decimal(str(c.amount_owed or 0))
-        )
+        collected = executed[c.id] if c.id in executed else Decimal(str(c.amount_owed or 0))
         rate = provider_agent_rate(_project(c.project_id))
         base += collected
         commission += (collected * rate).quantize(Decimal("0.01"))
