@@ -72,7 +72,9 @@ class SupervisorManager:
                     payload = event
                 await ws.send_json(payload)
             except Exception as exc:
-                logger.warning("supervisor broadcast failed tenant=%s: %s", tenant_id, exc)
+                logger.warning(
+                    "supervisor broadcast failed tenant=%s: %s", tenant_id, exc, exc_info=True
+                )
                 await self.disconnect(tenant_id, ws)
 
 

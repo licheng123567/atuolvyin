@@ -102,3 +102,39 @@ async def test_disconnect_removes_conn(phone_enc):
 
     assert ws.sent == []
     assert mgr._rooms.get(1) is None
+
+
+async def test_broadcast_isolated_by_tenant(phone_enc):
+    """broadcast 到 tenant 1 不会泄漏给注册在 tenant 2 的连接。"""
+    mgr = SupervisorManager()
+    ws_t1 = FakeWebSocket()
+    ws_t2 = FakeWebSocket()
+    await mgr.connect(1, ws_t1, can_see_plaintext=True)
+    await mgr.connect(2, ws_t2, can_see_plaintext=True)
+
+    await mgr.broadcast(1, {"type": "call.started"}, owner_phone_enc=phone_enc)
+
+    assert len(ws_t1.sent) == 1
+    assert ws_t2.sent == []
+
+
+async def test_broadcast_drops_failed_connection(phone_enc):
+    """某连接 send_json 抛错时，broadcast 继续投递其余连接并把坏连接移出房间。"""
+
+    class RaisingWebSocket:
+        async def send_json(self, data: dict) -> None:
+            raise RuntimeError("socket dead")
+
+    mgr = SupervisorManager()
+    bad_ws = RaisingWebSocket()
+    good_ws = FakeWebSocket()
+    await mgr.connect(1, bad_ws, can_see_plaintext=True)
+    await mgr.connect(1, good_ws, can_see_plaintext=True)
+
+    await mgr.broadcast(1, {"type": "call.started"}, owner_phone_enc=phone_enc)
+
+    # 坏连接抛错不影响健康连接收消息
+    assert len(good_ws.sent) == 1
+    # 坏连接被移出房间，健康连接仍在
+    assert bad_ws not in mgr._rooms[1]
+    assert good_ws in mgr._rooms[1]
