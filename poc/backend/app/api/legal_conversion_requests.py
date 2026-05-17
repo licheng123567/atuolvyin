@@ -403,12 +403,6 @@ def get_request_detail(
 ) -> LegalConversionRequestDetailOut:
     """§9.1 — 物业审批人看请求详情 + 服务商法务上传的补充材料。"""
     tenant_id = _require_tenant(payload)
-    request_row = db.get(LegalConversionRequest, request_id)
-    if request_row is None or request_row.tenant_id != tenant_id:
-        raise HTTPException(
-            status_code=http_status.HTTP_404_NOT_FOUND,
-            detail={"code": "ERR_NOT_FOUND", "message": "申请不存在"},
-        )
     (
         request_row,
         case,

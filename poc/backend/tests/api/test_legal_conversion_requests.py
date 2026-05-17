@@ -500,3 +500,85 @@ def test_property_request_detail_cross_tenant_404(
             assert resp.status_code == 404
     finally:
         app.dependency_overrides.clear()
+
+
+def test_property_request_detail_rejects_provider_side(
+    db_session, seeded_tenant, seeded_case
+):
+    """服务商侧用户（provider_id 非空）访问物业侧端点 8 → 403。"""
+    from starlette.testclient import TestClient
+
+    from app.core.crypto import encrypt_phone
+    from app.core.db import get_db
+    from app.core.security import create_access_token, get_password_hash
+    from app.main import app
+    from app.models.legal_conversion import LegalConversionRequest
+    from app.models.tenant import ServiceProvider, UserTenantMembership
+    from app.models.user import UserAccount
+
+    provider = ServiceProvider(name="服务商Z", provider_type="legal",
+                               admin_phone_enc=encrypt_phone("13900000088"))
+    db_session.add(provider)
+    db_session.flush()
+    u = UserAccount(name="服务商督导", phone_enc=encrypt_phone("13700000088"),
+                    password_hash=get_password_hash("pw"), is_active=True)
+    db_session.add(u)
+    db_session.flush()
+    db_session.add(UserTenantMembership(
+        tenant_id=seeded_tenant.id, user_id=u.id, role="supervisor",
+        provider_id=provider.id, is_active=True))
+    db_session.flush()
+    req = LegalConversionRequest(
+        tenant_id=seeded_tenant.id, case_id=seeded_case.id,
+        requester_user_id=u.id, requester_role="legal", status="pending")
+    db_session.add(req)
+    db_session.flush()
+    token = create_access_token({
+        "sub": str(u.id), "user_id": u.id, "tenant_id": seeded_tenant.id,
+        "role": "supervisor", "provider_id": provider.id,
+        "scope": f"tenant:{seeded_tenant.id}"})
+
+    def _override():
+        yield db_session
+
+    app.dependency_overrides[get_db] = _override
+    try:
+        with TestClient(app) as cli:
+            resp = cli.get(
+                f"/api/v1/legal-conversion-requests/{req.id}",
+                headers={"Authorization": f"Bearer {token}"})
+            assert resp.status_code == 403
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_property_material_download_cross_tenant_404(
+    db_session, seeded_tenant, seeded_case, seeded_supervisor_user, supervisor_auth_headers
+):
+    """物业审批人不能下载别家租户的材料。"""
+    from starlette.testclient import TestClient
+
+    from app.core.crypto import encrypt_phone
+    from app.core.db import get_db
+    from app.main import app
+    from app.models.tenant import Tenant
+
+    other = Tenant(name="别家物业B", admin_phone_enc=encrypt_phone("13800000077"),
+                   plan="trial", is_active=True)
+    db_session.add(other)
+    db_session.flush()
+    req, mat = _seed_request_with_material(
+        db_session, other, seeded_case, seeded_supervisor_user.id)
+
+    def _override():
+        yield db_session
+
+    app.dependency_overrides[get_db] = _override
+    try:
+        with TestClient(app) as cli:
+            resp = cli.get(
+                f"/api/v1/legal-conversion-requests/{req.id}/materials/{mat.id}",
+                headers=supervisor_auth_headers)
+            assert resp.status_code == 404
+    finally:
+        app.dependency_overrides.clear()
