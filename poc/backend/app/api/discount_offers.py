@@ -289,6 +289,7 @@ def create_offer(
     offer = DiscountOffer(
         tenant_id=int(tenant_id),
         case_id=case_id,
+        provider_id=payload.get("provider_id"),
         applicant_user_id=user_id,
         applicant_role=applicant_role,
         offer_type=body.offer_type,

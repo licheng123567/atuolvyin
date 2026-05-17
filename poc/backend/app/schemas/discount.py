@@ -40,6 +40,7 @@ class DiscountOfferOut(BaseModel):
     id: int
     tenant_id: int
     case_id: int
+    provider_id: int | None = None
     applicant_user_id: int | None
     applicant_role: ApplicantRole
     applicant_name: str | None = None
