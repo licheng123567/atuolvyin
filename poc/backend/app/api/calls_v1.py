@@ -289,17 +289,17 @@ def _check_soft_quota(db: Session, tenant_id: int, year_month: str, mode: str) -
 
 
 async def _broadcast_call_event(db: Session, call: CallRecord, event_type: str) -> None:
-    """向 supervisor 房间推 call.started / call.ended / call.aborted 事件。"""
+    """向 supervisor 房间推 call.started / call.ended / call.aborted 事件。
+
+    §9.3 —— 业主电话 owner_phone_masked 不在此处拼装：把密文 owner_phone_enc
+    交给 SupervisorManager.broadcast，由其按每个订阅连接握手时的
+    can_see_plaintext 快照逐一注入明文 / 脱敏值。
+    """
     from app.risk.supervisor_manager import get_supervisor_manager
 
     caller = db.get(UserAccount, call.caller_user_id) if call.caller_user_id else None
     case = db.get(CollectionCase, call.case_id) if call.case_id else None
     owner = db.get(OwnerProfile, case.owner_id) if case and case.owner_id else None
-    # WS 广播按 tenant_id 群发,无法逐订阅者脱敏 —— 这里固定 provider_id=None。
-    # TODO(v2.2-followup): 服务商侧督导(supervisor + provider_id)连入同一 tenant
-    # 房间时会因此收到明文业主电话;根治需在 SupervisorManager.broadcast 内按
-    # 每个订阅连接的 provider_id 逐一脱敏。
-    _bc_reveal = should_reveal_owner_phone(role="supervisor", provider_id=None)
     payload = {
         "type": event_type,  # "call.started" | "call.ended" | "call.aborted"
         "call_id": call.id,
@@ -307,16 +307,14 @@ async def _broadcast_call_event(db: Session, call: CallRecord, event_type: str) 
         "caller_user_id": call.caller_user_id,
         "caller_name": caller.name if caller else None,
         "owner_name": owner.name if owner else None,
-        "owner_phone_masked": display_owner_phone(
-            owner.phone_enc if owner else None,
-            reveal=_bc_reveal,
-        ),
         "started_at": call.started_at.isoformat() if call.started_at else None,
         "recording_mode": call.recording_mode,
         "status": call.status,
     }
     sup = get_supervisor_manager()
-    await sup.broadcast(call.tenant_id, payload)
+    await sup.broadcast(
+        call.tenant_id, payload, owner_phone_enc=owner.phone_enc if owner else None
+    )
 
 
 @router.post("/dial-start", response_model=DialStartOut, status_code=201)
