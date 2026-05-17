@@ -406,3 +406,81 @@ def test_upload_material_invalid_mime_422(api, db_session, seeded_tenant):
     )
     assert resp.status_code == 422
     assert resp.json()["code"] == "ERR_INVALID_MIME"
+
+
+def test_list_conversion_requests(api, db_session, seeded_tenant):
+    env = _seed_provider_env(db_session, seeded_tenant,
+                             provider_name="服务商A", owner_phone="13712345678")
+    req = _create_request(db_session, env)
+    resp = api.get("/api/v1/provider/legal/conversion-requests", headers=_auth(env.token))
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["items"][0]["id"] == req.id
+    assert body["items"][0]["status"] == "pending"
+
+
+def test_list_conversion_requests_cross_provider_isolation(api, db_session, seeded_tenant):
+    env_a = _seed_provider_env(db_session, seeded_tenant,
+                               provider_name="服务商A", owner_phone="13712345678")
+    env_b = _seed_provider_env(db_session, seeded_tenant,
+                               provider_name="服务商B", owner_phone="13755556666")
+    _create_request(db_session, env_a)
+    _create_request(db_session, env_b)
+    resp = api.get("/api/v1/provider/legal/conversion-requests", headers=_auth(env_a.token))
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 1
+
+
+def test_get_conversion_request_detail_with_materials_and_order_status(
+    api, db_session, seeded_tenant
+):
+    env = _seed_provider_env(db_session, seeded_tenant,
+                             provider_name="服务商A", owner_phone="13712345678")
+    req = _create_request(db_session, env)
+    from decimal import Decimal
+
+    from app.models.legal_conversion import LegalConversionOrder, LegalServicePackage
+    pkg = LegalServicePackage(
+        tenant_id=None, slug="lawyer_letter_detail", package_type="lawyer_letter",
+        name="律师函", price=Decimal("199.00"), platform_fee_rate=Decimal("0.30"),
+    )
+    db_session.add(pkg)
+    db_session.flush()
+    order = LegalConversionOrder(
+        tenant_id=seeded_tenant.id, case_id=env.case.id, status="internal_processing",
+        package_id=pkg.id, price_quoted=Decimal("199.00"),
+        platform_fee_amount=Decimal("59.70"),
+    )
+    db_session.add(order)
+    db_session.flush()
+    req.related_order_id = order.id
+    db_session.flush()
+    up = api.post(
+        f"/api/v1/provider/legal/conversion-requests/{req.id}/materials",
+        files={"file": ("证据.pdf", b"%PDF-1.4 x", "application/pdf")},
+        headers=_auth(env.token),
+    )
+    assert up.status_code == 201
+
+    resp = api.get(
+        f"/api/v1/provider/legal/conversion-requests/{req.id}", headers=_auth(env.token)
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["id"] == req.id
+    assert body["order_status"] == "internal_processing"
+    assert len(body["materials"]) == 1
+    assert body["materials"][0]["filename"] == "证据.pdf"
+
+
+def test_get_conversion_request_detail_cross_provider_404(api, db_session, seeded_tenant):
+    env_a = _seed_provider_env(db_session, seeded_tenant,
+                               provider_name="服务商A", owner_phone="13712345678")
+    env_b = _seed_provider_env(db_session, seeded_tenant,
+                               provider_name="服务商B", owner_phone="13755556666")
+    req_b = _create_request(db_session, env_b)
+    resp = api.get(
+        f"/api/v1/provider/legal/conversion-requests/{req_b.id}", headers=_auth(env_a.token)
+    )
+    assert resp.status_code == 404

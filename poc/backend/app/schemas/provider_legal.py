@@ -6,6 +6,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.legal_conversion_request import LegalConversionRequestMaterialOut
+
 
 class ProviderLegalCaseListItem(BaseModel):
     """服务商法务案件列表项。"""
@@ -71,3 +73,9 @@ class ProviderLegalRequestOut(BaseModel):
     order_status: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class ProviderLegalRequestDetail(ProviderLegalRequestOut):
+    """请求详情 —— 在列表项基础上带补充材料列表。"""
+
+    materials: list[LegalConversionRequestMaterialOut] = []

@@ -37,6 +37,7 @@ from app.schemas.provider_legal import (
     ProviderLegalCaseDetail,
     ProviderLegalCaseListItem,
     ProviderLegalConversionRequestCreate,
+    ProviderLegalRequestDetail,
     ProviderLegalRequestOut,
 )
 from app.services.audit import log_audit
@@ -409,4 +410,76 @@ def download_material(
         filename=material.filename,
         content_type=material.content_type,
         size_bytes=material.size_bytes,
+    )
+
+
+@router.get(
+    "/conversion-requests",
+    response_model=PaginatedResponse[ProviderLegalRequestOut],
+)
+def list_conversion_requests(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_provider_roles(ROLE_LEGAL))],
+    db: Annotated[Session, Depends(get_db)],
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+) -> PaginatedResponse[ProviderLegalRequestOut]:
+    tenant_id, provider_id, _ = _ctx(payload)
+    req_filter = sa.and_(
+        LegalConversionRequest.tenant_id == tenant_id,
+        LegalConversionRequest.case_id.in_(
+            select(CollectionCase.id).where(
+                _provider_legal_case_filter(tenant_id, provider_id)
+            )
+        ),
+    )
+    total = int(
+        db.execute(
+            select(func.count(LegalConversionRequest.id)).where(req_filter)
+        ).scalar_one()
+    )
+    reqs = (
+        db.execute(
+            select(LegalConversionRequest)
+            .where(req_filter)
+            .order_by(desc(LegalConversionRequest.id))
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        .scalars()
+        .all()
+    )
+    items = [_request_to_out(db, r) for r in reqs]
+    return PaginatedResponse[ProviderLegalRequestOut](
+        items=items, total=total, page=page, page_size=page_size
+    )
+
+
+@router.get(
+    "/conversion-requests/{request_id}",
+    response_model=ProviderLegalRequestDetail,
+)
+def get_conversion_request(
+    request_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_provider_roles(ROLE_LEGAL))],
+    db: Annotated[Session, Depends(get_db)],
+) -> ProviderLegalRequestDetail:
+    tenant_id, provider_id, _ = _ctx(payload)
+    req = _load_provider_request(db, request_id, tenant_id, provider_id)
+    materials = (
+        db.execute(
+            select(LegalConversionRequestMaterial)
+            .where(LegalConversionRequestMaterial.request_id == request_id)
+            .order_by(LegalConversionRequestMaterial.id)
+        )
+        .scalars()
+        .all()
+    )
+    base = _request_to_out(db, req)
+    return ProviderLegalRequestDetail(
+        **base.model_dump(),
+        materials=[
+            LegalConversionRequestMaterialOut.model_validate(m) for m in materials
+        ],
     )
