@@ -146,6 +146,7 @@ class CommissionLineItem(BaseModel):
     owner_name: str
     paid_amount: Decimal
     paid_at: datetime | None
+    commission_rate: Decimal  # §9.2 — 该案所属项目的服务商佣金率
 
 
 class ProviderMemberCommission(BaseModel):

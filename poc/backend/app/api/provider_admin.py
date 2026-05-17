@@ -739,6 +739,17 @@ async def get_member_commission(
     _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> ProviderMemberCommission:
+    """§9.2-C/D2 — 服务商单成员当月佣金。
+
+    逐案件：实收（扣已执行减免）× 该案项目的 provider_agent_commission_rate
+    （NULL 回退系统默认 0.05），求和。commission_rate 透出加权有效率。
+    服务商成员可跨租户接案，故按 tenant_id 分组取减免后合并。
+    """
+    from collections import defaultdict
+
+    from app.models.case import Project
+    from app.services.commission import executed_discount_amounts, provider_agent_rate
+
     user_id = _user_id_from_payload(payload)
     provider_id = _resolve_provider_id(user_id, db)
 
@@ -776,24 +787,49 @@ async def get_member_commission(
         .where(CollectionCase.updated_at < period_end)
     ).all()
 
-    items = [
-        CommissionLineItem(
-            case_id=c.id,
-            owner_name=o.name,
-            paid_amount=Decimal(str(c.amount_owed or 0)),
-            paid_at=c.updated_at,
+    # 服务商成员可跨租户接案 —— 按 tenant_id 分组取已执行减免后合并（case_id 全局唯一）
+    ids_by_tenant: dict[int, list[int]] = defaultdict(list)
+    for c, _o in case_rows:
+        ids_by_tenant[c.tenant_id].append(c.id)
+    executed: dict[int, Decimal] = {}
+    for tid, ids in ids_by_tenant.items():
+        executed.update(executed_discount_amounts(db, tid, ids))
+
+    project_cache: dict[int, Project | None] = {}
+
+    def _project(project_id: int | None) -> Project | None:
+        if project_id is None:
+            return None
+        if project_id not in project_cache:
+            project_cache[project_id] = db.get(Project, project_id)
+        return project_cache[project_id]
+
+    items: list[CommissionLineItem] = []
+    base = Decimal("0")
+    commission = Decimal("0")
+    for c, o in case_rows:
+        collected = (
+            executed[c.id] if c.id in executed else Decimal(str(c.amount_owed or 0))
         )
-        for c, o in case_rows
-    ]
-    base = sum((i.paid_amount for i in items), Decimal("0"))
-    rate = DEFAULT_COMMISSION_RATE
-    commission = (base * Decimal(str(rate))).quantize(Decimal("0.01"))
+        rate = provider_agent_rate(_project(c.project_id))
+        base += collected
+        commission += (collected * rate).quantize(Decimal("0.01"))
+        items.append(
+            CommissionLineItem(
+                case_id=c.id,
+                owner_name=o.name,
+                paid_amount=collected,
+                paid_at=c.updated_at,
+                commission_rate=rate,
+            )
+        )
+    effective_rate = float(commission / base) if base > 0 else DEFAULT_COMMISSION_RATE
 
     return ProviderMemberCommission(
         user_id=member.id,
         name=member.name,
         year_month=year_month,
-        commission_rate=rate,
+        commission_rate=effective_rate,
         base_amount=base,
         commission=commission,
         items=items,
