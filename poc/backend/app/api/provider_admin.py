@@ -43,6 +43,7 @@ from app.models.user import UserAccount
 from app.schemas.common import PaginatedResponse
 from app.schemas.provider_admin import (
     CommissionLineItem,
+    ProjectCommissionRateIn,
     ProviderContractSummary,
     ProviderDashboardStats,
     ProviderDisputeIn,
@@ -1031,3 +1032,40 @@ async def assign_provider_pm(
     project.provider_pm_user_id = body.user_id
     db.commit()
     return {"status": "ok", "project_id": project.id, "pm_user_id": body.user_id}
+
+
+@router.patch("/projects/{project_id}/commission-rate")
+async def set_project_commission_rate(
+    project_id: int,
+    body: ProjectCommissionRateIn,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[
+        object, Depends(require_provider_roles("project_manager", "admin"))
+    ],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    """§9.2-D2 — 服务商 PM/admin 设置本家项目的服务商催收员佣金率。"""
+    from app.models.case import Project
+
+    user_id = _user_id_from_payload(payload)
+    provider_id = _resolve_provider_id(user_id, db)
+
+    project = db.execute(
+        select(Project).where(
+            Project.id == project_id,
+            Project.provider_id == provider_id,
+        )
+    ).scalar_one_or_none()
+    if project is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "项目不存在或不属本服务商"},
+        )
+
+    project.provider_agent_commission_rate = body.provider_agent_commission_rate
+    db.commit()
+    return {
+        "status": "ok",
+        "project_id": project.id,
+        "provider_agent_commission_rate": str(body.provider_agent_commission_rate),
+    }

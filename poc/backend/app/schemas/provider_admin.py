@@ -159,6 +159,12 @@ class ProviderMemberCommission(BaseModel):
     items: list[CommissionLineItem]
 
 
+class ProjectCommissionRateIn(BaseModel):
+    """§9.2-D2 — 服务商设置本家项目的服务商催收员佣金率。"""
+
+    provider_agent_commission_rate: Decimal = Field(ge=0, le=1)
+
+
 # ── Sprint 9.3 — dispute submission ─────────────────────────────────────
 
 

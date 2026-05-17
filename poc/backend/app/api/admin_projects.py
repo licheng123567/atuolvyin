@@ -92,6 +92,9 @@ def _to_out(
         late_fee_waive_auto_approve_threshold_pct=p.late_fee_waive_auto_approve_threshold_pct,
         late_fee_waive_supervisor_max_pct=p.late_fee_waive_supervisor_max_pct,
         late_fee_waive_disabled=p.late_fee_waive_disabled,
+        # §9.2 D1/D2 — 项目级佣金率
+        internal_agent_commission_rate=p.internal_agent_commission_rate,
+        provider_agent_commission_rate=p.provider_agent_commission_rate,
     )
 
 
@@ -275,6 +278,8 @@ def create_project(
         late_fee_waive_auto_approve_threshold_pct=body.late_fee_waive_auto_approve_threshold_pct,
         late_fee_waive_supervisor_max_pct=body.late_fee_waive_supervisor_max_pct,
         late_fee_waive_disabled=body.late_fee_waive_disabled,
+        # §9.2-D1 — 项目级内勤佣金率
+        internal_agent_commission_rate=body.internal_agent_commission_rate,
     )
     db.add(p)
     db.flush()

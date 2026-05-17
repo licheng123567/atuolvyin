@@ -49,6 +49,8 @@ class ProjectCreateIn(BaseModel):
     late_fee_waive_auto_approve_threshold_pct: int | None = Field(None, ge=0, le=100)
     late_fee_waive_supervisor_max_pct: int | None = Field(None, ge=0, le=100)
     late_fee_waive_disabled: bool | None = None
+    # §9.2-D1 — 项目级内勤催收员佣金率（NULL 继承系统默认 0.05）
+    internal_agent_commission_rate: Decimal | None = Field(None, ge=0, le=1)
 
 
 class ProjectUpdateIn(BaseModel):
@@ -83,6 +85,8 @@ class ProjectUpdateIn(BaseModel):
     late_fee_waive_auto_approve_threshold_pct: int | None = Field(None, ge=0, le=100)
     late_fee_waive_supervisor_max_pct: int | None = Field(None, ge=0, le=100)
     late_fee_waive_disabled: bool | None = None
+    # §9.2-D1 — 项目级内勤催收员佣金率（NULL 继承系统默认 0.05）
+    internal_agent_commission_rate: Decimal | None = Field(None, ge=0, le=1)
 
 
 class ProjectOut(BaseModel):
@@ -127,3 +131,6 @@ class ProjectOut(BaseModel):
     late_fee_waive_auto_approve_threshold_pct: int | None = None
     late_fee_waive_supervisor_max_pct: int | None = None
     late_fee_waive_disabled: bool | None = None
+    # §9.2 D1/D2 — 项目级佣金率（NULL 表示继承系统默认 0.05）
+    internal_agent_commission_rate: Decimal | None = None
+    provider_agent_commission_rate: Decimal | None = None
