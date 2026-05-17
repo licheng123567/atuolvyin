@@ -61,3 +61,31 @@ async def test_broadcast_call_event_passes_owner_phone_enc(
     assert "owner_phone_masked" not in sent["event"]
     assert sent["event"]["type"] == "call.started"
     assert sent["event"]["case_id"] == seeded_case.id
+
+
+async def test_broadcast_call_event_no_owner_passes_none(
+    db_session, seeded_tenant, seeded_member_user, fake_supervisor_manager,
+):
+    """无 case/owner 的通话 → owner_phone_enc 传 None，broadcast 仍被调用一次。"""
+    from app.api.calls_v1 import _broadcast_call_event
+    from app.models.call import CallRecord
+
+    call = CallRecord(
+        tenant_id=seeded_tenant.id,
+        case_id=None,
+        caller_user_id=seeded_member_user.id,
+        callee_phone_enc=encrypt_phone("13700000000"),
+        initiated_by="pc",
+        status="dialing",
+    )
+    db_session.add(call)
+    db_session.flush()
+
+    await _broadcast_call_event(db_session, call, "call.ended")
+
+    assert len(fake_supervisor_manager.calls) == 1
+    sent = fake_supervisor_manager.calls[0]
+    assert sent["owner_phone_enc"] is None
+    assert sent["event"]["owner_name"] is None
+    assert "owner_phone_masked" not in sent["event"]
+    assert sent["event"]["type"] == "call.ended"
