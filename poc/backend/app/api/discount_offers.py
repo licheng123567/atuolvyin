@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles
+from app.core.security import get_token_payload, require_roles, require_tenant_roles
 from app.models.case import (  # noqa: F401  Project 用于 _get_policy
     CollectionCase,
     OwnerProfile,
@@ -402,7 +402,7 @@ def approve_offer(
     offer_id: int,
     body: DiscountActionRequest,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ALL_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles("supervisor", "admin", "superadmin"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> DiscountOfferOut:
     tenant_id = payload.get("tenant_id")
@@ -452,7 +452,7 @@ def reject_offer(
     offer_id: int,
     body: DiscountRejectRequest,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ALL_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles("supervisor", "admin", "superadmin"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> DiscountOfferOut:
     tenant_id = payload.get("tenant_id")
@@ -500,7 +500,7 @@ def escalate_offer(
     offer_id: int,
     body: DiscountActionRequest,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_roles(*ALL_ROLES))],
+    _user: Annotated[object, Depends(require_tenant_roles("supervisor", "admin", "superadmin"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> DiscountOfferOut:
     tenant_id = payload.get("tenant_id")
