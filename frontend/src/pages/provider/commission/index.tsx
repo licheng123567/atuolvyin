@@ -3,6 +3,8 @@ import { useCustom, useGo } from "@refinedev/core";
 import { ArrowLeft, BadgeDollarSign } from "lucide-react";
 import { useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
+import { Kpi } from "@/components/ui/Kpi";
+import { currentYM } from "@/lib/datetime";
 
 interface CommissionLineItem {
   case_id: number;
@@ -20,11 +22,6 @@ interface CommissionOut {
   base_amount: string;
   commission: string;
   items: CommissionLineItem[];
-}
-
-function currentYM(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 export function ProviderMemberCommissionPage() {
@@ -136,39 +133,6 @@ export function ProviderMemberCommissionPage() {
           </div>
         </>
       )}
-    </div>
-  );
-}
-
-function Kpi({
-  label,
-  value,
-  highlight,
-}: {
-  label: string;
-  value: string;
-  highlight?: boolean;
-}) {
-  return (
-    <div
-      className="p-4 rounded"
-      style={{
-        background: highlight
-          ? "var(--color-primary-light)"
-          : "var(--color-neutral-50)",
-      }}
-    >
-      <p className="text-xs text-[var(--color-neutral-500)] mb-1">{label}</p>
-      <p
-        className="text-2xl font-bold"
-        style={{
-          color: highlight
-            ? "var(--color-primary)"
-            : "var(--color-neutral-900)",
-        }}
-      >
-        {value}
-      </p>
     </div>
   );
 }

@@ -81,3 +81,9 @@ export function formatTotalMinutes(min: number | null | undefined): string {
   if (m === 0) return `${h}小时`;
   return `${h}小时${m}分`;
 }
+
+/** 返回当前月份字符串 "YYYY-MM"，用于月选择器默认值。 */
+export function currentYM(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
