@@ -184,7 +184,8 @@
 
 - 现象:`SupervisorManager.broadcast` 按 `tenant_id` 群发,`calls_v1.py` 的实时通话事件广播对 `supervisor` 固定 `provider_id=None`、统一明文。
 - 旧模型下 `supervisor` 必是物业内部,行为正确;新模型允许服务商侧督导(`supervisor` + `provider_id`),其连入同一 tenant 房间会收到明文业主电话 —— 是过度披露。
-- 根治需在 `broadcast` 内按每个订阅连接的 `provider_id` 逐一脱敏(架构改动)。本次重构不做,代码已留 `TODO(v2.2-followup)`,作为后续独立需求记录。
+- 根治需在 `broadcast` 内按每个订阅连接的身份逐一脱敏(架构改动)。
+- ✅ **已实现(2026-05-16)**:`SupervisorManager` 改为按连接存 `can_see_plaintext` 快照、`broadcast` 逐连接注入 `owner_phone_masked`;`ws_supervisor` 握手时算快照。详见 `docs/superpowers/specs/2026-05-16-ws-broadcast-phone-masking-design.md`。`TODO(v2.2-followup)` 已清除。
 
 ## 10. 风险与回滚
 
