@@ -30,6 +30,7 @@ from app.models.case import (  # noqa: F401  Project 用于 _get_policy
 )
 from app.models.discount_offer import DiscountOffer
 from app.models.settings import TenantSettings
+from app.models.tenant import ServiceProvider
 from app.models.user import UserAccount
 from app.schemas.common import PaginatedResponse
 from app.schemas.discount import (
@@ -122,6 +123,8 @@ def _to_out(db: Session, offer: DiscountOffer) -> DiscountOfferOut:
     out.case_building = (owner.building or "") if owner else None
     out.project_name = project.name if project else None
     out.offer_type_label = _OFFER_TYPE_LABELS.get(offer.offer_type, offer.offer_type)
+    provider = db.get(ServiceProvider, offer.provider_id) if offer.provider_id else None
+    out.provider_name = provider.name if provider else None
     return out
 
 

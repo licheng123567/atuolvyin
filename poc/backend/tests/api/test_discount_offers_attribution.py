@@ -90,3 +90,16 @@ async def test_property_agent_offer_provider_id_null(client, seeded_case, agent_
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["provider_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_provider_agent_offer_carries_provider_name(
+    client, db_session, seeded_tenant, seeded_case
+):
+    provider = _provider(db_session)
+    headers = _provider_agent_headers(db_session, seeded_tenant.id, provider.id)
+    resp = await client.post(
+        f"/api/v1/cases/{seeded_case.id}/discount-offers", json=_BODY, headers=headers
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["provider_name"] == provider.name
