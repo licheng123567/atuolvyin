@@ -46,6 +46,7 @@ class DiscountOffer(Base, TimestampMixin):
         sa.BigInteger,
         sa.ForeignKey("service_provider.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     applicant_user_id: Mapped[int] = mapped_column(
         sa.BigInteger,

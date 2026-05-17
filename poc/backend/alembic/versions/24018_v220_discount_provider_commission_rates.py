@@ -17,6 +17,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    # §9.2-A 减免归属：NULL=物业内勤 / 非NULL=服务商发起
     op.add_column(
         "discount_offer",
         sa.Column("provider_id", sa.BigInteger(), nullable=True),
@@ -29,6 +30,7 @@ def upgrade() -> None:
         ["id"],
         ondelete="SET NULL",
     )
+    op.create_index("ix_discount_offer_provider_id", "discount_offer", ["provider_id"])
     op.add_column(
         "project",
         sa.Column("internal_agent_commission_rate", sa.Numeric(6, 4), nullable=True),
@@ -42,5 +44,6 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_column("project", "provider_agent_commission_rate")
     op.drop_column("project", "internal_agent_commission_rate")
+    op.drop_index("ix_discount_offer_provider_id", table_name="discount_offer")
     op.drop_constraint("fk_discount_offer_provider", "discount_offer", type_="foreignkey")
     op.drop_column("discount_offer", "provider_id")
