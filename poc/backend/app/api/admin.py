@@ -620,11 +620,17 @@ async def list_agent_commissions(
     db: Annotated[Session, Depends(get_db)],
     year_month: str = Query(..., pattern=r"^\d{4}-\d{2}$"),
 ) -> AgentCommissionList:
-    """v1.5.6 — 物业内部催收员当月提成（应发员工工资视图）。"""
+    """v1.5.6 — 物业内部催收员当月提成（应发员工工资视图）。
+
+    §9.2-C/D1 — 佣金基数改用「实收金额」（扣已执行减免），佣金率改为逐案按
+    项目级 internal_agent_commission_rate（NULL 回退系统默认 0.05）。
+    AgentCommissionItem.commission_rate 透出为该 agent 的加权有效率。
+    """
     from decimal import Decimal as D
 
     from app.core.crypto import mask_phone
-    from app.models.case import CollectionCase
+    from app.models.case import CollectionCase, Project
+    from app.services.commission import executed_discount_amounts, internal_agent_rate
 
     tenant_id: int | None = payload.get("tenant_id")
     if not tenant_id:
@@ -635,7 +641,6 @@ async def list_agent_commissions(
 
     period_start, period_end = _month_window(year_month)
 
-    # 拉本租户所有 active agent（内部，work_mode=internal）
     agents = db.execute(
         select(UserAccount, UserTenantMembership)
         .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
@@ -649,10 +654,24 @@ async def list_agent_commissions(
         .order_by(UserAccount.id)
     ).all()
 
+    # 项目缓存：跨 agent 复用，避免 N+1
+    project_cache: dict[int, Project | None] = {}
+
+    def _project(project_id: int | None) -> Project | None:
+        if project_id is None:
+            return None
+        if project_id not in project_cache:
+            project_cache[project_id] = db.get(Project, project_id)
+        return project_cache[project_id]
+
     items: list[AgentCommissionItem] = []
     for u, _m in agents:
         rows = db.execute(
-            select(CollectionCase.amount_owed).where(
+            select(
+                CollectionCase.id,
+                CollectionCase.amount_owed,
+                CollectionCase.project_id,
+            ).where(
                 CollectionCase.assigned_to == u.id,
                 CollectionCase.tenant_id == tenant_id,
                 CollectionCase.stage == "paid",
@@ -660,15 +679,24 @@ async def list_agent_commissions(
                 CollectionCase.updated_at < period_end,
             )
         ).all()
-        base = sum((D(str(r[0] or 0)) for r in rows), D("0"))
-        commission = (base * D(str(INTERNAL_AGENT_COMMISSION_RATE))).quantize(D("0.01"))
+        executed = executed_discount_amounts(db, tenant_id, [r[0] for r in rows])
+        base = D("0")
+        commission = D("0")
+        for case_id, amount_owed, project_id in rows:
+            collected = executed.get(case_id) or D(str(amount_owed or 0))
+            rate = internal_agent_rate(_project(project_id))
+            base += collected
+            commission += (collected * rate).quantize(D("0.01"))
+        effective_rate = (
+            float(commission / base) if base > 0 else INTERNAL_AGENT_COMMISSION_RATE
+        )
         items.append(
             AgentCommissionItem(
                 user_id=u.id,
                 name=u.name,
                 phone_masked=mask_phone(u.phone_enc),
                 year_month=year_month,
-                commission_rate=INTERNAL_AGENT_COMMISSION_RATE,
+                commission_rate=effective_rate,
                 base_amount=base,
                 paid_case_count=len(rows),
                 commission=commission,
