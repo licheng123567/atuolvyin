@@ -56,6 +56,9 @@ ALL_ROLES = (
     "superadmin",
 )
 
+# §9.2-B — 减免审批端点（approve/reject/escalate）：物业侧专属角色
+APPROVAL_ROLES = ("supervisor", "admin", "superadmin")
+
 
 def _now_str() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
@@ -402,7 +405,7 @@ def approve_offer(
     offer_id: int,
     body: DiscountActionRequest,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles("supervisor", "admin", "superadmin"))],
+    _user: Annotated[object, Depends(require_tenant_roles(*APPROVAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> DiscountOfferOut:
     tenant_id = payload.get("tenant_id")
@@ -452,7 +455,7 @@ def reject_offer(
     offer_id: int,
     body: DiscountRejectRequest,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles("supervisor", "admin", "superadmin"))],
+    _user: Annotated[object, Depends(require_tenant_roles(*APPROVAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> DiscountOfferOut:
     tenant_id = payload.get("tenant_id")
@@ -500,7 +503,7 @@ def escalate_offer(
     offer_id: int,
     body: DiscountActionRequest,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles("supervisor", "admin", "superadmin"))],
+    _user: Annotated[object, Depends(require_tenant_roles(*APPROVAL_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> DiscountOfferOut:
     tenant_id = payload.get("tenant_id")

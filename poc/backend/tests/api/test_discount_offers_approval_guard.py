@@ -86,7 +86,7 @@ async def test_provider_supervisor_cannot_approve(
     resp = await client.post(
         f"/api/v1/discount-offers/{offer.id}/approve", json={}, headers=headers
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 403, resp.text
     assert resp.json()["code"] == "ERR_FORBIDDEN"
 
 
@@ -101,7 +101,7 @@ async def test_provider_supervisor_cannot_reject(
         json={"reason": "驳回理由"},
         headers=headers,
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 403, resp.text
     assert resp.json()["code"] == "ERR_FORBIDDEN"
 
 
@@ -114,7 +114,7 @@ async def test_provider_supervisor_cannot_escalate(
     resp = await client.post(
         f"/api/v1/discount-offers/{offer.id}/escalate", json={}, headers=headers
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 403, resp.text
     assert resp.json()["code"] == "ERR_FORBIDDEN"
 
 
@@ -130,3 +130,16 @@ async def test_property_supervisor_can_approve(
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["status"] == "approved"
+
+
+@pytest.mark.asyncio
+async def test_property_agent_cannot_approve(
+    client, db_session, seeded_tenant, seeded_case, agent_auth_headers
+):
+    """角色维度收紧：物业内勤 agent（改造前在 ALL_ROLES 内）现在应被挡。"""
+    offer = _pending_offer(db_session, seeded_tenant.id, seeded_case.id)
+    resp = await client.post(
+        f"/api/v1/discount-offers/{offer.id}/approve", json={}, headers=agent_auth_headers
+    )
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["code"] == "ERR_FORBIDDEN"
