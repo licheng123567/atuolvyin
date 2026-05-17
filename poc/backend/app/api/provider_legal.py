@@ -449,6 +449,9 @@ def list_conversion_requests(
         .scalars()
         .all()
     )
+    # 技术债：_request_to_out 每行最多 4 次 db.get（case/owner/project/order）。
+    # page_size ≤ 100、且同页请求多共享 case/project（命中 identity map），PoC 可接受；
+    # 若 page_size 上限提高需改为批量 join 取数。
     items = [_request_to_out(db, r) for r in reqs]
     return PaginatedResponse[ProviderLegalRequestOut](
         items=items, total=total, page=page, page_size=page_size
