@@ -853,6 +853,7 @@ def main() -> None:
         # 新增服务商侧催收员 + 督导
         provider_agent_user, _ = _upsert_user(db, "13000000011", "服务商催收员小孙")
         provider_supervisor_user, _ = _upsert_user(db, "13000000012", "服务商督导小钱")
+        provider_legal_user, _ = _upsert_user(db, "13000000013", "服务商法务李")
 
         # 3. Memberships
         # platform_super + platform_ops: 平台账号，platform_role 已在账号上设置，无 membership
@@ -883,6 +884,9 @@ def main() -> None:
         )
         _upsert_membership(
             db, provider_supervisor_user, tenant, "supervisor", provider_id=provider.id
+        )
+        _upsert_membership(
+            db, provider_legal_user, tenant, "legal", provider_id=provider.id
         )
 
         # 3c. 项目（v1.4 — Project 成为一等公民；v1.6 加合同 + v1.6.1 减免覆盖演示）

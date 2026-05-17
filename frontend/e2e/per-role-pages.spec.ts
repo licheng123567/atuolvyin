@@ -107,18 +107,14 @@ const ROLE_CASES: RoleCase[] = [
   },
   // 13000000012: provider-side supervisor — no provider-supervisor-specific pages exist yet
   // (property /supervisor/* pages would 403 for provider scope); added to smoke login test only.
-
-  // TODO(§9-provider-legal): seed 脚本中暂无服务商侧 legal 账号（provider_id 非 NULL + role=legal）。
-  // 待 seed_demo.py 补充如下账号后，在此追加 provider-legal 冒烟：
-  // {
-  //   name: "legal (provider)",
-  //   phone: "<待补充>",
-  //   pages: [
-  //     { path: "/provider/legal/cases", expectText: /法务案件|案件/ },
-  //     { path: "/provider/legal/requests", expectText: /转化请求|请求/ },
-  //   ],
-  // }
-  // 导航与路由已通过 nav.test.ts 单测覆盖（src/config/__tests__/nav.test.ts）。
+  {
+    name: "legal (provider)",
+    phone: "13000000013",
+    pages: [
+      { path: "/provider/legal/cases", expectText: /法务案件|案件/ },
+      { path: "/provider/legal/requests", expectText: /转化请求|请求/ },
+    ],
+  },
 ];
 
 async function dismissAppIntroIfPresent(page: Page) {
