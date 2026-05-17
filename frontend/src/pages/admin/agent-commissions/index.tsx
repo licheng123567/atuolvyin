@@ -8,7 +8,7 @@ import { useAgentCommissions } from "./api";
 
 export function AgentCommissionsListPage() {
   const [ym, setYm] = useState(currentYM());
-  const { data, isLoading } = useAgentCommissions(ym);
+  const { data, isLoading, isError } = useAgentCommissions(ym);
   const go = useGo();
 
   const TABLE_COLS = 6;
@@ -76,13 +76,31 @@ export function AgentCommissionsListPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--color-neutral-100)]">
-            {!data || data.items.length === 0 ? (
+            {isLoading ? (
               <tr>
                 <td
                   colSpan={TABLE_COLS}
                   className="px-4 py-8 text-center text-[var(--color-neutral-400)]"
                 >
-                  {isLoading ? null : "本月无内勤催收员提成数据"}
+                  加载中…
+                </td>
+              </tr>
+            ) : isError ? (
+              <tr>
+                <td
+                  colSpan={TABLE_COLS}
+                  className="px-4 py-8 text-center text-[var(--color-neutral-400)]"
+                >
+                  加载失败
+                </td>
+              </tr>
+            ) : !data || data.items.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={TABLE_COLS}
+                  className="px-4 py-8 text-center text-[var(--color-neutral-400)]"
+                >
+                  本月无内勤催收员提成数据
                 </td>
               </tr>
             ) : (

@@ -43,7 +43,7 @@ export function useAgentCommissions(yearMonth: string) {
     method: "get",
     config: { query: { year_month: yearMonth } },
   });
-  return { data: query.data?.data, isLoading: query.isLoading };
+  return { data: query.data?.data, isLoading: query.isLoading, isError: query.isError };
 }
 
 export function useAgentCommissionDetail(userId: number | undefined, yearMonth: string) {
