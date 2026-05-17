@@ -198,3 +198,7 @@ frontend/src/pages/admin/agent-commissions/
 | `frontend/src/pages/**/__tests__/`、`frontend/e2e/`、`poc/backend/tests/` | 建/改测试 |
 
 无 Android 改动。
+
+---
+
+> ✅ **已实现(2026-05-17)**：§9.1 服务商法务 4 页 + 导航/路由；§9.2 减免归属展示、服务商佣金页适配、内勤提成列表+详情、D1/D2 项目佣金率；配套后端改动（`DiscountOfferOut.provider_name`、`get_agent_commission_detail` 迁新算法、`list_provider_projects` 透出 `provider_agent_commission_rate`）。见实施计划 `docs/superpowers/plans/2026-05-17-section9-frontend-ui.md`。
