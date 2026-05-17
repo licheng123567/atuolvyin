@@ -42,16 +42,10 @@ from app.schemas.provider_legal import (
 )
 from app.services.audit import log_audit
 
-router = APIRouter()
+# §9.1 — 复用 legal_documents 的文件大小 / MIME 白名单常量，避免漂移（设计 §4.1）
+from .legal_documents import ALLOWED_MIME_PREFIXES, MAX_DOC_SIZE
 
-MAX_MATERIAL_SIZE = 50 * 1024 * 1024  # 50 MB
-ALLOWED_MIME_PREFIXES = (
-    "application/pdf",
-    "application/msword",
-    "application/vnd.openxmlformats-officedocument",
-    "image/",
-    "text/",
-)
+router = APIRouter()
 
 
 def _ctx(payload: dict) -> tuple[int, int, int]:
@@ -348,7 +342,7 @@ async def upload_material(
             status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"code": "ERR_EMPTY_FILE", "message": "上传文件为空"},
         )
-    if len(raw) > MAX_MATERIAL_SIZE:
+    if len(raw) > MAX_DOC_SIZE:
         raise HTTPException(
             status_code=http_status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail={"code": "ERR_FILE_TOO_LARGE", "message": "文件超过 50MB 限制"},
