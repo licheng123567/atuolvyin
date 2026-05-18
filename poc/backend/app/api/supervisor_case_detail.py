@@ -3,7 +3,8 @@
 GET /api/v1/supervisor/cases/{case_id}
 
 v1.6.9 — 改为复用 admin/agent 同款 build_case_detail_response，返回标准
-CaseDetailResponse；督导/admin/legal 三个角色看相同字段。前端用同款共享组件。
+CaseDetailResponse；supervisor / admin / legal / coordinator / workorder
+五个角色看相同字段。前端用同款共享组件。
 """
 
 from __future__ import annotations
@@ -29,7 +30,6 @@ router = APIRouter()
 SUPERVISOR_ROLES = ("supervisor", "admin", "legal", "coordinator", "workorder")
 # v1.6 — legal 角色（物业法务对接人）可只读案件全貌（限本租户）；律所/律师不在内
 # v1.9.6 — coordinator / workorder（物业协调员）处理工单时需读案件全貌（业主画像 + 时间线）
-# v1.6 — legal 角色（物业法务对接人）可只读案件全貌（限本租户）；律所/律师不在内
 
 
 @router.get("/cases/{case_id}", response_model=CaseDetailResponse)
@@ -57,7 +57,9 @@ async def get_case_detail(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail={"code": "ERR_NO_OWNER", "message": "案件无业主信息"},
         )
-    # v1.7.0 — supervisor 是物业内部角色，phone_masked 字段会返回明文
+    # v1.9.4 — phone_masked 明文与否由下游 should_reveal_owner_phone 按
+    #          viewer_role + viewer_provider_id 决定；force_phone_reveal 为 True
+    #          时（legal 角色且有活跃法务订单）直接强制明文，跳过合同/项目时效校验。
     # v1.9.4 — legal 角色处理本租户内部法务订单时（订单存在且非 cancelled/pending）
     #          直接给明文，便于打电话/发律师函
     role = payload.get("role")

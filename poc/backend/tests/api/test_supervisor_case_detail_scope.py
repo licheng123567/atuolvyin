@@ -324,3 +324,162 @@ def test_property_supervisor_cannot_get_provider_case(api, detail_scope_env):
     )
     assert resp.status_code == 404, resp.text
     assert resp.json()["code"] == "ERR_NOT_FOUND"
+
+
+# ---------------------------------------------------------------------------
+# 测试 4：legal 角色 scope 隔离
+# ---------------------------------------------------------------------------
+
+def test_provider_a_legal_can_get_own_case_detail(api, detail_scope_env, db_session):
+    """服务商 A legal 取服务商 A 项目的案件详情 → 200（守卫放行 + scope 过滤正确）。"""
+    token = _make_supervisor_token(
+        db_session, detail_scope_env.tenant,
+        provider_id=detail_scope_env.provider_a.id,
+        role="legal",
+    )
+    resp = api.get(
+        f"/api/v1/supervisor/cases/{detail_scope_env.case_a.id}",
+        headers=_auth(token),
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["id"] == detail_scope_env.case_a.id
+
+
+def test_provider_a_legal_cannot_get_provider_b_case(api, detail_scope_env, db_session):
+    """服务商 A legal 取服务商 B 项目的案件详情 → 404（跨 scope 隔离）。"""
+    token = _make_supervisor_token(
+        db_session, detail_scope_env.tenant,
+        provider_id=detail_scope_env.provider_a.id,
+        role="legal",
+    )
+    resp = api.get(
+        f"/api/v1/supervisor/cases/{detail_scope_env.case_b.id}",
+        headers=_auth(token),
+    )
+    assert resp.status_code == 404, resp.text
+    assert resp.json()["code"] == "ERR_NOT_FOUND"
+
+
+def test_provider_a_legal_cannot_get_property_case(api, detail_scope_env, db_session):
+    """服务商 A legal 取物业案件 → 404（跨 scope 隔离）。"""
+    token = _make_supervisor_token(
+        db_session, detail_scope_env.tenant,
+        provider_id=detail_scope_env.provider_a.id,
+        role="legal",
+    )
+    resp = api.get(
+        f"/api/v1/supervisor/cases/{detail_scope_env.case_property.id}",
+        headers=_auth(token),
+    )
+    assert resp.status_code == 404, resp.text
+    assert resp.json()["code"] == "ERR_NOT_FOUND"
+
+
+def test_property_legal_can_get_property_case_detail(api, detail_scope_env, db_session):
+    """物业侧 legal 取物业自办项目案件 → 200。"""
+    token = _make_supervisor_token(
+        db_session, detail_scope_env.tenant,
+        provider_id=None,
+        role="legal",
+    )
+    resp = api.get(
+        f"/api/v1/supervisor/cases/{detail_scope_env.case_property.id}",
+        headers=_auth(token),
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["id"] == detail_scope_env.case_property.id
+
+
+def test_property_legal_cannot_get_provider_case(api, detail_scope_env, db_session):
+    """物业侧 legal 取服务商 A 案件 → 404（跨 scope 隔离）。"""
+    token = _make_supervisor_token(
+        db_session, detail_scope_env.tenant,
+        provider_id=None,
+        role="legal",
+    )
+    resp = api.get(
+        f"/api/v1/supervisor/cases/{detail_scope_env.case_a.id}",
+        headers=_auth(token),
+    )
+    assert resp.status_code == 404, resp.text
+    assert resp.json()["code"] == "ERR_NOT_FOUND"
+
+
+def _make_legal_pkg(db_session) -> object:
+    """创建一个最小法务服务包（LegalConversionOrder 的 package_id FK 需要）。"""
+    from decimal import Decimal
+
+    from app.models.legal_conversion import LegalServicePackage
+
+    pkg = LegalServicePackage(
+        tenant_id=None,
+        slug="lawyer_letter_det",
+        package_type="lawyer_letter",
+        name="律师函（详情测试）",
+        price=Decimal("199.00"),
+        platform_fee_rate=Decimal("0.30"),
+        sort_order=99,
+    )
+    db_session.add(pkg)
+    db_session.flush()
+    return pkg
+
+
+def test_property_legal_force_phone_reveal_with_internal_processing_order(
+    api, detail_scope_env, db_session
+):
+    """物业侧 legal 访问有 internal_processing 法务订单的案件 → 200 且电话明文。
+
+    force_phone_reveal 路径：legal 角色 + 订单 status='internal_processing'
+    → build_case_detail_response 收到 force_owner_phone_reveal=True
+    → phone_masked 字段返回明文（非 138****XXXX 格式）。
+    """
+    from app.models.legal_conversion import LegalConversionOrder
+
+    token = _make_supervisor_token(
+        db_session, detail_scope_env.tenant,
+        provider_id=None,
+        role="legal",
+    )
+    pkg = _make_legal_pkg(db_session)
+    order = LegalConversionOrder(
+        tenant_id=detail_scope_env.tenant.id,
+        case_id=detail_scope_env.case_property.id,
+        package_id=pkg.id,
+        status="internal_processing",
+        price_quoted=__import__("decimal").Decimal("199.00"),
+        platform_fee_amount=__import__("decimal").Decimal("59.70"),
+    )
+    db_session.add(order)
+    db_session.flush()
+
+    resp = api.get(
+        f"/api/v1/supervisor/cases/{detail_scope_env.case_property.id}",
+        headers=_auth(token),
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    # 明文手机号不含 "****"（脱敏格式为 138****1234）
+    phone_masked = data["owner"]["phone_masked"]
+    assert "****" not in phone_masked, (
+        f"期望明文手机号，实际为脱敏格式：{phone_masked!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 测试 5：coordinator 角色守卫放行
+# ---------------------------------------------------------------------------
+
+def test_provider_a_coordinator_can_get_own_case_detail(api, detail_scope_env, db_session):
+    """服务商 A coordinator 取自己项目的案件详情 → 200（守卫放行确认）。"""
+    token = _make_supervisor_token(
+        db_session, detail_scope_env.tenant,
+        provider_id=detail_scope_env.provider_a.id,
+        role="coordinator",
+    )
+    resp = api.get(
+        f"/api/v1/supervisor/cases/{detail_scope_env.case_a.id}",
+        headers=_auth(token),
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["id"] == detail_scope_env.case_a.id
