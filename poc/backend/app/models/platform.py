@@ -87,3 +87,26 @@ class BlockchainConfig(Base):
     )
 
     __table_args__ = (sa.UniqueConstraint("provider", name="uq_blockchain_config_provider"),)
+
+
+class SmsConfig(Base):
+    """短信中心（028lk）平台级配置 —— 单行，超管在 /super/sms-config 维护。"""
+
+    __tablename__ = "sms_config"
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    secret_name: Mapped[str] = mapped_column(sa.String(128), nullable=False)
+    secret_key_enc: Mapped[str | None] = mapped_column(sa.Text, nullable=True)  # AES-256
+    sign_name: Mapped[str] = mapped_column(sa.String(64), nullable=False, default="")
+    otp_template_id: Mapped[str | None] = mapped_column(sa.String(64), nullable=True)
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=False)
+    last_failure_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
+    )
+    last_failure_reason: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True),
+        server_default=sa.func.now(),
+        onupdate=sa.func.now(),
+        nullable=False,
+    )
