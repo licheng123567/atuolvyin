@@ -87,3 +87,23 @@ def test_duplicate_provider_slot_rejected(db_session, shift_fk_rows):
     db_session.add(_shift(1, 100))
     with pytest.raises(sa.exc.IntegrityError):
         db_session.flush()
+
+
+def test_same_provider_different_slot_coexist(db_session, shift_fk_rows):
+    """同一 (tenant, provider, date) 下不同 slot 可并存，锁死 partial unique index 列顺序回归。
+
+    服务商侧 uq_supervisor_shift_provider 索引列为 (tenant_id, provider_id, shift_date, slot)，
+    约束仅在完全相同的四元组时触发；morning 与 afternoon 属于不同 slot，不应冲突。
+    """
+    db_session.add_all([
+        _shift(1, 100, slot="morning"),
+        _shift(1, 100, slot="afternoon"),
+    ])
+    db_session.flush()
+    rows = db_session.execute(
+        sa.select(SupervisorShift).where(
+            SupervisorShift.tenant_id == 1,
+            SupervisorShift.provider_id == 100,
+        )
+    ).scalars().all()
+    assert len(rows) == 2

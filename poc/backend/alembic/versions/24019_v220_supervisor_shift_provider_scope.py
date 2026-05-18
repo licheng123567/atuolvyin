@@ -18,6 +18,8 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    # 此处 FK ondelete 刻意用 CASCADE 而非 24018 的 SET NULL：
+    # provider 删除时其排班/调班行应一并删除，不能掉回 provider_id IS NULL 的物业 scope。
     # 两表加 provider_id（NULL=物业 / 非NULL=服务商）
     op.add_column("supervisor_shift", sa.Column("provider_id", sa.BigInteger(), nullable=True))
     op.create_foreign_key(
