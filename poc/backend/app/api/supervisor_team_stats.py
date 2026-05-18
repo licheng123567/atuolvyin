@@ -129,7 +129,10 @@ async def get_team_stats(
     agent_ids = [
         r[0]
         for r in db.execute(
-            select(UserTenantMembership.user_id).where(supervisor_agent_filter(scope))
+            select(UserTenantMembership.user_id).where(
+                supervisor_agent_filter(scope),
+                UserTenantMembership.is_active.is_(True),
+            )
         ).all()
     ]
 
