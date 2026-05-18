@@ -61,7 +61,7 @@ def _attestation_to_blockchain_meta(att: Any) -> dict[str, Any]:
         "block_height": att.block_height,
         "status": att.status,
         "submitted_at": att.submitted_at.isoformat() if att.submitted_at else None,
-        "verify_url": f"/verify/{att.tx_hash}",
+        "verify_url": f"/verify/{att.tx_hash}" if att.tx_hash else None,
     }
 
 

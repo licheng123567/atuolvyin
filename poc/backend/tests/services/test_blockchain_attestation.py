@@ -141,6 +141,30 @@ def test_ebaoquan_create_failure_records_config_failure(db_session, seeded_tenan
     assert "name 不正确" in cfg.last_failure_reason
 
 
+def test_ebaoquan_decrypt_failure_marks_not_configured(db_session, seeded_tenant):
+    """api_key_enc 存在但解密失败 → failed + ERR_BLOCKCHAIN_NOT_CONFIGURED。"""
+    cfg = BlockchainConfig(
+        provider="ebaoquan",
+        api_endpoint="https://bs.sandbox.ebaoquan.org",
+        app_key="appkey1",
+        api_key_enc="非法密文不是有效AES",  # 解密必然失败
+        is_active=True,
+    )
+    db_session.add(cfg)
+    db_session.flush()
+    att = submit_attestation(
+        db_session,
+        tenant_id=seeded_tenant.id,
+        data=b"x",
+        data_type="call_recording",
+        title="t",
+    )
+    assert att.status == "failed"
+    assert att.payload_metadata.get("error") == "ERR_BLOCKCHAIN_NOT_CONFIGURED"
+    db_session.refresh(cfg)
+    assert cfg.last_failure_reason == "ERR_BLOCKCHAIN_NOT_CONFIGURED"
+
+
 def test_ebaoquan_active_but_missing_credentials(db_session, seeded_tenant):
     cfg = BlockchainConfig(
         provider="ebaoquan",
