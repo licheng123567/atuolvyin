@@ -140,7 +140,6 @@ def shifts_swap_env(db_session, seeded_tenant):
     )
 
     token_p_lead = _make_token(seeded_tenant, sup_p_lead, provider_id=None)
-    token_p = _make_token(seeded_tenant, sup_p_lead, provider_id=None)
     token_a_lead = _make_token(seeded_tenant, sup_a_lead, provider_id=provider_a.id)
     token_a = _make_token(seeded_tenant, sup_a, provider_id=provider_a.id)
     token_b_lead = _make_token(seeded_tenant, sup_b_lead, provider_id=provider_b.id)
@@ -154,7 +153,6 @@ def shifts_swap_env(db_session, seeded_tenant):
         sup_a=sup_a,
         sup_b_lead=sup_b_lead,
         token_p_lead=token_p_lead,
-        token_p=token_p,
         token_a_lead=token_a_lead,
         token_a=token_a,
         token_b_lead=token_b_lead,
@@ -215,7 +213,7 @@ def test_swap_requests_list_isolated(client, shifts_swap_env, db_session):
         "/api/v1/supervisor/shifts/swap-requests", headers=_auth(env.token_b_lead)
     ).json()
     p_list = client.get(
-        "/api/v1/supervisor/shifts/swap-requests", headers=_auth(env.token_p)
+        "/api/v1/supervisor/shifts/swap-requests", headers=_auth(env.token_p_lead)
     ).json()
 
     assert len(a_list) == 1
@@ -246,3 +244,29 @@ def test_swap_request_own_slot_check_scoped(client, shifts_swap_env):
     )
     assert resp.status_code == 403, resp.text
     assert resp.json()["code"] == "ERR_NOT_OWN_SLOT"
+
+
+def test_non_lead_can_submit_swap_request(client, shifts_swap_env):
+    """普通督导（is_shift_lead=False）可对自己的班次发起调班 — swap 端点不要求 is_shift_lead。
+
+    与 save_shifts 形成对比：save_shifts 要求 is_shift_lead，swap-request 不要求。
+    流程：
+    1. 用 token_a_lead（排班负责人）把今天 morning 排给 sup_a（普通督导）。
+    2. 用 token_a（普通督导，is_shift_lead=False）对该班次发起 swap-request。
+    3. 断言 200 成功，证明鉴权不依赖 is_shift_lead。
+    """
+    env = shifts_swap_env
+    # 步骤 1：负责人把今天 morning 排给普通督导 sup_a
+    today = _seed_own_slot(client, env.token_a_lead, env.sup_a.name)
+
+    # 步骤 2：普通督导（非 lead）用自己的 token 发起调班
+    resp = client.post(
+        "/api/v1/supervisor/shifts/swap-request",
+        headers=_auth(env.token_a),
+        json={"date": today.isoformat(), "slot": "morning", "swap_with": "服务商A督导_swap_负责人"},
+    )
+    # 步骤 3：断言 200 — 无需 is_shift_lead
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["from_user"] == env.sup_a.name
+    assert data["status"] == "pending_confirm"

@@ -1,9 +1,9 @@
 """v1.6 — 督导值班排班 API（DB 持久化）。
 
-GET    /api/v1/supervisor/shifts                     列出本租户下周排班
+GET    /api/v1/supervisor/shifts                     列出本 scope（物业 / 服务商侧）下周排班
 POST   /api/v1/supervisor/shifts                     组长批量保存（仅 is_shift_lead 用户）
 POST   /api/v1/supervisor/shifts/swap-request        普通督导发起调班申请
-GET    /api/v1/supervisor/shifts/swap-requests       本租户调班申请列表
+GET    /api/v1/supervisor/shifts/swap-requests       本 scope（物业 / 服务商侧）调班申请列表
 
 组长由 user_account.preferences.is_shift_lead = true 标识（JSONB 字段，无需新表）。
 """
