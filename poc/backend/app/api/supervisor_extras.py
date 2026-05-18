@@ -17,7 +17,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles, require_tenant_roles
+from app.core.security import get_token_payload, require_roles
 from app.models.call import CallRecord, RiskEvent
 from app.models.case import CollectionCase
 from app.models.tenant import UserTenantMembership
@@ -29,21 +29,17 @@ from app.schemas.supervisor import (
     TeamPerformanceOut,
 )
 
-from ._supervisor_scope import SupervisorScope, supervisor_call_filter, supervisor_scope
+from ._supervisor_scope import (
+    SupervisorScope,
+    supervisor_agent_filter,
+    supervisor_call_filter,
+    supervisor_case_filter,
+    supervisor_scope,
+)
 
 router = APIRouter()
 
 SUPERVISOR_ROLES = ("supervisor", "admin")
-
-
-def _tenant_id(payload: dict) -> int:
-    tid = payload.get("tenant_id")
-    if not tid:
-        raise HTTPException(
-            status_code=http_status.HTTP_403_FORBIDDEN,
-            detail={"code": "ERR_NO_TENANT", "message": "当前账号未绑定租户"},
-        )
-    return int(tid)
 
 
 # ── Sprint 9.4: risk events timeline ────────────────────────────────
@@ -145,23 +141,21 @@ def annotate_risk_event(
 
 @router.get("/team-performance", response_model=TeamPerformanceOut)
 def team_performance(
-    payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
     period_days: int = Query(7, ge=1, le=90),
 ) -> TeamPerformanceOut:
-    tenant_id = _tenant_id(payload)
     now = datetime.now(UTC)
     cur_start = now - timedelta(days=period_days)
     prev_start = now - timedelta(days=period_days * 2)
     prev_end = cur_start
 
-    # All agents in this tenant
+    # All agents visible in this supervisor's scope
     agent_rows = db.execute(
         select(UserAccount.id, UserAccount.name)
         .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
-        .where(UserTenantMembership.tenant_id == tenant_id)
-        .where(UserTenantMembership.role == "agent")
+        .where(supervisor_agent_filter(scope))
         .where(UserTenantMembership.is_active.is_(True))
     ).all()
     agent_ids = [r.id for r in agent_rows]
@@ -175,7 +169,7 @@ def team_performance(
                 func.count().label("total"),
                 func.sum(case((CallRecord.billable_duration > 0, 1), else_=0)).label("connected"),
             )
-            .where(CallRecord.tenant_id == tenant_id)
+            .where(supervisor_call_filter(scope))
             .where(CallRecord.caller_user_id.in_(agent_ids))
             .where(CallRecord.created_at >= start)
             .where(CallRecord.created_at < end)
@@ -188,7 +182,7 @@ def team_performance(
 
     promised_rows = db.execute(
         select(CollectionCase.assigned_to, func.count())
-        .where(CollectionCase.tenant_id == tenant_id)
+        .where(supervisor_case_filter(scope))
         .where(CollectionCase.assigned_to.in_(agent_ids))
         .where(CollectionCase.stage == "promised")
         .group_by(CollectionCase.assigned_to)
@@ -197,7 +191,7 @@ def team_performance(
 
     paid_rows = db.execute(
         select(CollectionCase.assigned_to, func.count())
-        .where(CollectionCase.tenant_id == tenant_id)
+        .where(supervisor_case_filter(scope))
         .where(CollectionCase.assigned_to.in_(agent_ids))
         .where(CollectionCase.stage == "paid")
         .group_by(CollectionCase.assigned_to)
