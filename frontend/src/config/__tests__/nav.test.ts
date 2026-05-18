@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getNavSections, HELP_SECTION } from "../nav";
+import { getNavSections } from "../nav";
 
 describe("getNavSections — provider legal", () => {
   it("returns provider-legal nav for legal role with provider scope", () => {
@@ -26,20 +26,41 @@ describe("getNavSections — provider legal", () => {
   });
 });
 
-describe("getNavSections — Fix 4 (Gap3): provider supervisor nav", () => {
-  it("服务商督导只显示帮助中心，不含会 403 的物业页", () => {
+describe("getNavSections — provider supervisor nav (Phase 1)", () => {
+  it("服务商督导包含 Phase 1 全部九项路径", () => {
     const sections = getNavSections("supervisor", "provider:2");
     const paths = sections.flatMap((s) => s.items.map((i) => i.path));
-    // 不应含物业督导专属页
-    expect(paths).not.toContain("/supervisor/live-wall");
-    expect(paths).not.toContain("/supervisor/workspace");
-    expect(paths).not.toContain("/supervisor/cases");
-    expect(paths).not.toContain("/supervisor/discount-approvals");
+    // Phase 1 九项
+    expect(paths).toContain("/supervisor/workspace");
+    expect(paths).toContain("/supervisor/live-wall");
+    expect(paths).toContain("/supervisor/team-performance");
+    expect(paths).toContain("/supervisor/cases");
+    expect(paths).toContain("/supervisor/reviews");
+    expect(paths).toContain("/supervisor/script-labels");
+    expect(paths).toContain("/supervisor/risk-events");
+    expect(paths).toContain("/supervisor/my-kpi");
+    expect(paths).toContain("/supervisor/stats");
   });
 
-  it("服务商督导结果等于 [HELP_SECTION]", () => {
+  it("服务商督导不含 Phase 2 及排除项", () => {
     const sections = getNavSections("supervisor", "provider:2");
-    expect(sections).toEqual([HELP_SECTION]);
+    const paths = sections.flatMap((s) => s.items.map((i) => i.path));
+    // Phase 2（未实现）
+    expect(paths).not.toContain("/supervisor/shifts");
+    // 明确排除项
+    expect(paths).not.toContain("/admin/agent-devices");
+    expect(paths).not.toContain("/supervisor/escalated");
+    expect(paths).not.toContain("/supervisor/promises");
+    expect(paths).not.toContain("/supervisor/case-alerts");
+    expect(paths).not.toContain("/supervisor/discount-approvals");
+    expect(paths).not.toContain("/supervisor/legal-conversion-approvals");
+    expect(paths).not.toContain("/supervisor/training");
+  });
+
+  it("服务商督导仍包含 HELP_SECTION", () => {
+    const sections = getNavSections("supervisor", "provider:2");
+    const paths = sections.flatMap((s) => s.items.map((i) => i.path));
+    expect(paths).toContain("/help/app");
   });
 
   it("物业督导（tenant scope）仍返回包含实时通话墙的完整 nav — 不误伤", () => {
@@ -47,11 +68,14 @@ describe("getNavSections — Fix 4 (Gap3): provider supervisor nav", () => {
     const paths = sections.flatMap((s) => s.items.map((i) => i.path));
     expect(paths).toContain("/supervisor/live-wall");
     expect(paths).toContain("/supervisor/workspace");
+    // 物业督导有排班
+    expect(paths).toContain("/supervisor/shifts");
   });
 
   it("物业督导无 scope 参数时也返回完整 nav", () => {
     const sections = getNavSections("supervisor");
     const paths = sections.flatMap((s) => s.items.map((i) => i.path));
     expect(paths).toContain("/supervisor/live-wall");
+    expect(paths).toContain("/supervisor/shifts");
   });
 });

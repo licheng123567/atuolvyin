@@ -280,6 +280,39 @@ const LEGAL_PROVIDER_NAV: NavSection[] = [
   },
 ];
 
+// 服务商督导 nav（scope=provider:{id}）— Phase 1 九项
+const SUPERVISOR_PROVIDER_NAV: NavSection[] = [
+  {
+    title: "实时监控",
+    items: [
+      { label: "督导工作台", path: "/supervisor/workspace", icon: "LayoutDashboard" },
+      { label: "实时通话墙", path: "/supervisor/live-wall", icon: "RadioTower" },
+      { label: "团队监控", path: "/supervisor/team-performance", icon: "Activity" },
+    ],
+  },
+  {
+    title: "案件管理",
+    items: [
+      { label: "案件分配", path: "/supervisor/cases", icon: "ClipboardList" },
+    ],
+  },
+  {
+    title: "质检与培训",
+    items: [
+      { label: "质检复核", path: "/supervisor/reviews", icon: "ShieldCheck" },
+      { label: "话术反馈", path: "/supervisor/script-labels", icon: "MessageCircle" },
+      { label: "风控事件", path: "/supervisor/risk-events", icon: "AlertTriangle" },
+    ],
+  },
+  {
+    title: "我的工作",
+    items: [
+      { label: "我的 KPI", path: "/supervisor/my-kpi", icon: "BarChart3" },
+      { label: "团队报表", path: "/supervisor/stats", icon: "BarChart2" },
+    ],
+  },
+];
+
 // 「下载 App」对所有角色都展示（modal 关掉后还能找到）
 export const HELP_SECTION: NavSection = {
   title: "帮助",
@@ -314,9 +347,9 @@ export function getNavSections(role: UserRole | string, scope?: string): NavSect
     return [...LEGAL_PROVIDER_NAV, HELP_SECTION];
   }
 
-  // supervisor: provider-side has no backend endpoints yet → show only help
+  // supervisor: provider-side uses Phase 1 nine-item nav (backend /supervisor/* endpoints are now scope-aware)
   if (role === "supervisor" && s.startsWith("provider:")) {
-    return [HELP_SECTION];
+    return [...SUPERVISOR_PROVIDER_NAV, HELP_SECTION];
   }
 
   const base =
