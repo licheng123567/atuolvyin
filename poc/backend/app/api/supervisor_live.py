@@ -14,6 +14,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Annotated
 
+import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi import status as http_status
 from pydantic import BaseModel
@@ -26,15 +27,30 @@ from app.core.phone_visibility import (
     is_provider_contract_active,
     should_reveal_owner_phone,
 )
-from app.core.security import get_token_payload, require_tenant_roles
+from app.core.security import get_token_payload, require_roles
 from app.models.call import CallRecord
 from app.models.case import CollectionCase, OwnerProfile
 from app.models.user import UserAccount
 from app.schemas.call import LiveCallItem, LiveCallsOut
 
+from ._supervisor_scope import SupervisorScope, supervisor_case_filter, supervisor_scope
+
 router = APIRouter()
 
 WALL_ROLES = ("supervisor", "admin", "project_manager")
+
+
+def _allowed_case_clause(scope: SupervisorScope) -> sa.ColumnElement[bool]:
+    """CallRecord 的 case 是否落在督导 scope 内。
+
+    服务商督导：case 必须属本服务商项目（无 case 的通话不可见——无归属）。
+    物业督导：case 属物业 / 无项目，或通话本身无 case_id（保留既有「物业看本租户全部」语义）。
+    """
+    allowed_case_ids = select(CollectionCase.id).where(supervisor_case_filter(scope))
+    clause = CallRecord.case_id.in_(allowed_case_ids)
+    if scope.provider_id is None:
+        clause = sa.or_(CallRecord.case_id.is_(None), clause)
+    return clause
 
 
 class ForceHangupReq(BaseModel):
@@ -61,22 +77,17 @@ class TakeoverResp(BaseModel):
 @router.get("/live-calls", response_model=LiveCallsOut)
 def list_live_calls(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*WALL_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*WALL_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
 ) -> LiveCallsOut:
-    tenant_id = int(payload.get("tenant_id") or 0)
-    if not tenant_id:
-        raise HTTPException(
-            status_code=http_status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "ERR_INVALID_TOKEN", "message": "Token 缺少 tenant_id"},
-        )
-
     rows = (
         db.execute(
             select(CallRecord)
             .where(
-                CallRecord.tenant_id == tenant_id,
+                CallRecord.tenant_id == scope.tenant_id,
                 CallRecord.status.in_(("dialing", "live")),
+                _allowed_case_clause(scope),
             )
             .order_by(CallRecord.started_at.desc().nulls_last())
         )
@@ -84,10 +95,9 @@ def list_live_calls(
         .all()
     )
 
-    # v1.7.0 — supervisor / admin / project_manager 都是物业内部
     role = payload.get("role", "")
-    contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
-    owner_phone_reveal = should_reveal_owner_phone(role=role, provider_id=payload.get("provider_id"), contract_active=contract_active)
+    contract_active = is_provider_contract_active(db, scope.tenant_id, scope.provider_id)
+    owner_phone_reveal = should_reveal_owner_phone(role=role, provider_id=scope.provider_id, contract_active=contract_active)
 
     now = datetime.now(UTC)
     items: list[LiveCallItem] = []
@@ -125,13 +135,13 @@ async def supervisor_force_hangup(
     call_id: int,
     body: ForceHangupReq,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*WALL_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*WALL_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
 ) -> ForceHangupResp:
     """督导手动结束某通话 (Sprint 15.2 / 15.3)。"""
-    tenant_id = int(payload.get("tenant_id") or 0)
     user_id = int(payload.get("user_id") or 0)
-    if not tenant_id or not user_id:
+    if not user_id:
         raise HTTPException(
             status_code=http_status.HTTP_401_UNAUTHORIZED,
             detail={"code": "ERR_INVALID_TOKEN", "message": "Token 缺少必要字段"},
@@ -139,7 +149,8 @@ async def supervisor_force_hangup(
     call = db.execute(
         select(CallRecord).where(
             CallRecord.id == call_id,
-            CallRecord.tenant_id == tenant_id,
+            CallRecord.tenant_id == scope.tenant_id,
+            _allowed_case_clause(scope),
         )
     ).scalar_one_or_none()
     if call is None:
@@ -158,7 +169,7 @@ async def supervisor_force_hangup(
     await dispatch_force_hangup(
         db,
         call_id=call.id,
-        tenant_id=tenant_id,
+        tenant_id=scope.tenant_id,
         reason=body.reason,
         triggered_by="supervisor.manual",
         supervisor_user_id=user_id,
@@ -176,7 +187,8 @@ async def supervisor_takeover(
     call_id: int,
     body: TakeoverReq,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*WALL_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*WALL_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
 ) -> TakeoverResp:
     """督导发起强制转接请求 (Sprint 15.3, PRD §11.2)。
@@ -184,15 +196,18 @@ async def supervisor_takeover(
     后续动作：agent App 收到 supervisor.takeover_request → 弹层选择
     accept/reject → POST /calls/{call_id}/takeover-response 回应。
     """
-    tenant_id = int(payload.get("tenant_id") or 0)
     user_id = int(payload.get("user_id") or 0)
-    if not tenant_id or not user_id:
+    if not user_id:
         raise HTTPException(
             status_code=http_status.HTTP_401_UNAUTHORIZED,
             detail={"code": "ERR_INVALID_TOKEN", "message": "Token 缺少必要字段"},
         )
     call = db.execute(
-        select(CallRecord).where(CallRecord.id == call_id, CallRecord.tenant_id == tenant_id)
+        select(CallRecord).where(
+            CallRecord.id == call_id,
+            CallRecord.tenant_id == scope.tenant_id,
+            _allowed_case_clause(scope),
+        )
     ).scalar_one_or_none()
     if call is None:
         raise HTTPException(
@@ -213,7 +228,7 @@ async def supervisor_takeover(
     await dispatch_takeover_request(
         db,
         call_id=call.id,
-        tenant_id=tenant_id,
+        tenant_id=scope.tenant_id,
         supervisor_user_id=user_id,
         supervisor_name=supervisor_name,
         reason=body.reason,
