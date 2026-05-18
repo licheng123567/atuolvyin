@@ -105,8 +105,17 @@ const ROLE_CASES: RoleCase[] = [
       { path: "/agent/cases", expectText: /案件/ },
     ],
   },
-  // 13000000012: provider-side supervisor — no provider-supervisor-specific pages exist yet
-  // (property /supervisor/* pages would 403 for provider scope); added to smoke login test only.
+  // 13000000012: provider-side supervisor — Phase 1 起 /supervisor/* 端点已 scope-aware，
+  // 服务商督导可正常访问本服务商数据（公海 / 质检 / 团队监控等）。
+  {
+    name: "supervisor (provider)",
+    phone: "13000000012",
+    pages: [
+      { path: "/supervisor/cases", expectText: /案件|公海/ },
+      { path: "/supervisor/reviews", expectText: /复核|review/i },
+      { path: "/supervisor/team-performance", expectText: /团队|绩效/ },
+    ],
+  },
   {
     name: "legal (provider)",
     phone: "13000000013",
