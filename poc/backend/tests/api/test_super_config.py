@@ -178,6 +178,8 @@ async def test_sms_config_put_then_get(client, super_auth_headers):
 
     got = await client.get("/api/v1/super/sms-config", headers=super_auth_headers)
     assert got.json()["secret_name"] == "API"
+    assert "secret_key" not in got.json()
+    assert "s3cr3t" not in str(got.json())
 
 
 @pytest.mark.asyncio
@@ -202,6 +204,23 @@ async def test_sms_config_put_upsert_keeps_key_when_omitted(client, super_auth_h
 
 @pytest.mark.asyncio
 async def test_sms_config_requires_superadmin(client, agent_auth_headers):
-    """非超管访问 → 403。"""
+    """非超管访问 GET → 403。"""
     r = await client.get("/api/v1/super/sms-config", headers=agent_auth_headers)
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_sms_config_put_requires_superadmin(client, agent_auth_headers):
+    """非超管发 PUT → 403。"""
+    r = await client.put(
+        "/api/v1/super/sms-config",
+        json={
+            "secret_name": "API",
+            "secret_key": "s3cr3t",
+            "sign_name": "有证慧催",
+            "otp_template_id": None,
+            "is_active": False,
+        },
+        headers=agent_auth_headers,
+    )
     assert r.status_code == 403

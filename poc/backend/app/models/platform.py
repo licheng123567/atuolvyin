@@ -100,6 +100,9 @@ class SmsConfig(Base):
     sign_name: Mapped[str] = mapped_column(sa.String(64), nullable=False, default="")
     otp_template_id: Mapped[str | None] = mapped_column(sa.String(64), nullable=True)
     is_active: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=False)
+    singleton: Mapped[bool] = mapped_column(
+        sa.Boolean, nullable=False, default=True, server_default=sa.true()
+    )
     last_failure_at: Mapped[datetime | None] = mapped_column(
         sa.DateTime(timezone=True), nullable=True
     )
@@ -110,3 +113,5 @@ class SmsConfig(Base):
         onupdate=sa.func.now(),
         nullable=False,
     )
+
+    __table_args__ = (sa.UniqueConstraint("singleton", name="uq_sms_config_singleton"),)

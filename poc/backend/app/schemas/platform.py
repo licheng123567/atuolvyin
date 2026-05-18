@@ -130,7 +130,7 @@ class BlockchainConfigOut(BaseModel):
 
 class SmsConfigIn(BaseModel):
     secret_name: str = Field(min_length=1, max_length=128)
-    secret_key: str | None = Field(None, max_length=500)  # None=不改
+    secret_key: str | None = Field(None, min_length=1, max_length=500)  # None=不改；空串422
     sign_name: str = Field(default="", max_length=64)
     otp_template_id: str | None = Field(None, max_length=64)
     is_active: bool = False

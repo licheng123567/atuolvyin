@@ -6,6 +6,8 @@ Endpoints:
   PATCH /super/llm-prompts/{id}/active    — activate / deactivate (single-active per name)
   GET   /super/blockchain-config          — get current single config (or null)
   PUT   /super/blockchain-config          — upsert config; api_key encrypted
+  GET   /super/sms-config                 — get current SMS config (or null)
+  PUT   /super/sms-config                 — upsert config; secret_key encrypted
 """
 
 from __future__ import annotations

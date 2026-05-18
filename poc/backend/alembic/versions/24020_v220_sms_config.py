@@ -26,6 +26,7 @@ def upgrade() -> None:
         sa.Column("sign_name", sa.String(length=64), nullable=False, server_default=""),
         sa.Column("otp_template_id", sa.String(length=64), nullable=True),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column("singleton", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("last_failure_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("last_failure_reason", sa.Text(), nullable=True),
         sa.Column(
@@ -35,6 +36,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("singleton", name="uq_sms_config_singleton"),
     )
 
 
