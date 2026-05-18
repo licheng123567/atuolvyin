@@ -14,13 +14,15 @@ from datetime import date as date_type
 from datetime import timedelta
 from typing import Annotated
 
+import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi import status as http_status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api._supervisor_scope import SupervisorScope, supervisor_scope
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_tenant_roles
+from app.core.security import get_token_payload, require_roles, require_tenant_roles
 from app.models.supervisor_shift import SupervisorShift, SupervisorShiftSwapRequest
 from app.models.user import UserAccount
 
@@ -30,6 +32,22 @@ SUPERVISOR_ROLES = ("supervisor",)
 SLOTS = ("morning", "afternoon", "evening")
 
 
+def _shift_scope_clause(
+    scope: SupervisorScope,
+    model: type[SupervisorShift] | type[SupervisorShiftSwapRequest],
+) -> sa.ColumnElement[bool]:
+    """SupervisorShift / SupervisorShiftSwapRequest 的 scope 过滤（自含 tenant_id）。
+
+    物业侧 scope（provider_id=None）→ provider_id IS NULL；
+    服务商侧 scope → provider_id == 本服务商。
+    """
+    if scope.provider_id is None:
+        provider_cond = model.provider_id.is_(None)
+    else:
+        provider_cond = model.provider_id == scope.provider_id
+    return sa.and_(model.tenant_id == scope.tenant_id, provider_cond)
+
+
 def _is_shift_lead(user: UserAccount | None) -> bool:
     if user is None:
         return False
@@ -37,13 +55,13 @@ def _is_shift_lead(user: UserAccount | None) -> bool:
     return bool(prefs.get("is_shift_lead", False))
 
 
-def _ensure_seed_week(db: Session, tenant_id: int) -> None:
-    """若本周未排班，给 7 天每个时段插入空记录（占位），让前端可编辑。"""
+def _ensure_seed_week(db: Session, scope: SupervisorScope) -> None:
+    """若本 scope 本周未排班，给 7 天每个时段插入空记录（占位），让前端可编辑。"""
     today = date_type.today()
     end = today + timedelta(days=6)
     existing = db.execute(
         select(SupervisorShift.shift_date, SupervisorShift.slot)
-        .where(SupervisorShift.tenant_id == tenant_id)
+        .where(_shift_scope_clause(scope, SupervisorShift))
         .where(SupervisorShift.shift_date.between(today, end))
     ).all()
     have = {(r[0], r[1]) for r in existing}
@@ -54,7 +72,8 @@ def _ensure_seed_week(db: Session, tenant_id: int) -> None:
             if (d, s) not in have:
                 inserts.append(
                     SupervisorShift(
-                        tenant_id=tenant_id,
+                        tenant_id=scope.tenant_id,
+                        provider_id=scope.provider_id,
                         shift_date=d,
                         slot=s,
                         supervisor_user_id=None,
@@ -69,27 +88,22 @@ def _ensure_seed_week(db: Session, tenant_id: int) -> None:
 @router.get("/shifts")
 async def list_shifts(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
-    tenant_id = payload.get("tenant_id")
-    if tenant_id is None:
-        raise HTTPException(
-            status_code=http_status.HTTP_403_FORBIDDEN,
-            detail={"code": "ERR_NO_TENANT", "message": "督导必须关联租户"},
-        )
     user_id = int(payload["user_id"])
     user = db.get(UserAccount, user_id)
     is_lead = _is_shift_lead(user)
 
-    _ensure_seed_week(db, int(tenant_id))
+    _ensure_seed_week(db, scope)
 
     today = date_type.today()
     end = today + timedelta(days=6)
     rows = (
         db.execute(
             select(SupervisorShift)
-            .where(SupervisorShift.tenant_id == int(tenant_id))
+            .where(_shift_scope_clause(scope, SupervisorShift))
             .where(SupervisorShift.shift_date.between(today, end))
             .order_by(SupervisorShift.shift_date, SupervisorShift.slot)
         )
@@ -103,34 +117,27 @@ async def list_shifts(
         by_date.setdefault(ds, {"morning": "", "afternoon": "", "evening": ""})
         by_date[ds][r.slot] = r.supervisor_name or ""
 
-    # 列出本租户所有督导，给前端做下拉
-    supervisors = (
-        db.execute(
-            select(UserAccount.name).join_from(
-                UserAccount, UserAccount, UserAccount.id == UserAccount.id
-            )
-        )
-        .scalars()
-        .all()
-        if False
-        else []
-    )  # placeholder — 见下方真实查询
+    # 本 scope 的督导列表，给前端做下拉
     from app.models.tenant import UserTenantMembership
 
-    sup_rows = db.execute(
+    sup_q = (
         select(UserAccount.name)
         .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
-        .where(UserTenantMembership.tenant_id == int(tenant_id))
+        .where(UserTenantMembership.tenant_id == scope.tenant_id)
         .where(UserTenantMembership.role == "supervisor")
         .where(UserAccount.is_active.is_(True))
         .distinct()
-    ).all()
-    supervisors = [r[0] for r in sup_rows] if sup_rows else []
+    )
+    if scope.provider_id is None:
+        sup_q = sup_q.where(UserTenantMembership.provider_id.is_(None))
+    else:
+        sup_q = sup_q.where(UserTenantMembership.provider_id == scope.provider_id)
+    supervisors = [r[0] for r in db.execute(sup_q).all()]
     if user and user.name not in supervisors:
         supervisors.append(user.name)
 
     return {
-        "tenant_id": tenant_id,
+        "tenant_id": scope.tenant_id,
         "is_shift_lead": is_lead,
         "current_user_name": user.name if user else "",
         "supervisors": supervisors,
