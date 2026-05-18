@@ -12,7 +12,7 @@ from typing import Annotated
 
 import sqlalchemy as sa
 from fastapi import Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import Select, select
 
 from app.core.security import get_token_payload
 from app.models.case import CollectionCase, Project
@@ -33,14 +33,22 @@ def supervisor_scope(payload: Annotated[dict, Depends(get_token_payload)]) -> Su
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"code": "ERR_NO_SCOPE", "message": "需要租户上下文"},
         )
-    provider_id = payload.get("provider_id")
+    raw_provider = payload.get("provider_id")
+    provider_id: int | None = None
+    if raw_provider is not None:
+        provider_id = int(raw_provider)
+        if provider_id <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"code": "ERR_NO_SCOPE", "message": "provider 上下文非法"},
+            )
     return SupervisorScope(
         tenant_id=int(tenant_id),
-        provider_id=int(provider_id) if provider_id else None,
+        provider_id=provider_id,
     )
 
 
-def _provider_projects(scope: SupervisorScope):
+def _provider_projects(scope: SupervisorScope) -> Select[tuple[int]]:
     """子查询：本 scope 下的项目 id 集。"""
     q = select(Project.id).where(Project.tenant_id == scope.tenant_id)
     if scope.provider_id is None:
@@ -48,8 +56,10 @@ def _provider_projects(scope: SupervisorScope):
     return q.where(Project.provider_id == scope.provider_id)
 
 
-def supervisor_case_filter(scope: SupervisorScope):
-    """案件可见性。
+def supervisor_case_filter(scope: SupervisorScope) -> sa.ColumnElement[bool]:
+    """案件可见性；返回针对 ``CollectionCase`` 的过滤表达式。
+
+    调用方需在查询中 select/join ``CollectionCase``，本函数不负责 join。
 
     物业督导：无项目案件 + 物业项目案件（project.provider_id IS NULL）。
     服务商督导：仅本服务商项目案件。
@@ -79,8 +89,11 @@ def supervisor_case_filter(scope: SupervisorScope):
     )
 
 
-def supervisor_agent_filter(scope: SupervisorScope):
-    """团队成员（催收员）可见性。"""
+def supervisor_agent_filter(scope: SupervisorScope) -> sa.ColumnElement[bool]:
+    """团队成员（催收员）可见性；返回针对 ``UserTenantMembership`` 的过滤表达式。
+
+    调用方需在查询中 select/join ``UserTenantMembership``，本函数不负责 join。
+    """
     base = sa.and_(
         UserTenantMembership.tenant_id == scope.tenant_id,
         UserTenantMembership.role == "agent",

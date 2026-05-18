@@ -19,11 +19,11 @@ from app.api._supervisor_scope import (
     SupervisorScope,
     supervisor_agent_filter,
     supervisor_case_filter,
+    supervisor_scope,
 )
 from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.tenant import ServiceProvider, UserTenantMembership
 from app.models.user import UserAccount
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -313,3 +313,18 @@ def test_supervisor_scope_is_frozen():
     scope = SupervisorScope(tenant_id=1, provider_id=None)
     with pytest.raises((AttributeError, TypeError)):
         scope.tenant_id = 99  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# supervisor_scope 依赖函数边界测试
+# ---------------------------------------------------------------------------
+
+def test_supervisor_scope_rejects_provider_id_zero():
+    """payload 中 provider_id=0 属于非法上下文，应抛出 403 ERR_NO_SCOPE。"""
+    from fastapi import HTTPException
+
+    payload = {"tenant_id": 1, "provider_id": 0}
+    with pytest.raises(HTTPException) as exc_info:
+        supervisor_scope(payload)
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail["code"] == "ERR_NO_SCOPE"
