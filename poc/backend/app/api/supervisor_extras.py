@@ -1,7 +1,7 @@
 """Sprint 9.4 + 9.5 — Supervisor extras (PRD §4.6, §4.7).
 
 Endpoints:
-  - GET  /supervisor/risk-events       — 本租户内全部 RiskEvent 时间线
+  - GET  /supervisor/risk-events       — 按督导 scope（物业 / 本服务商）过滤的 RiskEvent 时间线
   - PATCH /supervisor/risk-events/{id} — 添加 / 更新 disposition_note
   - GET  /supervisor/team-performance  — 团队成员排名 + 与上一周期对比
 """
@@ -16,7 +16,6 @@ from fastapi import status as http_status
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
-from app.api._supervisor_scope import SupervisorScope, supervisor_call_filter, supervisor_scope
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles, require_tenant_roles
 from app.models.call import CallRecord, RiskEvent
@@ -29,6 +28,8 @@ from app.schemas.supervisor import (
     TeamPerformanceItem,
     TeamPerformanceOut,
 )
+
+from ._supervisor_scope import SupervisorScope, supervisor_call_filter, supervisor_scope
 
 router = APIRouter()
 
