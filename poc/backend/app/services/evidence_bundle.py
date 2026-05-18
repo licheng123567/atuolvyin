@@ -213,14 +213,16 @@ def build_evidence_bundle_zip(
                     }
                 )
 
-            # 区块链上链（仅当有 recording_sha）
+            # 区块链上链（仅当有录音）
             blockchain_meta: dict[str, Any]
             if recording_sha:
                 att = blockchain_svc.submit_attestation(
                     db,
                     tenant_id=tenant_id,
-                    data_sha256=recording_sha,
+                    data=audio,
                     data_type="call_recording",
+                    title=f"案件{case.id}通话{call.id}录音",
+                    description=tenant.name if tenant else None,
                     call_id=call.id,
                     legal_case_id=legal_case_id,
                     payload_metadata={
