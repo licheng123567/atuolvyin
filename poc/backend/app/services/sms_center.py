@@ -38,7 +38,7 @@ def _mask_phone(phone: str) -> str:
     return phone[:3] + "****" + phone[-4:] if len(phone) >= 11 else "***"
 
 
-def _call_sms_center(body: dict) -> dict:
+def _call_sms_center(body: dict[str, object]) -> dict[str, object]:
     """真实 HTTP POST 到短信中心，返回解析后的 JSON。失败抛异常。
 
     测试通过 monkeypatch 替换本函数以模拟 028lk 响应。
@@ -58,12 +58,22 @@ def _record_failure(db: Session, config: SmsConfig, reason: str) -> None:
 def send_otp_sms(
     db: Session, *, phone: str, code: str, ttl_minutes: int = 5
 ) -> SmsResult:
-    """发送 OTP 验证码短信。永不抛异常 —— 统一返回 SmsResult。"""
-    if settings.sms_backend == "mock":
+    """发送 OTP 验证码短信。永不抛异常 —— 统一返回 SmsResult。
+
+    失败路径（包括 sms_center 分支的 API 错误）会调用 _record_failure，
+    后者执行 db.commit()，会顺带提交当前 Session 中调用方已写入但未提交的行
+    （如 OTP 记录）。调用方需知悉此副作用。
+    """
+    backend = settings.sms_backend.lower()
+    if backend == "mock":
         logger.info(
             "[SMS-mock] OTP → %s code=%s ttl=%dmin", _mask_phone(phone), code, ttl_minutes
         )
         return SmsResult(ok=True, batch_id="mock-otp")
+
+    if backend != "sms_center":
+        logger.error("unknown SMS_BACKEND: %s", settings.sms_backend)
+        return SmsResult(ok=False, error="ERR_SMS_NOT_CONFIGURED")
 
     config = db.execute(
         select(SmsConfig).order_by(desc(SmsConfig.updated_at)).limit(1)
@@ -81,7 +91,7 @@ def send_otp_sms(
     if sign and not sign.startswith("【"):
         sign = f"【{sign}】"
 
-    body: dict = {
+    body: dict[str, object] = {
         "SecretName": config.secret_name,
         "SecretKey": secret_key,
         "Mobile": phone,
