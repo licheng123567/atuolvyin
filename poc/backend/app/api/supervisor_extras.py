@@ -16,8 +16,9 @@ from fastapi import status as http_status
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
+from app.api._supervisor_scope import SupervisorScope, supervisor_call_filter, supervisor_scope
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_tenant_roles
+from app.core.security import get_token_payload, require_roles, require_tenant_roles
 from app.models.call import CallRecord, RiskEvent
 from app.models.case import CollectionCase
 from app.models.tenant import UserTenantMembership
@@ -49,21 +50,20 @@ def _tenant_id(payload: dict) -> int:
 
 @router.get("/risk-events", response_model=list[RiskEventTimelineItem])
 def list_risk_events(
-    payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
     level: str | None = Query(None, pattern=r"^L[1-3]$"),
     period_days: int = Query(7, ge=1, le=90),
     limit: int = Query(200, ge=1, le=500),
 ) -> list[RiskEventTimelineItem]:
-    tenant_id = _tenant_id(payload)
     cutoff = datetime.now(UTC) - timedelta(days=period_days)
 
     stmt = (
         select(RiskEvent, CallRecord, UserAccount)
         .join(CallRecord, CallRecord.id == RiskEvent.call_id)
         .outerjoin(UserAccount, UserAccount.id == CallRecord.caller_user_id)
-        .where(CallRecord.tenant_id == tenant_id)
+        .where(supervisor_call_filter(scope))
         .where(RiskEvent.created_at >= cutoff)
     )
     if level:
@@ -95,17 +95,17 @@ def annotate_risk_event(
     event_id: int,
     body: RiskEventNoteIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
 ) -> RiskEventTimelineItem:
-    tenant_id = _tenant_id(payload)
     user_id = int(payload.get("user_id") or 0)
 
     row = db.execute(
         select(RiskEvent, CallRecord)
         .join(CallRecord, CallRecord.id == RiskEvent.call_id)
         .where(RiskEvent.id == event_id)
-        .where(CallRecord.tenant_id == tenant_id)
+        .where(supervisor_call_filter(scope))
     ).first()
     if row is None:
         raise HTTPException(
