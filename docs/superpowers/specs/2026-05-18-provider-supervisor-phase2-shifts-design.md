@@ -82,3 +82,7 @@ Phase 1 把 9 项 `/supervisor/*` 功能改成 scope-aware，但值班排班（`
 
 - partial unique index 的迁移需确保 `DROP` 旧约束与 `CREATE` 新索引顺序正确；迁移后跑一次「物业 + 服务商同槽位并存」的集成测试确认约束行为符合预期。
 - `_ensure_seed_week` 是「读时补种」逻辑 —— scope 化后要确认服务商督导首次访问只补种本服务商的 21 行，不会误补物业行。
+
+---
+
+> ✅ **Phase 2 已实现（2026-05-18）**：`SupervisorShift` / `SupervisorShiftSwapRequest` 两表加 `provider_id` + 两个 partial unique index（物业/服务商各一）；4 个 `/supervisor/shifts` 端点（list / save / swap-request / swap-requests）全部 scope-aware（守卫 `require_roles` + `supervisor_scope` + 局部 helper `_shift_scope_clause`）；前端 `SUPERVISOR_PROVIDER_NAV` 补「值班排班」。每端点配多租户隔离测试，后端全量回归 865 passed、前端 203 passed。详见实施计划 `docs/superpowers/plans/2026-05-18-provider-supervisor-phase2-shifts.md`。

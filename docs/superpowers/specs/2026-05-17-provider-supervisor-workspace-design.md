@@ -100,4 +100,4 @@ Phase 2 独立成实施计划，Phase 1 完成并验收后启动。
 
 > ✅ **Phase 1 已实现（2026-05-18）**：9 项 `/supervisor/*` 端点（公海/案件、实时通话墙 3 端点、`WS /ws/supervisor`、质检复核 3 端点、话术反馈、风控 2 端点、团队监控、团队报表/KPI）全部 scope-aware，配 `app/api/_supervisor_scope.py` 共享件（`supervisor_scope` / `supervisor_case_filter` / `supervisor_call_filter` / `supervisor_agent_filter` / `resolve_call_provider_id`）；前端 `SUPERVISOR_PROVIDER_NAV`（9 项）已接入 `getNavSections`。每端点配多租户三向隔离测试，后端全量回归 834 passed。详见实施计划 `docs/superpowers/plans/2026-05-17-provider-supervisor-workspace.md`。
 >
-> ⬜ **Phase 2（值班排班）待启动** —— 需 `SupervisorShift` 表迁移（加 `supervisor_user_id` / `provider_id` 列），独立成实施计划。
+> ✅ **Phase 2（值班排班）已实现（2026-05-18）** —— `SupervisorShift` 两表加 `provider_id` + 4 个 `/supervisor/shifts` 端点 scope-aware + nav 补值班排班。详见 `2026-05-18-provider-supervisor-phase2-shifts-design.md`。
