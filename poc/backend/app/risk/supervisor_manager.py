@@ -17,6 +17,7 @@ class SupervisorConn:
     """单个 supervisor WS 连接的身份快照。WS 握手时算一次，连接生命周期内不变。"""
 
     can_see_plaintext: bool
+    provider_id: int | None  # None=物业侧；非 None=服务商侧
 
 
 class SupervisorManager:
@@ -32,10 +33,18 @@ class SupervisorManager:
         self._lock = asyncio.Lock()
 
     async def connect(
-        self, tenant_id: int, ws: WebSocket, *, can_see_plaintext: bool
+        self,
+        tenant_id: int,
+        ws: WebSocket,
+        *,
+        can_see_plaintext: bool,
+        provider_id: int | None,
     ) -> None:
         async with self._lock:
-            self._rooms[tenant_id][ws] = SupervisorConn(can_see_plaintext=can_see_plaintext)
+            self._rooms[tenant_id][ws] = SupervisorConn(
+                can_see_plaintext=can_see_plaintext,
+                provider_id=provider_id,
+            )
 
     async def disconnect(self, tenant_id: int, ws: WebSocket) -> None:
         async with self._lock:
@@ -51,8 +60,12 @@ class SupervisorManager:
         event: dict,
         *,
         owner_phone_enc: str | None = None,
+        call_provider_id: int | None,
     ) -> None:
-        """向 tenant 房间群发 event。
+        """向 tenant 房间群发 event，按 provider scope 过滤后逐连接推送。
+
+        call_provider_id 是该通话归属的服务商 id（无 case / 物业通话 = None）。
+        只有 conn.provider_id == call_provider_id 的连接才会收到推送。
 
         owner_phone_enc 非空时，按每个连接的 can_see_plaintext 快照逐一注入
         owner_phone_masked（覆盖 event 里同名键）；为空时 event 原样下发。
@@ -60,6 +73,9 @@ class SupervisorManager:
         async with self._lock:
             members = list(self._rooms.get(tenant_id, {}).items())
         for ws, conn in members:
+            # scope 过滤：只推给归属 provider 匹配的连接
+            if conn.provider_id != call_provider_id:
+                continue
             try:
                 if owner_phone_enc is not None:
                     payload = {

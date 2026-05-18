@@ -13,6 +13,7 @@ from typing import Annotated
 import sqlalchemy as sa
 from fastapi import Depends, HTTPException, status
 from sqlalchemy import Select, select
+from sqlalchemy.orm import Session
 
 from app.core.security import get_token_payload
 from app.models.case import CollectionCase, Project
@@ -87,6 +88,24 @@ def supervisor_case_filter(scope: SupervisorScope) -> sa.ColumnElement[bool]:
         CollectionCase.tenant_id == scope.tenant_id,
         CollectionCase.project_id.in_(_provider_projects(scope)),
     )
+
+
+def resolve_call_provider_id(db: Session, case_id: int | None) -> int | None:
+    """通话归属的服务商 id：case→project→Project.provider_id。
+
+    无 case / 无 project / 物业项目 → None（物业侧）。
+    服务商项目 → 对应 provider_id。
+    """
+    if case_id is None:
+        return None
+    project_id = db.execute(
+        select(CollectionCase.project_id).where(CollectionCase.id == case_id)
+    ).scalar_one_or_none()
+    if project_id is None:
+        return None
+    return db.execute(
+        select(Project.provider_id).where(Project.id == project_id)
+    ).scalar_one_or_none()
 
 
 def supervisor_agent_filter(scope: SupervisorScope) -> sa.ColumnElement[bool]:

@@ -79,12 +79,18 @@ async def ws_calls(
             await manager.broadcast(call_id, {"type": "tag.ready", **tag})
 
         _tenant_id = call.tenant_id
+        from app.api._supervisor_scope import resolve_call_provider_id
+        _call_provider_id = resolve_call_provider_id(db, call.case_id)
 
         async def broadcast_risk(event: dict) -> None:
             await manager.broadcast(call_id, event)
             if _tenant_id:
                 sup = get_supervisor_manager()
-                await sup.broadcast(_tenant_id, {**event, "type": "supervisor.alert"})
+                await sup.broadcast(
+                    _tenant_id,
+                    {**event, "type": "supervisor.alert"},
+                    call_provider_id=_call_provider_id,
+                )
             # Sprint 15.2 — L3 自动挂断（PRD §13）：尊重 TenantSettings.l3_hangup_enabled
             if event.get("level") == "L3":
                 from app.services.call_intervention import maybe_auto_hangup_for_l3

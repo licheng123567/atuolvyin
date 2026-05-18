@@ -58,21 +58,28 @@ async def ws_supervisor(
     # provider_id 为 None = 物业内部，永远明文；非空 = 服务商侧，按合同有效性快照决定。
     # 权衡（见设计文档 §4）：合同有效性只在连接时查一次；中途解约的脱敏延迟到下次重连。
     # 角色重构后所有 token 必带 provider_id；缺失=物业侧是安全默认（fail-open 仅放宽给物业内部）。
-    provider_id = payload.get("provider_id")
-    if provider_id is None:
+    # provider_id_norm: 0 / 缺失 / None 均归一化为 None（物业侧），与 supervisor_scope 口径一致。
+    raw_provider_id = payload.get("provider_id")
+    provider_id_norm: int | None = int(raw_provider_id) if raw_provider_id else None
+    if provider_id_norm is not None and provider_id_norm <= 0:
+        provider_id_norm = None
+
+    if provider_id_norm is None:
         can_see_plaintext = True
     else:
-        contract_active = is_provider_contract_active(db, tenant_id, provider_id)
+        contract_active = is_provider_contract_active(db, tenant_id, provider_id_norm)
         can_see_plaintext = should_reveal_owner_phone(
             role=role,
-            provider_id=provider_id,
+            provider_id=provider_id_norm,
             contract_active=contract_active,
             project_active=True,  # 广播事件不绑单个项目语境，固定 True
         )
 
     await websocket.accept()
     manager = get_supervisor_manager()
-    await manager.connect(tenant_id, websocket, can_see_plaintext=can_see_plaintext)
+    await manager.connect(
+        tenant_id, websocket, can_see_plaintext=can_see_plaintext, provider_id=provider_id_norm
+    )
     logger.info(
         "supervisor connected tenant=%s role=%s plaintext=%s",
         tenant_id,

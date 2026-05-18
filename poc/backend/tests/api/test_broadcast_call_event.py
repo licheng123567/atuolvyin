@@ -17,9 +17,16 @@ class _FakeManager:
     def __init__(self) -> None:
         self.calls: list[dict] = []
 
-    async def broadcast(self, tenant_id, event, *, owner_phone_enc=None) -> None:
+    async def broadcast(
+        self, tenant_id, event, *, owner_phone_enc=None, call_provider_id=None
+    ) -> None:
         self.calls.append(
-            {"tenant_id": tenant_id, "event": event, "owner_phone_enc": owner_phone_enc}
+            {
+                "tenant_id": tenant_id,
+                "event": event,
+                "owner_phone_enc": owner_phone_enc,
+                "call_provider_id": call_provider_id,
+            }
         )
 
 

@@ -48,9 +48,18 @@ async def dispatch_force_hangup(
     返回事件 payload 给调用方做 ack。
     """
     # WS push 给 agent 房间（call-level）
+    from app.api._supervisor_scope import resolve_call_provider_id
     from app.api.ws_calls import _sessions
     from app.risk.supervisor_manager import get_supervisor_manager
     from app.ws.connection_manager import get_connection_manager
+
+    # 解析通话归属服务商（用于 supervisor 房间 scope 过滤）
+    call_record = db.execute(
+        select(CallRecord).where(CallRecord.id == call_id)
+    ).scalar_one_or_none()
+    call_provider_id = resolve_call_provider_id(
+        db, call_record.case_id if call_record else None
+    )
 
     payload_agent = {
         "type": "call.force_hangup",
@@ -74,7 +83,9 @@ async def dispatch_force_hangup(
         "ts": datetime.now(UTC).isoformat(),
     }
     try:
-        await get_supervisor_manager().broadcast(tenant_id, payload_sup)
+        await get_supervisor_manager().broadcast(
+            tenant_id, payload_sup, call_provider_id=call_provider_id
+        )
     except Exception as exc:
         logger.warning("force_hangup supervisor broadcast failed tenant=%s: %s", tenant_id, exc)
 
@@ -141,8 +152,17 @@ async def dispatch_takeover_request(
 ) -> dict:
     """督导发起强制转接请求：WS 推 agent + audit。等 agent 决策后调
     dispatch_takeover_response 通知 supervisor。"""
+    from app.api._supervisor_scope import resolve_call_provider_id
     from app.risk.supervisor_manager import get_supervisor_manager
     from app.ws.connection_manager import get_connection_manager
+
+    # 解析通话归属服务商（用于 supervisor 房间 scope 过滤）
+    call_record = db.execute(
+        select(CallRecord).where(CallRecord.id == call_id)
+    ).scalar_one_or_none()
+    call_provider_id = resolve_call_provider_id(
+        db, call_record.case_id if call_record else None
+    )
 
     payload = {
         "type": "supervisor.takeover_request",
@@ -168,7 +188,9 @@ async def dispatch_takeover_request(
         "ts": payload["ts"],
     }
     try:
-        await get_supervisor_manager().broadcast(tenant_id, sup_payload)
+        await get_supervisor_manager().broadcast(
+            tenant_id, sup_payload, call_provider_id=call_provider_id
+        )
     except Exception as exc:
         logger.warning("takeover request broadcast (sup) failed tenant=%s: %s", tenant_id, exc)
 
@@ -196,8 +218,17 @@ async def dispatch_takeover_response(
     note: str | None = None,
 ) -> dict:
     """agent 响应督导转接：accepted=True/False。"""
+    from app.api._supervisor_scope import resolve_call_provider_id
     from app.risk.supervisor_manager import get_supervisor_manager
     from app.ws.connection_manager import get_connection_manager
+
+    # 解析通话归属服务商（用于 supervisor 房间 scope 过滤）
+    call_record = db.execute(
+        select(CallRecord).where(CallRecord.id == call_id)
+    ).scalar_one_or_none()
+    call_provider_id = resolve_call_provider_id(
+        db, call_record.case_id if call_record else None
+    )
 
     action = "takeover_accepted" if accepted else "takeover_rejected"
     payload = {
@@ -210,7 +241,9 @@ async def dispatch_takeover_response(
     }
     # 给 supervisor wall 推
     try:
-        await get_supervisor_manager().broadcast(tenant_id, payload)
+        await get_supervisor_manager().broadcast(
+            tenant_id, payload, call_provider_id=call_provider_id
+        )
     except Exception as exc:
         logger.warning("takeover response broadcast failed: %s", exc)
 

@@ -17,6 +17,7 @@ from sqlalchemy import select
 
 from app.api._supervisor_scope import (
     SupervisorScope,
+    resolve_call_provider_id,
     supervisor_agent_filter,
     supervisor_case_filter,
     supervisor_scope,
@@ -328,3 +329,37 @@ def test_supervisor_scope_rejects_provider_id_zero():
         supervisor_scope(payload)
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail["code"] == "ERR_NO_SCOPE"
+
+
+# ---------------------------------------------------------------------------
+# Task 4 — resolve_call_provider_id 测试
+# ---------------------------------------------------------------------------
+
+def test_resolve_call_provider_id_no_case(db_session):
+    """case_id=None → 返回 None（物业侧）。"""
+    result = resolve_call_provider_id(db_session, None)
+    assert result is None
+
+
+def test_resolve_call_provider_id_property_case(db_session, case_env):
+    """物业项目案件（project.provider_id=None）→ 返回 None。"""
+    result = resolve_call_provider_id(db_session, case_env.case_property_proj.id)
+    assert result is None
+
+
+def test_resolve_call_provider_id_no_project_case(db_session, case_env):
+    """无项目案件（project_id=None）→ 返回 None。"""
+    result = resolve_call_provider_id(db_session, case_env.case_no_proj.id)
+    assert result is None
+
+
+def test_resolve_call_provider_id_provider_case(db_session, case_env):
+    """服务商项目案件 → 返回该服务商 provider_id。"""
+    result = resolve_call_provider_id(db_session, case_env.case_provider_proj.id)
+    assert result == case_env.provider.id
+
+
+def test_resolve_call_provider_id_nonexistent_case(db_session, seeded_tenant):
+    """不存在的 case_id → 返回 None（无记录时安全降级）。"""
+    result = resolve_call_provider_id(db_session, 999999)
+    assert result is None

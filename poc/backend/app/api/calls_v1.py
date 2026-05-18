@@ -294,7 +294,9 @@ async def _broadcast_call_event(db: Session, call: CallRecord, event_type: str) 
     §9.3 —— 业主电话 owner_phone_masked 不在此处拼装：把密文 owner_phone_enc
     交给 SupervisorManager.broadcast，由其按每个订阅连接握手时的
     can_see_plaintext 快照逐一注入明文 / 脱敏值。
+    Task 4 —— 同时传入 call_provider_id，按 scope 过滤推送目标连接。
     """
+    from app.api._supervisor_scope import resolve_call_provider_id
     from app.risk.supervisor_manager import get_supervisor_manager
 
     caller = db.get(UserAccount, call.caller_user_id) if call.caller_user_id else None
@@ -311,9 +313,13 @@ async def _broadcast_call_event(db: Session, call: CallRecord, event_type: str) 
         "recording_mode": call.recording_mode,
         "status": call.status,
     }
+    call_provider_id = resolve_call_provider_id(db, call.case_id)
     sup = get_supervisor_manager()
     await sup.broadcast(
-        call.tenant_id, payload, owner_phone_enc=owner.phone_enc if owner else None
+        call.tenant_id,
+        payload,
+        owner_phone_enc=owner.phone_enc if owner else None,
+        call_provider_id=call_provider_id,
     )
 
 
