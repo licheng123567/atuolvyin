@@ -31,16 +31,32 @@ class SupervisorShift(Base, TimestampMixin):
         sa.ForeignKey("user_account.id", ondelete="SET NULL"),
     )
     supervisor_name: Mapped[str | None] = mapped_column(sa.String(120))
+    provider_id: Mapped[int | None] = mapped_column(
+        sa.BigInteger,
+        sa.ForeignKey("service_provider.id", ondelete="CASCADE"),
+    )
 
     __table_args__ = (
         sa.CheckConstraint(
             "slot IN ('morning', 'afternoon', 'evening')",
             name="ck_supervisor_shift_slot",
         ),
-        sa.UniqueConstraint(
-            "tenant_id", "shift_date", "slot", name="uq_supervisor_shift_tenant_date_slot"
-        ),
         sa.Index("ix_supervisor_shift_tenant_date", "tenant_id", "shift_date"),
+        sa.Index("ix_supervisor_shift_provider_id", "provider_id"),
+        # 物业侧（provider_id IS NULL）唯一：tenant + date + slot
+        sa.Index(
+            "uq_supervisor_shift_property",
+            "tenant_id", "shift_date", "slot",
+            unique=True,
+            postgresql_where=sa.text("provider_id IS NULL"),
+        ),
+        # 服务商侧（provider_id 非空）唯一：tenant + provider + date + slot
+        sa.Index(
+            "uq_supervisor_shift_provider",
+            "tenant_id", "provider_id", "shift_date", "slot",
+            unique=True,
+            postgresql_where=sa.text("provider_id IS NOT NULL"),
+        ),
     )
 
 
@@ -64,6 +80,10 @@ class SupervisorShiftSwapRequest(Base, TimestampMixin):
     shift_date: Mapped[date_type] = mapped_column(sa.Date, nullable=False)
     slot: Mapped[str] = mapped_column(sa.String(16), nullable=False)
     status: Mapped[str] = mapped_column(sa.String(24), nullable=False, default="pending_confirm")
+    provider_id: Mapped[int | None] = mapped_column(
+        sa.BigInteger,
+        sa.ForeignKey("service_provider.id", ondelete="CASCADE"),
+    )
 
     __table_args__ = (
         sa.CheckConstraint(
@@ -74,4 +94,5 @@ class SupervisorShiftSwapRequest(Base, TimestampMixin):
             "status IN ('pending_confirm', 'accepted', 'rejected', 'cancelled')",
             name="ck_swap_request_status",
         ),
+        sa.Index("ix_supervisor_shift_swap_request_provider_id", "provider_id"),
     )
