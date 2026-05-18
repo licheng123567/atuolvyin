@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.api._supervisor_scope import SupervisorScope, supervisor_scope
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_roles, require_tenant_roles
+from app.core.security import get_token_payload, require_roles
 from app.models.supervisor_shift import SupervisorShift, SupervisorShiftSwapRequest
 from app.models.tenant import UserTenantMembership
 from app.models.user import UserAccount
@@ -207,16 +207,11 @@ async def save_shifts(
 async def submit_swap_request(
     body: dict,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     """body = {"date": "...", "slot": "...", "swap_with": "督导张敏"}"""
-    tenant_id = payload.get("tenant_id")
-    if tenant_id is None:
-        raise HTTPException(
-            status_code=http_status.HTTP_403_FORBIDDEN,
-            detail={"code": "ERR_NO_TENANT", "message": "督导必须关联租户"},
-        )
     user_id = int(payload["user_id"])
     user = db.get(UserAccount, user_id)
     d_str = body.get("date")
@@ -237,7 +232,7 @@ async def submit_swap_request(
 
     row = db.execute(
         select(SupervisorShift)
-        .where(SupervisorShift.tenant_id == int(tenant_id))
+        .where(_shift_scope_clause(scope, SupervisorShift))
         .where(SupervisorShift.shift_date == d)
         .where(SupervisorShift.slot == slot)
     ).scalar_one_or_none()
@@ -248,7 +243,8 @@ async def submit_swap_request(
         )
 
     req = SupervisorShiftSwapRequest(
-        tenant_id=int(tenant_id),
+        tenant_id=scope.tenant_id,
+        provider_id=scope.provider_id,
         from_user_id=user_id,
         from_user_name=user.name,
         to_user_name=swap_with,
@@ -273,17 +269,14 @@ async def submit_swap_request(
 
 @router.get("/shifts/swap-requests")
 async def list_swap_requests(
-    payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[dict]:
-    tenant_id = payload.get("tenant_id")
-    if tenant_id is None:
-        return []
     rows = (
         db.execute(
             select(SupervisorShiftSwapRequest)
-            .where(SupervisorShiftSwapRequest.tenant_id == int(tenant_id))
+            .where(_shift_scope_clause(scope, SupervisorShiftSwapRequest))
             .order_by(SupervisorShiftSwapRequest.id.desc())
         )
         .scalars()
