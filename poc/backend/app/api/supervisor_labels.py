@@ -9,9 +9,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_tenant_roles
+from app.core.security import get_token_payload, require_roles
 from app.models.call import CallRecord, SuggestionFeedback
 from app.schemas.script import SupervisorLabelCreate, SupervisorLabelOut
+
+from ._supervisor_scope import SupervisorScope, supervisor_call_filter, supervisor_scope
 
 router = APIRouter()
 
@@ -21,16 +23,16 @@ SUPERVISOR_ROLES = ("supervisor", "admin")
 @router.get("/script-labels", response_model=list[SupervisorLabelOut])
 def list_script_labels(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
     unread_only: bool = Query(False),
 ) -> list[SupervisorLabelOut]:
-    tenant_id = int(payload.get("tenant_id") or 0)
     stmt = (
         select(SuggestionFeedback)
         .join(CallRecord, CallRecord.id == SuggestionFeedback.call_id)
         .where(
-            CallRecord.tenant_id == tenant_id,
+            supervisor_call_filter(scope),
             SuggestionFeedback.script_template_id.is_not(None),
         )
     )
@@ -57,17 +59,17 @@ def label_script(
     feedback_id: int,
     body: SupervisorLabelCreate,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
 ) -> SupervisorLabelOut:
-    tenant_id = int(payload.get("tenant_id") or 0)
     user_id = int(payload.get("user_id") or 0)
     fb = db.execute(
         select(SuggestionFeedback)
         .join(CallRecord, CallRecord.id == SuggestionFeedback.call_id)
         .where(
             SuggestionFeedback.id == feedback_id,
-            CallRecord.tenant_id == tenant_id,
+            supervisor_call_filter(scope),
         )
     ).scalar_one_or_none()
     if not fb:
