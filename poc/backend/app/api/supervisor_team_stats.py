@@ -13,16 +13,24 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi import status as http_status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_tenant_roles
+from app.core.security import require_roles
 from app.models.call import CallRecord
 from app.models.case import CollectionCase
+from app.models.tenant import UserTenantMembership
 from app.models.user import UserAccount
+
+from ._supervisor_scope import (
+    SupervisorScope,
+    supervisor_agent_filter,
+    supervisor_call_filter,
+    supervisor_case_filter,
+    supervisor_scope,
+)
 
 router = APIRouter()
 
@@ -31,19 +39,11 @@ SUPERVISOR_ROLES = ("supervisor", "admin", "superadmin")
 
 @router.get("/team-stats")
 async def get_team_stats(
-    payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
     period_days: int = Query(30, ge=1, le=365),
 ) -> dict:
-    tenant_id = payload.get("tenant_id")
-    if tenant_id is None:
-        raise HTTPException(
-            status_code=http_status.HTTP_403_FORBIDDEN,
-            detail={"code": "ERR_NO_TENANT", "message": "当前角色未关联租户"},
-        )
-    tenant_id = int(tenant_id)
-
     now = datetime.now(UTC)
     period_end = now
     period_start = now - timedelta(days=period_days)
@@ -57,7 +57,7 @@ async def get_team_stats(
             func.sum(case((CallRecord.status == "completed", 1), else_=0)).label("connected"),
         )
         .where(
-            CallRecord.tenant_id == tenant_id,
+            supervisor_call_filter(scope),
             CallRecord.started_at >= period_start,
             CallRecord.started_at <= period_end,
         )
@@ -77,7 +77,7 @@ async def get_team_stats(
     outbound_total = (
         db.execute(
             select(func.count(CallRecord.id)).where(
-                CallRecord.tenant_id == tenant_id,
+                supervisor_call_filter(scope),
                 CallRecord.started_at >= period_start,
                 CallRecord.started_at <= period_end,
             )
@@ -87,7 +87,7 @@ async def get_team_stats(
     connected_total = (
         db.execute(
             select(func.count(CallRecord.id)).where(
-                CallRecord.tenant_id == tenant_id,
+                supervisor_call_filter(scope),
                 CallRecord.started_at >= period_start,
                 CallRecord.started_at <= period_end,
                 CallRecord.status == "completed",
@@ -98,7 +98,7 @@ async def get_team_stats(
     promised_total = (
         db.execute(
             select(func.count(CallRecord.id)).where(
-                CallRecord.tenant_id == tenant_id,
+                supervisor_call_filter(scope),
                 CallRecord.started_at >= period_start,
                 CallRecord.started_at <= period_end,
                 CallRecord.result_tag.in_(("承诺缴", "立即缴")),
@@ -109,7 +109,7 @@ async def get_team_stats(
     paid_total = (
         db.execute(
             select(func.count(CollectionCase.id)).where(
-                CollectionCase.tenant_id == tenant_id,
+                supervisor_case_filter(scope),
                 CollectionCase.stage == "paid",
                 CollectionCase.updated_at >= period_start,
             )
@@ -125,7 +125,15 @@ async def get_team_stats(
     }
 
     # ── 3. 团队成员排名 ─────────────────────────────────────
-    # 按 caller_user_id 聚合，限本租户内 agent 角色
+    # 先算本 scope 催收员 id 集，用于限定排名范围
+    agent_ids = [
+        r[0]
+        for r in db.execute(
+            select(UserTenantMembership.user_id).where(supervisor_agent_filter(scope))
+        ).all()
+    ]
+
+    # 按 caller_user_id 聚合，限本 scope 内 agent
     agg_rows = db.execute(
         select(
             CallRecord.caller_user_id,
@@ -139,9 +147,10 @@ async def get_team_stats(
             ).label("promised"),
         )
         .where(
-            CallRecord.tenant_id == tenant_id,
+            supervisor_call_filter(scope),
             CallRecord.started_at >= period_start,
             CallRecord.started_at <= period_end,
+            CallRecord.caller_user_id.in_(agent_ids),
         )
         .group_by(CallRecord.caller_user_id)
     ).all()
@@ -153,9 +162,10 @@ async def get_team_stats(
             func.coalesce(func.sum(CollectionCase.amount_owed), 0).label("paid"),
         )
         .where(
-            CollectionCase.tenant_id == tenant_id,
+            supervisor_case_filter(scope),
             CollectionCase.stage == "paid",
             CollectionCase.updated_at >= period_start,
+            CollectionCase.assigned_to.in_(agent_ids),
         )
         .group_by(CollectionCase.assigned_to)
     ).all()
