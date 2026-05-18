@@ -1,7 +1,7 @@
 // §9.1 — 服务商法务-案件浏览列表页（只读，手机号脱敏）
 import { useGo } from "@refinedev/core";
 import { Scale } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { PaginationBar } from "../../../../components/ui/PaginationBar";
 import { SearchInput } from "../../../../components/ui/SearchInput";
 import { useDebouncedValue } from "../../../../hooks/useDebouncedValue";
@@ -16,17 +16,11 @@ export function ProviderLegalCasesPage() {
   const [keyword, setKeyword] = useState("");
   const debouncedKw = useDebouncedValue(keyword, 300);
 
-  const { items, total, isLoading, isError } = useProviderLegalCases({ page, pageSize: PAGE_SIZE });
-
-  const filteredItems = useMemo(() => {
-    const kw = debouncedKw.trim().toLowerCase();
-    if (!kw) return items;
-    return items.filter((c) => {
-      const ownerMatch = (c.owner_name ?? "").toLowerCase().includes(kw);
-      const roomMatch = `${c.building ?? ""}${c.room ?? ""}`.toLowerCase().includes(kw);
-      return ownerMatch || roomMatch;
-    });
-  }, [items, debouncedKw]);
+  const { items, total, isLoading, isError } = useProviderLegalCases({
+    page,
+    pageSize: PAGE_SIZE,
+    keyword: debouncedKw,
+  });
 
   return (
     <div>
@@ -64,10 +58,10 @@ export function ProviderLegalCasesPage() {
           <tbody>
             {isLoading && <TableStateRow colSpan={6}>加载中…</TableStateRow>}
             {isError && !isLoading && <TableStateRow colSpan={6}>加载失败</TableStateRow>}
-            {!isLoading && !isError && filteredItems.length === 0 && (
+            {!isLoading && !isError && items.length === 0 && (
               <TableStateRow colSpan={6}>{keyword ? "无匹配结果" : "暂无案件"}</TableStateRow>
             )}
-            {!isLoading && !isError && filteredItems.map((c) => (
+            {!isLoading && !isError && items.map((c) => (
               <tr key={c.case_id}>
                 <td>
                   <div>

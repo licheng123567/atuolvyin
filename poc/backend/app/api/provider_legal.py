@@ -90,19 +90,48 @@ def list_cases(
     db: Annotated[Session, Depends(get_db)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    keyword: str | None = Query(None),
 ) -> PaginatedResponse[ProviderLegalCaseListItem]:
     tenant_id, provider_id, _ = _ctx(payload)
     case_filter = _provider_legal_case_filter(tenant_id, provider_id)
-    total = int(db.execute(select(func.count(CollectionCase.id)).where(case_filter)).scalar_one())
-    rows = db.execute(
-        select(CollectionCase, OwnerProfile, Project.name.label("project_name"))
-        .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
-        .outerjoin(Project, Project.id == CollectionCase.project_id)
-        .where(case_filter)
-        .order_by(desc(CollectionCase.id))
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    ).all()
+
+    kw = keyword.strip() if keyword else ""
+    if kw:
+        room_concat = func.concat(
+            func.coalesce(OwnerProfile.building, ""),
+            func.coalesce(OwnerProfile.room, ""),
+        )
+        kw_filter = sa.or_(
+            OwnerProfile.name.ilike(f"%{kw}%"),
+            room_concat.ilike(f"%{kw}%"),
+        )
+        total = int(
+            db.execute(
+                select(func.count(CollectionCase.id))
+                .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
+                .where(case_filter, kw_filter)
+            ).scalar_one()
+        )
+        rows = db.execute(
+            select(CollectionCase, OwnerProfile, Project.name.label("project_name"))
+            .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
+            .outerjoin(Project, Project.id == CollectionCase.project_id)
+            .where(case_filter, kw_filter)
+            .order_by(desc(CollectionCase.id))
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        ).all()
+    else:
+        total = int(db.execute(select(func.count(CollectionCase.id)).where(case_filter)).scalar_one())
+        rows = db.execute(
+            select(CollectionCase, OwnerProfile, Project.name.label("project_name"))
+            .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
+            .outerjoin(Project, Project.id == CollectionCase.project_id)
+            .where(case_filter)
+            .order_by(desc(CollectionCase.id))
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        ).all()
     reveal = _owner_phone_reveal(provider_id)
     items = [
         ProviderLegalCaseListItem(

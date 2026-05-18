@@ -64,11 +64,23 @@ interface ListResp<T> {
   total: number;
 }
 
-export function useProviderLegalCases(params: { page: number; pageSize: number }) {
+export function useProviderLegalCases(params: {
+  page: number;
+  pageSize: number;
+  keyword?: string;
+}) {
+  const queryParams: Record<string, string | number> = {
+    page: params.page,
+    page_size: params.pageSize,
+  };
+  const kw = params.keyword?.trim() ?? "";
+  if (kw) {
+    queryParams.keyword = kw;
+  }
   const { query } = useCustom<ListResp<ProviderLegalCaseListItem>>({
     url: "provider/legal/cases",
     method: "get",
-    config: { query: { page: params.page, page_size: params.pageSize } },
+    config: { query: queryParams },
   });
   return {
     items: query.data?.data?.items ?? [],

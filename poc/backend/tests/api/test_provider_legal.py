@@ -484,3 +484,121 @@ def test_get_conversion_request_detail_cross_provider_404(api, db_session, seede
         f"/api/v1/provider/legal/conversion-requests/{req_b.id}", headers=_auth(env_a.token)
     )
     assert resp.status_code == 404
+
+
+# ── keyword 服务端搜索测试 ────────────────────────────────────────────────────
+
+def _seed_multiple_cases(db_session, tenant, env):
+    """在 env.project 下补充 2 条额外案件（不同业主/房号），共 3 条。"""
+    from decimal import Decimal
+
+    from app.core.crypto import encrypt_phone
+    from app.models.case import CollectionCase, OwnerProfile
+
+    owner_li = OwnerProfile(
+        tenant_id=tenant.id, name="李四",
+        phone_enc=encrypt_phone("13811112222"),
+        building="3栋", room="301",
+    )
+    db_session.add(owner_li)
+    db_session.flush()
+    db_session.add(CollectionCase(
+        tenant_id=tenant.id, project_id=env.project.id, owner_id=owner_li.id,
+        pool_type="public", stage="new", amount_owed=Decimal("2000.00"), months_overdue=2,
+    ))
+
+    owner_wang = OwnerProfile(
+        tenant_id=tenant.id, name="王五",
+        phone_enc=encrypt_phone("13833334444"),
+        building="5栋", room="502",
+    )
+    db_session.add(owner_wang)
+    db_session.flush()
+    db_session.add(CollectionCase(
+        tenant_id=tenant.id, project_id=env.project.id, owner_id=owner_wang.id,
+        pool_type="public", stage="new", amount_owed=Decimal("1500.00"), months_overdue=1,
+    ))
+    db_session.flush()
+
+
+def test_list_cases_keyword_by_owner_name(api, db_session, seeded_tenant):
+    """keyword 匹配业主名片段 → 只返回匹配行，total 也正确。"""
+    env = _seed_provider_env(db_session, seeded_tenant,
+                             provider_name="服务商KW", owner_phone="13712345678")
+    _seed_multiple_cases(db_session, seeded_tenant, env)
+
+    resp = api.get(
+        "/api/v1/provider/legal/cases",
+        params={"keyword": "李四"},
+        headers=_auth(env.token),
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["total"] == 1
+    assert len(body["items"]) == 1
+    assert body["items"][0]["owner_name"] == "李四"
+
+
+def test_list_cases_keyword_by_room(api, db_session, seeded_tenant):
+    """keyword 匹配楼栋+房号拼接 → 命中。"""
+    env = _seed_provider_env(db_session, seeded_tenant,
+                             provider_name="服务商KW2", owner_phone="13712345678")
+    _seed_multiple_cases(db_session, seeded_tenant, env)
+
+    # "5栋502" 应匹配 owner_wang（building="5栋", room="502"）
+    resp = api.get(
+        "/api/v1/provider/legal/cases",
+        params={"keyword": "5栋502"},
+        headers=_auth(env.token),
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["items"][0]["owner_name"] == "王五"
+
+
+def test_list_cases_keyword_partial_building(api, db_session, seeded_tenant):
+    """keyword 只含楼栋前缀也能命中（ILIKE %kw%）。"""
+    env = _seed_provider_env(db_session, seeded_tenant,
+                             provider_name="服务商KW3", owner_phone="13712345678")
+    _seed_multiple_cases(db_session, seeded_tenant, env)
+
+    # "3栋" 只匹配 owner_li（building="3栋"）
+    resp = api.get(
+        "/api/v1/provider/legal/cases",
+        params={"keyword": "3栋"},
+        headers=_auth(env.token),
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["items"][0]["owner_name"] == "李四"
+
+
+def test_list_cases_empty_keyword_returns_all(api, db_session, seeded_tenant):
+    """空 keyword（不传）返回全部案件。"""
+    env = _seed_provider_env(db_session, seeded_tenant,
+                             provider_name="服务商KW4", owner_phone="13712345678")
+    _seed_multiple_cases(db_session, seeded_tenant, env)
+
+    resp = api.get("/api/v1/provider/legal/cases", headers=_auth(env.token))
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["total"] == 3
+    assert len(body["items"]) == 3
+
+
+def test_list_cases_blank_keyword_returns_all(api, db_session, seeded_tenant):
+    """keyword 为纯空白串时等价于无搜索，返回全部。"""
+    env = _seed_provider_env(db_session, seeded_tenant,
+                             provider_name="服务商KW5", owner_phone="13712345678")
+    _seed_multiple_cases(db_session, seeded_tenant, env)
+
+    resp = api.get(
+        "/api/v1/provider/legal/cases",
+        params={"keyword": "   "},
+        headers=_auth(env.token),
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["total"] == 3
