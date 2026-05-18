@@ -151,9 +151,14 @@ def get_tenant_discount_policy(
 
     督导打开减免审批页时调用，确认实际阈值而非硬编码默认值。
     """
-    tenant_id: int = int(payload.get("tenant_id") or 0)
+    tenant_id = payload.get("tenant_id")
+    if tenant_id is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_NO_TENANT", "message": "需要租户上下文"},
+        )
     s = db.execute(
-        select(TenantSettings).where(TenantSettings.tenant_id == tenant_id)
+        select(TenantSettings).where(TenantSettings.tenant_id == int(tenant_id))
     ).scalar_one_or_none()
     if s is None:
         return _DISCOUNT_POLICY_DEFAULTS
@@ -161,13 +166,9 @@ def get_tenant_discount_policy(
         discount_auto_approve_threshold_pct=s.discount_auto_approve_threshold_pct,
         discount_supervisor_max_pct=s.discount_supervisor_max_pct,
         discount_disabled=s.discount_disabled,
-        late_fee_waive_auto_approve_threshold_pct=getattr(
-            s, "late_fee_waive_auto_approve_threshold_pct", 50
-        )
-        or 50,
-        late_fee_waive_supervisor_max_pct=getattr(s, "late_fee_waive_supervisor_max_pct", 100)
-        or 100,
-        late_fee_waive_disabled=getattr(s, "late_fee_waive_disabled", False) or False,
+        late_fee_waive_auto_approve_threshold_pct=s.late_fee_waive_auto_approve_threshold_pct,
+        late_fee_waive_supervisor_max_pct=s.late_fee_waive_supervisor_max_pct,
+        late_fee_waive_disabled=s.late_fee_waive_disabled,
     )
 
 

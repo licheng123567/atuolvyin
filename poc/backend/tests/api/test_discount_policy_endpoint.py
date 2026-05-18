@@ -117,3 +117,37 @@ async def test_discount_policy_returns_defaults_when_no_settings(
     # 检查默认值合理性（不为负数）
     assert data["discount_auto_approve_threshold_pct"] >= 0
     assert data["discount_supervisor_max_pct"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_discount_policy_returns_custom_settings(
+    client, db_session, seeded_tenant, supervisor_auth_headers
+):
+    """租户已配置 TenantSettings 时，端点回显实际配置值（而非默认值）。
+
+    自定义值均满足模型 CHECK 约束：auto ≤ supervisor_max，各值 0-100。
+    """
+    from app.models.settings import TenantSettings
+
+    settings = TenantSettings(
+        tenant_id=seeded_tenant.id,
+        discount_auto_approve_threshold_pct=15,
+        discount_supervisor_max_pct=40,
+        discount_disabled=True,
+        late_fee_waive_auto_approve_threshold_pct=20,
+        late_fee_waive_supervisor_max_pct=60,
+        late_fee_waive_disabled=False,
+    )
+    db_session.add(settings)
+    db_session.flush()
+
+    resp = await client.get("/api/v1/discount-policy", headers=supervisor_auth_headers)
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+
+    assert data["discount_auto_approve_threshold_pct"] == 15
+    assert data["discount_supervisor_max_pct"] == 40
+    assert data["discount_disabled"] is True
+    assert data["late_fee_waive_auto_approve_threshold_pct"] == 20
+    assert data["late_fee_waive_supervisor_max_pct"] == 60
+    assert data["late_fee_waive_disabled"] is False
