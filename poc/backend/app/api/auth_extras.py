@@ -37,6 +37,7 @@ from app.models.login_otp import LoginOtp
 from app.models.tenant import Tenant, UserTenantMembership
 from app.models.user import UserAccount
 from app.schemas.auth import TokenResponse
+from app.services.sms_center import send_otp_sms
 
 router = APIRouter()
 
@@ -415,7 +416,12 @@ def login_by_credit_code(body: CreditCodeLoginIn, db: Session = Depends(get_db))
 @router.post("/otp/send", response_model=OtpSendOut)
 def otp_send(body: OtpSendIn, db: Session = Depends(get_db)) -> OtpSendOut:
     code = _create_otp(db, body.phone, body.purpose)
-    # TODO: 接入 SMS gateway（v1.5）
+    result = send_otp_sms(db, phone=body.phone, code=code, ttl_minutes=OTP_TTL_SECONDS // 60)
+    if not result.ok:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_SMS_SEND_FAILED", "message": "验证码短信发送失败，请稍后重试"},
+        )
     return OtpSendOut(
         sent=True,
         expires_in=OTP_TTL_SECONDS,
@@ -457,6 +463,12 @@ def password_reset_request(
     # 用户不存在仍假装成功（防爆破探测）
     if user:
         code = _create_otp(db, body.phone, "password_reset")
+        result = send_otp_sms(db, phone=body.phone, code=code, ttl_minutes=OTP_TTL_SECONDS // 60)
+        if not result.ok:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"code": "ERR_SMS_SEND_FAILED", "message": "验证码短信发送失败，请稍后重试"},
+            )
         return OtpSendOut(
             sent=True,
             expires_in=OTP_TTL_SECONDS,
