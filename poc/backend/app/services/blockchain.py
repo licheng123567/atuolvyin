@@ -38,9 +38,12 @@ _EBAOQUAN_TYPE = {
 
 
 def _resolve_config(db: Session) -> BlockchainConfig | None:
-    """取最新一行 BlockchainConfig（单行平台配置）。"""
+    """取最新一行 *启用中* 的 BlockchainConfig（未启用的配置一律视作未配置，落 mock）。"""
     return db.execute(
-        select(BlockchainConfig).order_by(desc(BlockchainConfig.updated_at)).limit(1)
+        select(BlockchainConfig)
+        .where(BlockchainConfig.is_active.is_(True))
+        .order_by(desc(BlockchainConfig.updated_at))
+        .limit(1)
     ).scalar_one_or_none()
 
 
