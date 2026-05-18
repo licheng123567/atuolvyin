@@ -106,8 +106,7 @@ export function SuperSmsConfigPage() {
           className="p-3 bg-[var(--color-danger-light)] text-sm"
           style={{ borderRadius: "var(--radius-md)", color: "var(--color-danger)" }}
         >
-          最近失败：{config.last_failure_at?.slice(0, 19).replace("T", " ")} ·
-          {config.last_failure_reason}
+          最近失败：{config.last_failure_at?.slice(0, 19).replace("T", " ")} ·{" "}{config.last_failure_reason}
         </div>
       )}
 
@@ -134,6 +133,7 @@ export function SuperSmsConfigPage() {
           </label>
           <input
             type="password"
+            autoComplete="new-password"
             value={secretKey}
             onChange={(e) => setSecretKey(e.target.value)}
             placeholder={
@@ -187,7 +187,9 @@ export function SuperSmsConfigPage() {
           </label>
         </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && (
+          <p className="text-sm" style={{ color: "var(--color-danger)" }}>{error}</p>
+        )}
 
         <div className="flex items-center justify-between">
           {savedAt ? (
