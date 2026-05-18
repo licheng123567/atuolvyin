@@ -245,8 +245,9 @@ def perf_scope_env(db_session, seeded_tenant):
     - proj_property：物业自办项目（provider_id=None）
     - proj_a / proj_b：服务商 A / B 项目
     - agent_property / agent_a / agent_b：各 scope 的催收员（membership.provider_id 对应各 scope）
-    - 每个 agent 挂 3 条 CollectionCase（含 stage='promised' / 'paid'）
-    - 每个 agent 挂 3 条 CallRecord（含 billable_duration>0）
+    - agent_property：2 条 CallRecord（1 connected）+ 3 条 CollectionCase（2 new + 1 promised）
+    - agent_a：3 条 CallRecord（2 connected）+ 6 条 CollectionCase（3 new + 2 promised + 1 paid）
+    - agent_b：1 条 CallRecord（1 connected）+ 1 条 CollectionCase（1 new）
     - token_property_sv / token_a / token_b：三类督导 token
     """
     provider_a = _make_provider(db_session, name="服务商A-team")
@@ -350,6 +351,8 @@ def perf_scope_env(db_session, seeded_tenant):
         tenant=seeded_tenant,
         provider_a=provider_a,
         provider_b=provider_b,
+        proj_a=proj_a,
+        owner=owner,
         agent_property=agent_property,
         agent_a=agent_a,
         agent_b=agent_b,
@@ -431,3 +434,54 @@ def test_provider_a_agent_metrics_match_own_scope_data(api, perf_scope_env):
     assert agent_item["connected_calls"] == 2
     assert agent_item["promised_cases"] == 2
     assert agent_item["paid_cases"] == 1
+
+
+# ---------------------------------------------------------------------------
+# 测试 3：delta×scope — provider scope 下 delta_vs_previous 计算正确
+# ---------------------------------------------------------------------------
+
+
+def test_provider_a_agent_delta_vs_previous_correct(api, perf_scope_env, db_session):
+    """服务商 A 督导看到的 A agent delta_vs_previous 精确等于
+    (cur_total - prev_total) / prev_total。
+
+    造数据：
+    - 当前周期（days_ago=1）：fixture 已造 3 条通话
+    - 上一周期（days_ago=10，落在 prev_start=[now-14d, now-7d) 窗口）：额外造 2 条通话
+    - 期望 delta = (3 - 2) / 2 = 0.5
+    """
+    # 上一周期额外为 agent_a 造 2 条通话（days_ago=10 落在 7~14 天前窗口）。
+    # supervisor_call_filter 对服务商侧督导要求 case_id IN (proj_a 的案件)，
+    # 因此必须为每条通话挂上归属 proj_a 的案件，否则被 scope 过滤掉。
+    for _ in range(2):
+        case = _make_case(
+            db_session,
+            perf_scope_env.tenant,
+            perf_scope_env.owner,
+            project_id=perf_scope_env.proj_a.id,
+            assigned_to=perf_scope_env.agent_a.id,
+        )
+        _make_call(
+            db_session,
+            perf_scope_env.tenant,
+            caller_user_id=perf_scope_env.agent_a.id,
+            case_id=case.id,
+            billable_duration=60,
+            days_ago=10,
+        )
+
+    resp = api.get(
+        "/api/v1/supervisor/team-performance",
+        headers=_auth(perf_scope_env.token_a),
+    )
+    assert resp.status_code == 200, resp.text
+    items = resp.json()["items"]
+    agent_item = next(
+        (i for i in items if i["user_id"] == perf_scope_env.agent_a.id), None
+    )
+    assert agent_item is not None, "服务商 A agent 应出现在服务商 A 督导的结果中"
+
+    # cur_total=3（fixture 造的当前周期通话），prev_total=2（本测试额外造的上一周期通话）
+    # delta = (3 - 2) / 2 = 0.5
+    assert agent_item["total_calls"] == 3
+    assert agent_item["delta_vs_previous"] == pytest.approx(0.5)
