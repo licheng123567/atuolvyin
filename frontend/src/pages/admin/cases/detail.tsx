@@ -38,9 +38,12 @@ export function AdminCaseDetailPage() {
     queryOptions: { enabled: !!id },
   });
 
+  const isAdmin = identity?.role === "admin";
+
   const { query: agentsQuery } = useList<AdminUser>({
     resource: "admin/users",
     pagination: { currentPage: 1, pageSize: 100 },
+    queryOptions: { enabled: isAdmin },
   });
 
   const agentsRaw = agentsQuery.data?.data;
@@ -183,15 +186,17 @@ export function AdminCaseDetailPage() {
                   <CreditCard className="w-3.5 h-3.5" />
                   发送缴费链接
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setAssignOpen(true)}
-                  className="ds-btn ds-btn-secondary"
-                  style={{ width: "100%", justifyContent: "center" }}
-                >
-                  <Users className="w-3.5 h-3.5" />
-                  分配 / 重分配
-                </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setAssignOpen(true)}
+                    className="ds-btn ds-btn-secondary"
+                    style={{ width: "100%", justifyContent: "center" }}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    分配 / 重分配
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={handleCreateWorkOrder}

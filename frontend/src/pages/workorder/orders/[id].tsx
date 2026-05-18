@@ -2,7 +2,8 @@
 //   左 320：业主画像 + 项目情况（OwnerInfoCard + ProjectInfoCard，案件存在时）
 //   中 1fr：全案活动时间线（ActivityTimeline，案件存在时；否则显示工单描述说明）
 //   右 280：sticky 操作（描述/优先级/状态/负责人/处理结果 + 保存）
-import { useCustomMutation, useGo, useList, useOne, useUpdate } from "@refinedev/core";
+import { useCustomMutation, useGetIdentity, useGo, useList, useOne, useUpdate } from "@refinedev/core";
+import type { AuthUser } from "../../../providers/auth-provider";
 import { ArrowLeft, ClipboardList, MessageSquarePlus, Save } from "lucide-react";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
@@ -111,6 +112,9 @@ export function WorkOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const go = useGo();
 
+  const { data: identity } = useGetIdentity<AuthUser>();
+  const isAdmin = identity?.role === "admin";
+
   const { query } = useOne<WorkOrderDetail>({
     resource: "workorders",
     id: id ?? "",
@@ -125,11 +129,11 @@ export function WorkOrderDetailPage() {
   });
   const caseDetail = caseQuery.data?.data;
 
-  // 负责人下拉
+  // 负责人下拉（仅 admin 才有权访问 admin/users，非 admin 不发请求）
   const { result: usersResult } = useList<AdminUser>({
     resource: "admin/users",
     pagination: { pageSize: 100 },
-    queryOptions: { retry: 0 },
+    queryOptions: { retry: 0, enabled: isAdmin },
   });
   const rawUsers = usersResult.data;
   const users: AdminUser[] =
@@ -404,19 +408,25 @@ export function WorkOrderDetailPage() {
 
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">负责人</label>
-                <select
-                  className="form-control"
-                  value={form.assigned_to ?? ""}
-                  onChange={(e) => setForm({ ...form, assigned_to: e.target.value ? Number(e.target.value) : null })}
-                >
-                  <option value="">未分配</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>{u.name}（{ROLE_LABEL[u.role] ?? u.role}）</option>
-                  ))}
-                  {form.assigned_to !== null && !users.some((u) => u.id === form.assigned_to) && (
-                    <option value={form.assigned_to}>用户 #{form.assigned_to} ({detail.assignee_name ?? "未知"})</option>
-                  )}
-                </select>
+                {isAdmin ? (
+                  <select
+                    className="form-control"
+                    value={form.assigned_to ?? ""}
+                    onChange={(e) => setForm({ ...form, assigned_to: e.target.value ? Number(e.target.value) : null })}
+                  >
+                    <option value="">未分配</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>{u.name}（{ROLE_LABEL[u.role] ?? u.role}）</option>
+                    ))}
+                    {form.assigned_to !== null && !users.some((u) => u.id === form.assigned_to) && (
+                      <option value={form.assigned_to}>用户 #{form.assigned_to} ({detail.assignee_name ?? "未知"})</option>
+                    )}
+                  </select>
+                ) : (
+                  <div style={{ padding: "8px 12px", background: "#f9fafb", border: "1px solid var(--color-neutral-200)", borderRadius: 6, fontSize: 13, color: "var(--color-neutral-700)" }}>
+                    {detail.assignee_name ?? "—"}
+                  </div>
+                )}
               </div>
 
               <div className="form-group" style={{ marginBottom: 0 }}>
