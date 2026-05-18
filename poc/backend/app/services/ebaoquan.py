@@ -86,7 +86,11 @@ def create_evidence_hash(
         evidence_id = payload.get("evidenceId")
         if evidence_id is None:
             return EbaoquanHashResult(ok=False, error="ERR_EBAOQUAN_NO_EVIDENCE_ID")
-        return EbaoquanHashResult(ok=True, evidence_id=int(evidence_id))
+        try:
+            return EbaoquanHashResult(ok=True, evidence_id=int(evidence_id))
+        except (TypeError, ValueError):
+            logger.warning("易保全 createEvidenceHash 返回非法 evidenceId: %r", evidence_id)
+            return EbaoquanHashResult(ok=False, error="ERR_EBAOQUAN_NO_EVIDENCE_ID")
 
     reason = str(data.get("message") or f"code={data.get('code')}")
     return EbaoquanHashResult(ok=False, error=reason)
@@ -116,9 +120,15 @@ def query_evidence_detail(
     if data.get("code") == 0:
         payload = data.get("data") or {}
         pid = payload.get("preservationId")
-        return EbaoquanDetailResult(
-            ok=True, preservation_id=int(pid) if pid is not None else None
-        )
+        preservation_id: int | None = None
+        if pid is not None:
+            try:
+                preservation_id = int(pid)
+            except (TypeError, ValueError):
+                logger.warning(
+                    "易保全 queryEvidenceDetail 返回非法 preservationId: %r", pid
+                )
+        return EbaoquanDetailResult(ok=True, preservation_id=preservation_id)
 
     reason = str(data.get("message") or f"code={data.get('code')}")
     return EbaoquanDetailResult(ok=False, error=reason)
