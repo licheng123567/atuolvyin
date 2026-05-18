@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     # ==== 实时流式 ASR / 推送 / 实时 LLM ====
     streaming_asr_backend: str = "mock"  # "mock" | "dashscope"
 
+    # ==== 短信通道：mock / sms_center（短信中心 028lk）====
+    sms_backend: str = "mock"  # "mock" | "sms_center"
+
     mipush_backend: str = "mock"  # "mock" | "xiaomi"
     mipush_app_secret: str = ""
     mipush_package_name: str = "com.autoluyin.demo"
