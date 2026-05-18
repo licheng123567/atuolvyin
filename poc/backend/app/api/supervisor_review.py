@@ -11,7 +11,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -88,8 +88,6 @@ def list_reviews(
         stmt = stmt.where(AnalysisResult.supervisor_quality.is_(None))
 
     # Count
-    from sqlalchemy import func
-
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total: int = db.execute(count_stmt).scalar_one()
 
