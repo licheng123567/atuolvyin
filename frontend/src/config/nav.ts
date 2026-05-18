@@ -308,6 +308,7 @@ const SUPERVISOR_PROVIDER_NAV: NavSection[] = [
     title: "我的工作",
     items: [
       { label: "我的 KPI", path: "/supervisor/my-kpi", icon: "BarChart3" },
+      { label: "值班排班", path: "/supervisor/shifts", icon: "Calendar" },
       { label: "团队报表", path: "/supervisor/stats", icon: "BarChart2" },
     ],
   },

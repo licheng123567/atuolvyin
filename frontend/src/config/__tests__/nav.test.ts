@@ -42,12 +42,10 @@ describe("getNavSections — provider supervisor nav (Phase 1)", () => {
     expect(paths).toContain("/supervisor/stats");
   });
 
-  it("服务商督导不含 Phase 2 及排除项", () => {
+  it("服务商督导不含明确排除项", () => {
     const sections = getNavSections("supervisor", "provider:2");
     const paths = sections.flatMap((s) => s.items.map((i) => i.path));
-    // Phase 2（未实现）
-    expect(paths).not.toContain("/supervisor/shifts");
-    // 明确排除项
+    // 明确排除项（Phase 2 已加 /supervisor/shifts，此处不再排除）
     expect(paths).not.toContain("/admin/agent-devices");
     expect(paths).not.toContain("/supervisor/escalated");
     expect(paths).not.toContain("/supervisor/promises");
@@ -55,6 +53,13 @@ describe("getNavSections — provider supervisor nav (Phase 1)", () => {
     expect(paths).not.toContain("/supervisor/discount-approvals");
     expect(paths).not.toContain("/supervisor/legal-conversion-approvals");
     expect(paths).not.toContain("/supervisor/training");
+  });
+
+  it("provider supervisor nav 含值班排班（Phase 2）", () => {
+    const paths = getNavSections("supervisor", "provider:2")
+      .flatMap((s) => s.items)
+      .map((i) => i.path);
+    expect(paths).toContain("/supervisor/shifts");
   });
 
   it("服务商督导仍包含 HELP_SECTION", () => {
