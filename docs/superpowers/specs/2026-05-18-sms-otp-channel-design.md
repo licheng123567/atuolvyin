@@ -119,3 +119,9 @@ send_otp_sms(db, *, phone: str, code: str) -> SmsResult
 - 028lk 的明文鉴权具体签名方式与 `TemplateVars` 字段格式需在实施计划阶段对照文档附录定稿；若附录不足，实现时以最小可用参数集发一条，按真实返回校正。
 - 国内验证码短信合规通常要求模板预先在短信中心控制台报备 —— 直接文本模式作兜底，但生产建议超管配置 `otp_template_id` 走模板模式。
 - `secret_key` 以 AES 密文存库（与 `BlockchainConfig.api_key_enc` 同），`.env` 的 `autoluyin_aes_key` 是解密前提 —— 与既有约束一致。
+
+---
+
+> ✅ **已实现（2026-05-18）**：`SmsConfig` 平台级单行配置表（`singleton` 唯一约束）+ 超管 `GET/PUT /super/sms-config` + `app/services/sms_center.py` 客户端 `send_otp_sms`（mock / 028lk 双模式、模板+直接文本、永不抛异常）+ OTP 端点（`otp_send` / `password_reset_request`）经 `_send_otp_and_respond` helper 接入短信发送（失败 `403 ERR_SMS_SEND_FAILED`）+ 超管前端配置页 `/super/sms-config`。每环节配测试，后端全量回归 884 passed、前端 204 passed。
+>
+> 028lk 接口确认：明文鉴权（`SecretName`+`SecretKey` 直接放 JSON body，无签名）；`TemplateVars` 为 String 数组；响应 `{"code":0,"msg":...,"data":批次号}`。
