@@ -42,14 +42,25 @@ class BlockchainAttestation(Base):
     )
 
     data_sha256: Mapped[str] = mapped_column(sa.String(64), nullable=False)
+    data_sha512: Mapped[str | None] = mapped_column(
+        sa.String(128), nullable=True
+    )  # 送易保全的 SHA-512 hex
     data_type: Mapped[str] = mapped_column(
         sa.String(32), nullable=False
     )  # "call_recording" / "transcript" / "analysis" / "evidence_bundle"
 
     chain_provider: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     chain_endpoint: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
-    tx_hash: Mapped[str] = mapped_column(sa.String(64), nullable=False, unique=True)
-    block_height: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
+    # mock 分支填本地 tx_hash + block_height；易保全分支留 NULL。
+    tx_hash: Mapped[str | None] = mapped_column(sa.String(64), nullable=True, unique=True)
+    block_height: Mapped[int | None] = mapped_column(sa.BigInteger, nullable=True)
+    # 易保全分支字段
+    provider_evidence_id: Mapped[int | None] = mapped_column(
+        sa.BigInteger, nullable=True
+    )  # 易保全 evidenceId
+    preservation_id: Mapped[int | None] = mapped_column(
+        sa.BigInteger, nullable=True
+    )  # 易保全保全备案号
 
     status: Mapped[str] = mapped_column(sa.String(16), nullable=False)  # "confirmed"/"failed"
     submitted_at: Mapped[datetime] = mapped_column(
