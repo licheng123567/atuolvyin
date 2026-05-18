@@ -7,6 +7,7 @@ interface BlockchainConfig {
   id: number;
   provider: string;
   api_endpoint: string;
+  app_key: string | null;
   has_api_key: boolean;
   is_active: boolean;
   last_failure_at: string | null;
@@ -15,6 +16,7 @@ interface BlockchainConfig {
 }
 
 const PROVIDER_OPTIONS = [
+  { value: "ebaoquan", label: "易保全证据保全" },
   { value: "antchain", label: "蚂蚁链" },
   { value: "fisco-bcos", label: "FISCO BCOS" },
   { value: "mock", label: "Mock（仅测试）" },
@@ -29,8 +31,9 @@ export function SuperBlockchainConfigPage() {
   });
   const config = query.data?.data ?? null;
 
-  const [provider, setProvider] = useState("antchain");
+  const [provider, setProvider] = useState("ebaoquan");
   const [endpoint, setEndpoint] = useState("");
+  const [appKey, setAppKey] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [isActive, setIsActive] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -42,6 +45,7 @@ export function SuperBlockchainConfigPage() {
       initRef.current = true;
       setProvider(config.provider);
       setEndpoint(config.api_endpoint);
+      setAppKey(config.app_key ?? "");
       setIsActive(config.is_active);
     }
   }, [config]);
@@ -61,6 +65,7 @@ export function SuperBlockchainConfigPage() {
         values: {
           provider,
           api_endpoint: endpoint,
+          app_key: appKey || null,
           api_key: apiKey || null,
           is_active: isActive,
         },
@@ -154,7 +159,24 @@ export function SuperBlockchainConfigPage() {
             type="url"
             value={endpoint}
             onChange={(e) => setEndpoint(e.target.value)}
-            placeholder="https://api.antchain.example/attest"
+            placeholder="https://bs.sandbox.ebaoquan.org"
+            className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-200)]"
+            style={{ borderRadius: "var(--radius-md)" }}
+          />
+          <p className="text-xs text-[var(--color-neutral-400)] mt-1">
+            易保全沙箱 https://bs.sandbox.ebaoquan.org · 生产 https://bs.ebaoquan.org
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-[var(--color-neutral-700)] mb-1">
+            appKey（公钥标识）
+          </label>
+          <input
+            type="text"
+            value={appKey}
+            onChange={(e) => setAppKey(e.target.value)}
+            placeholder="易保全 appKey"
             className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-200)]"
             style={{ borderRadius: "var(--radius-md)" }}
           />
@@ -162,7 +184,7 @@ export function SuperBlockchainConfigPage() {
 
         <div>
           <label className="block text-sm font-medium text-[var(--color-neutral-700)] mb-1">
-            API Key
+            appKeySecret（密钥）
           </label>
           <input
             type="password"
