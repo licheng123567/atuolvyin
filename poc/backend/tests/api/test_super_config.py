@@ -224,3 +224,41 @@ async def test_sms_config_put_requires_superadmin(client, agent_auth_headers):
         headers=agent_auth_headers,
     )
     assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_blockchain_config_put_ebaoquan_with_app_key(
+    client: AsyncClient, super_auth_headers
+):
+    body = {
+        "provider": "ebaoquan",
+        "api_endpoint": "https://bs.sandbox.ebaoquan.org",
+        "app_key": "a7ce728fbec40519",
+        "api_key": "appkeysecret-plain",
+        "is_active": True,
+    }
+    put = await client.put(
+        "/api/v1/super/blockchain-config", json=body, headers=super_auth_headers
+    )
+    assert put.status_code == 200
+    data = put.json()
+    assert data["provider"] == "ebaoquan"
+    assert data["app_key"] == "a7ce728fbec40519"
+    assert data["has_api_key"] is True
+    assert "api_key" not in data
+    assert "appkeysecret-plain" not in str(data)
+
+    get = await client.get(
+        "/api/v1/super/blockchain-config", headers=super_auth_headers
+    )
+    assert get.json()["app_key"] == "a7ce728fbec40519"
+
+
+@pytest.mark.asyncio
+async def test_blockchain_config_ebaoquan_requires_super(
+    client: AsyncClient, ops_auth_headers
+):
+    resp = await client.get(
+        "/api/v1/super/blockchain-config", headers=ops_auth_headers
+    )
+    assert resp.status_code == 403

@@ -108,9 +108,10 @@ class LLMPromptActivateIn(BaseModel):
 
 
 class BlockchainConfigIn(BaseModel):
-    provider: Literal["antchain", "fisco-bcos", "mock"]
+    provider: Literal["ebaoquan", "antchain", "fisco-bcos", "mock"]
     api_endpoint: str = Field(min_length=1, max_length=500)
-    api_key: str | None = Field(None, max_length=500)
+    app_key: str | None = Field(None, max_length=128)
+    api_key: str | None = Field(None, max_length=500)  # appKeySecret；None 时不改
     is_active: bool = False
 
 
@@ -118,7 +119,8 @@ class BlockchainConfigOut(BaseModel):
     id: int
     provider: str
     api_endpoint: str
-    has_api_key: bool  # never echo the key back
+    app_key: str | None  # 公钥标识，可回显
+    has_api_key: bool  # never echo the appKeySecret back
     is_active: bool
     last_failure_at: datetime | None
     last_failure_reason: str | None
