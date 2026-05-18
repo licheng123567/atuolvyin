@@ -56,10 +56,12 @@ const DEFAULT_POLICY: Omit<DiscountPolicy, "isLoading"> = {
   disabled: false,
 };
 
-/** 仅拉租户级策略（不区分项目）— admin 系统配置页用 */
+/** 仅拉租户级策略（不区分项目）— supervisor/admin 减免审批页用。
+ *  v2.2 — 改用 discount-policy 端点（supervisor 可读），不再调 admin/settings（admin 专属）。
+ */
 export function useDiscountPolicy(): DiscountPolicy {
   const { query } = useCustom<TenantSettingsDiscountFields>({
-    url: "admin/settings",
+    url: "discount-policy",
     method: "get",
     queryOptions: { staleTime: 60_000, retry: false },
   });

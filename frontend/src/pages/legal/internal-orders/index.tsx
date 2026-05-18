@@ -88,7 +88,7 @@ export function LegalInternalOrdersPage() {
   const { query: projectsQuery } = useCustom<{ items: ProjectOption[] }>({
     url: "admin/projects",
     method: "get",
-    config: { query: { page_size: 200 } },
+    config: { query: { page_size: 100 } },
   });
   const projectOptions = projectsQuery.data?.data?.items ?? [];
 

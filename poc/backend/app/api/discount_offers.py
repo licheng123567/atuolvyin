@@ -37,6 +37,7 @@ from app.schemas.discount import (
     DiscountActionRequest,
     DiscountOfferCreate,
     DiscountOfferOut,
+    DiscountPolicyOut,
     DiscountRejectRequest,
 )
 from app.services.audit import log_audit
@@ -126,6 +127,48 @@ def _to_out(db: Session, offer: DiscountOffer) -> DiscountOfferOut:
     provider = db.get(ServiceProvider, offer.provider_id) if offer.provider_id else None
     out.provider_name = provider.name if provider else None
     return out
+
+
+_SUPERVISOR_POLICY_ROLES = ("supervisor", "admin", "superadmin")
+
+_DISCOUNT_POLICY_DEFAULTS = DiscountPolicyOut(
+    discount_auto_approve_threshold_pct=10,
+    discount_supervisor_max_pct=30,
+    discount_disabled=False,
+    late_fee_waive_auto_approve_threshold_pct=50,
+    late_fee_waive_supervisor_max_pct=100,
+    late_fee_waive_disabled=False,
+)
+
+
+@router.get("/discount-policy", response_model=DiscountPolicyOut)
+def get_tenant_discount_policy(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_tenant_roles(*_SUPERVISOR_POLICY_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> DiscountPolicyOut:
+    """v2.2 — 督导/admin 可读的租户减免策略（仅 6 个减免字段，不暴露其他配置）。
+
+    督导打开减免审批页时调用，确认实际阈值而非硬编码默认值。
+    """
+    tenant_id: int = int(payload.get("tenant_id") or 0)
+    s = db.execute(
+        select(TenantSettings).where(TenantSettings.tenant_id == tenant_id)
+    ).scalar_one_or_none()
+    if s is None:
+        return _DISCOUNT_POLICY_DEFAULTS
+    return DiscountPolicyOut(
+        discount_auto_approve_threshold_pct=s.discount_auto_approve_threshold_pct,
+        discount_supervisor_max_pct=s.discount_supervisor_max_pct,
+        discount_disabled=s.discount_disabled,
+        late_fee_waive_auto_approve_threshold_pct=getattr(
+            s, "late_fee_waive_auto_approve_threshold_pct", 50
+        )
+        or 50,
+        late_fee_waive_supervisor_max_pct=getattr(s, "late_fee_waive_supervisor_max_pct", 100)
+        or 100,
+        late_fee_waive_disabled=getattr(s, "late_fee_waive_disabled", False) or False,
+    )
 
 
 @router.get("/cases/{case_id}/discount-policy")

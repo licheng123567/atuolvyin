@@ -41,7 +41,7 @@ from app.schemas.common import PaginatedResponse
 
 router = APIRouter()
 
-ALLOWED_ROLES = ("admin", "superadmin", "supervisor")
+ALLOWED_ROLES = ("admin", "superadmin", "supervisor", "project_manager")
 PLATFORM_ROLES = ("superadmin",)
 
 _STATUS_LABEL = {

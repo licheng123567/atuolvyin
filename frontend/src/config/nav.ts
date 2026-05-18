@@ -281,7 +281,7 @@ const LEGAL_PROVIDER_NAV: NavSection[] = [
 ];
 
 // 「下载 App」对所有角色都展示（modal 关掉后还能找到）
-const HELP_SECTION: NavSection = {
+export const HELP_SECTION: NavSection = {
   title: "帮助",
   items: [{ label: "下载 App", path: "/help/app", icon: "Smartphone" }],
 };
@@ -312,6 +312,11 @@ export function getNavSections(role: UserRole | string, scope?: string): NavSect
   // legal: provider-side gets provider legal nav; property-side gets property legal nav
   if (role === "legal" && s.startsWith("provider:")) {
     return [...LEGAL_PROVIDER_NAV, HELP_SECTION];
+  }
+
+  // supervisor: provider-side has no backend endpoints yet → show only help
+  if (role === "supervisor" && s.startsWith("provider:")) {
+    return [HELP_SECTION];
   }
 
   const base =
