@@ -19,9 +19,11 @@ from app.api._supervisor_scope import (
     SupervisorScope,
     resolve_call_provider_id,
     supervisor_agent_filter,
+    supervisor_call_filter,
     supervisor_case_filter,
     supervisor_scope,
 )
+from app.models.call import CallRecord
 from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.tenant import ServiceProvider, UserTenantMembership
 from app.models.user import UserAccount
@@ -363,3 +365,161 @@ def test_resolve_call_provider_id_nonexistent_case(db_session, seeded_tenant):
     """不存在的 case_id → 返回 None（无记录时安全降级）。"""
     result = resolve_call_provider_id(db_session, 999999)
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Task 5 Part A — supervisor_call_filter 单元测试
+# ---------------------------------------------------------------------------
+
+_call_phone_counter = 0
+
+
+def _unique_call_phone() -> str:
+    global _call_phone_counter
+    _call_phone_counter += 1
+    return f"137{_call_phone_counter:08d}"
+
+
+def _make_caller(db_session, tenant) -> UserAccount:
+    from app.core.crypto import encrypt_phone
+    from app.core.security import get_password_hash
+    from app.models.tenant import UserTenantMembership
+
+    user = UserAccount(
+        name="催收员",
+        phone_enc=encrypt_phone(_unique_call_phone()),
+        password_hash=get_password_hash("pw"),
+        is_active=True,
+    )
+    db_session.add(user)
+    db_session.flush()
+    mem = UserTenantMembership(
+        tenant_id=tenant.id,
+        user_id=user.id,
+        role="agent",
+        work_mode="internal",
+        is_active=True,
+    )
+    db_session.add(mem)
+    db_session.flush()
+    return user
+
+
+def _make_call(db_session, tenant, caller, *, case_id: int | None) -> CallRecord:
+    from app.core.crypto import encrypt_phone
+
+    call = CallRecord(
+        tenant_id=tenant.id,
+        caller_user_id=caller.id,
+        callee_phone_enc=encrypt_phone(_unique_call_phone()),
+        initiated_by="app",
+        status="ended",
+        recording_mode="post",
+        case_id=case_id,
+    )
+    db_session.add(call)
+    db_session.flush()
+    return call
+
+
+@pytest.fixture()
+def call_filter_env(db_session, seeded_tenant):
+    """
+    建立以下数据：
+    - provider_a / provider_b：服务商 A / B
+    - proj_property：物业自办项目（provider_id=None）
+    - proj_a / proj_b：服务商 A / B 项目
+    - case_property / case_a / case_b：各项目各 1 条案件
+    - call_property：归属物业案件的通话
+    - call_a / call_b：归属服务商 A / B 案件的通话
+    - call_no_case：无 case_id 的通话
+    """
+    from app.models.tenant import ServiceProvider
+
+    prov_a = ServiceProvider(
+        name="服务商Filter_A",
+        provider_type="collection",
+        admin_phone_enc=__import__("app.core.crypto", fromlist=["encrypt_phone"]).encrypt_phone(_unique_call_phone()),
+    )
+    prov_b = ServiceProvider(
+        name="服务商Filter_B",
+        provider_type="collection",
+        admin_phone_enc=__import__("app.core.crypto", fromlist=["encrypt_phone"]).encrypt_phone(_unique_call_phone()),
+    )
+    db_session.add(prov_a)
+    db_session.add(prov_b)
+    db_session.flush()
+
+    proj_property = _make_project(db_session, seeded_tenant, name="物业项目CF", provider_id=None)
+    proj_a = _make_project(db_session, seeded_tenant, name="服务商A项目CF", provider_id=prov_a.id)
+    proj_b = _make_project(db_session, seeded_tenant, name="服务商B项目CF", provider_id=prov_b.id)
+
+    owner = _make_owner(db_session, seeded_tenant, name="业主CF")
+
+    case_property = _make_case(db_session, seeded_tenant, owner, project_id=proj_property.id)
+    case_a = _make_case(db_session, seeded_tenant, owner, project_id=proj_a.id)
+    case_b = _make_case(db_session, seeded_tenant, owner, project_id=proj_b.id)
+
+    caller_property = _make_caller(db_session, seeded_tenant)
+    caller_a = _make_caller(db_session, seeded_tenant)
+    caller_b = _make_caller(db_session, seeded_tenant)
+    caller_no_case = _make_caller(db_session, seeded_tenant)
+
+    call_property = _make_call(db_session, seeded_tenant, caller_property, case_id=case_property.id)
+    call_a = _make_call(db_session, seeded_tenant, caller_a, case_id=case_a.id)
+    call_b = _make_call(db_session, seeded_tenant, caller_b, case_id=case_b.id)
+    call_no_case = _make_call(db_session, seeded_tenant, caller_no_case, case_id=None)
+
+    return SimpleNamespace(
+        tenant=seeded_tenant,
+        prov_a=prov_a,
+        prov_b=prov_b,
+        call_property=call_property,
+        call_a=call_a,
+        call_b=call_b,
+        call_no_case=call_no_case,
+    )
+
+
+def _query_call_ids(db_session, scope: SupervisorScope) -> set[int]:
+    filt = supervisor_call_filter(scope)
+    rows = db_session.execute(select(CallRecord.id).where(filt)).scalars().all()
+    return set(rows)
+
+
+def test_call_filter_property_scope_sees_property_call(db_session, call_filter_env):
+    """物业督导能看到归属物业案件的通话。"""
+    scope = SupervisorScope(tenant_id=call_filter_env.tenant.id, provider_id=None)
+    ids = _query_call_ids(db_session, scope)
+    assert call_filter_env.call_property.id in ids
+
+
+def test_call_filter_property_scope_sees_no_case_call(db_session, call_filter_env):
+    """物业督导能看到无 case 的通话。"""
+    scope = SupervisorScope(tenant_id=call_filter_env.tenant.id, provider_id=None)
+    ids = _query_call_ids(db_session, scope)
+    assert call_filter_env.call_no_case.id in ids
+
+
+def test_call_filter_property_scope_cannot_see_provider_a_call(db_session, call_filter_env):
+    """物业督导不能看到服务商 A 的通话。"""
+    scope = SupervisorScope(tenant_id=call_filter_env.tenant.id, provider_id=None)
+    ids = _query_call_ids(db_session, scope)
+    assert call_filter_env.call_a.id not in ids
+
+
+def test_call_filter_property_scope_cannot_see_provider_b_call(db_session, call_filter_env):
+    """物业督导不能看到服务商 B 的通话。"""
+    scope = SupervisorScope(tenant_id=call_filter_env.tenant.id, provider_id=None)
+    ids = _query_call_ids(db_session, scope)
+    assert call_filter_env.call_b.id not in ids
+
+
+def test_call_filter_provider_a_scope_sees_own_call(db_session, call_filter_env):
+    """服务商 A 督导只能看到服务商 A 案件的通话。"""
+    scope = SupervisorScope(tenant_id=call_filter_env.tenant.id, provider_id=call_filter_env.prov_a.id)
+    ids = _query_call_ids(db_session, scope)
+    assert call_filter_env.call_a.id in ids
+    assert call_filter_env.call_b.id not in ids
+    assert call_filter_env.call_property.id not in ids
+    assert call_filter_env.call_no_case.id not in ids

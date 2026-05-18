@@ -16,6 +16,7 @@ from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
 from app.core.security import get_token_payload
+from app.models.call import CallRecord
 from app.models.case import CollectionCase, Project
 from app.models.tenant import UserTenantMembership
 
@@ -88,6 +89,20 @@ def supervisor_case_filter(scope: SupervisorScope) -> sa.ColumnElement[bool]:
         CollectionCase.tenant_id == scope.tenant_id,
         CollectionCase.project_id.in_(_provider_projects(scope)),
     )
+
+
+def supervisor_call_filter(scope: SupervisorScope) -> sa.ColumnElement[bool]:
+    """CallRecord 行级可见性 —— 经 case→project 链映射 supervisor_case_filter。
+
+    服务商督导：仅本服务商项目案件的通话（无 case 的通话不可见——无归属）；
+    物业督导：物业 / 无项目案件的通话 + 无 case 通话。
+    自含 CallRecord.tenant_id 条件，可直接用于 .where()。
+    """
+    allowed_case_ids = select(CollectionCase.id).where(supervisor_case_filter(scope))
+    case_clause = CallRecord.case_id.in_(allowed_case_ids)
+    if scope.provider_id is None:
+        case_clause = sa.or_(CallRecord.case_id.is_(None), case_clause)
+    return sa.and_(CallRecord.tenant_id == scope.tenant_id, case_clause)
 
 
 def resolve_call_provider_id(db: Session, case_id: int | None) -> int | None:

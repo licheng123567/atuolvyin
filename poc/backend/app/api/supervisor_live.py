@@ -14,7 +14,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Annotated
 
-import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi import status as http_status
 from pydantic import BaseModel
@@ -33,24 +32,11 @@ from app.models.case import CollectionCase, OwnerProfile
 from app.models.user import UserAccount
 from app.schemas.call import LiveCallItem, LiveCallsOut
 
-from ._supervisor_scope import SupervisorScope, supervisor_case_filter, supervisor_scope
+from ._supervisor_scope import SupervisorScope, supervisor_call_filter, supervisor_scope
 
 router = APIRouter()
 
 WALL_ROLES = ("supervisor", "admin", "project_manager")
-
-
-def _allowed_case_clause(scope: SupervisorScope) -> sa.ColumnElement[bool]:
-    """CallRecord 的 case 是否落在督导 scope 内。
-
-    服务商督导：case 必须属本服务商项目（无 case 的通话不可见——无归属）。
-    物业督导：case 属物业 / 无项目，或通话本身无 case_id（保留既有「物业看本租户全部」语义）。
-    """
-    allowed_case_ids = select(CollectionCase.id).where(supervisor_case_filter(scope))
-    clause = CallRecord.case_id.in_(allowed_case_ids)
-    if scope.provider_id is None:
-        clause = sa.or_(CallRecord.case_id.is_(None), clause)
-    return clause
 
 
 class ForceHangupReq(BaseModel):
@@ -85,9 +71,8 @@ def list_live_calls(
         db.execute(
             select(CallRecord)
             .where(
-                CallRecord.tenant_id == scope.tenant_id,
+                supervisor_call_filter(scope),
                 CallRecord.status.in_(("dialing", "live")),
-                _allowed_case_clause(scope),
             )
             .order_by(CallRecord.started_at.desc().nulls_last())
         )
@@ -149,8 +134,7 @@ async def supervisor_force_hangup(
     call = db.execute(
         select(CallRecord).where(
             CallRecord.id == call_id,
-            CallRecord.tenant_id == scope.tenant_id,
-            _allowed_case_clause(scope),
+            supervisor_call_filter(scope),
         )
     ).scalar_one_or_none()
     if call is None:
@@ -205,8 +189,7 @@ async def supervisor_takeover(
     call = db.execute(
         select(CallRecord).where(
             CallRecord.id == call_id,
-            CallRecord.tenant_id == scope.tenant_id,
-            _allowed_case_clause(scope),
+            supervisor_call_filter(scope),
         )
     ).scalar_one_or_none()
     if call is None:

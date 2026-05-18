@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.phone_visibility import display_owner_phone, should_reveal_owner_phone
-from app.core.security import get_token_payload, require_tenant_roles
+from app.core.security import get_token_payload, require_roles
 from app.models.call import AnalysisResult, CallRecord, RiskEvent, Transcript
 from app.schemas.common import PaginatedResponse
 from app.schemas.review import (
@@ -27,19 +27,11 @@ from app.schemas.review import (
     TranscriptSegmentOut,
 )
 
+from ._supervisor_scope import SupervisorScope, supervisor_call_filter, supervisor_scope
+
 router = APIRouter()
 
 REVIEW_ROLES = ("supervisor", "admin")
-
-
-def _require_tenant(payload: dict) -> int:
-    tenant_id = payload.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(
-            status_code=http_status.HTTP_403_FORBIDDEN,
-            detail={"code": "ERR_NO_TENANT", "message": "Token does not contain tenant_id"},
-        )
-    return int(tenant_id)
 
 
 def _to_review_item(
@@ -76,19 +68,18 @@ def _to_review_item(
 @router.get("/reviews", response_model=PaginatedResponse[ReviewItemOut])
 def list_reviews(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*REVIEW_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*REVIEW_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     only_pending: bool = Query(True, description="仅未复核（supervisor_quality 为空）"),
 ) -> PaginatedResponse[ReviewItemOut]:
-    tenant_id = _require_tenant(payload)
-
     stmt = (
         select(CallRecord, AnalysisResult)
         .join(AnalysisResult, AnalysisResult.call_id == CallRecord.id)
         .where(
-            CallRecord.tenant_id == tenant_id,
+            supervisor_call_filter(scope),
             AnalysisResult.needs_review.is_(True),
         )
     )
@@ -111,7 +102,7 @@ def list_reviews(
     return PaginatedResponse(
         items=[
             _to_review_item(
-                call, analysis, reveal_phone=should_reveal_owner_phone(role=payload.get("role", ""), provider_id=payload.get("provider_id"))
+                call, analysis, reveal_phone=should_reveal_owner_phone(role=payload.get("role", ""), provider_id=scope.provider_id)
             )
             for call, analysis in rows
         ],
@@ -126,17 +117,17 @@ def label_review(
     call_id: int,
     body: ReviewLabelIn,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*REVIEW_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*REVIEW_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
 ) -> ReviewItemOut:
-    tenant_id = _require_tenant(payload)
     user_id = int(payload.get("user_id") or 0)
 
-    # Verify call belongs to this tenant
+    # Verify call belongs to this supervisor's scope
     call = db.execute(
         select(CallRecord).where(
             CallRecord.id == call_id,
-            CallRecord.tenant_id == tenant_id,
+            supervisor_call_filter(scope),
         )
     ).scalar_one_or_none()
 
@@ -177,7 +168,7 @@ def label_review(
     return _to_review_item(
         call,
         analysis,
-        reveal_phone=should_reveal_owner_phone(role=payload.get("role", ""), provider_id=payload.get("provider_id")),
+        reveal_phone=should_reveal_owner_phone(role=payload.get("role", ""), provider_id=scope.provider_id),
     )
 
 
@@ -185,19 +176,18 @@ def label_review(
 def get_review_detail(
     call_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*REVIEW_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*REVIEW_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
 ) -> ReviewDetailOut:
     """Sprint 12.2 — 单条复核详情：含录音 URL + 转写 + 风控时间点列表，
     供前端复核工作台播放器使用（点击事件可跳转到对应 audio_offset_ms）。"""
-    tenant_id = _require_tenant(payload)
-
     row = db.execute(
         select(CallRecord, AnalysisResult)
         .join(AnalysisResult, AnalysisResult.call_id == CallRecord.id)
         .where(
             CallRecord.id == call_id,
-            CallRecord.tenant_id == tenant_id,
+            supervisor_call_filter(scope),
         )
     ).first()
     if row is None:
@@ -224,7 +214,7 @@ def get_review_detail(
     base = _to_review_item(
         call,
         analysis,
-        reveal_phone=should_reveal_owner_phone(role=payload.get("role", ""), provider_id=payload.get("provider_id")),
+        reveal_phone=should_reveal_owner_phone(role=payload.get("role", ""), provider_id=scope.provider_id),
     )
 
     segments_out: list[TranscriptSegmentOut] = []
