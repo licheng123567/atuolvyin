@@ -35,6 +35,16 @@ def is_l3_hangup_enabled(db: Session, tenant_id: int) -> bool:
     return bool(settings and settings.l3_hangup_enabled)
 
 
+def _resolve_call_provider_id(db: Session, call_id: int) -> int | None:
+    """通话归属服务商 id —— 给 SupervisorManager.broadcast 的 scope 过滤用。"""
+    from app.api._supervisor_scope import resolve_call_provider_id
+
+    case_id = db.execute(
+        select(CallRecord.case_id).where(CallRecord.id == call_id)
+    ).scalar_one_or_none()
+    return resolve_call_provider_id(db, case_id)
+
+
 async def dispatch_force_hangup(
     db: Session,
     *,
@@ -48,18 +58,12 @@ async def dispatch_force_hangup(
     返回事件 payload 给调用方做 ack。
     """
     # WS push 给 agent 房间（call-level）
-    from app.api._supervisor_scope import resolve_call_provider_id
     from app.api.ws_calls import _sessions
     from app.risk.supervisor_manager import get_supervisor_manager
     from app.ws.connection_manager import get_connection_manager
 
     # 解析通话归属服务商（用于 supervisor 房间 scope 过滤）
-    call_record = db.execute(
-        select(CallRecord).where(CallRecord.id == call_id)
-    ).scalar_one_or_none()
-    call_provider_id = resolve_call_provider_id(
-        db, call_record.case_id if call_record else None
-    )
+    call_provider_id = _resolve_call_provider_id(db, call_id)
 
     payload_agent = {
         "type": "call.force_hangup",
@@ -152,17 +156,11 @@ async def dispatch_takeover_request(
 ) -> dict:
     """督导发起强制转接请求：WS 推 agent + audit。等 agent 决策后调
     dispatch_takeover_response 通知 supervisor。"""
-    from app.api._supervisor_scope import resolve_call_provider_id
     from app.risk.supervisor_manager import get_supervisor_manager
     from app.ws.connection_manager import get_connection_manager
 
     # 解析通话归属服务商（用于 supervisor 房间 scope 过滤）
-    call_record = db.execute(
-        select(CallRecord).where(CallRecord.id == call_id)
-    ).scalar_one_or_none()
-    call_provider_id = resolve_call_provider_id(
-        db, call_record.case_id if call_record else None
-    )
+    call_provider_id = _resolve_call_provider_id(db, call_id)
 
     payload = {
         "type": "supervisor.takeover_request",
@@ -218,17 +216,11 @@ async def dispatch_takeover_response(
     note: str | None = None,
 ) -> dict:
     """agent 响应督导转接：accepted=True/False。"""
-    from app.api._supervisor_scope import resolve_call_provider_id
     from app.risk.supervisor_manager import get_supervisor_manager
     from app.ws.connection_manager import get_connection_manager
 
     # 解析通话归属服务商（用于 supervisor 房间 scope 过滤）
-    call_record = db.execute(
-        select(CallRecord).where(CallRecord.id == call_id)
-    ).scalar_one_or_none()
-    call_provider_id = resolve_call_provider_id(
-        db, call_record.case_id if call_record else None
-    )
+    call_provider_id = _resolve_call_provider_id(db, call_id)
 
     action = "takeover_accepted" if accepted else "takeover_rejected"
     payload = {
