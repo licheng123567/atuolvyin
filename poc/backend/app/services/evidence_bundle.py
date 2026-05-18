@@ -55,11 +55,14 @@ def _ext_from_object_key(object_key: str) -> str:
 
 def _attestation_to_blockchain_meta(att: Any) -> dict[str, Any]:
     return {
+        "data_type": att.data_type,
         "provider": att.chain_provider,
         "endpoint": att.chain_endpoint,
+        "status": att.status,
         "transaction_id": att.tx_hash,
         "block_height": att.block_height,
-        "status": att.status,
+        "evidence_id": att.provider_evidence_id,
+        "preservation_id": att.preservation_id,
         "submitted_at": att.submitted_at.isoformat() if att.submitted_at else None,
         "verify_url": f"/verify/{att.tx_hash}" if att.tx_hash else None,
     }
@@ -139,6 +142,7 @@ def build_evidence_bundle_zip(
             call_dir = f"{base_dir}/calls/call_{call.id}"
 
             recording_sha: str | None = None
+            recording_bytes: bytes | None = None
             recording_skipped = False
             recording_skip_reason: str | None = None
             if call.object_key:
@@ -155,6 +159,7 @@ def build_evidence_bundle_zip(
                 ext = _ext_from_object_key(call.object_key)
                 _write(f"{call_dir}/recording.{ext}", audio)
                 recording_sha = hashlib.sha256(audio).hexdigest()
+                recording_bytes = audio
             else:
                 recording_skipped = True
                 recording_skip_reason = "object_key 为空，未上传录音"
@@ -170,8 +175,10 @@ def build_evidence_bundle_zip(
                 select(Transcript).where(Transcript.call_id == call.id)
             ).scalar_one_or_none()
             transcript_sha: str | None = None
+            transcript_bytes: bytes | None = None
             if transcript and transcript.full_text:
-                _write(f"{call_dir}/transcript.txt", transcript.full_text.encode("utf-8"))
+                transcript_bytes = transcript.full_text.encode("utf-8")
+                _write(f"{call_dir}/transcript.txt", transcript_bytes)
                 transcript_sha = files_index[-1]["sha256"]
                 if transcript.segments:
                     _write(
@@ -193,16 +200,17 @@ def build_evidence_bundle_zip(
                 select(AnalysisResult).where(AnalysisResult.call_id == call.id)
             ).scalar_one_or_none()
             analysis_sha: str | None = None
+            analysis_bytes: bytes | None = None
             if analysis:
                 analysis_payload = {
                     "summary": analysis.summary,
                     "key_segments": analysis.key_segments,
                     "needs_review": analysis.needs_review,
                 }
-                _write(
-                    f"{call_dir}/analysis.json",
-                    json.dumps(analysis_payload, ensure_ascii=False, indent=2).encode("utf-8"),
-                )
+                analysis_bytes = json.dumps(
+                    analysis_payload, ensure_ascii=False, indent=2
+                ).encode("utf-8")
+                _write(f"{call_dir}/analysis.json", analysis_bytes)
                 analysis_sha = files_index[-1]["sha256"]
             else:
                 files_index.append(
@@ -213,15 +221,22 @@ def build_evidence_bundle_zip(
                     }
                 )
 
-            # 区块链上链（仅当有录音）
-            blockchain_meta: dict[str, Any]
-            if recording_sha:
+            # 区块链上链 —— 录音 / 转写 / 分析各上一次，单条失败不阻断
+            blockchain_metas: list[dict[str, Any]] = []
+            _attest_targets: list[tuple[str, bytes | None, str]] = [
+                ("call_recording", recording_bytes, f"案件{case.id}通话{call.id}录音"),
+                ("transcript", transcript_bytes, f"案件{case.id}通话{call.id}转写"),
+                ("analysis", analysis_bytes, f"案件{case.id}通话{call.id}AI分析"),
+            ]
+            for _dtype, _payload, _title in _attest_targets:
+                if _payload is None:
+                    continue
                 att = blockchain_svc.submit_attestation(
                     db,
                     tenant_id=tenant_id,
-                    data=audio,
-                    data_type="call_recording",
-                    title=f"案件{case.id}通话{call.id}录音",
+                    data=_payload,
+                    data_type=_dtype,
+                    title=_title,
                     description=tenant.name if tenant else None,
                     call_id=call.id,
                     legal_case_id=legal_case_id,
@@ -229,21 +244,14 @@ def build_evidence_bundle_zip(
                         "tenant_name": tenant.name if tenant else None,
                         "call_id": call.id,
                         "case_id": case.id,
-                        "started_at": call.started_at.isoformat() if call.started_at else None,
+                        "data_type": _dtype,
+                        "started_at": call.started_at.isoformat()
+                        if call.started_at
+                        else None,
                         "duration_sec": call.duration_sec,
                     },
                 )
-                blockchain_meta = _attestation_to_blockchain_meta(att)
-            else:
-                blockchain_meta = {
-                    "provider": None,
-                    "endpoint": None,
-                    "transaction_id": None,
-                    "block_height": None,
-                    "status": "skipped_no_recording",
-                    "submitted_at": None,
-                    "verify_url": None,
-                }
+                blockchain_metas.append(_attestation_to_blockchain_meta(att))
 
             attestation = {
                 "call_id": call.id,
@@ -257,7 +265,7 @@ def build_evidence_bundle_zip(
                 "transcript_sha256": transcript_sha,
                 "analysis_sha256": analysis_sha,
                 "computed_at": generated_at.isoformat(),
-                "blockchain": blockchain_meta,
+                "blockchain": blockchain_metas,
             }
             _write(
                 f"{call_dir}/attestation.json",

@@ -10,7 +10,6 @@ from decimal import Decimal
 import pytest
 from httpx import AsyncClient
 
-
 # ── fixtures (duplicated from test_legal_evidence_bundle.py) ──────────
 
 
@@ -104,7 +103,9 @@ def _extract_first_tx_hash(zip_bytes: bytes, case_id: int) -> tuple[str, dict]:
     for name in zf.namelist():
         if name.endswith("/attestation.json") and "/calls/" in name:
             data = json.loads(zf.read(name))
-            tx = data["blockchain"]["transaction_id"]
+            chain = data["blockchain"]
+            rec = next(m for m in chain if m["data_type"] == "call_recording")
+            tx = rec["transaction_id"]
             assert tx, "tx_hash must be populated for calls with recordings"
             return tx, data
     raise AssertionError(f"no attestation.json found in bundle for case {case_id}")
