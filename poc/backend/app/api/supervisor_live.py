@@ -156,7 +156,7 @@ async def supervisor_force_hangup(
     if call is None:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
-            detail={"code": "ERR_NOT_FOUND", "message": "通话不存在或不属于当前租户"},
+            detail={"code": "ERR_NOT_FOUND", "message": "通话不存在或不在督导范围内"},
         )
     if call.status not in ("dialing", "live"):
         raise HTTPException(
@@ -212,7 +212,7 @@ async def supervisor_takeover(
     if call is None:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
-            detail={"code": "ERR_NOT_FOUND", "message": "通话不存在或不属于当前租户"},
+            detail={"code": "ERR_NOT_FOUND", "message": "通话不存在或不在督导范围内"},
         )
     if call.status not in ("dialing", "live"):
         raise HTTPException(
