@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import secrets
 from datetime import UTC, datetime, timedelta
@@ -38,6 +39,8 @@ from app.models.tenant import Tenant, UserTenantMembership
 from app.models.user import UserAccount
 from app.schemas.auth import TokenResponse
 from app.services.sms_center import send_otp_sms
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -307,6 +310,25 @@ def _consume_otp_email(db: Session, email: str, code: str, purpose: str) -> bool
     return True
 
 
+def _mask_otp_phone(p: str) -> str:
+    """脱敏手机号，仅用于日志输出。"""
+    if len(p) >= 11:
+        return p[:3] + "****" + p[-4:]
+    return "***"
+
+
+def _send_otp_and_respond(db: Session, phone: str, code: str) -> OtpSendOut:
+    """发 OTP 短信并构造响应。短信失败 → 403 ERR_SMS_SEND_FAILED。"""
+    result = send_otp_sms(db, phone=phone, code=code, ttl_minutes=OTP_TTL_SECONDS // 60)
+    if not result.ok:
+        logger.warning("OTP 短信发送失败 phone=%s reason=%s", _mask_otp_phone(phone), result.error)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_SMS_SEND_FAILED", "message": "验证码短信发送失败，请稍后重试"},
+        )
+    return OtpSendOut(sent=True, expires_in=OTP_TTL_SECONDS, dev_code=code if OTP_DEV_RETURN else None)
+
+
 # ─── Endpoints ────────────────────────────────────────────────
 
 
@@ -416,17 +438,7 @@ def login_by_credit_code(body: CreditCodeLoginIn, db: Session = Depends(get_db))
 @router.post("/otp/send", response_model=OtpSendOut)
 def otp_send(body: OtpSendIn, db: Session = Depends(get_db)) -> OtpSendOut:
     code = _create_otp(db, body.phone, body.purpose)
-    result = send_otp_sms(db, phone=body.phone, code=code, ttl_minutes=OTP_TTL_SECONDS // 60)
-    if not result.ok:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"code": "ERR_SMS_SEND_FAILED", "message": "验证码短信发送失败，请稍后重试"},
-        )
-    return OtpSendOut(
-        sent=True,
-        expires_in=OTP_TTL_SECONDS,
-        dev_code=code if OTP_DEV_RETURN else None,
-    )
+    return _send_otp_and_respond(db, body.phone, code)
 
 
 @router.post("/otp/verify", response_model=TokenResponse)
@@ -463,17 +475,7 @@ def password_reset_request(
     # 用户不存在仍假装成功（防爆破探测）
     if user:
         code = _create_otp(db, body.phone, "password_reset")
-        result = send_otp_sms(db, phone=body.phone, code=code, ttl_minutes=OTP_TTL_SECONDS // 60)
-        if not result.ok:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={"code": "ERR_SMS_SEND_FAILED", "message": "验证码短信发送失败，请稍后重试"},
-            )
-        return OtpSendOut(
-            sent=True,
-            expires_in=OTP_TTL_SECONDS,
-            dev_code=code if OTP_DEV_RETURN else None,
-        )
+        return _send_otp_and_respond(db, body.phone, code)
     return OtpSendOut(sent=True, expires_in=OTP_TTL_SECONDS)
 
 
