@@ -194,3 +194,40 @@ def test_provider_a_seed_does_not_leak_to_property_or_provider_b(
     assert by_scope.get(None) == 21                        # 物业侧
     assert by_scope.get(shifts_env.provider_a.id) == 21   # 服务商 A
     assert by_scope.get(shifts_env.provider_b.id) == 21   # 服务商 B
+
+
+def test_provider_a_supervisor_cannot_see_property_side_shift(
+    client, shifts_env, db_session
+):
+    """服务商 A 督导 GET /supervisor/shifts 读不到物业侧已排的班。"""
+    from datetime import date
+
+    from app.models.supervisor_shift import SupervisorShift
+
+    today = date.today()
+
+    # 直接往 DB 插一行物业侧排班（provider_id=None）
+    property_shift = SupervisorShift(
+        tenant_id=shifts_env.tenant.id,
+        provider_id=None,
+        shift_date=today,
+        slot="morning",
+        supervisor_name="物业排的人",
+    )
+    db_session.add(property_shift)
+    db_session.commit()
+
+    # 服务商 A 督导调接口（_ensure_seed_week 会给 A 补 21 行空排班）
+    resp = client.get(
+        "/api/v1/supervisor/shifts", headers=_auth(shifts_env.token_a)
+    )
+    assert resp.status_code == 200, resp.text
+
+    # 找今天那天 morning 的值，服务商 A 看到的应该是空字符串
+    shifts = resp.json()["shifts"]
+    today_str = today.isoformat()
+    today_entry = next((d for d in shifts if d["date"] == today_str), None)
+    assert today_entry is not None, f"响应中未找到今天 {today_str} 的排班"
+    assert today_entry["morning"] == "", (
+        f"服务商 A 督导不应看到物业排的班，但 morning={today_entry['morning']!r}"
+    )

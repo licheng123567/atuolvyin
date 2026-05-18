@@ -24,6 +24,7 @@ from app.api._supervisor_scope import SupervisorScope, supervisor_scope
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles, require_tenant_roles
 from app.models.supervisor_shift import SupervisorShift, SupervisorShiftSwapRequest
+from app.models.tenant import UserTenantMembership
 from app.models.user import UserAccount
 
 router = APIRouter()
@@ -118,8 +119,6 @@ async def list_shifts(
         by_date[ds][r.slot] = r.supervisor_name or ""
 
     # 本 scope 的督导列表，给前端做下拉
-    from app.models.tenant import UserTenantMembership
-
     sup_q = (
         select(UserAccount.name)
         .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
