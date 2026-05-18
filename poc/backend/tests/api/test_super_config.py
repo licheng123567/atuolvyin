@@ -4,7 +4,6 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 
-
 # ── L1969 LLM prompt management ─────────────────────────────────────
 
 
@@ -141,3 +140,68 @@ async def test_blockchain_config_put_invalid_provider(
         headers=super_auth_headers,
     )
     assert resp.status_code == 422
+
+
+# ── 短信配置 ─────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_sms_config_get_empty(client, super_auth_headers):
+    r = await client.get("/api/v1/super/sms-config", headers=super_auth_headers)
+    assert r.status_code == 200
+    assert r.json() is None
+
+
+@pytest.mark.asyncio
+async def test_sms_config_put_then_get(client, super_auth_headers):
+    put = await client.put(
+        "/api/v1/super/sms-config",
+        json={
+            "secret_name": "API",
+            "secret_key": "s3cr3t",
+            "sign_name": "有证慧催",
+            "otp_template_id": "T1001",
+            "is_active": True,
+        },
+        headers=super_auth_headers,
+    )
+    assert put.status_code == 200
+    body = put.json()
+    assert body["secret_name"] == "API"
+    assert body["sign_name"] == "有证慧催"
+    assert body["otp_template_id"] == "T1001"
+    assert body["is_active"] is True
+    assert body["has_secret_key"] is True
+    # 明文 secret_key 绝不回传
+    assert "secret_key" not in body
+    assert "secret_key_enc" not in body
+
+    got = await client.get("/api/v1/super/sms-config", headers=super_auth_headers)
+    assert got.json()["secret_name"] == "API"
+
+
+@pytest.mark.asyncio
+async def test_sms_config_put_upsert_keeps_key_when_omitted(client, super_auth_headers):
+    """secret_key 传 null 时不改原 key（has_secret_key 仍 True）。"""
+    await client.put(
+        "/api/v1/super/sms-config",
+        json={"secret_name": "API", "secret_key": "k1", "sign_name": "S",
+              "otp_template_id": None, "is_active": False},
+        headers=super_auth_headers,
+    )
+    r = await client.put(
+        "/api/v1/super/sms-config",
+        json={"secret_name": "API2", "secret_key": None, "sign_name": "S2",
+              "otp_template_id": None, "is_active": True},
+        headers=super_auth_headers,
+    )
+    assert r.status_code == 200
+    assert r.json()["secret_name"] == "API2"
+    assert r.json()["has_secret_key"] is True
+
+
+@pytest.mark.asyncio
+async def test_sms_config_requires_superadmin(client, agent_auth_headers):
+    """非超管访问 → 403。"""
+    r = await client.get("/api/v1/super/sms-config", headers=agent_auth_headers)
+    assert r.status_code == 403

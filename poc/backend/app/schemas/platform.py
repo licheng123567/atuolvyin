@@ -123,3 +123,26 @@ class BlockchainConfigOut(BaseModel):
     last_failure_at: datetime | None
     last_failure_reason: str | None
     updated_at: datetime
+
+
+# ── SMS config (短信中心 028lk) ─────────────────────────────────────
+
+
+class SmsConfigIn(BaseModel):
+    secret_name: str = Field(min_length=1, max_length=128)
+    secret_key: str | None = Field(None, max_length=500)  # None=不改
+    sign_name: str = Field(default="", max_length=64)
+    otp_template_id: str | None = Field(None, max_length=64)
+    is_active: bool = False
+
+
+class SmsConfigOut(BaseModel):
+    id: int
+    secret_name: str
+    sign_name: str
+    otp_template_id: str | None
+    has_secret_key: bool  # never echo the key back
+    is_active: bool
+    last_failure_at: datetime | None
+    last_failure_reason: str | None
+    updated_at: datetime

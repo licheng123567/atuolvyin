@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from app.core.crypto import encrypt_phone  # generic AES helper
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles
-from app.models.platform import BlockchainConfig, LLMPromptTemplate
+from app.models.platform import BlockchainConfig, LLMPromptTemplate, SmsConfig
 from app.models.user import UserAccount
 from app.schemas.platform import (
     BlockchainConfigIn,
@@ -29,6 +29,8 @@ from app.schemas.platform import (
     LLMPromptActivateIn,
     LLMPromptIn,
     LLMPromptOut,
+    SmsConfigIn,
+    SmsConfigOut,
 )
 
 router = APIRouter()
@@ -177,3 +179,61 @@ async def put_blockchain_config(
     db.commit()
     db.refresh(c)
     return _config_to_out(c)
+
+
+# ── 短信中心配置 ─────────────────────────────────────────────────────
+
+
+def _sms_config_to_out(c: SmsConfig) -> SmsConfigOut:
+    return SmsConfigOut(
+        id=c.id,
+        secret_name=c.secret_name,
+        sign_name=c.sign_name,
+        otp_template_id=c.otp_template_id,
+        has_secret_key=bool(c.secret_key_enc),
+        is_active=c.is_active,
+        last_failure_at=c.last_failure_at,
+        last_failure_reason=c.last_failure_reason,
+        updated_at=c.updated_at,
+    )
+
+
+@router.get("/sms-config", response_model=SmsConfigOut | None)
+async def get_sms_config(
+    _user: Annotated[UserAccount, Depends(require_roles(*SUPER_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> SmsConfigOut | None:
+    c = db.execute(
+        select(SmsConfig).order_by(desc(SmsConfig.updated_at)).limit(1)
+    ).scalar_one_or_none()
+    return _sms_config_to_out(c) if c else None
+
+
+@router.put("/sms-config", response_model=SmsConfigOut)
+async def put_sms_config(
+    body: SmsConfigIn,
+    _user: Annotated[UserAccount, Depends(require_roles(*SUPER_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> SmsConfigOut:
+    c = db.execute(
+        select(SmsConfig).order_by(desc(SmsConfig.updated_at)).limit(1)
+    ).scalar_one_or_none()
+    if c is None:
+        c = SmsConfig(
+            secret_name=body.secret_name,
+            secret_key_enc=encrypt_phone(body.secret_key) if body.secret_key else None,
+            sign_name=body.sign_name,
+            otp_template_id=body.otp_template_id,
+            is_active=body.is_active,
+        )
+        db.add(c)
+    else:
+        c.secret_name = body.secret_name
+        if body.secret_key is not None:
+            c.secret_key_enc = encrypt_phone(body.secret_key) if body.secret_key else None
+        c.sign_name = body.sign_name
+        c.otp_template_id = body.otp_template_id
+        c.is_active = body.is_active
+    db.commit()
+    db.refresh(c)
+    return _sms_config_to_out(c)
