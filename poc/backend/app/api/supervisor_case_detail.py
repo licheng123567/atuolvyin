@@ -16,11 +16,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_tenant_roles
+from app.core.security import get_token_payload, require_roles
 from app.models.case import CollectionCase, OwnerProfile
 from app.models.legal_conversion import LegalConversionOrder
 from app.schemas.case import CaseDetailResponse
 
+from ._supervisor_scope import SupervisorScope, supervisor_case_filter, supervisor_scope
 from .admin_cases import build_case_detail_response
 
 router = APIRouter()
@@ -35,21 +36,20 @@ SUPERVISOR_ROLES = ("supervisor", "admin", "legal", "coordinator", "workorder")
 async def get_case_detail(
     case_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseDetailResponse:
-    tenant_id = payload.get("tenant_id")
-    if tenant_id is None:
-        raise HTTPException(
-            status_code=http_status.HTTP_403_FORBIDDEN,
-            detail={"code": "ERR_NO_TENANT", "message": "当前角色未关联租户"},
+    case = db.execute(
+        select(CollectionCase).where(
+            CollectionCase.id == case_id,
+            supervisor_case_filter(scope),
         )
-    tenant_id = int(tenant_id)
-    case = db.get(CollectionCase, case_id)
-    if not case or case.tenant_id != tenant_id:
+    ).scalar_one_or_none()
+    if case is None:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
-            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在或不属于本租户"},
+            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在或不在督导范围内"},
         )
     owner = db.get(OwnerProfile, case.owner_id) if case.owner_id else None
     if owner is None:
@@ -65,7 +65,7 @@ async def get_case_detail(
     if role == "legal":
         legal_order_status = db.execute(
             select(LegalConversionOrder.status)
-            .where(LegalConversionOrder.tenant_id == tenant_id)
+            .where(LegalConversionOrder.tenant_id == scope.tenant_id)
             .where(LegalConversionOrder.case_id == case_id)
             .order_by(LegalConversionOrder.created_at.desc())
             .limit(1)
@@ -83,9 +83,9 @@ async def get_case_detail(
         db,
         case,
         owner,
-        tenant_id=tenant_id,
+        tenant_id=scope.tenant_id,
         include_phone_plain=False,
         viewer_role=role,
-        viewer_provider_id=payload.get("provider_id"),
+        viewer_provider_id=scope.provider_id,
         force_owner_phone_reveal=force_phone_reveal,
     )
