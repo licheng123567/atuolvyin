@@ -84,3 +84,12 @@ describe("getNavSections — provider supervisor nav (Phase 1)", () => {
     expect(paths).toContain("/supervisor/shifts");
   });
 });
+
+describe("getNavSections — superadmin nav", () => {
+  it("superadmin nav 含短信配置", () => {
+    const paths = getNavSections("superadmin")
+      .flatMap((s) => s.items)
+      .map((i) => i.path);
+    expect(paths).toContain("/super/sms-config");
+  });
+});

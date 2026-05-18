@@ -77,6 +77,7 @@ import { OpsAnnouncementsPage } from "./pages/ops/announcements";
 import { OpsMyAuditLogsPage } from "./pages/ops/audit-logs";
 import { SuperLlmPromptsPage } from "./pages/super/llm-prompts";
 import { SuperBlockchainConfigPage } from "./pages/super/blockchain-config";
+import { SuperSmsConfigPage } from "./pages/super/sms-config";
 import { ProviderTeamPerformancePage } from "./pages/provider/team-performance";
 import { ProviderMemberCommissionPage } from "./pages/provider/commission";
 import { OpsCustomerFollowupsPage } from "./pages/ops/customer-followups";
@@ -505,6 +506,7 @@ function App() {
             <Route path="/ops/audit-logs" element={<OpsMyAuditLogsPage />} />
             <Route path="/super/llm-prompts" element={<SuperLlmPromptsPage />} />
             <Route path="/super/blockchain-config" element={<SuperBlockchainConfigPage />} />
+            <Route path="/super/sms-config" element={<SuperSmsConfigPage />} />
             <Route path="/ops/customer-followups" element={<OpsCustomerFollowupsPage />} />
             <Route path="/provider/team-performance" element={<ProviderTeamPerformancePage />} />
             <Route path="/provider/team/:user_id/commission" element={<ProviderMemberCommissionPage />} />

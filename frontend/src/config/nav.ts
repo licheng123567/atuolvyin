@@ -238,6 +238,7 @@ const NAV_CONFIG: Partial<Record<UserRole | "workorder", NavSection[]>> = {
         { label: "套餐配置", path: "/super/plans", icon: "Package" },
         { label: "LLM Prompts", path: "/super/llm-prompts", icon: "Brain" },
         { label: "区块链配置", path: "/super/blockchain-config", icon: "Link2" },
+        { label: "短信配置", path: "/super/sms-config", icon: "MessageSquare" },
       ],
     },
   ],
