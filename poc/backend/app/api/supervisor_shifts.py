@@ -148,16 +148,11 @@ async def list_shifts(
 async def save_shifts(
     body: dict,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     """body = {"shifts": [{"date": "2026-05-08", "morning": "...", "afternoon": "...", "evening": "..."}]}"""
-    tenant_id = payload.get("tenant_id")
-    if tenant_id is None:
-        raise HTTPException(
-            status_code=http_status.HTTP_403_FORBIDDEN,
-            detail={"code": "ERR_NO_TENANT", "message": "督导必须关联租户"},
-        )
     user_id = int(payload["user_id"])
     user = db.get(UserAccount, user_id)
     if not _is_shift_lead(user):
@@ -188,13 +183,14 @@ async def save_shifts(
             name = s.get(slot, "") or ""
             row = db.execute(
                 select(SupervisorShift)
-                .where(SupervisorShift.tenant_id == int(tenant_id))
+                .where(_shift_scope_clause(scope, SupervisorShift))
                 .where(SupervisorShift.shift_date == d)
                 .where(SupervisorShift.slot == slot)
             ).scalar_one_or_none()
             if row is None:
                 row = SupervisorShift(
-                    tenant_id=int(tenant_id),
+                    tenant_id=scope.tenant_id,
+                    provider_id=scope.provider_id,
                     shift_date=d,
                     slot=slot,
                     supervisor_name=name,
