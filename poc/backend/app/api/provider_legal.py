@@ -90,10 +90,17 @@ def list_cases(
     db: Annotated[Session, Depends(get_db)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    keyword: str | None = Query(None),
+    keyword: str | None = Query(None, max_length=100),
 ) -> PaginatedResponse[ProviderLegalCaseListItem]:
     tenant_id, provider_id, _ = _ctx(payload)
     case_filter = _provider_legal_case_filter(tenant_id, provider_id)
+
+    stmt = (
+        select(CollectionCase, OwnerProfile, Project.name.label("project_name"))
+        .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
+        .outerjoin(Project, Project.id == CollectionCase.project_id)
+        .where(case_filter)
+    )
 
     kw = keyword.strip() if keyword else ""
     if kw:
@@ -105,33 +112,16 @@ def list_cases(
             OwnerProfile.name.ilike(f"%{kw}%"),
             room_concat.ilike(f"%{kw}%"),
         )
-        total = int(
-            db.execute(
-                select(func.count(CollectionCase.id))
-                .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
-                .where(case_filter, kw_filter)
-            ).scalar_one()
-        )
-        rows = db.execute(
-            select(CollectionCase, OwnerProfile, Project.name.label("project_name"))
-            .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
-            .outerjoin(Project, Project.id == CollectionCase.project_id)
-            .where(case_filter, kw_filter)
-            .order_by(desc(CollectionCase.id))
-            .offset((page - 1) * page_size)
-            .limit(page_size)
-        ).all()
-    else:
-        total = int(db.execute(select(func.count(CollectionCase.id)).where(case_filter)).scalar_one())
-        rows = db.execute(
-            select(CollectionCase, OwnerProfile, Project.name.label("project_name"))
-            .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
-            .outerjoin(Project, Project.id == CollectionCase.project_id)
-            .where(case_filter)
-            .order_by(desc(CollectionCase.id))
-            .offset((page - 1) * page_size)
-            .limit(page_size)
-        ).all()
+        stmt = stmt.where(kw_filter)
+
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total = int(db.execute(count_stmt).scalar_one())
+
+    rows = db.execute(
+        stmt.order_by(desc(CollectionCase.id))
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
     reveal = _owner_phone_reveal(provider_id)
     items = [
         ProviderLegalCaseListItem(

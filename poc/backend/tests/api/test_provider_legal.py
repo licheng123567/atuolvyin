@@ -602,3 +602,96 @@ def test_list_cases_blank_keyword_returns_all(api, db_session, seeded_tenant):
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["total"] == 3
+
+
+def test_legal_cases_keyword_matches_across_pages(api, db_session, seeded_tenant):
+    """服务端搜索跨页命中测试：目标行因 desc(id) 排序落在第 2 页，keyword 仍能跨全集找到。
+
+    构造方法：
+    - 先建「命中行」（id 最小 → desc 排序排最后 → 第 2 页）。
+    - 再批量建 24 条普通案件，id 更大，占满第 1 页（page_size=20）及第 2 页前段。
+    - 不带 keyword 时命中行在第 2 页；带 keyword 过滤后 total==1 且 items 包含该行。
+    """
+    from decimal import Decimal
+
+    from app.core.crypto import encrypt_phone
+    from app.models.case import CollectionCase, OwnerProfile
+
+    env = _seed_provider_env(db_session, seeded_tenant,
+                             provider_name="服务商跨页", owner_phone="13712345678")
+
+    # 1. 先建命中行（id 最小）
+    target_owner = OwnerProfile(
+        tenant_id=seeded_tenant.id,
+        name="跨页测试业主张",
+        phone_enc=encrypt_phone("13900111222"),
+        building="1栋",
+        room="101",
+    )
+    db_session.add(target_owner)
+    db_session.flush()
+    target_case = CollectionCase(
+        tenant_id=seeded_tenant.id,
+        project_id=env.project.id,
+        owner_id=target_owner.id,
+        pool_type="public",
+        stage="new",
+        amount_owed=Decimal("9999.00"),
+        months_overdue=12,
+    )
+    db_session.add(target_case)
+    db_session.flush()
+    target_case_id = target_case.id  # 最小 id，desc 排序排最后
+
+    # 2. 再建 24 条普通案件（id 更大 → desc 排序靠前，占第 1 页和第 2 页前段）
+    for i in range(24):
+        phone_suffix = str(10000000 + i).zfill(8)
+        o = OwnerProfile(
+            tenant_id=seeded_tenant.id,
+            name=f"普通业主{i:03d}",
+            phone_enc=encrypt_phone(f"138{phone_suffix}"),
+            building="9栋",
+            room=f"{i + 1:03d}",
+        )
+        db_session.add(o)
+        db_session.flush()
+        db_session.add(CollectionCase(
+            tenant_id=seeded_tenant.id,
+            project_id=env.project.id,
+            owner_id=o.id,
+            pool_type="public",
+            stage="new",
+            amount_owed=Decimal("100.00"),
+            months_overdue=1,
+        ))
+    db_session.flush()
+
+    # 3. 不带 keyword — 确认目标行不在第 1 页（证明它确实落在第 2 页）
+    all_resp = api.get(
+        "/api/v1/provider/legal/cases",
+        params={"page": 1, "page_size": 20},
+        headers=_auth(env.token),
+    )
+    assert all_resp.status_code == 200
+    all_body = all_resp.json()
+    # _seed_provider_env 已建 1 条原始案件 + target_case(1) + 24 条普通案件 = 26 条
+    assert all_body["total"] == 26
+    page1_ids = [item["case_id"] for item in all_body["items"]]
+    assert target_case_id not in page1_ids, (
+        f"命中行(id={target_case_id})不应在第 1 页，但实际在第 1 页；id 顺序可能异常"
+    )
+
+    # 4. 带 keyword 搜索第 1 页 → 应跨全集找到命中行，total==1，items 含该行
+    kw_resp = api.get(
+        "/api/v1/provider/legal/cases",
+        params={"keyword": "跨页测试业主张", "page": 1, "page_size": 20},
+        headers=_auth(env.token),
+    )
+    assert kw_resp.status_code == 200, kw_resp.text
+    kw_body = kw_resp.json()
+    assert kw_body["total"] == 1, (
+        f"keyword 搜索应命中 1 条，实际 total={kw_body['total']}"
+    )
+    assert len(kw_body["items"]) == 1
+    assert kw_body["items"][0]["case_id"] == target_case_id
+    assert kw_body["items"][0]["owner_name"] == "跨页测试业主张"
