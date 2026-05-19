@@ -15,6 +15,7 @@ import { ProjectInfoCard } from "../../../components/case/ProjectInfoCard";
 import { SearchableSelect } from "../../../components/ui/SearchableSelect";
 import { WorkOrderCreateModal } from "../../../components/admin/WorkOrderCreateModal";
 import { PaymentLinkQrModal } from "../../../components/admin/PaymentLinkQrModal";
+import type { PaymentBreakdown } from "../../../components/admin/PaymentLinkQrModal";
 
 interface AdminUser {
   id: number;
@@ -36,8 +37,8 @@ export function AdminCaseDetailPage() {
   const [convertOpen, setConvertOpen] = useState(false);
   const [workOrderOpen, setWorkOrderOpen] = useState(false);
   const [paymentLink, setPaymentLink] = useState<{
-    link: string;
-    short_link: string;
+    token: string;
+    breakdown: PaymentBreakdown;
     sent_to: string;
   } | null>(null);
 
@@ -80,13 +81,13 @@ export function AdminCaseDetailPage() {
       {
         onSuccess: (resp) => {
           const d = resp.data as {
-            link: string;
-            short_link: string;
+            token: string;
             sent_to: string;
+            breakdown: PaymentBreakdown;
           };
           setPaymentLink({
-            link: d.link,
-            short_link: d.short_link,
+            token: d.token,
+            breakdown: d.breakdown,
             sent_to: d.sent_to,
           });
         },
@@ -344,8 +345,8 @@ export function AdminCaseDetailPage() {
 
       {paymentLink && (
         <PaymentLinkQrModal
-          link={paymentLink.link}
-          shortLink={paymentLink.short_link}
+          token={paymentLink.token}
+          breakdown={paymentLink.breakdown}
           sentTo={paymentLink.sent_to}
           onClose={() => setPaymentLink(null)}
         />
