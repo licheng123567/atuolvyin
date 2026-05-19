@@ -14,6 +14,7 @@ import { AppIntroModal } from "./components/onboarding/AppIntroModal";
 import { LoginPage } from "./pages/login";
 import { VerifyPage } from "./pages/verify";
 import { HelpAppPage } from "./pages/help/app";
+import { PaymentBillPage } from "./pages/public/PaymentBillPage";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE ?? "http://localhost:18000";
 import { TenantListPage } from "./pages/ops/tenants/index";
@@ -383,6 +384,7 @@ function App() {
           <Route path="/verify" element={<VerifyPage />} />
           <Route path="/verify/:tx_hash" element={<VerifyPage />} />
           <Route path="/help/app" element={<HelpAppPage />} />
+          <Route path="/pay/:token" element={<PaymentBillPage />} />
 
           {/* v2.0 — Android WebView 移动路由（独立布局，无 PC 侧边栏） */}
           <Route path="/app/*" element={<AppMobileRoutes />} />
