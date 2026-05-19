@@ -23,6 +23,8 @@ const ROLE_CASES: RoleCase[] = [
       { path: "/super/audit", expectText: /审计|audit/i },
       { path: "/super/cost", expectText: /成本/ },
       { path: "/super/plans", expectText: /套餐/ },
+      { path: "/super/sms-config", expectText: /短信/ },
+      { path: "/super/blockchain-config", expectText: /区块链/ },
     ],
   },
   {
@@ -162,12 +164,15 @@ for (const rc of ROLE_CASES) {
         await page.goto(pg.path);
         await dismissAppIntroIfPresent(page);
 
-        // 不应被踢回 /login（dataProvider 401 redirect）
-        await page.waitForLoadState("networkidle");
-        expect(page.url(), `pages should not redirect to /login: ${pg.path}`).not.toContain("/login");
+        // 等页面就绪：稳定文案出现 = 真·渲染完成。取代脆弱的 networkidle ——
+        // 轮询页（如 /super/health）永远到不了 networkidle，长跑套件下后台请求也不断。
+        await expect(
+          page.getByText(pg.expectText).first(),
+          `${pg.path} 应渲染该页内容（若超时多半是被 401 踢回 /login 或接口异常）`,
+        ).toBeVisible({ timeout: 15_000 });
 
-        // 该页的稳定文案应可见
-        await expect(page.getByText(pg.expectText).first()).toBeVisible({ timeout: 5_000 });
+        // 不应被踢回 /login（dataProvider 401 redirect）
+        expect(page.url(), `pages should not redirect to /login: ${pg.path}`).not.toContain("/login");
 
         // 不应有未捕获异常或 5xx
         expect(errors, `${pg.path} 渲染时无 runtime error`).toEqual([]);
