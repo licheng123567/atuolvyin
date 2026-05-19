@@ -123,7 +123,7 @@ export default defineConfig(({ command }) => {
   // v2.4 fix — 这些 alias 仅供 mobile build（Android WebView Chromium 53 兼容）；
   // PC dev (vite :5173) 必须走真 react-router-dom v7 + 真 @refinedev/core v5，
   // 否则 @refinedev/react-router 拉不到 v6 缺失的 Link export，dep optimize 失败 → /login 红屏。
-  const mobileBuildAliases =
+  const mobileBuildAliases: Record<string, string> =
     command === "build"
       ? {
           // v2.2 — mobile bundle 走 react-router v6（v7 用 Chrome 95+ API，
