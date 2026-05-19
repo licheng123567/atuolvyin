@@ -121,3 +121,33 @@ async def test_admin_cannot_send_for_cross_tenant_case(
     )
     assert resp.status_code == 404
     assert resp.json()["code"] == "ERR_NOT_FOUND"
+
+
+def test_payment_link_model_and_project_fields(db_session, seeded_tenant, seeded_case):
+    """PaymentLink 表可写入；Project 新增收款字段可读写。"""
+    from datetime import UTC, datetime, timedelta
+
+    from app.models.case import Project
+    from app.models.payment_link import PaymentLink
+
+    project = Project(tenant_id=seeded_tenant.id, name="收款配置项目")
+    project.payee_name = "测试物业管理有限公司"
+    project.payee_account = "工行 6222 0000 0000 1234"
+    project.payment_instructions = "请到物业服务中心缴费，转账请注明房号"
+    db_session.add(project)
+    db_session.flush()
+    db_session.refresh(project)
+    assert project.payment_mode == "property_self"  # server_default
+
+    link = PaymentLink(
+        token="tok_test_123456",
+        tenant_id=seeded_tenant.id,
+        case_id=seeded_case.id,
+        project_id=project.id,
+        payment_mode="property_self",
+        expires_at=datetime.now(UTC) + timedelta(days=7),
+    )
+    db_session.add(link)
+    db_session.flush()
+    assert link.id is not None
+    assert link.created_at is not None

@@ -25,6 +25,7 @@ from .legal_internal import (  # noqa: F401
 )
 from .legal_platform_invoice import LegalPlatformInvoice  # noqa: F401
 from .notification import Notification, NotificationDeliveryLog  # noqa: F401
+from .payment_link import PaymentLink  # noqa: F401
 from .platform import (  # noqa: F401
     BlockchainConfig,
     CustomerFollowup,

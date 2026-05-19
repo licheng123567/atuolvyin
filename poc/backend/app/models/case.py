@@ -83,6 +83,15 @@ class Project(Base, TimestampMixin):
     internal_agent_commission_rate: Mapped[sa.Numeric | None] = mapped_column(sa.Numeric(6, 4))
     provider_agent_commission_rate: Mapped[sa.Numeric | None] = mapped_column(sa.Numeric(6, 4))
 
+    # v2.2 — 项目级收款配置（按项目设置；物业管理员在项目编辑页配）
+    payment_mode: Mapped[str] = mapped_column(
+        sa.String(16), nullable=False, server_default="property_self"
+    )  # property_self（物业自收，MVP）/ notary_escrow（公证提存，v1.1）
+    payee_name: Mapped[str | None] = mapped_column(sa.Text)  # 收款户名
+    payee_account: Mapped[str | None] = mapped_column(sa.Text)  # 收款账户（自由文本）
+    payee_qr_object_key: Mapped[str | None] = mapped_column(sa.Text)  # 收款码图 MinIO key
+    payment_instructions: Mapped[str | None] = mapped_column(sa.Text)  # 线下缴费说明
+
     __table_args__ = (
         sa.CheckConstraint(
             "charge_period IS NULL OR charge_period IN ('monthly','quarterly','semiannual','annual')",
@@ -115,6 +124,10 @@ class Project(Base, TimestampMixin):
         sa.CheckConstraint(
             "late_fee_waive_auto_approve_threshold_pct IS NULL OR late_fee_waive_supervisor_max_pct IS NULL OR late_fee_waive_auto_approve_threshold_pct <= late_fee_waive_supervisor_max_pct",
             name="ck_project_late_fee_waive_thresholds_order",
+        ),
+        sa.CheckConstraint(
+            "payment_mode IN ('property_self','notary_escrow')",
+            name="ck_project_payment_mode",
         ),
     )
 
