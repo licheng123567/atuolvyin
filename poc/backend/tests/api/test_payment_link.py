@@ -123,6 +123,32 @@ async def test_admin_cannot_send_for_cross_tenant_case(
     assert resp.json()["code"] == "ERR_NOT_FOUND"
 
 
+@pytest.mark.asyncio
+async def test_send_payment_link_persists_token_and_returns_breakdown(
+    client, db_session, seeded_case, admin_auth_headers
+):
+    """发送缴费链接：写 payment_link 行 + 响应含 token 与 breakdown。"""
+    from app.models.payment_link import PaymentLink
+
+    resp = await client.post(
+        f"/api/v1/admin/cases/{seeded_case.id}/send-payment-link",
+        headers=admin_auth_headers,
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["token"]
+    assert body["breakdown"]["payable"] == "3000.00"
+    assert body["breakdown"]["has_pending"] is False
+
+    row = (
+        db_session.query(PaymentLink)
+        .filter(PaymentLink.token == body["token"])
+        .one()
+    )
+    assert row.case_id == seeded_case.id
+    assert row.tenant_id == seeded_case.tenant_id
+
+
 def test_payment_link_model_and_project_fields(db_session, seeded_tenant, seeded_case):
     """PaymentLink 表可写入；Project 新增收款字段可读写。"""
     from datetime import UTC, datetime, timedelta

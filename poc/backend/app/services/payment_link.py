@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.crypto import mask_phone
 from app.models.case import CollectionCase, OwnerProfile
 from app.models.discount_offer import DiscountOffer
+from app.models.payment_link import PaymentLink
 from app.services.audit import log_audit
 
 
@@ -84,12 +85,14 @@ def compute_payable(db: Session, case: CollectionCase) -> PaymentBreakdown:
 
 class PaymentLinkOut(BaseModel):
     case_id: int
+    token: str
     link: str
     short_link: str
     sent_to: str  # masked phone
     sent_at: datetime
     expires_at: datetime
     sms_status: str  # "queued" / "sent" / "skipped"
+    breakdown: PaymentBreakdown
 
 
 def build_and_record_payment_link(
@@ -101,16 +104,34 @@ def build_and_record_payment_link(
     actor_role: str,
     tenant_id: int,
 ) -> PaymentLinkOut:
-    """生成缴费短链 + H5 链接并写 audit log。PoC：不真实下发短信（sms_status='queued'）。
+    """生成缴费短链、写 payment_link 行 + audit log，返回链接与支付明细。
 
-    调用方需先完成：案件归属校验 / owner 存在性校验 / 鉴权。本函数只做链接生成与记录。
+    调用方需先完成：案件归属校验 / owner 存在性校验 / 鉴权。
+
+    注意：本函数内部执行 db.commit() —— 会顺带提交调用方在同一 Session 中
+    已写入但未提交的行。调用方应在完成自身写操作后、作为最后一步调用本函数。
     """
+
     token = token_urlsafe(12)
     now = datetime.now(UTC)
     expires_at = now + timedelta(days=7)
-    full_link = f"https://pay.autoluyin.example.com/h5/{token}"
-    short_link = f"https://yzhc.cn/p/{token[:6]}"
+    full_link = f"https://pay.youcuihuicui.com/c/{token}"
+    short_link = f"https://yzhc.cn/p/{token[:8]}"  # 8 字符展示前缀；完整 token 入库为权威标识
     sent_to_masked = mask_phone(owner.phone_enc)
+
+    db.add(
+        PaymentLink(
+            token=token,
+            tenant_id=tenant_id,
+            case_id=case.id,
+            project_id=case.project_id,
+            created_by_user_id=actor_user_id,
+            payment_mode="property_self",
+            expires_at=expires_at,
+        )
+    )
+
+    breakdown = compute_payable(db, case)
 
     log_audit(
         db,
@@ -123,7 +144,8 @@ def build_and_record_payment_link(
         payload={
             "owner_phone_masked": sent_to_masked,
             "amount": str(case.amount_owed) if case.amount_owed else None,
-            "short_link": short_link,
+            "payable": str(breakdown.payable),
+            "token": token,
             "expires_at": expires_at.isoformat(),
         },
     )
@@ -131,10 +153,12 @@ def build_and_record_payment_link(
 
     return PaymentLinkOut(
         case_id=case.id,
+        token=token,
         link=full_link,
         short_link=short_link,
         sent_to=sent_to_masked,
         sent_at=now,
         expires_at=expires_at,
-        sms_status="queued",  # 真实短信通道接入后改为 'sent'
+        sms_status="queued",
+        breakdown=breakdown,
     )
