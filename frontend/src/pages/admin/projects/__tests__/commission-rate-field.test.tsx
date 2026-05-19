@@ -162,3 +162,39 @@ describe("项目创建表单 — D2 服务商佣金率（外包模式）", () =>
     expect(callArg.values.provider_agent_commission_rate).toBeCloseTo(0.08, 10);
   });
 });
+
+describe("项目创建表单 — 收款信息", () => {
+  it("渲染收款户名 / 收款账户 / 缴费说明字段", () => {
+    render(
+      <MemoryRouter>
+        <AdminProjectNewPage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByPlaceholderText("例：金桂物业管理有限公司")).toBeDefined();
+    expect(screen.getByPlaceholderText(/例：工行/)).toBeDefined();
+    expect(screen.getByPlaceholderText(/到物业服务中心/)).toBeDefined();
+  });
+
+  it("填收款信息提交 → payload 含 payee_name / payee_account", () => {
+    createMutate.mockClear();
+    render(
+      <MemoryRouter>
+        <AdminProjectNewPage />
+      </MemoryRouter>,
+    );
+    fillRequiredFields();
+    fireEvent.change(screen.getByPlaceholderText("例：金桂物业管理有限公司"), {
+      target: { value: "金桂物业" },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/例：工行/), {
+      target: { value: "工行 6222 1234" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "创建项目" }));
+
+    const callArg = createMutate.mock.calls[0][0] as {
+      values: { payee_name: string; payee_account: string };
+    };
+    expect(callArg.values.payee_name).toBe("金桂物业");
+    expect(callArg.values.payee_account).toBe("工行 6222 1234");
+  });
+});

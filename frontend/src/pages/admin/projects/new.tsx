@@ -58,6 +58,10 @@ export function AdminProjectNewPage() {
   const [internalCommRate, setInternalCommRate] = useState("");
   // §9.2-D2 — 外包项目的服务商佣金率初始值（百分比录入，提交时除以 100）
   const [providerCommRate, setProviderCommRate] = useState("");
+  // v2.2 — 项目收款信息
+  const [payeeName, setPayeeName] = useState("");
+  const [payeeAccount, setPayeeAccount] = useState("");
+  const [paymentInstructions, setPaymentInstructions] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   async function uploadContract(file: File) {
@@ -171,6 +175,10 @@ export function AdminProjectNewPage() {
       late_fee_waive_auto_approve_threshold_pct: lateFeeAutoThreshold === "" ? null : Number(lateFeeAutoThreshold),
       late_fee_waive_supervisor_max_pct: lateFeeSupervisorMax === "" ? null : Number(lateFeeSupervisorMax),
       late_fee_waive_disabled: lateFeeDisabled === "" ? null : lateFeeDisabled === "true",
+      // v2.2 — 项目收款信息
+      payee_name: payeeName.trim() || null,
+      payee_account: payeeAccount.trim() || null,
+      payment_instructions: paymentInstructions.trim() || null,
     };
     if (mode === "outsourced") {
       values.provider_id = providerId;
@@ -584,6 +592,53 @@ export function AdminProjectNewPage() {
                 value={chargeNotes}
                 onChange={(e) => setChargeNotes(e.target.value)}
                 placeholder="例：商铺 3.0 元/㎡/月，住宅 1.5 元/㎡/月；逾期按日加收 0.5‰ 滞纳金"
+                style={{ minHeight: 60 }}
+              />
+            </div>
+          </div>
+
+          {/* v2.2 — 项目收款信息 */}
+          <div
+            className="form-group"
+            style={{
+              background: "#f9fafb",
+              padding: 12,
+              borderRadius: 6,
+              border: "1px solid #e5e7eb",
+              marginBottom: 16,
+            }}
+          >
+            <div className="setting-label" style={{ marginBottom: 4 }}>
+              🏦 收款信息（业主缴费链接展示）
+            </div>
+            <div className="setting-hint" style={{ marginBottom: 12 }}>
+              业主扫描缴费二维码后看到的收款账户与缴费说明，按项目分别配置。
+            </div>
+            <div className="form-group">
+              <label className="form-label">收款户名</label>
+              <input
+                className="form-control"
+                value={payeeName}
+                onChange={(e) => setPayeeName(e.target.value)}
+                placeholder="例：金桂物业管理有限公司"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">收款账户</label>
+              <input
+                className="form-control"
+                value={payeeAccount}
+                onChange={(e) => setPayeeAccount(e.target.value)}
+                placeholder="例：工行 6222 0000 0000 1234"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">缴费说明</label>
+              <textarea
+                className="form-control"
+                value={paymentInstructions}
+                onChange={(e) => setPaymentInstructions(e.target.value)}
+                placeholder="例：工作日 9:00-17:00 到物业服务中心缴费；银行转账请注明房号"
                 style={{ minHeight: 60 }}
               />
             </div>
