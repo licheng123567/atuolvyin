@@ -8,6 +8,7 @@ import {
 } from "@refinedev/core";
 import { useState } from "react";
 import { PaginationBar } from "../../../components/ui/PaginationBar";
+import { SearchableSelect } from "../../../components/ui/SearchableSelect";
 import { SearchInput } from "../../../components/ui/SearchInput";
 import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 import type { PaginatedResponse } from "../../../types";
@@ -415,21 +416,12 @@ export function AdminPoolPage() {
                 {agents.length === 0 ? (
                   <p style={{ fontSize: 13, color: "#9ca3af" }}>暂无可用催收员</p>
                 ) : (
-                  <select
-                    className="form-control"
+                  <SearchableSelect
                     value={selectedAgent ?? ""}
-                    onChange={(e) =>
-                      setSelectedAgent(Number(e.target.value) || null)
-                    }
-                  >
-                    <option value="">— 选择员工 —</option>
-                    {agents.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                        {/* TODO: show work_mode (internal/external) once /admin/users exposes work_mode */}
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="搜索并选择催收员"
+                    onChange={(v) => setSelectedAgent(v === "" ? null : Number(v))}
+                    options={agents.map((a) => ({ value: a.id, label: a.name }))}
+                  />
                 )}
               </div>
             </div>

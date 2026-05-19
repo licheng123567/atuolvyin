@@ -100,6 +100,80 @@ async def test_d1_property_patch_cannot_set_provider_rate(
     assert project.provider_agent_commission_rate is None
 
 
+# ── D2：创建外包项目时写入服务商佣金率初始值 ──────────────────────────
+
+
+def _tenant_member(db_session, tenant_id, role, name_suffix):
+    """在 tenant 内造一个 role 角色用户（物业侧 provider_id=NULL），返回 user.id。"""
+    from app.core.security import get_password_hash
+    from app.models.tenant import UserTenantMembership
+    from app.models.user import UserAccount
+
+    user = UserAccount(
+        phone_enc=encrypt_phone(f"137000940{name_suffix}"),
+        name=f"{role}{name_suffix}",
+        password_hash=get_password_hash("Member@12345678"),
+        is_active=True,
+    )
+    db_session.add(user)
+    db_session.flush()
+    db_session.add(
+        UserTenantMembership(
+            user_id=user.id,
+            tenant_id=tenant_id,
+            role=role,
+            provider_id=None,
+            is_active=True,
+        )
+    )
+    db_session.flush()
+    return user.id
+
+
+def _approved_provider(db_session, name_suffix):
+    from app.models.tenant import ServiceProvider
+
+    provider = ServiceProvider(
+        name=f"D2创建测试服务商{name_suffix}",
+        provider_type="collection",
+        admin_phone_enc=encrypt_phone(f"139000950{name_suffix}"),
+        is_active=True,
+        audit_status="approved",
+    )
+    db_session.add(provider)
+    db_session.flush()
+    return provider.id
+
+
+@pytest.mark.asyncio
+async def test_create_outsourced_project_sets_provider_rate(
+    client, db_session, seeded_tenant, admin_auth_headers
+):
+    """创建外包项目时 provider_agent_commission_rate 初始值写入 Project。"""
+    provider_id = _approved_provider(db_session, "10")
+    coordinator_id = _tenant_member(db_session, seeded_tenant.id, "coordinator", "11")
+    legal_id = _tenant_member(db_session, seeded_tenant.id, "legal", "12")
+    resp = await client.post(
+        "/api/v1/admin/projects",
+        json={
+            "name": "D2 创建外包项目",
+            "provider_id": provider_id,
+            "coordinator_user_id": coordinator_id,
+            "legal_user_id": legal_id,
+            "provider_agent_commission_rate": "0.0800",
+        },
+        headers=admin_auth_headers,
+    )
+    assert resp.status_code == 201, resp.text
+    assert Decimal(str(resp.json()["provider_agent_commission_rate"])) == Decimal("0.0800")
+
+    from app.models.case import Project
+
+    project = db_session.get(Project, resp.json()["id"])
+    db_session.refresh(project)
+    assert project.provider_agent_commission_rate == Decimal("0.0800")
+
+
 # ── D2：服务商 PATCH 服务商率 ────────────────────────────────────────
 
 

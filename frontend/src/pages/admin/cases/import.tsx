@@ -253,7 +253,7 @@ export function CaseImportPage() {
                     <th>姓名*</th>
                     <th>手机号*</th>
                     <th>楼栋*</th>
-                    <th>房间</th>
+                    <th>房号（坐落）</th>
                     <th>欠费开始日期</th>
                     <th>欠费截止日期</th>
                     <th>物业费 ¥</th>

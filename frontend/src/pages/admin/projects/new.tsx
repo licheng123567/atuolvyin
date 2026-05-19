@@ -3,6 +3,7 @@ import { useApiUrl, useCreate, useGo, useList } from "@refinedev/core";
 import { ArrowLeft, Info, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { SearchableSelect } from "../../../components/ui/SearchableSelect";
+import { SearchableMultiSelect } from "../../../components/ui/SearchableMultiSelect";
 import type { PaginatedResponse } from "../../../types";
 
 interface UserItem {
@@ -53,8 +54,10 @@ export function AdminProjectNewPage() {
   const [lateFeeAutoThreshold, setLateFeeAutoThreshold] = useState("");
   const [lateFeeSupervisorMax, setLateFeeSupervisorMax] = useState("");
   const [lateFeeDisabled, setLateFeeDisabled] = useState<"" | "true" | "false">("");
-  // §9.2 — 内勤催收员佣金率（百分比录入，提交时除以 100 转为 0-1 小数）
+  // §9.2-D1 — 内勤催收员佣金率（百分比录入，提交时除以 100 转为 0-1 小数）
   const [internalCommRate, setInternalCommRate] = useState("");
+  // §9.2-D2 — 外包项目的服务商佣金率初始值（百分比录入，提交时除以 100）
+  const [providerCommRate, setProviderCommRate] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   async function uploadContract(file: File) {
@@ -168,15 +171,19 @@ export function AdminProjectNewPage() {
       late_fee_waive_auto_approve_threshold_pct: lateFeeAutoThreshold === "" ? null : Number(lateFeeAutoThreshold),
       late_fee_waive_supervisor_max_pct: lateFeeSupervisorMax === "" ? null : Number(lateFeeSupervisorMax),
       late_fee_waive_disabled: lateFeeDisabled === "" ? null : lateFeeDisabled === "true",
-      // §9.2 — 内勤催收员佣金率（÷100 转为 0-1 小数）
-      internal_agent_commission_rate: internalCommRate === "" ? null : Number(internalCommRate) / 100,
     };
     if (mode === "outsourced") {
       values.provider_id = providerId;
+      // §9.2-D2 — 服务商佣金率初始值（÷100 转为 0-1 小数）
+      values.provider_agent_commission_rate =
+        providerCommRate === "" ? null : Number(providerCommRate) / 100;
     } else {
       values.provider_id = null;
       values.supervisor_user_ids = supervisorIds;
       values.agent_user_ids = agentIds;
+      // §9.2-D1 — 内勤催收员佣金率（÷100 转为 0-1 小数）
+      values.internal_agent_commission_rate =
+        internalCommRate === "" ? null : Number(internalCommRate) / 100;
     }
 
     create(
@@ -348,30 +355,32 @@ export function AdminProjectNewPage() {
 
               <div style={{ marginBottom: 10 }}>
                 <label className="form-label">督导组（可多选）</label>
-                <CheckboxList
-                  items={supervisors.map((u) => ({ id: u.id, label: u.name }))}
-                  selected={supervisorIds}
-                  onToggle={(id) =>
-                    setSupervisorIds((prev) =>
-                      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-                    )
-                  }
-                  emptyHint="还没有督导角色用户，请先到「用户管理」创建"
+                <SearchableMultiSelect
+                  value={supervisorIds}
+                  onChange={(v) => setSupervisorIds(v.map(Number))}
+                  options={supervisors.map((u) => ({ value: u.id, label: u.name }))}
+                  placeholder="搜索并选择督导"
                 />
+                {supervisors.length === 0 && (
+                  <div className="form-hint" style={{ color: "#d97706" }}>
+                    ⚠ 还没有督导角色用户，请先到「用户管理」创建
+                  </div>
+                )}
               </div>
 
               <div>
                 <label className="form-label">默认催收团队（可多选）</label>
-                <CheckboxList
-                  items={agents.map((u) => ({ id: u.id, label: u.name }))}
-                  selected={agentIds}
-                  onToggle={(id) =>
-                    setAgentIds((prev) =>
-                      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-                    )
-                  }
-                  emptyHint="还没有内部催收员，请先到「用户管理」创建"
+                <SearchableMultiSelect
+                  value={agentIds}
+                  onChange={(v) => setAgentIds(v.map(Number))}
+                  options={agents.map((u) => ({ value: u.id, label: u.name }))}
+                  placeholder="搜索并选择催收员"
                 />
+                {agents.length === 0 && (
+                  <div className="form-hint" style={{ color: "#d97706" }}>
+                    ⚠ 还没有内部催收员，请先到「用户管理」创建
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -580,21 +589,40 @@ export function AdminProjectNewPage() {
             </div>
           </div>
 
-          {/* §9.2 — 内勤催收员佣金率 */}
-          <div className="form-group">
-            <label className="form-label">内勤催收员佣金率 (%)</label>
-            <input
-              className="form-control"
-              type="number"
-              min="0"
-              max="100"
-              step="0.01"
-              value={internalCommRate}
-              onChange={(e) => setInternalCommRate(e.target.value)}
-              placeholder="例：5"
-            />
-            <div className="form-hint">留空 = 继承系统默认 5%</div>
-          </div>
+          {/* §9.2 — 催收佣金率（按催收方式区分：自办→内勤率；外包→服务商率）*/}
+          {mode === "self" ? (
+            <div className="form-group">
+              <label className="form-label">内勤催收员佣金率 (%)</label>
+              <input
+                className="form-control"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={internalCommRate}
+                onChange={(e) => setInternalCommRate(e.target.value)}
+                placeholder="例：5"
+              />
+              <div className="form-hint">留空 = 继承系统默认 5%</div>
+            </div>
+          ) : (
+            <div className="form-group">
+              <label className="form-label">服务商佣金率 (%)</label>
+              <input
+                className="form-control"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={providerCommRate}
+                onChange={(e) => setProviderCommRate(e.target.value)}
+                placeholder="例：8"
+              />
+              <div className="form-hint">
+                外包项目按此初始佣金率结算；留空 = 继承系统默认 5%，服务商后续可自行调整
+              </div>
+            </div>
+          )}
 
           {/* v1.6.1 / 1.6.2 — 项目级减免策略覆盖（拆分为两类） */}
           <div
@@ -804,59 +832,5 @@ function ModeRadio({
         </div>
       </div>
     </label>
-  );
-}
-
-function CheckboxList({
-  items,
-  selected,
-  onToggle,
-  emptyHint,
-}: {
-  items: { id: number; label: string }[];
-  selected: number[];
-  onToggle: (id: number) => void;
-  emptyHint: string;
-}) {
-  if (items.length === 0) {
-    return (
-      <div className="form-hint" style={{ color: "#d97706", fontSize: 12 }}>
-        ⚠ {emptyHint}
-      </div>
-    );
-  }
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-      {items.map((it) => {
-        const isSel = selected.includes(it.id);
-        return (
-          <label
-            key={it.id}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: 13,
-              padding: "4px 10px",
-              borderRadius: 999,
-              border: isSel
-                ? "1px solid var(--color-primary)"
-                : "1px solid var(--color-neutral-200, #e5e7eb)",
-              background: isSel ? "var(--color-primary-light, #eff6ff)" : "white",
-              color: isSel ? "var(--color-primary)" : "var(--color-neutral-700)",
-              cursor: "pointer",
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={isSel}
-              onChange={() => onToggle(it.id)}
-              style={{ width: 12, height: 12 }}
-            />
-            {it.label}
-          </label>
-        );
-      })}
-    </div>
   );
 }

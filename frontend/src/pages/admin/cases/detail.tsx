@@ -12,6 +12,9 @@ import { ActivityTimeline } from "../../../components/case/ActivityTimeline";
 import { FollowUpNoteCard } from "../../../components/case/FollowUpNoteCard";
 import { OwnerInfoCard } from "../../../components/case/OwnerInfoCard";
 import { ProjectInfoCard } from "../../../components/case/ProjectInfoCard";
+import { SearchableSelect } from "../../../components/ui/SearchableSelect";
+import { WorkOrderCreateModal } from "../../../components/admin/WorkOrderCreateModal";
+import { PaymentLinkQrModal } from "../../../components/admin/PaymentLinkQrModal";
 
 interface AdminUser {
   id: number;
@@ -31,6 +34,12 @@ export function AdminCaseDetailPage() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
   const [convertOpen, setConvertOpen] = useState(false);
+  const [workOrderOpen, setWorkOrderOpen] = useState(false);
+  const [paymentLink, setPaymentLink] = useState<{
+    link: string;
+    short_link: string;
+    sent_to: string;
+  } | null>(null);
 
   const { query } = useOne<CaseDetailResponse>({
     resource: "admin/cases",
@@ -54,32 +63,34 @@ export function AdminCaseDetailPage() {
 
   const { mutate: assignCase, mutation: assignMutation } = useCustomMutation();
   const assigning = assignMutation.isPending;
-  const { mutate: createWorkOrderMutate } = useCustomMutation();
+  const { mutate: sendPaymentLink, mutation: paymentLinkMutation } =
+    useCustomMutation();
 
   const detail = query.data?.data;
   const isLoading = query.isLoading;
 
-  const handleCreateWorkOrder = () => {
+  const handleSendPaymentLink = () => {
     if (!detail) return;
-    const description = window.prompt("工单内容（必填）：");
-    if (!description?.trim()) return;
-    createWorkOrderMutate(
+    sendPaymentLink(
       {
-        url: "workorders",
+        url: `admin/cases/${detail.id}/send-payment-link`,
         method: "post",
-        values: {
-          case_id: detail.id,
-          order_type: "case_followup",
-          description: description.trim(),
-          priority: "normal",
-        },
+        values: {},
       },
       {
         onSuccess: (resp) => {
-          const wo = resp.data as { id?: number };
-          alert(`工单 #${wo.id ?? "?"} 已创建`);
+          const d = resp.data as {
+            link: string;
+            short_link: string;
+            sent_to: string;
+          };
+          setPaymentLink({
+            link: d.link,
+            short_link: d.short_link,
+            sent_to: d.sent_to,
+          });
         },
-        onError: (err) => alert(`建工单失败：${err.message}`),
+        onError: () => alert("生成缴费链接失败，请重试"),
       },
     );
   };
@@ -180,11 +191,13 @@ export function AdminCaseDetailPage() {
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <button
                   type="button"
+                  onClick={handleSendPaymentLink}
+                  disabled={paymentLinkMutation.isPending}
                   className="ds-btn ds-btn-primary"
                   style={{ width: "100%", justifyContent: "center" }}
                 >
                   <CreditCard className="w-3.5 h-3.5" />
-                  发送缴费链接
+                  {paymentLinkMutation.isPending ? "生成中…" : "发送缴费链接"}
                 </button>
                 {isAdmin && (
                   <button
@@ -199,7 +212,7 @@ export function AdminCaseDetailPage() {
                 )}
                 <button
                   type="button"
-                  onClick={handleCreateWorkOrder}
+                  onClick={() => setWorkOrderOpen(true)}
                   className="ds-btn ds-btn-secondary"
                   style={{ width: "100%", justifyContent: "center" }}
                 >
@@ -267,42 +280,19 @@ export function AdminCaseDetailPage() {
               {agents.length === 0 ? (
                 <p className="text-sm text-muted">暂无可用坐席</p>
               ) : (
-                <ul style={{ display: "flex", flexDirection: "column", gap: 4, listStyle: "none" }}>
-                  {agents.map((agent: AdminUser) => (
-                    <li key={agent.id}>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedAgent(agent.id)}
-                        style={{
-                          width: "100%",
-                          textAlign: "left",
-                          padding: "8px 12px",
-                          fontSize: 13.5,
-                          borderRadius: "var(--radius-md)",
-                          background:
-                            selectedAgent === agent.id
-                              ? "var(--color-primary-light)"
-                              : "transparent",
-                          color:
-                            selectedAgent === agent.id
-                              ? "var(--color-primary)"
-                              : "#374151",
-                          fontWeight: selectedAgent === agent.id ? 600 : 400,
-                          border: "none",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {agent.name}
-                        <span
-                          style={{ fontSize: 11.5, color: "#9ca3af", marginLeft: 8 }}
-                        >
-                          {/* TODO: show work_mode (internal/external) once /admin/users exposes work_mode field */}
-                          (催收员)
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                <div className="form-group">
+                  <label className="form-label">选择坐席</label>
+                  <SearchableSelect
+                    value={selectedAgent ?? ""}
+                    placeholder="搜索并选择坐席"
+                    onChange={(v) => setSelectedAgent(v === "" ? null : Number(v))}
+                    options={agents.map((a: AdminUser) => ({
+                      value: a.id,
+                      label: a.name,
+                      subtitle: "催收员",
+                    }))}
+                  />
+                </div>
               )}
             </div>
             <div className="modal-footer">
@@ -338,6 +328,26 @@ export function AdminCaseDetailPage() {
             alert(`法务转化订单 #${orderId} 已创建，等待平台运营撮合律所`);
             go({ to: "/admin/legal-conversion" });
           }}
+        />
+      )}
+
+      {workOrderOpen && (
+        <WorkOrderCreateModal
+          caseId={detail.id}
+          onClose={() => setWorkOrderOpen(false)}
+          onSuccess={(orderId) => {
+            setWorkOrderOpen(false);
+            alert(`工单 #${orderId ?? "?"} 已创建，已自动派单给协调员`);
+          }}
+        />
+      )}
+
+      {paymentLink && (
+        <PaymentLinkQrModal
+          link={paymentLink.link}
+          shortLink={paymentLink.short_link}
+          sentTo={paymentLink.sent_to}
+          onClose={() => setPaymentLink(null)}
         />
       )}
 

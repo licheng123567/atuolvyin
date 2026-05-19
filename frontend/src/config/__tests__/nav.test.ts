@@ -93,3 +93,59 @@ describe("getNavSections — superadmin nav", () => {
     expect(paths).toContain("/super/sms-config");
   });
 });
+
+describe("getNavSections — 物业管理员 7 段菜单", () => {
+  // getNavSections 末尾追加 HELP_SECTION；剥掉后即 NAV_CONFIG.admin 本体
+  const adminSections = () =>
+    getNavSections("admin", "tenant:1").filter((s) => s.title !== "帮助");
+
+  it("admin 菜单为 7 段，标题如约", () => {
+    const titles = adminSections().map((s) => s.title);
+    expect(titles).toEqual([
+      "工作台",
+      "案件管理",
+      "人员管理",
+      "结算与报表",
+      "话术与风控",
+      "法务管理",
+      "系统",
+    ]);
+  });
+
+  it("每段至少含 1 项", () => {
+    for (const s of adminSections()) {
+      expect(s.items.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("覆盖全部 23 个 admin 路径，且无重复", () => {
+    const paths = adminSections().flatMap((s) => s.items.map((i) => i.path));
+    const expected = [
+      "/admin/projects",
+      "/admin/dashboard",
+      "/admin/cases",
+      "/admin/cases/kanban",
+      "/admin/pool",
+      "/admin/cases/import",
+      "/admin/users",
+      "/admin/agent-devices",
+      "/admin/providers",
+      "/admin/settlements",
+      "/admin/agent-commissions",
+      "/admin/reports",
+      "/admin/compliance",
+      "/admin/scripts",
+      "/admin/scripts/effectiveness",
+      "/admin/risk-keywords",
+      "/admin/legal-conversion",
+      "/admin/legal-conversion-approvals",
+      "/admin/discount-approvals",
+      "/admin/partner-law-firms",
+      "/admin/internal-letter-templates",
+      "/admin/audit-logs",
+      "/admin/settings",
+    ];
+    expect([...paths].sort()).toEqual([...expected].sort());
+    expect(new Set(paths).size).toBe(paths.length);
+  });
+});

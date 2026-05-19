@@ -28,6 +28,7 @@ from app.schemas.case import (
 )
 from app.schemas.common import PaginatedResponse
 from app.services.audit import log_audit
+from app.services.payment_link import PaymentLinkOut, build_and_record_payment_link
 
 from .admin_cases import _case_row_to_response, _require_tenant, build_case_detail_response
 
@@ -446,36 +447,18 @@ def post_case_intent(
     return _CaseIntentOut(case_id=case_id, action=body.action, recorded_at=now, status="queued")
 
 
-class _PaymentLinkOut(BaseModel):
-    case_id: int
-    link: str
-    short_link: str
-    sent_to: str  # masked phone
-    sent_at: datetime
-    expires_at: datetime
-    sms_status: str  # "queued" / "sent" / "skipped"
-
-
-@router.post("/cases/{case_id}/send-payment-link", response_model=_PaymentLinkOut, status_code=201)
+@router.post(
+    "/cases/{case_id}/send-payment-link",
+    response_model=PaymentLinkOut,
+    status_code=201,
+)
 def send_payment_link(
     case_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
     user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
-) -> _PaymentLinkOut:
-    """v1.6.7 — E4 一键发送缴费链接给业主（PoC：生成短链 + 写 audit log，不真实下发短信）。
-
-    业务流程：
-    - 校验 case 属于当前 agent + tenant
-    - 生成短链 token + H5 缴费链接
-    - 写 audit log（actor / case_id / sent_to_phone_masked）
-    - 短信通道接入留 TODO（sms_status='queued'）
-    """
-    from datetime import timedelta
-    from secrets import token_urlsafe
-
-    from app.core.crypto import mask_phone
-
+) -> PaymentLinkOut:
+    """v1.6.7 — E4 一键发送缴费链接给业主（坐席端：仅限分配给自己的案件）。"""
     tenant_id = _require_tenant(payload)
     case = db.get(CollectionCase, case_id)
     if not case or case.tenant_id != tenant_id:
@@ -496,38 +479,13 @@ def send_payment_link(
             detail={"code": "ERR_OWNER_MISSING", "message": "案件未关联业主"},
         )
 
-    token = token_urlsafe(12)
-    now = datetime.now(UTC)
-    expires_at = now + timedelta(days=7)
-    full_link = f"https://pay.autoluyin.example.com/h5/{token}"
-    short_link = f"https://yzhc.cn/p/{token[:6]}"
-    sent_to_masked = mask_phone(owner.phone_enc)
-
-    log_audit(
+    return build_and_record_payment_link(
         db,
+        case=case,
+        owner=owner,
         actor_user_id=user.id,
         actor_role=str(payload.get("role") or ""),
         tenant_id=tenant_id,
-        action="case.payment_link_sent",
-        target_type="collection_case",
-        target_id=case_id,
-        payload={
-            "owner_phone_masked": sent_to_masked,
-            "amount": str(case.amount_owed) if case.amount_owed else None,
-            "short_link": short_link,
-            "expires_at": expires_at.isoformat(),
-        },
-    )
-    db.commit()
-
-    return _PaymentLinkOut(
-        case_id=case_id,
-        link=full_link,
-        short_link=short_link,
-        sent_to=sent_to_masked,
-        sent_at=now,
-        expires_at=expires_at,
-        sms_status="queued",  # 真实短信通道接入后改为 'sent'
     )
 
 

@@ -27,16 +27,11 @@ const NAV_CONFIG: Partial<Record<UserRole | "workorder", NavSection[]>> = {
       ],
     },
     {
-      title: "CRM",
+      title: "案件管理",
       items: [
         { label: "案件列表", path: "/admin/cases", icon: "List" },
         { label: "案件看板", path: "/admin/cases/kanban", icon: "Kanban" },
         { label: "公海管理", path: "/admin/pool", icon: "Inbox" },
-      ],
-    },
-    {
-      title: "数据管理",
-      items: [
         { label: "业主名单导入", path: "/admin/cases/import", icon: "Upload" },
       ],
     },
@@ -49,33 +44,37 @@ const NAV_CONFIG: Partial<Record<UserRole | "workorder", NavSection[]>> = {
       ],
     },
     {
-      title: "结算与配置",
+      title: "结算与报表",
       items: [
-        // 结算 → 报表 紧邻（财务月结视角）
         { label: "结算管理", path: "/admin/settlements", icon: "Receipt" },
-        {
-          label: "数据报表",
-          path: "/admin/reports",
-          icon: "BarChart2",
-        },
-        {
-          label: "合规月报",
-          path: "/admin/compliance",
-          icon: "Shield",
-        },
-        // 话术 → 风控 紧邻（话术 + 风险词同属对话质量管理）
+        { label: "内勤提成", path: "/admin/agent-commissions", icon: "Wallet" },
+        { label: "数据报表", path: "/admin/reports", icon: "BarChart2" },
+        { label: "合规月报", path: "/admin/compliance", icon: "Shield" },
+      ],
+    },
+    {
+      title: "话术与风控",
+      items: [
         { label: "话术库管理", path: "/admin/scripts", icon: "MessageSquare" },
         { label: "话术效果", path: "/admin/scripts/effectiveness", icon: "BarChart3" },
         { label: "风控关键词", path: "/admin/risk-keywords", icon: "ShieldAlert" },
-        // 法务 + 审计 + 设置 殿后
+      ],
+    },
+    {
+      title: "法务管理",
+      items: [
         { label: "法务转化", path: "/admin/legal-conversion", icon: "Scale" },
         // v1.6.8 — 法务转化两步审批 inbox（催收员申请 → admin 也可代督导审批）
         { label: "法务转化审批", path: "/admin/legal-conversion-approvals", icon: "ClipboardList" },
+        { label: "减免大额审批", path: "/admin/discount-approvals", icon: "BadgePercent" },
         // v1.9.0 — 法务内部处理配套：合作律所 + 律师函模板（物业法务起草律师函时选用）
         { label: "合作律所", path: "/admin/partner-law-firms", icon: "Building2" },
         { label: "律师函模板", path: "/admin/internal-letter-templates", icon: "FileText" },
-        { label: "减免大额审批", path: "/admin/discount-approvals", icon: "BadgePercent" },
-        { label: "内勤提成", path: "/admin/agent-commissions", icon: "Wallet" },
+      ],
+    },
+    {
+      title: "系统",
+      items: [
         { label: "审计日志", path: "/admin/audit-logs", icon: "ScrollText" },
         { label: "系统配置", path: "/admin/settings", icon: "Settings" },
       ],

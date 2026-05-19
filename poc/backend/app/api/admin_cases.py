@@ -39,6 +39,7 @@ from app.schemas.case import (
 )
 from app.schemas.common import PaginatedResponse
 from app.services.case_timeline import build_case_timeline
+from app.services.payment_link import PaymentLinkOut, build_and_record_payment_link
 
 router = APIRouter()
 
@@ -702,3 +703,45 @@ async def update_case_stage(
         )
         db.commit()
     return case
+
+
+@router.post(
+    "/cases/{case_id}/send-payment-link",
+    response_model=PaymentLinkOut,
+    status_code=201,
+)
+def admin_send_payment_link(
+    case_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[
+        UserAccount, Depends(require_tenant_roles("admin", "supervisor"))
+    ],
+    db: Annotated[Session, Depends(get_db)],
+) -> PaymentLinkOut:
+    """v2.2 — 物业管理端发送缴费链接。
+
+    与坐席端（/agent/cases/{id}/send-payment-link）共用生成逻辑，区别在于：
+    管理员 / 督导可对本租户任意案件发送，不要求 assigned_to == 自己 —— 便于把
+    缴费二维码 / 短链转给催收人员通过微信发给业主。
+    """
+    tenant_id = _require_tenant(payload)
+    case = db.get(CollectionCase, case_id)
+    if not case or case.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
+        )
+    owner = db.get(OwnerProfile, case.owner_id) if case.owner_id else None
+    if not owner:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_OWNER_MISSING", "message": "案件未关联业主"},
+        )
+    return build_and_record_payment_link(
+        db,
+        case=case,
+        owner=owner,
+        actor_user_id=int(payload.get("user_id") or 0),
+        actor_role=str(payload.get("role") or ""),
+        tenant_id=tenant_id,
+    )

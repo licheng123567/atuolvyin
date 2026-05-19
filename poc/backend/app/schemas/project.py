@@ -51,6 +51,9 @@ class ProjectCreateIn(BaseModel):
     late_fee_waive_disabled: bool | None = None
     # §9.2-D1 — 项目级内勤催收员佣金率（NULL 继承系统默认 0.05）
     internal_agent_commission_rate: Decimal | None = Field(None, ge=0, le=1)
+    # §9.2-D2 — 外包项目的服务商坐席佣金率初始值（NULL 继承系统默认 0.05）。
+    # 仅创建时由物业设初始值；后续服务商可在自家端点覆盖（ProjectUpdateIn 不含此字段）。
+    provider_agent_commission_rate: Decimal | None = Field(None, ge=0, le=1)
 
 
 class ProjectUpdateIn(BaseModel):

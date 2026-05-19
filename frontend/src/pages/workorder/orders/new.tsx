@@ -1,6 +1,9 @@
-import { useCreate, useGo } from "@refinedev/core";
+import { useCreate, useGetIdentity, useGo, useList } from "@refinedev/core";
 import { ArrowLeft, ClipboardList } from "lucide-react";
 import { useState } from "react";
+import { SearchableSelect } from "../../../components/ui/SearchableSelect";
+import type { AuthUser } from "../../../providers/auth-provider";
+import type { PaginatedResponse } from "../../../types";
 import {
   WORK_ORDER_PRIORITIES,
   WORK_ORDER_TYPES,
@@ -19,10 +22,31 @@ interface FormData {
   priority: WorkOrderPriority;
 }
 
+interface UserOption {
+  id: number;
+  name: string;
+  phone_masked: string;
+  role: string;
+}
+
 export function WorkOrderNewPage() {
   const go = useGo();
   const { mutate: create, mutation: createMutation } = useCreate();
   const isPending = createMutation.isPending;
+
+  // 指派人下拉：/admin/users 仅 admin 可读，其余角色（协调员等）回退手填用户 ID
+  const { data: identity } = useGetIdentity<AuthUser>();
+  const canPickUsers = identity?.role === "admin";
+  const { query: usersQuery } = useList<UserOption>({
+    resource: "admin/users",
+    pagination: { currentPage: 1, pageSize: 200 },
+    queryOptions: { enabled: canPickUsers },
+  });
+  const usersRaw = usersQuery.data?.data;
+  const users: UserOption[] =
+    (usersRaw as unknown as PaginatedResponse<UserOption>)?.items ??
+    (usersRaw as UserOption[] | undefined) ??
+    [];
   const [form, setForm] = useState<FormData>({
     order_type: "quality",
     description: "",
@@ -175,18 +199,34 @@ export function WorkOrderNewPage() {
 
         <div>
           <label className="block text-sm font-medium text-[var(--color-neutral-700)] mb-1">
-            指派给（用户 ID，选填）
+            指派给（选填）
           </label>
-          <input
-            type="number"
-            min={1}
-            value={form.assigned_to}
-            onChange={(e) =>
-              setForm({ ...form, assigned_to: e.target.value })
-            }
-            className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-200)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-            style={{ borderRadius: "var(--radius-md)" }}
-          />
+          {canPickUsers ? (
+            <SearchableSelect
+              value={form.assigned_to}
+              placeholder="搜索并选择负责人（留空则自动派单给协调员）"
+              onChange={(v) =>
+                setForm({ ...form, assigned_to: v === "" ? "" : String(v) })
+              }
+              options={users.map((u) => ({
+                value: String(u.id),
+                label: u.name,
+                subtitle: u.phone_masked,
+              }))}
+            />
+          ) : (
+            <input
+              type="number"
+              min={1}
+              value={form.assigned_to}
+              onChange={(e) =>
+                setForm({ ...form, assigned_to: e.target.value })
+              }
+              placeholder="用户 ID（留空则自动派单给协调员）"
+              className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-200)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+              style={{ borderRadius: "var(--radius-md)" }}
+            />
+          )}
         </div>
 
         {errorMsg && (

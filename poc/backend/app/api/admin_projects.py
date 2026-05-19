@@ -280,6 +280,8 @@ def create_project(
         late_fee_waive_disabled=body.late_fee_waive_disabled,
         # §9.2-D1 — 项目级内勤佣金率
         internal_agent_commission_rate=body.internal_agent_commission_rate,
+        # §9.2-D2 — 外包项目的服务商坐席佣金率初始值
+        provider_agent_commission_rate=body.provider_agent_commission_rate,
     )
     db.add(p)
     db.flush()
