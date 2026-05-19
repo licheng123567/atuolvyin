@@ -7,14 +7,79 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from secrets import token_urlsafe
 
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.crypto import mask_phone
 from app.models.case import CollectionCase, OwnerProfile
+from app.models.discount_offer import DiscountOffer
 from app.services.audit import log_audit
+
+
+class PaymentBreakdown(BaseModel):
+    """业主缴费明细构成：应缴 − 已减免 = 应支付。"""
+
+    principal: Decimal | None
+    late_fee: Decimal | None
+    original: Decimal
+    waived: Decimal
+    payable: Decimal
+    has_pending: bool
+
+
+def compute_payable(db: Session, case: CollectionCase) -> PaymentBreakdown:
+    """算案件当前应付额。
+
+    已减免 = 该案件 status='approved' 且未过期的 DiscountOffer（多条取 approved_at 最新）。
+    pending 减免不抵扣，但置 has_pending=True 供前端提示。
+    """
+    original = case.amount_owed or Decimal("0")
+    now = datetime.now(UTC)
+
+    active_offer = (
+        db.execute(
+            select(DiscountOffer)
+            .where(
+                DiscountOffer.tenant_id == case.tenant_id,
+                DiscountOffer.case_id == case.id,
+                DiscountOffer.status == "approved",
+                DiscountOffer.expires_at > now,
+            )
+            .order_by(DiscountOffer.approved_at.desc().nullslast(), DiscountOffer.id.desc())
+        )
+        .scalars()
+        .first()
+    )
+    if active_offer is not None:
+        payable = active_offer.proposed_amount
+        waived = original - payable
+    else:
+        payable = original
+        waived = Decimal("0")
+
+    has_pending = (
+        db.execute(
+            select(DiscountOffer.id).where(
+                DiscountOffer.tenant_id == case.tenant_id,
+                DiscountOffer.case_id == case.id,
+                DiscountOffer.status.in_(("pending_supervisor", "pending_admin")),
+            )
+        ).first()
+        is not None
+    )
+
+    return PaymentBreakdown(
+        principal=case.principal_amount,
+        late_fee=case.late_fee_amount,
+        original=original,
+        waived=waived,
+        payable=payable,
+        has_pending=has_pending,
+    )
 
 
 class PaymentLinkOut(BaseModel):
