@@ -54,6 +54,11 @@ class ProjectCreateIn(BaseModel):
     # §9.2-D2 — 外包项目的服务商坐席佣金率初始值（NULL 继承系统默认 0.05）。
     # 仅创建时由物业设初始值；后续服务商可在自家端点覆盖（ProjectUpdateIn 不含此字段）。
     provider_agent_commission_rate: Decimal | None = Field(None, ge=0, le=1)
+    # v2.2 — 项目级收款配置（物业自收模式）
+    payee_name: str | None = Field(None, max_length=200)
+    payee_account: str | None = Field(None, max_length=500)
+    payee_qr_object_key: str | None = Field(None, max_length=500)
+    payment_instructions: str | None = Field(None, max_length=2000)
 
 
 class ProjectUpdateIn(BaseModel):
@@ -90,6 +95,11 @@ class ProjectUpdateIn(BaseModel):
     late_fee_waive_disabled: bool | None = None
     # §9.2-D1 — 项目级内勤催收员佣金率（NULL 继承系统默认 0.05）
     internal_agent_commission_rate: Decimal | None = Field(None, ge=0, le=1)
+    # v2.2 — 项目级收款配置（物业自收模式）
+    payee_name: str | None = Field(None, max_length=200)
+    payee_account: str | None = Field(None, max_length=500)
+    payee_qr_object_key: str | None = Field(None, max_length=500)
+    payment_instructions: str | None = Field(None, max_length=2000)
 
 
 class ProjectOut(BaseModel):
@@ -137,3 +147,9 @@ class ProjectOut(BaseModel):
     # §9.2 D1/D2 — 项目级佣金率（NULL 表示继承系统默认 0.05）
     internal_agent_commission_rate: Decimal | None = None
     provider_agent_commission_rate: Decimal | None = None
+    # v2.2 — 项目级收款配置
+    payment_mode: str = "property_self"
+    payee_name: str | None = None
+    payee_account: str | None = None
+    payee_qr_object_key: str | None = None
+    payment_instructions: str | None = None

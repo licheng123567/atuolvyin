@@ -278,3 +278,36 @@ async def test_d2_list_provider_projects_includes_commission_rate(
 
     assert Decimal(str(item_with_rate["provider_agent_commission_rate"])) == Decimal("0.0800")
     assert item_no_rate["provider_agent_commission_rate"] is None
+
+
+@pytest.mark.asyncio
+async def test_project_payee_fields_create_and_patch(
+    client, db_session, seeded_tenant, admin_auth_headers
+):
+    """创建项目带收款信息 → 回显；PATCH 可改收款信息。"""
+    coordinator_id = _tenant_member(db_session, seeded_tenant.id, "coordinator", "20")
+    legal_id = _tenant_member(db_session, seeded_tenant.id, "legal", "21")
+    resp = await client.post(
+        "/api/v1/admin/projects",
+        json={
+            "name": "收款配置项目",
+            "coordinator_user_id": coordinator_id,
+            "legal_user_id": legal_id,
+            "payee_name": "金桂物业管理有限公司",
+            "payee_account": "工行 6222 0000 1234",
+            "payment_instructions": "工作日 9-17 点到服务中心缴费",
+        },
+        headers=admin_auth_headers,
+    )
+    assert resp.status_code == 201, resp.text
+    project_id = resp.json()["id"]
+    assert resp.json()["payee_name"] == "金桂物业管理有限公司"
+    assert resp.json()["payment_mode"] == "property_self"
+
+    patch = await client.patch(
+        f"/api/v1/admin/projects/{project_id}",
+        json={"payee_account": "建行 6217 9999 8888"},
+        headers=admin_auth_headers,
+    )
+    assert patch.status_code == 200, patch.text
+    assert patch.json()["payee_account"] == "建行 6217 9999 8888"
