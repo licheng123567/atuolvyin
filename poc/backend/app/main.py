@@ -49,6 +49,7 @@ from app.api import (
     provider_scripts,
     provider_termination,
     public_app_info,
+    public_payment,
     public_verify,
     recordings,
     super_audit,
@@ -254,6 +255,9 @@ app.include_router(devices_v1.router, prefix="/api/v1/devices", tags=["devices-v
 app.include_router(calls_v1.router, prefix="/api/v1/calls", tags=["calls-v1"])
 app.include_router(public_verify.router, prefix="/api/v1/public", tags=["public-verify"])
 app.include_router(public_app_info.router, prefix="/api/v1/public", tags=["public-app-info"])
+app.include_router(
+    public_payment.router, prefix="/api/v1/public", tags=["public-payment"]
+)
 app.include_router(user_preferences.router, prefix="/api/v1/users", tags=["user-preferences"])
 app.include_router(notifications_api.router, prefix="/api/v1/users", tags=["notifications"])
 # Legacy PoC routers (Sprint 1 migrates these to ORM + /api/v1/ prefix)
