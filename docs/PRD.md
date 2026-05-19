@@ -1177,43 +1177,90 @@ ASR 文本（含 speaker: agent/customer/unknown）
 
 ## 14. 支付功能
 
-### MVP：支付信息展示（静态二维码）
+### MVP：缴费链接 + H5 静态账单页（v2.2 已交付）
 
-- 后端用 Python `qrcode` 库生成业主专属二维码
-- 二维码内容指向后端生成的短链（格式 `https://pay.youcuihuicui.com/c/{token}`，token 隐藏 case_id）
-- PC 右栏点击「发支付信息」→ 弹出二维码图片（员工截图发微信给业主）
-- App 通话中点击「二维码」→ 全屏显示大图（给业主扫描）
-- **MVP 不接在线支付**；二维码扫开后显示的 H5 落地页为静态账单页（无支付按钮）
+**核心闭环**：物业管理员按项目配置收款信息 → 催收人员点「发送缴费链接」生成业主专属 token → 弹窗展示二维码 + 支付明细 → 业主扫码/点链接打开公开 H5 账单页，按页面展示的线下方式缴费。
 
-#### MVP H5 静态账单页内容（`pay.youcuihuicui.com/c/{token}`）
+**MVP 不接在线支付**；H5 落地页为静态账单（无支付按钮），公证提存 + 在线通道留到 v1.1。
 
-业主扫码看到的页面，不需要登录，移动端自适应：
+#### 项目级收款配置（按项目，物业管理员配）
+
+`Project` 表新增 5 字段，物业管理员在项目编辑页录入：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `payment_mode` | String(16) | `property_self`（物业自收，MVP）/ `notary_escrow`（公证提存，v1.1 预留），默认 `property_self` |
+| `payee_name` | Text | 收款户名（如「××物业管理有限公司」） |
+| `payee_account` | Text | 收款账户，自由文本（银行 + 账号 / 对公账户） |
+| `payee_qr_object_key` | Text | 收款码图（微信/支付宝收款码）MinIO key（v2.2 字段已就位，前端上传控件待补）|
+| `payment_instructions` | Text | 线下缴费说明（缴费时间、服务中心地址、转账备注等） |
+
+> 一个物业公司管多个项目，各项目可独立配收款账户。
+
+#### token 持久化（`payment_link` 表）
+
+每次发送生成一条新行：`token`(unique) / `case_id` / `tenant_id` / `project_id` / `created_by_user_id` / `payment_mode`（发送时快照） / `expires_at`（默认 +7 天）/ `created_at` / `updated_at`。token 不复用，旧 token 到期自然失效。
+
+#### 支付明细构成 —— 应缴 − 已减免 = 应支付
+
+业主弹窗 + H5 页都展示同一份明细：
+
+```
+物业费本金          ¥ principal_amount
+违约金 / 滞纳金     ¥ late_fee_amount
+─────────────────────────
+应缴合计            ¥ amount_owed
+已减免            - ¥ waived            ← waived = 0 时该行隐藏
+═════════════════════════
+应支付              ¥ payable
+```
+
+**减免联动规则**：`waived` 来自案件**已审批通过（status='approved'）且未过期**的 `DiscountOffer`（多条取 `approved_at` 最新一条）；pending 减免**不抵扣**。`payable = approved_offer.proposed_amount`；无有效 offer 时 `payable = amount_owed`。
+
+#### H5 实时计算
+
+模式 A（物业自收，MVP）下 H5 页**每次打开实时跑 `compute_payable`**，不冻结发送时金额 —— 催收员承诺的减免后续审批通过，业主刷新链接即见降后金额，无需重发。
+
+#### 待审批减免非阻断提醒
+
+发送时若该案件有 `status ∈ (pending_supervisor, pending_admin)` 的减免，**照常发送**，仅在弹窗顶部加提示：「⚠ 该案件有待审批减免，当前链接金额按已审批结果计算；减免审批通过后业主刷新链接即见更新。」
+
+#### 公开端点 + 公开页（业主侧，免登录）
+
+| 端点 | 说明 |
+|------|------|
+| `GET /api/v1/public/payment/{token}` | 无鉴权；404 unknown / 410 expired / 200 valid；**不返回业主手机号**（PRD §6 隐私要求） |
+| `/pay/:token`（前端） | 业主扫码/点链接打开的 H5 账单页，渲染明细 + 项目 payee 信息（收款户名/账号/缴费说明/可选收款码图） |
+
+业主侧 H5 渲染版式：
 
 ```
 ┌──────────────────────────────────────┐
-│   XX 物业管理有限公司                   │
-│                                      │
+│   {payee_name}                       │
 │   您好，[张三]，房号 [5-203]           │
-│   当前应缴物业费                       │
 │                                      │
 │   ┌────────────────────────────────┐ │
-│   │  欠费金额     ¥ 3,200.00       │ │
-│   │  欠费月数     4 个月            │ │
-│   │  计费周期     2025.10-2026.01  │ │
+│   │  物业费本金     ¥ 3,000.00     │ │
+│   │  违约金/滞纳金   ¥   200.00     │ │
+│   │  应缴合计        ¥ 3,200.00     │ │
+│   │  已减免        - ¥   200.00     │ │
+│   │  应支付          ¥ 3,000.00     │ │
 │   └────────────────────────────────┘ │
 │                                      │
-│   缴费方式：                          │
-│   银行转账 / 线下到物业服务中心         │
-│   收款账户：工行 xxxx xxxx xxxx 1234  │
-│   收款户名：XX 物业管理有限公司        │
+│   缴费方式：{payment_instructions}    │
+│   收款账户：{payee_account}           │
+│   收款户名：{payee_name}              │
+│   [可选：收款码图]                     │
 │                                      │
 │   ── v1.1 上线后可在此直接扫码支付 ── │
 └──────────────────────────────────────┘
 ```
 
-- 手机号不在页面显示（防止业主信息通过二维码泄露）
-- token 为一次性或有效期 7 天（管理员可配置）
-- **H5 落地页在 v1.1 支持在线支付和公证提存**
+#### 隐私与安全
+
+- 业主 H5 页**不显示手机号**（防止扫码/转发链接的人通过页面提取业主信息）
+- token 7 天有效，过期返回 410
+- 公开端点无鉴权但凭 token 检索；token 32 字符 base64url（≈190 bit 熵，碰撞概率可忽略）
 
 ### v1.1：在线支付接入
 
@@ -1466,6 +1513,20 @@ CREATE TABLE performance_record (
 );
 ```
 
+### 15.7 项目级佣金率（创建时按经营模式区分，v2.2）
+
+`Project` 表新增两个佣金率字段：`internal_agent_commission_rate`（内勤）+ `provider_agent_commission_rate`（服务商）。物业管理员**创建项目时**按经营模式选择填入哪个：
+
+| 经营模式 | 录入字段 | 说明 |
+|---------|--------|------|
+| 物业自办 | `internal_agent_commission_rate` | 内勤催收员佣金率 |
+| 外包给服务商 | `provider_agent_commission_rate` | 服务商坐席佣金率**初始值** |
+
+**职责边界**：
+- 物业 admin 仅能在**创建时**写 `provider_agent_commission_rate` 初始值；`PATCH /admin/projects/{id}` 不含此字段，避免事后单方面调降
+- 服务商可在自家 `PATCH /provider/projects/{id}/commission-rate` 端点覆盖该值
+- 两字段均 `NUMERIC(6,4)`，NULL 时回退系统默认 0.05（5%）
+
 ---
 
 ## 16. 数据模型概要
@@ -1498,7 +1559,7 @@ CREATE TABLE performance_record (
 | ReviewRecord | 督导复核记录，AI 判断 vs 人工判断对比，用于模型优化 |
 | ScriptTemplate | 话术模板，按异议类型分类，含使用统计 |
 | SuggestionFeedback | 话术推送反馈：催收员采用/忽略、督导标注、业务结果推断信号 |
-| PaymentQRRecord | 支付二维码生成记录（MVP 静态展示用）|
+| PaymentLink | 业主缴费链接 token 持久化（v2.2 取代 PaymentQRRecord）：token (unique)、case_id、project_id、created_by_user_id、payment_mode、expires_at（默认 +7 天）；业主凭 token 经公开端点 `/api/v1/public/payment/{token}` 打开 H5 账单页，详见 §14 |
 | PaymentRecord | 业主在线付款记录：payment_type(direct/escrow)、channel、status、escrow_cert_url、platform_fee（v1.1）|
 | BlockchainProof | 区块链存证回执：data_id、data_type、data_hash、tx_hash、chain、block_height（v1.1）|
 
@@ -1914,6 +1975,7 @@ A/B 测试结束后：
 - 快捷操作面板（发二维码 / 建工单 / 转接）
 - 公海/私海管理（手动分配为主）
 - 业主名单 Excel 导入
+- **缴费链接 + 收款配置（v2.2 已交付）**：项目级 4 收款字段 + payment_mode；`payment_link` token 持久化（7 天）；发送弹窗展示「应缴 − 已减免 = 应支付」明细 + 待审批减免非阻断提醒；公开 H5 账单页 `/pay/:token` 实时计算应付额；详见 §14（v1.1 加在线支付通道 + 公证提存）
 - 录音批量上传 + 事后分析
 - 管理员分析看板（今日概览 + 排名）
 - 督导复核工作台（基础版）
