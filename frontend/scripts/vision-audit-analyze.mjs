@@ -1,19 +1,26 @@
 #!/usr/bin/env node
-// v0.5.6 — AI 视觉巡检 PoC:第二阶段「Claude Vision 分析」
+// v0.5.6 PoC → v0.5.7 多 provider 策略
 //
-// 读 vision-audit-output/{role}/{slug}.png + {slug}.json,每张图喂给 Claude
-// 让它当 UX 审计员输出 JSON 问题清单,再聚合成 Markdown 报告。
+// AI 视觉巡检:读 vision-audit-output/{role}/{slug}.png + {slug}.json,每张图喂给
+// 视觉模型出 JSON 问题清单,再聚合成 Markdown 报告。
+//
+// **v0.5.7 起默认用 Gemini 2.5 Flash**(免费额度大,~$0.001/图);Anthropic Claude
+// 作为兜底备选(更准但贵 ~30 倍)。策略模式:
+//   1. 优先 GEMINI_API_KEY → Gemini 2.5 Flash
+//   2. 兜底 ANTHROPIC_API_KEY → Claude Opus 4.5
+//   3. 都没设 → 报错退出
 //
 // 跑法:
-//   export ANTHROPIC_API_KEY=sk-ant-...
+//   export GEMINI_API_KEY=AIza...           # Google AI Studio 免费申请
 //   node scripts/vision-audit-analyze.mjs
 //
 // 输出:vision-audit-report.md(根目录,默认 gitignore)
 //
-// 成本预估:Claude 4 Opus vision ~$15/MTok input,平均每图 ~2-3K tokens
-// (1024 × 1280 高清截图 + 短 prompt),约 $0.03/图。完整跑 ~50 张 ≈ $1.50。
+// 成本预估:
+//   Gemini 2.5 Flash:~50 图 × $0.001 ≈ $0.05/轮(且有免费额度 1500/天)
+//   Claude Opus 4.5: ~50 图 × $0.03 ≈ $1.50/轮
 
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,13 +30,23 @@ const __dirname = path.dirname(__filename);
 const OUTPUT_DIR = path.resolve(__dirname, "../vision-audit-output");
 const REPORT_PATH = path.resolve(__dirname, "../vision-audit-report.md");
 
-if (!process.env.ANTHROPIC_API_KEY) {
-  console.error("❌ ANTHROPIC_API_KEY 未设置。export ANTHROPIC_API_KEY=sk-ant-...");
-  process.exit(1);
+// ─── Provider 策略选择 ────────────────────────────────────────────────
+
+function pickProvider() {
+  if (process.env.GEMINI_API_KEY) return "gemini";
+  if (process.env.ANTHROPIC_API_KEY) return "anthropic";
+  return null;
 }
 
-const client = new Anthropic();
-const MODEL = process.env.VISION_MODEL ?? "claude-opus-4-5-20250929"; // 默认用 Opus 4.5(vision 强,$15/MTok)
+const PROVIDER = pickProvider();
+if (!PROVIDER) {
+  console.error(
+    "❌ 未设置 GEMINI_API_KEY 或 ANTHROPIC_API_KEY。\n" +
+    "推荐:export GEMINI_API_KEY=AIza...(Google AI Studio 免费申请)\n" +
+    "兜底:export ANTHROPIC_API_KEY=sk-ant-...",
+  );
+  process.exit(1);
+}
 
 const PROMPT = `你是有证慧催 SaaS 的 UX 审计员。请审查这张截图,识别用户可见的问题。
 
@@ -41,7 +58,7 @@ const PROMPT = `你是有证慧催 SaaS 的 UX 审计员。请审查这张截图
 5. **无障碍问题** — 仅靠颜色传达信息 / 缺少 label / 按钮无可识别名称
 
 **仅报告 HIGH 或 MEDIUM 严重度**(LOW 噪音不报)。
-**只输出 JSON**,不要 markdown 围栏,不要其他文字:
+**只输出 JSON**,不要 markdown 围栏(\`\`\`json),不要其他文字:
 
 {
   "issues": [
@@ -56,10 +73,65 @@ const PROMPT = `你是有证慧催 SaaS 的 UX 审计员。请审查这张截图
 
 若无问题,返回 {"issues":[]}。`;
 
-async function analyzePng(pngPath, meta) {
+// ─── Gemini 实现 ──────────────────────────────────────────────────────
+
+let geminiModel = null;
+if (PROVIDER === "gemini") {
+  const gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  const modelName = process.env.VISION_MODEL ?? "gemini-2.5-flash";
+  geminiModel = gemini.getGenerativeModel({
+    model: modelName,
+    generationConfig: {
+      temperature: 0.2,
+      maxOutputTokens: 1024,
+    },
+  });
+  console.log(`▶ Provider: Gemini (${modelName})`);
+}
+
+// ─── Anthropic 实现(兜底) ────────────────────────────────────────────
+
+let anthropicClient = null;
+if (PROVIDER === "anthropic") {
+  const Anthropic = (await import("@anthropic-ai/sdk")).default;
+  anthropicClient = new Anthropic();
+  const modelName = process.env.VISION_MODEL ?? "claude-opus-4-5-20250929";
+  console.log(`▶ Provider: Anthropic (${modelName})`);
+}
+
+function stripJsonFences(text) {
+  // Gemini 喜欢加 ```json ... ``` 围栏,即使 prompt 说不要也会偶尔加
+  let t = text.trim();
+  if (t.startsWith("```")) {
+    // 去掉首行 ```json 或 ```
+    t = t.replace(/^```(?:json)?\s*\n/i, "");
+    // 去掉末尾 ```
+    t = t.replace(/\n```\s*$/i, "");
+  }
+  return t.trim();
+}
+
+async function analyzePngGemini(pngPath) {
   const data = fs.readFileSync(pngPath).toString("base64");
-  const resp = await client.messages.create({
-    model: MODEL,
+  const result = await geminiModel.generateContent([
+    { inlineData: { data, mimeType: "image/png" } },
+    PROMPT,
+  ]);
+  const raw = result.response.text();
+  const clean = stripJsonFences(raw);
+  try {
+    const parsed = JSON.parse(clean);
+    return { ok: true, issues: parsed.issues ?? [] };
+  } catch {
+    return { ok: false, issues: [], raw: clean.slice(0, 200) };
+  }
+}
+
+async function analyzePngAnthropic(pngPath) {
+  const data = fs.readFileSync(pngPath).toString("base64");
+  const modelName = process.env.VISION_MODEL ?? "claude-opus-4-5-20250929";
+  const resp = await anthropicClient.messages.create({
+    model: modelName,
     max_tokens: 1024,
     messages: [
       {
@@ -72,12 +144,19 @@ async function analyzePng(pngPath, meta) {
     ],
   });
   const text = resp.content.find((c) => c.type === "text")?.text ?? "";
+  const clean = stripJsonFences(text);
   try {
-    const parsed = JSON.parse(text);
+    const parsed = JSON.parse(clean);
     return { ok: true, issues: parsed.issues ?? [] };
   } catch {
-    return { ok: false, issues: [], raw: text.slice(0, 200) };
+    return { ok: false, issues: [], raw: clean.slice(0, 200) };
   }
+}
+
+async function analyzePng(pngPath, _meta) {
+  return PROVIDER === "gemini"
+    ? analyzePngGemini(pngPath)
+    : analyzePngAnthropic(pngPath);
 }
 
 function severityRank(s) {
@@ -106,7 +185,7 @@ function walkOutputDir() {
 
 async function main() {
   const entries = walkOutputDir();
-  console.log(`▶ 共 ${entries.length} 张截图,开始分析(模型 ${MODEL})...`);
+  console.log(`▶ 共 ${entries.length} 张截图,开始分析...`);
 
   const allResults = [];
   let n = 0;
@@ -116,13 +195,13 @@ async function main() {
     try {
       const result = await analyzePng(e.pngPath, e.meta);
       allResults.push({ ...e, ...result });
-      console.log(result.ok ? `✓ ${result.issues.length} 个问题` : `⚠ 解析失败`);
+      console.log(result.ok ? `✓ ${result.issues.length} 个问题` : `⚠ 解析失败(${result.raw})`);
     } catch (err) {
       console.log(`✗ ${err?.message ?? "未知错误"}`);
       allResults.push({ ...e, ok: false, issues: [], error: String(err?.message ?? err) });
     }
-    // 简单 rate limit:每图间隔 1s,避免 429
-    await new Promise((r) => setTimeout(r, 1000));
+    // Rate limit:Gemini Flash 免费额度是 RPM,sleep 100ms 就够;Anthropic 1s 避 429
+    await new Promise((r) => setTimeout(r, PROVIDER === "gemini" ? 100 : 1000));
   }
 
   // 生成 Markdown 报告
@@ -139,7 +218,8 @@ async function main() {
   const lines = [];
   lines.push(`# AI 视觉巡检报告 — ${new Date().toISOString().slice(0, 19).replace("T", " ")}`);
   lines.push("");
-  lines.push(`> 模型:\`${MODEL}\` · 截图数:${entries.length} · 总问题数:${totalIssues}(HIGH ${high.length} · MEDIUM ${medium.length})`);
+  lines.push(`> Provider:\`${PROVIDER}\`(模型 ${process.env.VISION_MODEL ?? (PROVIDER === "gemini" ? "gemini-2.5-flash" : "claude-opus-4-5")})`);
+  lines.push(`> 截图数:${entries.length} · 总问题数:${totalIssues}(HIGH ${high.length} · MEDIUM ${medium.length})`);
   lines.push(`> Console 错误:${consoleErrorCount} · Page 异常:${pageErrorCount}`);
   lines.push("");
   lines.push("## 摘要(按严重度排)");

@@ -1,19 +1,22 @@
-# AI 视觉巡检 / a11y 自动检测 — v0.5.6 PoC
+# AI 视觉巡检 / a11y 自动检测 — v0.5.7
 
-> 本期落地一套「**手动跑 + 出报告**」流程,把每次需要肉眼盯一遍的角色巡检变成机器+模型的工作。用户原话:「有没有什么工具或者调用其他模型,通过模拟操作浏览器操作来判断哪些地方有问题,哪个地方需要优化,减少人工测试。」答案是**有,本期落地最小版**。
+> 「**手动跑 + 出报告**」流程,把每次需要肉眼盯一遍的角色巡检变成机器+模型的工作。
+> 用户原话:「有没有什么工具或者调用其他模型,通过模拟操作浏览器操作来判断哪些地方有问题,
+> 哪个地方需要优化,减少人工测试。」**v0.5.7 起默认用 Gemini 2.5 Flash**,~$0.05/轮,
+> 有免费额度 1500 RPM(够跑很多轮);Anthropic Claude 作为兜底备选。
 
 ## 整体流程
 
 ```
-Playwright 截图收集       Claude Vision 分析            聚合输出
+Playwright 截图收集       视觉模型分析                聚合输出
 ─────────────────         ─────────────────             ─────────
 50 张全屏 PNG       →     每图 1 次 API 调用      →     vision-audit-report.md
-+ 50 份 JSON 元数据        (~$0.03/图,总计 ~$1.5)        + a11y-audit-report.json
-(console/page error)
++ 50 份 JSON 元数据        (Gemini ~$0.001/图)            + a11y-audit-report.json
+(console/page error)        (Claude ~$0.03/图)
 ```
 
 两个互补:
-- **Claude Vision**:看「**机器查不出的**」— 布局漂移 / 术语混乱 / 数字格式不一致 / 空态缺失 / 按钮含义不明
+- **视觉模型(Gemini / Claude)**:看「**机器查不出的**」— 布局漂移 / 术语混乱 / 数字格式不一致 / 空态缺失 / 按钮含义不明
 - **axe-core a11y**:看「**机器能查的**」— 颜色对比度 / 缺 label / 图像无 alt / 焦点顺序 / WCAG 2.1 A+AA
 
 ## 跑法
@@ -41,15 +44,31 @@ npm run e2e:vision-collect
 
 产物:`frontend/vision-audit-output/{role}/{slug}.{png,json}`。每张 PNG 是某角色登录后该页的全屏截图;同名 JSON 是该页的 console error / pageerror / 失败网络请求清单。
 
-### 第 3 步:调 Claude Vision 出报告(~3-5 分钟)
+### 第 3 步:调视觉模型出报告(~3-5 分钟)
+
+**推荐:Gemini 2.5 Flash(便宜 + 免费额度)**
+
+```bash
+# 1. 申请 Google AI Studio key(免费):https://aistudio.google.com/apikey
+export GEMINI_API_KEY=AIza...
+# 2. 跑分析(脚本自动检测 provider)
+node scripts/vision-audit-analyze.mjs
+# 或:
+npm run vision:analyze
+```
+
+**兜底:Claude Opus 4.5(精度更高但更贵)**
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
-node scripts/vision-audit-analyze.mjs
+node scripts/vision-audit-analyze.mjs    # 自动 fallback 到 Anthropic
 ```
 
+provider 选择策略:`GEMINI_API_KEY` 优先 → `ANTHROPIC_API_KEY` 兜底 → 都没设则报错退出。
+可用 `VISION_MODEL` 环境变量覆盖默认模型(如 `gemini-2.5-pro` / `claude-sonnet-4-5`)。
+
 产物:`frontend/vision-audit-report.md`。结构:
-- 顶部摘要:总问题数 / HIGH / MEDIUM / Console 错误数 / Page 异常数
+- 顶部摘要:provider + 模型 + 总问题数 / HIGH / MEDIUM / Console 错误数 / Page 异常数
 - 按严重度分组(HIGH 优先)
 - 按角色 + 页详列(每页的所有问题 + console/page error 计数)
 
@@ -74,17 +93,29 @@ VISION_MODEL=claude-sonnet-4-5 node scripts/vision-audit-analyze.mjs
 
 ## 成本预估
 
+**Gemini 2.5 Flash(默认,v0.5.7 起)**:
+
+| 项 | 单价 | 量 | 小计 |
+|---|---|---|---|
+| Gemini 2.5 Flash vision input | $0.075 / MTok | ~50 张 × ~2K tok | ~$0.008 |
+| Gemini 2.5 Flash output | $0.30 / MTok | ~50 × ~500 tok | ~$0.008 |
+| **单次完整跑总计** | | | **~$0.05** |
+
+且 Google AI Studio 有免费额度 1500 RPM(每分钟 1500 请求),日常跑足够覆盖。
+
+**Claude Opus 4.5(兜底)**:
+
 | 项 | 单价 | 量 | 小计 |
 |---|---|---|---|
 | Claude Opus 4.5 vision input | $15 / MTok | ~50 张 × ~2.5K tok | ~$1.85 |
 | Claude Opus 4.5 vision output | $75 / MTok | ~50 × ~500 tok | ~$1.90 |
 | **单次完整跑总计** | | | **~$4** |
 
-跑频率建议:**手动按需**(发版前 / 大改后);**不进 CI**(成本高 + 时间长 + flakiness)。
+跑频率建议:**手动按需**(发版前 / 大改后);**不进 CI**(模型 false positive 让开发者疲于反驳)。
 
 ## 不进 CI 的理由
 
-- 单次 ~5 分钟跑 + ~$4 成本,放进 PR check 太重
+- ~5 分钟跑时间放进 PR check 太重(虽然 Gemini 成本已经几乎免费)
 - vision 模型的 false positive 会让开发者疲于反驳
 - 比较好的位置:**发版冒烟 checklist** 的一个手动步骤,人来决定是否要修
 
