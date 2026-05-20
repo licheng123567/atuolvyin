@@ -316,8 +316,25 @@ async def agent_update_case_stage(
         )
     prev_stage = case.stage
     case.stage = body.stage
+    # v0.5.6 — 标记承诺缴费时,把 3 个结构化字段写到 case
+    # (其他阶段切换不动 promise_* 字段,避免误清空历史承诺)
+    audit_extra: dict[str, object] = {}
+    if body.stage == "promised":
+        if body.promise_content is not None:
+            case.promise_content = body.promise_content
+            audit_extra["promise_content"] = body.promise_content
+        if body.promise_amount is not None:
+            case.promise_amount = body.promise_amount
+            audit_extra["promise_amount"] = str(body.promise_amount)
+        if body.promise_due_at is not None:
+            case.promise_due_at = body.promise_due_at
+            audit_extra["promise_due_at"] = body.promise_due_at.isoformat()
     db.commit()
     db.refresh(case)
+    audit_payload: dict[str, object] = {"from": prev_stage, "to": body.stage}
+    if body.note:
+        audit_payload["note"] = body.note
+    audit_payload.update(audit_extra)
     log_audit(
         db,
         actor_user_id=user.id,
@@ -326,9 +343,7 @@ async def agent_update_case_stage(
         action="case.stage_changed",
         target_type="collection_case",
         target_id=case_id,
-        payload={"from": prev_stage, "to": body.stage, "note": body.note}
-        if body.note
-        else {"from": prev_stage, "to": body.stage},
+        payload=audit_payload,
     )
     db.commit()
     return case

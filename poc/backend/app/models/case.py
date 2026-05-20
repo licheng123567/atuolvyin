@@ -159,7 +159,13 @@ class CollectionCase(Base, TimestampMixin):
     last_contact_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     monthly_contact_count: Mapped[int] = mapped_column(sa.Integer, default=0)
     # v1.6 承诺还款到期时间，到期前 24h scan_and_notify_promise_expiring 会发提醒
+    # v0.5.6 起作为「承诺缴费日期」结构化字段(MarkPromiseModal 写入)
     promise_due_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    # v0.5.6 承诺缴费结构化字段(标记承诺缴费时填,与 promise_due_at 配套)
+    # promise_content:承诺什么(如「全额缴清」「先缴本金」「分期 2 次」+ 可附补充说明)
+    promise_content: Mapped[str | None] = mapped_column(sa.String(500))
+    # promise_amount:承诺缴费金额(可空 — 业主只口头承诺不报金额时不强求)
+    promise_amount: Mapped[sa.Numeric | None] = mapped_column(sa.Numeric(12, 2))
     data_hash: Mapped[str | None] = mapped_column(sa.Text)
     status: Mapped[str] = mapped_column(sa.Text, nullable=False, default="active")
     # v1.4 — 欠费情况说明（导入时录入，让催收员一眼看到原因）

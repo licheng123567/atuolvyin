@@ -172,3 +172,117 @@ async def test_release_others_case_returns_403(
     )
     assert resp.status_code == 403
     assert resp.json()["code"] == "ERR_NOT_YOURS"
+
+
+# ─── v0.5.6 标记承诺缴费(stage='promised' + 3 结构化字段) ──────────────────
+
+
+@pytest.mark.asyncio
+async def test_mark_promised_with_structured_fields(
+    client: AsyncClient, db_session, agent_auth_headers, seeded_case, seeded_member_user,
+):
+    """v0.5.6 — 标记承诺缴费时 promise_content / promise_amount / promise_due_at
+    全部应写入 case 行,并出现在 audit log payload。"""
+    from decimal import Decimal
+    seeded_case.assigned_to = seeded_member_user.id
+    seeded_case.pool_type = "private"
+    db_session.commit()
+    resp = await client.patch(
+        f"/api/v1/agent/cases/{seeded_case.id}/stage",
+        json={
+            "stage": "promised",
+            "note": "业主承诺端午节前缴清",
+            "promise_content": "全额缴清",
+            "promise_amount": "5000.00",
+            "promise_due_at": "2026-06-10T00:00:00Z",
+        },
+        headers=agent_auth_headers,
+    )
+    assert resp.status_code == 200
+
+    # 持久化校验
+    from app.models.case import CollectionCase
+    db_session.expire_all()
+    refreshed = db_session.get(CollectionCase, seeded_case.id)
+    assert refreshed.stage == "promised"
+    assert refreshed.promise_content == "全额缴清"
+    assert refreshed.promise_amount == Decimal("5000.00")
+    assert refreshed.promise_due_at is not None
+
+    # AuditLog payload 应包含 3 字段
+    from sqlalchemy import select
+    from app.models.audit import AuditLog
+    logs = db_session.execute(
+        select(AuditLog).where(
+            AuditLog.target_type == "collection_case",
+            AuditLog.target_id == seeded_case.id,
+        )
+    ).scalars().all()
+    promised_log = next(
+        (l for l in logs if (l.payload or {}).get("to") == "promised"),
+        None,
+    )
+    assert promised_log is not None
+    assert promised_log.payload.get("promise_content") == "全额缴清"
+    assert promised_log.payload.get("promise_amount") == "5000.00"
+    assert "promise_due_at" in promised_log.payload
+
+
+@pytest.mark.asyncio
+async def test_mark_promised_without_amount_allowed(
+    client: AsyncClient, db_session, agent_auth_headers, seeded_case, seeded_member_user,
+):
+    """v0.5.6 — 业主只口头承诺不报金额时,promise_amount 可空。"""
+    seeded_case.assigned_to = seeded_member_user.id
+    seeded_case.pool_type = "private"
+    db_session.commit()
+    resp = await client.patch(
+        f"/api/v1/agent/cases/{seeded_case.id}/stage",
+        json={
+            "stage": "promised",
+            "promise_content": "分期 3 次,具体金额待商定",
+            "promise_due_at": "2026-07-01T00:00:00Z",
+        },
+        headers=agent_auth_headers,
+    )
+    assert resp.status_code == 200
+
+    from app.models.case import CollectionCase
+    db_session.expire_all()
+    refreshed = db_session.get(CollectionCase, seeded_case.id)
+    assert refreshed.promise_content == "分期 3 次,具体金额待商定"
+    assert refreshed.promise_amount is None
+
+
+@pytest.mark.asyncio
+async def test_other_stages_dont_touch_promise_fields(
+    client: AsyncClient, db_session, agent_auth_headers, seeded_case, seeded_member_user,
+):
+    """v0.5.6 — 切到其他阶段(in_progress / paid / closed)时,即使 body 里带了
+    promise_* 字段也应忽略,不写到 case 行(避免误清空已记录的承诺)。"""
+    from decimal import Decimal
+    seeded_case.assigned_to = seeded_member_user.id
+    seeded_case.pool_type = "private"
+    # 先种一个已有的承诺
+    seeded_case.promise_content = "原承诺:5000"
+    seeded_case.promise_amount = Decimal("5000.00")
+    db_session.commit()
+
+    resp = await client.patch(
+        f"/api/v1/agent/cases/{seeded_case.id}/stage",
+        json={
+            "stage": "in_progress",
+            "promise_content": "不该写入",  # 应被忽略
+            "promise_amount": "9999.00",  # 应被忽略
+        },
+        headers=agent_auth_headers,
+    )
+    assert resp.status_code == 200
+
+    from app.models.case import CollectionCase
+    db_session.expire_all()
+    refreshed = db_session.get(CollectionCase, seeded_case.id)
+    assert refreshed.stage == "in_progress"
+    # 原承诺保留不变
+    assert refreshed.promise_content == "原承诺:5000"
+    assert refreshed.promise_amount == Decimal("5000.00")

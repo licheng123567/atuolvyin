@@ -16,6 +16,8 @@ import {
 import { DiscountRequestModal } from "../../../components/discount/DiscountRequestModal";
 import { QrDialDialog } from "../../../components/dial/QrDialDialog";
 import { RequestLegalConversionModal } from "../../../components/legal-conversion/RequestLegalConversionModal";
+import { MarkPromiseModal } from "../../../components/case/MarkPromiseModal";
+import { WorkOrderCreateModal } from "../../../components/admin/WorkOrderCreateModal";
 import { useCallSocket } from "../../../hooks/useCallSocket";
 import type { PaginatedResponse } from "../../../types";
 import type { CaseDetailResponse } from "../../../types/case";
@@ -268,43 +270,21 @@ export function AgentWorkstationIndexPage() {
   }
 
   // ── 工作台 quick-actions（创建工单 / 标记承诺;升级督导 / 申请转法务走专用 modal）──
-  const { mutate: workOrderMutate } = useCustomMutation();
-  const { mutate: stageMutate } = useCustomMutation();
+  // v0.5.6 — 旧 window.prompt 创建工单 / window.prompt 标记承诺缴费 / 直接 stageMutate 全部废弃,
+  //          统一改成专用 Modal 组件(WorkOrderCreateModal + MarkPromiseModal),
+  //          与案件详情 + admin/supervisor 同源。
 
+  // 创建工单弹窗 state(用同一 WorkOrderCreateModal,与 admin/supervisor 一致)
+  const [workOrderCaseId, setWorkOrderCaseId] = useState<number | null>(null);
   function handleCreateWorkOrder(caseId: number) {
-    const description = window.prompt("工单内容（必填）：");
-    if (!description?.trim()) return;
-    workOrderMutate(
-      {
-        url: "workorders",
-        method: "post",
-        values: {
-          case_id: caseId,
-          order_type: "case_followup",
-          description: description.trim(),
-          priority: "normal",
-        },
-      },
-      {
-        onSuccess: (resp) => alert(`✓ 工单 #${(resp.data as { id?: number }).id ?? "?"} 已创建`),
-        onError: (err) => alert(`创建失败：${err.message}`),
-      },
-    );
+    setWorkOrderCaseId(caseId);
   }
 
+  // v0.5.6 — 标记承诺缴费走 MarkPromiseModal(结构化字段:承诺内容/日期/金额);
+  // 旧 window.prompt 实现已废弃。
+  const [markPromiseCaseId, setMarkPromiseCaseId] = useState<number | null>(null);
   function handleMarkPromised(caseId: number) {
-    const note = window.prompt("业主承诺备注（可选，例如：业主承诺月底前缴清）：") ?? "";
-    stageMutate(
-      {
-        url: `agent/cases/${caseId}/stage`,
-        method: "patch",
-        values: { stage: "promised", note: note.trim() || undefined },
-      },
-      {
-        onSuccess: () => alert("✓ 已标记为承诺缴费"),
-        onError: (err) => alert(`标记失败：${err.message}`),
-      },
-    );
+    setMarkPromiseCaseId(caseId);
   }
 
   // v0.5.4 — 升级督导弹窗 state(替代 window.prompt,加「什么情况下升级督导」指引)
@@ -1050,6 +1030,31 @@ export function AgentWorkstationIndexPage() {
           breakdown={paymentLink.breakdown}
           sentTo={paymentLink.sent_to}
           onClose={() => setPaymentLink(null)}
+        />
+      )}
+
+      {markPromiseCaseId !== null && (
+        <MarkPromiseModal
+          caseId={markPromiseCaseId}
+          endpoint={`agent/cases/${markPromiseCaseId}/stage`}
+          open
+          onClose={() => setMarkPromiseCaseId(null)}
+          onSuccess={() => {
+            caseListQuery.refetch();
+            kpiQuery.refetch();
+          }}
+        />
+      )}
+
+      {workOrderCaseId !== null && (
+        <WorkOrderCreateModal
+          caseId={workOrderCaseId}
+          onClose={() => setWorkOrderCaseId(null)}
+          onSuccess={(orderId) => {
+            setWorkOrderCaseId(null);
+            alert(`✓ 工单 #${orderId ?? "?"} 已创建`);
+            caseListQuery.refetch();
+          }}
         />
       )}
     </>

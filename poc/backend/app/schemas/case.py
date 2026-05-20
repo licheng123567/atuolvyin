@@ -104,6 +104,10 @@ class CaseImportResponse(BaseModel):
 class CaseStageUpdate(BaseModel):
     stage: Literal["new", "in_progress", "promised", "paid", "escalated", "closed"]
     note: str | None = None  # v1.6.6 — 阶段变更跟进备注（写入 audit log）
+    # v0.5.6 — 标记承诺缴费时附带的结构化字段(仅 stage='promised' 时生效;其他阶段忽略)
+    promise_content: str | None = Field(None, max_length=500)
+    promise_amount: Decimal | None = Field(None, ge=0)
+    promise_due_at: datetime | None = None
 
 
 class CaseAssignResponse(BaseModel):

@@ -1,9 +1,12 @@
 // v1.6.10 — 添加跟进备注卡（admin / agent / supervisor 案件详情共用）
 // 调用方传入 endpoint（如 "agent/cases/{id}/stage" 或 "admin/cases/{id}/stage"）
+// v0.5.6 — 阶段选「承诺缴费」时不再直接 PATCH,而是弹 MarkPromiseModal 让用户填
+//          结构化字段(承诺什么/金额/日期),完整数据再 PATCH。
 import { useCustomMutation, useInvalidate } from "@refinedev/core";
 import { Save } from "lucide-react";
 import { useState } from "react";
 import { STAGE_LABELS } from "./constants";
+import { MarkPromiseModal } from "./MarkPromiseModal";
 
 interface Props {
   caseId: number;
@@ -22,11 +25,30 @@ export function FollowUpNoteCard({
 }: Props) {
   const [note, setNote] = useState("");
   const [stage, setStage] = useState("");
+  const [promiseModalOpen, setPromiseModalOpen] = useState(false);
   const { mutate, mutation } = useCustomMutation();
   const invalidate = useInvalidate();
 
+  function invalidateAndReset() {
+    setNote("");
+    setStage("");
+    if (invalidateResource) {
+      void invalidate({
+        resource: invalidateResource,
+        invalidates: ["detail"],
+        id: caseId,
+      });
+    }
+    onSaved?.();
+  }
+
   function handleSave() {
     if (!stage) return;
+    // v0.5.6 — 承诺缴费走结构化弹窗,不走简单 PATCH
+    if (stage === "promised") {
+      setPromiseModalOpen(true);
+      return;
+    }
     mutate(
       {
         url: endpoint,
@@ -34,18 +56,7 @@ export function FollowUpNoteCard({
         values: { stage, note: note || undefined },
       },
       {
-        onSuccess: () => {
-          setNote("");
-          setStage("");
-          if (invalidateResource) {
-            void invalidate({
-              resource: invalidateResource,
-              invalidates: ["detail"],
-              id: caseId,
-            });
-          }
-          onSaved?.();
-        },
+        onSuccess: () => invalidateAndReset(),
         onError: (err) => alert(`保存失败：${err.message ?? "请重试"}`),
       },
     );
@@ -101,6 +112,19 @@ export function FollowUpNoteCard({
           {mutation.isPending ? "保存中…" : "保存"}
         </button>
       </div>
+
+      {promiseModalOpen && (
+        <MarkPromiseModal
+          caseId={caseId}
+          endpoint={endpoint}
+          open
+          onClose={() => setPromiseModalOpen(false)}
+          onSuccess={() => {
+            setPromiseModalOpen(false);
+            invalidateAndReset();
+          }}
+        />
+      )}
     </div>
   );
 }
