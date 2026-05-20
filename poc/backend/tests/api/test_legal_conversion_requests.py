@@ -413,6 +413,7 @@ def _seed_request_with_material(db_session, seeded_tenant, seeded_case, uploader
     req = LegalConversionRequest(
         tenant_id=seeded_tenant.id, case_id=seeded_case.id,
         requester_user_id=uploader_id, requester_role="legal", status="pending",
+        reason="测试上传材料的请求",
     )
     db_session.add(req)
     db_session.flush()
@@ -483,6 +484,7 @@ def test_property_request_detail_cross_tenant_404(
     foreign_req = LegalConversionRequest(
         tenant_id=other.id, case_id=seeded_case.id,
         requester_user_id=seeded_supervisor_user.id, requester_role="legal", status="pending",
+        reason="跨租户测试请求",
     )
     db_session.add(foreign_req)
     db_session.flush()
@@ -530,7 +532,8 @@ def test_property_request_detail_rejects_provider_side(
     db_session.flush()
     req = LegalConversionRequest(
         tenant_id=seeded_tenant.id, case_id=seeded_case.id,
-        requester_user_id=u.id, requester_role="legal", status="pending")
+        requester_user_id=u.id, requester_role="legal", status="pending",
+        reason="服务商法务测试请求")
     db_session.add(req)
     db_session.flush()
     token = create_access_token({

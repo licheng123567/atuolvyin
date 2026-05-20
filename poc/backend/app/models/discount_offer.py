@@ -73,6 +73,10 @@ class DiscountOffer(Base, TimestampMixin):
     audit_trail: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, nullable=False, default=list, server_default=sa.text("'[]'::jsonb")
     )
+    # v0.5.4 — 督导手动「上报 admin」时间戳；NULL 表示从未升级（pending_admin 不再由阈值自动产生）
+    escalated_to_admin_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True)
+    )
 
     __table_args__ = (
         sa.CheckConstraint(

@@ -284,7 +284,8 @@ def create_conversion_request(
         case_id=case_id,
         requester_user_id=user_id,
         requester_role=ROLE_LEGAL,
-        reason=body.reason,
+        # v0.5.4 — reason 改 NOT NULL，None 时给占位（Wave 3 API 改为必填）
+        reason=body.reason or "(待补充)",
         status="pending",
     )
     db.add(req)

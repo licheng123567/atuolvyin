@@ -414,7 +414,8 @@ def post_case_intent(
             case_id=case_id,
             requester_user_id=user_id,
             requester_role=role,
-            reason=body.note,
+            # v0.5.4 — reason 改 NOT NULL，body.note 可能为 None 时给占位（Wave 3 API 改为必填）
+            reason=body.note or "(待补充)",
             status="pending",
         )
         db.add(request_row)
