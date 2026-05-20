@@ -1,7 +1,7 @@
 // 督导侧案件详情 — v1.6.9
 // 重写：复用 admin/agent 同款 build_case_detail_response 后端 + 共享组件
 // 三栏布局（与 agent 详情页一致）：左 业主+项目+欠费 / 中 时间线+备注 / 右 sticky 操作
-import { useGetIdentity, useOne } from "@refinedev/core";
+import { useGetIdentity, useInvalidate, useOne } from "@refinedev/core";
 import {
   ArrowLeft,
   BadgePercent,
@@ -18,6 +18,11 @@ import { FollowUpNoteCard } from "../../../components/case/FollowUpNoteCard";
 import { OwnerInfoCard } from "../../../components/case/OwnerInfoCard";
 import { ProjectInfoCard } from "../../../components/case/ProjectInfoCard";
 import { DiscountRequestModal } from "../../../components/discount/DiscountRequestModal";
+import {
+  SupervisorCaseActionModal,
+  type SupervisorActionType,
+} from "../../../components/supervisor/SupervisorCaseActionModal";
+import { SupervisorReassignModal } from "../../../components/supervisor/SupervisorReassignModal";
 import type { AuthUser } from "../../../providers/auth-provider";
 import type { CaseDetailResponse } from "../../../types/case";
 
@@ -26,6 +31,14 @@ export function SupervisorCaseDetailPage() {
   const navigate = useNavigate();
   const { data: identity } = useGetIdentity<AuthUser>();
   const [showDiscountModal, setShowDiscountModal] = useState(false);
+  // v0.5.4 — 督导动作弹窗 state
+  const [actionType, setActionType] = useState<SupervisorActionType | null>(null);
+  const [reassignOpen, setReassignOpen] = useState(false);
+  const invalidate = useInvalidate();
+
+  function refresh() {
+    void invalidate({ resource: "supervisor/cases", invalidates: ["all"] });
+  }
 
   const { query } = useOne<CaseDetailResponse>({
     resource: "supervisor/cases",
@@ -141,8 +154,8 @@ export function SupervisorCaseDetailPage() {
                   type="button"
                   className="ds-btn ds-btn-secondary"
                   style={{ width: "100%", justifyContent: "center" }}
-                  onClick={() => alert("已通知催收员介入；下一通通话督导可监听/接管")}
-                  title="标记为督导陪同：催收员下次拨打时督导收到通知"
+                  onClick={() => setActionType("intervene")}
+                  title="督导接管:写入案件时间线 + 通知催收员"
                 >
                   <Headphones className="w-3.5 h-3.5" />
                   介入处理
@@ -163,10 +176,33 @@ export function SupervisorCaseDetailPage() {
                   type="button"
                   className="ds-btn ds-btn-secondary"
                   style={{ width: "100%", justifyContent: "center" }}
-                  onClick={() => alert("重新分配功能待接入：督导可指定其他催收员或退回公海")}
+                  onClick={() => setReassignOpen(true)}
+                  title="重新分配给其他催收员"
                 >
                   <Users className="w-3.5 h-3.5" />
                   重新分配
+                </button>
+              )}
+              <button
+                type="button"
+                className="ds-btn ds-btn-secondary"
+                style={{ width: "100%", justifyContent: "center" }}
+                onClick={() => setActionType("urge")}
+                title="对停滞案件发催办,推送通知给催收员"
+              >
+                <Phone className="w-3.5 h-3.5" />
+                催办
+              </button>
+              {detail.assigned_to && (
+                <button
+                  type="button"
+                  className="ds-btn ds-btn-secondary"
+                  style={{ width: "100%", justifyContent: "center" }}
+                  onClick={() => setActionType("remind_callback")}
+                  title="提醒催收员对该案件做回访"
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  催回访
                 </button>
               )}
               <button
@@ -223,6 +259,32 @@ export function SupervisorCaseDetailPage() {
             setShowDiscountModal(false);
             alert(`✓ 减免申请 #${offerId} 已提交`);
             navigate("/supervisor/discount-approvals");
+          }}
+        />
+      )}
+
+      {actionType && (
+        <SupervisorCaseActionModal
+          caseId={detail.id}
+          type={actionType}
+          onClose={() => setActionType(null)}
+          onDone={() => {
+            setActionType(null);
+            refresh();
+            alert("✓ 已写入案件时间线并通知催收员");
+          }}
+        />
+      )}
+
+      {reassignOpen && (
+        <SupervisorReassignModal
+          caseId={detail.id}
+          currentAssignedTo={detail.assigned_to ?? null}
+          onClose={() => setReassignOpen(false)}
+          onDone={() => {
+            setReassignOpen(false);
+            refresh();
+            alert("✓ 案件已重新分配,新催收员收到通知");
           }}
         />
       )}

@@ -58,6 +58,7 @@ from app.api import (
     super_health,
     super_plans,
     supervisor,
+    supervisor_actions,
     supervisor_case_detail,
     supervisor_escalated,
     supervisor_extras,
@@ -286,6 +287,9 @@ app.include_router(
 )
 app.include_router(
     supervisor_case_detail.router, prefix="/api/v1/supervisor", tags=["supervisor-case-detail"]
+)
+app.include_router(
+    supervisor_actions.router, prefix="/api/v1/supervisor", tags=["supervisor-actions"]
 )
 app.include_router(
     supervisor_shifts.router, prefix="/api/v1/supervisor", tags=["supervisor-shifts"]
