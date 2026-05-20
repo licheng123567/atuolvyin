@@ -118,7 +118,7 @@ describe("getNavSections — 物业管理员 7 段菜单", () => {
     }
   });
 
-  it("覆盖全部 23 个 admin 路径，且无重复", () => {
+  it("覆盖全部 22 个 admin 路径，且无重复", () => {
     const paths = adminSections().flatMap((s) => s.items.map((i) => i.path));
     const expected = [
       "/admin/projects",
@@ -131,7 +131,7 @@ describe("getNavSections — 物业管理员 7 段菜单", () => {
       "/admin/agent-devices",
       "/admin/providers",
       "/admin/settlements",
-      "/admin/agent-commissions",
+      "/admin/discount-approvals",
       "/admin/reports",
       "/admin/compliance",
       "/admin/scripts",
@@ -139,7 +139,6 @@ describe("getNavSections — 物业管理员 7 段菜单", () => {
       "/admin/risk-keywords",
       "/admin/legal-conversion",
       "/admin/legal-conversion-approvals",
-      "/admin/discount-approvals",
       "/admin/partner-law-firms",
       "/admin/internal-letter-templates",
       "/admin/audit-logs",

@@ -97,8 +97,6 @@ import { LegalInternalOrdersPage } from "./pages/legal/internal-orders/index";
 import { LegalInternalOrderDetailPage } from "./pages/legal/internal-orders/[id]";
 import { AdminPartnerLawFirmsPage } from "./pages/admin/partner-law-firms/index";
 import { AdminInternalLetterTemplatesPage } from "./pages/admin/internal-letter-templates/index";
-import { AgentCommissionsListPage } from "./pages/admin/agent-commissions";
-import { AgentCommissionDetailPage } from "./pages/admin/agent-commissions/[id]";
 import { WorkOrderListPage } from "./pages/workorder/orders/index";
 import { WorkOrderNewPage } from "./pages/workorder/orders/new";
 import { WorkOrderDetailPage } from "./pages/workorder/orders/[id]";
@@ -531,9 +529,6 @@ function App() {
             <Route path="/supervisor/discount-approvals/:id" element={<SupervisorDiscountApprovalDetailPage />} />
             <Route path="/admin/discount-approvals" element={<AdminDiscountApprovalsPage />} />
             <Route path="/admin/discount-approvals/:id" element={<AdminDiscountApprovalDetailPage />} />
-            {/* §9.2 — 内勤提成 */}
-            <Route path="/admin/agent-commissions" element={<AgentCommissionsListPage />} />
-            <Route path="/admin/agent-commissions/:id" element={<AgentCommissionDetailPage />} />
             {/* Workorder - Orders */}
             <Route path="/workorder/orders" element={<WorkOrderListPage />} />
             <Route path="/workorder/orders/new" element={<WorkOrderNewPage />} />

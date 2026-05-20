@@ -47,7 +47,8 @@ const NAV_CONFIG: Partial<Record<UserRole | "workorder", NavSection[]>> = {
       title: "结算与报表",
       items: [
         { label: "结算管理", path: "/admin/settlements", icon: "Receipt" },
-        { label: "内勤提成", path: "/admin/agent-commissions", icon: "Wallet" },
+        // v0.5.4 — 减免大额审批从「法务管理」移入此处（减免是金额谈判，非法务事项）
+        { label: "减免大额审批", path: "/admin/discount-approvals", icon: "BadgePercent" },
         { label: "数据报表", path: "/admin/reports", icon: "BarChart2" },
         { label: "合规月报", path: "/admin/compliance", icon: "Shield" },
       ],
@@ -66,7 +67,6 @@ const NAV_CONFIG: Partial<Record<UserRole | "workorder", NavSection[]>> = {
         { label: "法务转化", path: "/admin/legal-conversion", icon: "Scale" },
         // v1.6.8 — 法务转化两步审批 inbox（催收员申请 → admin 也可代督导审批）
         { label: "法务转化审批", path: "/admin/legal-conversion-approvals", icon: "ClipboardList" },
-        { label: "减免大额审批", path: "/admin/discount-approvals", icon: "BadgePercent" },
         // v1.9.0 — 法务内部处理配套：合作律所 + 律师函模板（物业法务起草律师函时选用）
         { label: "合作律所", path: "/admin/partner-law-firms", icon: "Building2" },
         { label: "律师函模板", path: "/admin/internal-letter-templates", icon: "FileText" },
