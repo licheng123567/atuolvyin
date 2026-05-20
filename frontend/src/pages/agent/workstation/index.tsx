@@ -482,6 +482,7 @@ export function AgentWorkstationIndexPage() {
             <select
               value={stageFilter}
               onChange={(e) => setStageFilter(e.target.value)}
+              aria-label="按阶段筛选案件"
               style={{ background: "#f8fafc", border: "1px solid #e2e8f0", color: "#475569",
                 fontSize: 12, padding: "3px 6px", borderRadius: 4 }}
             >
