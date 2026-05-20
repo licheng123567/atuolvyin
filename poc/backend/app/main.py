@@ -46,6 +46,7 @@ from app.api import (
     ops_providers,
     pm_dashboard,
     provider_admin,
+    provider_cases,
     provider_legal,
     provider_scripts,
     provider_termination,
@@ -330,6 +331,7 @@ app.include_router(
 app.include_router(work_orders.router, prefix="/api/v1/workorders", tags=["workorders"])
 app.include_router(pm_dashboard.router, prefix="/api/v1/pm", tags=["pm"])
 app.include_router(provider_admin.router, prefix="/api/v1/provider", tags=["provider"])
+app.include_router(provider_cases.router, prefix="/api/v1/provider", tags=["provider-cases"])
 app.include_router(provider_scripts.router, prefix="/api/v1/provider", tags=["provider-scripts"])
 app.include_router(
     provider_termination.admin_router,

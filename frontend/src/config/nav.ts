@@ -249,15 +249,35 @@ const NAV_CONFIG: Partial<Record<UserRole | "workorder", NavSection[]>> = {
 
 // Provider-side admin nav (scope = provider:{id}):
 // admin role with provider scope gets the provider dashboard menu
+// v0.5.6 — 加「案件管理」段(本服务商接手项目下的案件 + 公海 + 看板)
 const PROVIDER_ADMIN_NAV: NavSection[] = [
   {
+    title: "工作台",
     items: [
       { label: "总览", path: "/provider/dashboard", icon: "LayoutDashboard" },
       { label: "我的项目", path: "/provider/projects", icon: "FolderKanban" },
       { label: "合作租户", path: "/provider/tenants", icon: "Building2" },
+    ],
+  },
+  {
+    title: "案件管理",
+    items: [
+      { label: "案件列表", path: "/provider/cases", icon: "List" },
+      { label: "案件看板", path: "/provider/cases/kanban", icon: "KanbanSquare" },
+      { label: "服务商公海", path: "/provider/pool", icon: "Inbox" },
+    ],
+  },
+  {
+    title: "人员与话术",
+    items: [
       { label: "团队管理", path: "/provider/team", icon: "Users" },
       { label: "团队绩效", path: "/provider/team-performance", icon: "TrendingUp" },
       { label: "话术库", path: "/provider/scripts", icon: "MessageSquare" },
+    ],
+  },
+  {
+    title: "结算与报表",
+    items: [
       { label: "收入结算", path: "/provider/settlements", icon: "Receipt" },
       { label: "历史报表", path: "/provider/historical-reports", icon: "Archive" },
     ],

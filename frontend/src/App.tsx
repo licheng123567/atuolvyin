@@ -124,6 +124,9 @@ import { ProviderProjectsPage } from "./pages/provider/projects";
 import { ProviderScriptListPage } from "./pages/provider/scripts";
 import { ProviderTenantsPage } from "./pages/provider/tenants";
 import { ProviderTeamPage } from "./pages/provider/team";
+import { ProviderCasesPage, ProviderPoolPage } from "./pages/provider/cases";
+import { ProviderCaseDetailPage } from "./pages/provider/cases/detail";
+import { ProviderCasesKanbanPage } from "./pages/provider/cases/kanban";
 import { ProviderSettlementListPage } from "./pages/provider/settlements";
 import { ProviderSettlementDetailPage } from "./pages/provider/settlements/[id]";
 import { SuperHealthPage } from "./pages/super/health";
@@ -190,9 +193,12 @@ function AuthenticatedShell() {
   );
 }
 
-// Sprint 14.3 — 首登 App 引导（v1.5.6 — 仅对催收员显示）
-const APP_INTRO_ROLES = new Set([
-  "agent",
+// Sprint 14.3 — 首登 App 引导(v1.5.6 — 仅对催收员显示)
+// v0.5.6:用户反馈「催收员登录还是不提醒 app 的安装吧。每次提醒也很怪」→ 关闭对催收员的弹出。
+// 留空集合表示所有角色都不弹;preferences API 与 dismiss 逻辑都保留,后续如要恢复
+// 只需把对应 role 加回到 set 即可。
+const APP_INTRO_ROLES = new Set<string>([
+  // (v0.5.6 起空) — 之前是 "agent",催收员侧每次登录都弹太烦,关闭。
 ]);
 
 function AppIntroModalGate() {
@@ -513,6 +519,11 @@ function App() {
             <Route path="/ops/customer-followups" element={<OpsCustomerFollowupsPage />} />
             <Route path="/provider/team-performance" element={<ProviderTeamPerformancePage />} />
             <Route path="/provider/team/:user_id/commission" element={<ProviderMemberCommissionPage />} />
+            {/* v0.5.6 — 服务商管理员案件管理(列表 + 看板 + 详情 + 公海) */}
+            <Route path="/provider/cases" element={<ProviderCasesPage />} />
+            <Route path="/provider/cases/kanban" element={<ProviderCasesKanbanPage />} />
+            <Route path="/provider/cases/:id" element={<ProviderCaseDetailPage />} />
+            <Route path="/provider/pool" element={<ProviderPoolPage />} />
             {/* Legal - Cases */}
             <Route path="/legal/cases" element={<LegalCaseListPage />} />
             <Route path="/legal/cases/:id" element={<LegalCaseDetailPage />} />
