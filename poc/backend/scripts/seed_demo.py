@@ -620,6 +620,8 @@ def _upsert_internal_order(
             case_id=case.id,
             requester_user_id=requester.id,
             requester_role="agent",
+            # v0.5.6 起 reason NOT NULL;seed 演示用占位
+            reason="业主长期失联(>1 个月)",
             status="approved",
             related_order_id=order.id,
             reviewer_user_id=creator.id,
