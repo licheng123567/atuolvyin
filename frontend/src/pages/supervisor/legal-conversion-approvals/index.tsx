@@ -6,6 +6,7 @@ import { useCustom, useGetIdentity, useInvalidate } from "@refinedev/core";
 import { CheckCircle2, ClipboardList, Eye, Scale, X } from "lucide-react";
 import { useState } from "react";
 import { ConvertToLegalModal } from "../../../components/legal-conversion/ConvertToLegalModal";
+import { EscalateToAdminModal } from "../../../components/legal-conversion/EscalateToAdminModal";
 import { RejectRequestModal } from "../../../components/legal-conversion/RejectRequestModal";
 import { PaginationBar } from "../../../components/ui/PaginationBar";
 import { SearchInput } from "../../../components/ui/SearchInput";
@@ -28,7 +29,7 @@ interface RequestItem {
   requester_role: string;
   requester_name: string | null;
   reason: string | null;
-  status: "pending" | "approved" | "rejected" | "cancelled";
+  status: RequestStatus;
   reviewer_user_id: number | null;
   reviewer_role: string | null;
   reviewer_name: string | null;
@@ -39,21 +40,34 @@ interface RequestItem {
   updated_at: string;
 }
 
+// v0.5.4 — 状态扩展:加 pending_admin(督导上报后)+ approved_pending_legal(已批等法务接单选包)
+type RequestStatus =
+  | "pending"
+  | "pending_admin"
+  | "approved"
+  | "approved_pending_legal"
+  | "rejected"
+  | "cancelled";
+
 interface ListResp {
   items: RequestItem[];
   total: number;
 }
 
-const STATUS_LABEL: Record<RequestItem["status"], string> = {
-  pending: "待审批",
-  approved: "已批准",
+const STATUS_LABEL: Record<RequestStatus, string> = {
+  pending: "待督导审批",
+  pending_admin: "待 admin 审批",
+  approved: "已完结",
+  approved_pending_legal: "已批·待法务接单",
   rejected: "已驳回",
   cancelled: "已撤销",
 };
 
-const STATUS_BADGE: Record<RequestItem["status"], string> = {
+const STATUS_BADGE: Record<RequestStatus, string> = {
   pending: "ds-badge ds-badge-orange",
+  pending_admin: "ds-badge ds-badge-red",
   approved: "ds-badge ds-badge-green",
+  approved_pending_legal: "ds-badge ds-badge-blue",
   rejected: "ds-badge ds-badge-gray",
   cancelled: "ds-badge ds-badge-gray",
 };
@@ -74,8 +88,16 @@ export function SupervisorLegalConversionApprovalsPage() {
   const debouncedKw = useDebouncedValue(keyword, 300);
   const [approveTarget, setApproveTarget] = useState<RequestItem | null>(null);
   const [rejectTarget, setRejectTarget] = useState<RequestItem | null>(null);
+  // v0.5.4 — 督导新动作:上报 admin
+  const [escalateTarget, setEscalateTarget] = useState<RequestItem | null>(null);
 
-  const statusForApi = tab === "all" ? undefined : tab;
+  const role = identity?.role ?? "";
+  const isAdmin = role === "admin" || role === "superadmin";
+  // v0.5.4 — pending 的实际状态值因角色而异:督导看 pending,admin 看 pending_admin
+  const myPendingStatus: RequestStatus = isAdmin ? "pending_admin" : "pending";
+
+  const statusForApi: RequestStatus | undefined =
+    tab === "all" ? undefined : tab === "pending" ? myPendingStatus : tab;
 
   const { query } = useCustom<ListResp>({
     url: "legal-conversion-requests",
@@ -86,7 +108,7 @@ export function SupervisorLegalConversionApprovalsPage() {
   const { query: pendingQ } = useCustom<ListResp>({
     url: "legal-conversion-requests",
     method: "get",
-    config: { query: { status: "pending", page: 1, page_size: 1 } },
+    config: { query: { status: myPendingStatus, page: 1, page_size: 1 } },
   });
   const { query: approvedQ } = useCustom<ListResp>({
     url: "legal-conversion-requests",
@@ -123,9 +145,10 @@ export function SupervisorLegalConversionApprovalsPage() {
     setRejectTarget(null);
     void invalidate({ resource: "legal-conversion-requests", invalidates: ["all"] });
   }
-
-  const role = identity?.role ?? "";
-  const isAdmin = role === "admin" || role === "superadmin";
+  function handleEscalated() {
+    setEscalateTarget(null);
+    void invalidate({ resource: "legal-conversion-requests", invalidates: ["all"] });
+  }
 
   return (
     <div>
@@ -238,7 +261,11 @@ export function SupervisorLegalConversionApprovalsPage() {
                   ? `${r.reason.slice(0, 30)}…`
                   : r.reason
                 : "—";
-              const canAct = r.status === "pending";
+              // v0.5.4 — 角色 + 状态决定可操作性
+              const canSupervisorApprove = role === "supervisor" && r.status === "pending";
+              const canAdminApprove = isAdmin && r.status === "pending_admin";
+              const canApprove = canSupervisorApprove || canAdminApprove;
+              const canEscalate = role === "supervisor" && r.status === "pending";
               return (
                 <tr key={r.id}>
                   <td
@@ -326,7 +353,7 @@ export function SupervisorLegalConversionApprovalsPage() {
                   </td>
                   <td>
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                      {canAct ? (
+                      {canApprove ? (
                         <>
                           <button
                             type="button"
@@ -343,6 +370,17 @@ export function SupervisorLegalConversionApprovalsPage() {
                           >
                             <X size={12} /> 驳回
                           </button>
+                          {canEscalate && (
+                            <button
+                              type="button"
+                              className="ds-btn ds-btn-ghost ds-btn-sm"
+                              style={{ color: "#b45309" }}
+                              title="超出督导决断范围,上报 admin 决"
+                              onClick={() => setEscalateTarget(r)}
+                            >
+                              上报 admin
+                            </button>
+                          )}
                         </>
                       ) : (
                         <span
@@ -387,6 +425,14 @@ export function SupervisorLegalConversionApprovalsPage() {
           requestId={rejectTarget.id}
           onClose={() => setRejectTarget(null)}
           onRejected={handleRejected}
+        />
+      )}
+
+      {escalateTarget && (
+        <EscalateToAdminModal
+          requestId={escalateTarget.id}
+          onClose={() => setEscalateTarget(null)}
+          onEscalated={handleEscalated}
         />
       )}
     </div>

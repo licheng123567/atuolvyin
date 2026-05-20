@@ -127,7 +127,8 @@ def _order_to_out(
 @router.get("/legal-packages", response_model=list[LegalServicePackageOut])
 async def list_legal_packages(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
+    # v0.5.4 — legal 角色也可读包目录(法务接单时选包,/legal-finalize 流程)
+    _user: Annotated[UserAccount, Depends(require_tenant_roles("admin", "legal"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[LegalServicePackageOut]:
     tenant_id = _require_tenant(payload)

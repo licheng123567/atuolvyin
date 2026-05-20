@@ -95,6 +95,7 @@ import { LegalCaseListPage } from "./pages/legal/cases/index";
 import { LegalCaseDetailPage } from "./pages/legal/cases/[id]";
 import { LegalInternalOrdersPage } from "./pages/legal/internal-orders/index";
 import { LegalInternalOrderDetailPage } from "./pages/legal/internal-orders/[id]";
+import { LegalPendingFinalizePage } from "./pages/legal/pending-finalize/index";
 import { AdminPartnerLawFirmsPage } from "./pages/admin/partner-law-firms/index";
 import { AdminInternalLetterTemplatesPage } from "./pages/admin/internal-letter-templates/index";
 import { WorkOrderListPage } from "./pages/workorder/orders/index";
@@ -515,6 +516,7 @@ function App() {
             <Route path="/legal/cases/:id" element={<LegalCaseDetailPage />} />
             <Route path="/legal/internal-orders" element={<LegalInternalOrdersPage />} />
             <Route path="/legal/internal-orders/:id" element={<LegalInternalOrderDetailPage />} />
+            <Route path="/legal/pending-finalize" element={<LegalPendingFinalizePage />} />
             <Route path="/admin/partner-law-firms" element={<AdminPartnerLawFirmsPage />} />
             <Route path="/admin/internal-letter-templates" element={<AdminInternalLetterTemplatesPage />} />
             {/* v1.5.7 — 法务转化订单三视图 */}

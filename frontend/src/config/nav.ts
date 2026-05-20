@@ -144,7 +144,9 @@ const NAV_CONFIG: Partial<Record<UserRole | "workorder", NavSection[]>> = {
     {
       title: "我的工作",
       items: [
-        // v1.9.0 — 物业法务内部处理新工作台（主入口）
+        // v0.5.4 — 督导/admin 批准的转法务申请,法务接单选服务包后建 Order
+        { label: "待法务接单", path: "/legal/pending-finalize", icon: "Briefcase" },
+        // v1.9.0 — 物业法务内部处理新工作台（建单后的 LegalConversionOrder）
         { label: "待内部处理", path: "/legal/internal-orders", icon: "Gavel" },
         // v1.9.1 — 升级律所追踪：status=escalated_to_lawfirm 的订单，可加跟进记录（方案 C 之前先只读派单状态）
         { label: "升级律所追踪", path: "/legal/internal-orders?tab=escalated", icon: "ExternalLink" },

@@ -12,6 +12,7 @@ import { OwnerInfoCard } from "../../../components/case/OwnerInfoCard";
 import { ProjectInfoCard } from "../../../components/case/ProjectInfoCard";
 import { DiscountRequestModal } from "../../../components/discount/DiscountRequestModal";
 import { QrDialDialog } from "../../../components/dial/QrDialDialog";
+import { RequestLegalConversionModal } from "../../../components/legal-conversion/RequestLegalConversionModal";
 import type { CaseDetailResponse } from "../../../types/case";
 
 export function AgentWorkstationPage() {
@@ -19,6 +20,8 @@ export function AgentWorkstationPage() {
   const go = useGo();
   const [qrState, setQrState] = useState<{ caseId: number; qrPayload: string; expiresAt: string } | null>(null);
   const [showDiscountModal, setShowDiscountModal] = useState(false);
+  // v0.5.4 — 申请转法务弹窗 state(替代 window.prompt 流)
+  const [transferLegalOpen, setTransferLegalOpen] = useState(false);
   // v1.9.7 — 建工单 Modal（替换 window.prompt）
   const [woModalOpen, setWoModalOpen] = useState(false);
   const [woType, setWoType] = useState<"quality" | "reduction" | "dispute" | "other">("quality");
@@ -232,8 +235,8 @@ export function AgentWorkstationPage() {
                   width: "100%", justifyContent: "center",
                   color: "#7e3af2", borderColor: "#c4b5fd",
                 }}
-                onClick={() => handleIntent("transfer_legal", "申请转法务")}
-                title="提交转法务申请，督导/admin 审批后真正转化"
+                onClick={() => setTransferLegalOpen(true)}
+                title="提交转法务申请,督导/admin 审批后由法务接单选服务包建单"
               >
                 <Scale className="w-3.5 h-3.5" />
                 申请转法务
@@ -253,6 +256,17 @@ export function AgentWorkstationPage() {
           />
         </div>
       </div>
+
+      {transferLegalOpen && detail && (
+        <RequestLegalConversionModal
+          caseId={detail.id}
+          onClose={() => setTransferLegalOpen(false)}
+          onSubmitted={() => {
+            setTransferLegalOpen(false);
+            alert("✓ 申请转法务已提交,等待督导/admin 审批");
+          }}
+        />
+      )}
 
       {qrState && (
         <QrDialDialog

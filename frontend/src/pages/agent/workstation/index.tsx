@@ -10,6 +10,7 @@ import { OwnerInfoCard } from "../../../components/case/OwnerInfoCard";
 import { ProjectInfoCard } from "../../../components/case/ProjectInfoCard";
 import { DiscountRequestModal } from "../../../components/discount/DiscountRequestModal";
 import { QrDialDialog } from "../../../components/dial/QrDialDialog";
+import { RequestLegalConversionModal } from "../../../components/legal-conversion/RequestLegalConversionModal";
 import { useCallSocket } from "../../../hooks/useCallSocket";
 import type { PaginatedResponse } from "../../../types";
 import type { CaseDetailResponse } from "../../../types/case";
@@ -304,21 +305,8 @@ export function AgentWorkstationIndexPage() {
     );
   }
 
-  // v1.6.9 — 申请转法务（写入 LegalConversionRequest，督导/admin 审批）
-  function handleRequestTransferLegal(caseId: number) {
-    const note = window.prompt("转法务理由（建议简述为何不可能自愿缴）：") ?? "";
-    intentMutate(
-      {
-        url: `agent/cases/${caseId}/intent`,
-        method: "post",
-        values: { action: "transfer_legal", note: note.trim() || undefined },
-      },
-      {
-        onSuccess: () => alert("✓ 申请转法务已提交，等待督导/admin 审批"),
-        onError: (err) => alert(`申请失败：${err.message}`),
-      },
-    );
-  }
+  // v0.5.4 — 申请转法务弹窗 state(替代 window.prompt;reason 必填 + 预设原因)
+  const [transferLegalCaseId, setTransferLegalCaseId] = useState<number | null>(null);
 
   // ── 拨号 ─────────────────────────────────
   const { mutate: dialMutate } = useCreate();
@@ -986,8 +974,8 @@ export function AgentWorkstationIndexPage() {
                 className="ws-quick-btn"
                 disabled={!selectedCaseId}
                 data-testid="ws-transfer-legal"
-                onClick={() => selectedCaseId && handleRequestTransferLegal(selectedCaseId)}
-                title="申请转法务，督导/admin 审批后真正建单"
+                onClick={() => selectedCaseId && setTransferLegalCaseId(selectedCaseId)}
+                title="申请转法务,督导/admin 审批后由法务接单选服务包建单"
               >
                 ⚖️ 申请转法务
               </button>
@@ -1025,6 +1013,17 @@ export function AgentWorkstationIndexPage() {
           onSuccess={(offerId) => {
             setDiscountForCaseId(null);
             alert(`✓ 减免申请 #${offerId} 已提交，等待审批`);
+          }}
+        />
+      )}
+
+      {transferLegalCaseId !== null && (
+        <RequestLegalConversionModal
+          caseId={transferLegalCaseId}
+          onClose={() => setTransferLegalCaseId(null)}
+          onSubmitted={() => {
+            setTransferLegalCaseId(null);
+            alert("✓ 申请转法务已提交,等待督导/admin 审批");
           }}
         />
       )}
