@@ -16,6 +16,7 @@
     "visual:diff": "playwright test e2e/v200-mobile-pixel-diff.spec.ts --project=chromium",
     "e2e:vision-collect": "playwright test e2e/vision-audit-collect.spec.ts --project=chromium",
     "vision:analyze": "node scripts/vision-audit-analyze.mjs",
+    "vision:report": "node scripts/vision-audit-local-report.mjs",
     "e2e:a11y": "playwright test e2e/a11y-audit.spec.ts --project=chromium"
   },
   "dependencies": {

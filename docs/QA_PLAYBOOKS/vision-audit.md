@@ -44,33 +44,47 @@ npm run e2e:vision-collect
 
 产物:`frontend/vision-audit-output/{role}/{slug}.{png,json}`。每张 PNG 是某角色登录后该页的全屏截图;同名 JSON 是该页的 console error / pageerror / 失败网络请求清单。
 
-### 第 3 步:调视觉模型出报告(~3-5 分钟)
+### 第 3 步:出报告
 
-**推荐:Gemini 2.5 Flash(便宜 + 免费额度)**
+**v0.5.7 起推荐:纯本地版(无 LLM 依赖,零成本)**
 
 ```bash
-# 1. 申请 Google AI Studio key(免费):https://aistudio.google.com/apikey
-export GEMINI_API_KEY=AIza...
-# 2. 跑分析(脚本自动检测 provider)
-node scripts/vision-audit-analyze.mjs
-# 或:
-npm run vision:analyze
+node scripts/vision-audit-local-report.mjs
+# 或
+npm run vision:report
 ```
 
-**兜底:Claude Opus 4.5(精度更高但更贵)**
+这一版**不调任何 LLM**,只读 Playwright 截图旁的 `.json` 元数据,识别 5 类机器能查的问题:
+- **登录失败**(finalUrl 跳到 /login)— HIGH
+- **JS 异常**(pageerror)— HIGH
+- **Console 错误**(console.error)— MEDIUM
+- **网络请求失败**(过滤 telemetry 噪音)— MEDIUM
+- **白屏**(截图 < 10KB)— MEDIUM
+
+加上可选的 `a11y-audit-report.json`(axe-core WCAG 2.1 A+AA 违规)— 一并合并到本报告。
+
+零成本、零延迟、机器查得到的问题 100% 报出。**捕不到** UX 漂移 / 术语不一致等需要视觉判断的问题 — 这部分建议人工过一遍截图。
+
+**可选:加 LLM 视觉分析(Gemini Flash 或 Claude)**
+
+只在需要「人也看不出来但模型能感知」的 UX 漂移检测时启用。
 
 ```bash
+# Gemini 2.5 Flash(便宜 + Google AI Studio 免费额度;但 free tier RPM 5,跑慢)
+export GEMINI_API_KEY=AIza...
+node scripts/vision-audit-analyze.mjs
+
+# Claude Opus 4.5(更准但贵 ~30 倍)
 export ANTHROPIC_API_KEY=sk-ant-...
-node scripts/vision-audit-analyze.mjs    # 自动 fallback 到 Anthropic
+node scripts/vision-audit-analyze.mjs
 ```
 
 provider 选择策略:`GEMINI_API_KEY` 优先 → `ANTHROPIC_API_KEY` 兜底 → 都没设则报错退出。
-可用 `VISION_MODEL` 环境变量覆盖默认模型(如 `gemini-2.5-pro` / `claude-sonnet-4-5`)。
 
 产物:`frontend/vision-audit-report.md`。结构:
-- 顶部摘要:provider + 模型 + 总问题数 / HIGH / MEDIUM / Console 错误数 / Page 异常数
-- 按严重度分组(HIGH 优先)
-- 按角色 + 页详列(每页的所有问题 + console/page error 计数)
+- 顶部摘要:截图数 / 总问题数 / HIGH / MEDIUM / a11y 违规
+- HIGH 优先排,MEDIUM 紧随
+- 按角色 + 页详列(每页所有问题 + a11y 详细)
 
 ### 第 4 步(可选):跑 a11y 检测
 

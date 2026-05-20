@@ -160,7 +160,11 @@ interface PageReport {
 }
 
 test.describe.serial("v0.5.6 vision-audit 截图收集", () => {
-  test.setTimeout(45_000); // 单页 45s 兜底(网络 / 渲染慢)
+  // v0.5.7 — 压测级 seed 后某些 admin 页拉数据慢,90s 兜底
+  test.setTimeout(90_000);
+  // 已截图过的就跳过(避免每次都重跑成功的部分)
+  // 0 retry:卡住某一页直接 skip 进下一页,不要 2 次 retry 浪费时间
+  test.describe.configure({ retries: 0 });
 
   test.beforeAll(() => {
     if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
@@ -171,6 +175,12 @@ test.describe.serial("v0.5.6 vision-audit 截图收集", () => {
       test(`${role.name} → ${pg.slug}`, async ({ page }) => {
         const roleDir = path.join(OUTPUT_DIR, role.name);
         if (!fs.existsSync(roleDir)) fs.mkdirSync(roleDir, { recursive: true });
+        // v0.5.7 — 跳过已截图的(增量跑;rm vision-audit-output/ 可强制重跑)
+        const existingShot = path.join(roleDir, `${pg.slug}.png`);
+        if (fs.existsSync(existingShot)) {
+          console.log(`  [skip-existing] ${role.name}/${pg.slug}`);
+          return;
+        }
 
         const consoleErrors: string[] = [];
         const pageErrors: string[] = [];
