@@ -13,7 +13,10 @@
     "test:ui": "vitest --ui",
     "preview": "vite preview",
     "visual:baseline": "playwright test e2e/v200-mobile-baseline-gen.spec.ts --project=chromium",
-    "visual:diff": "playwright test e2e/v200-mobile-pixel-diff.spec.ts --project=chromium"
+    "visual:diff": "playwright test e2e/v200-mobile-pixel-diff.spec.ts --project=chromium",
+    "e2e:vision-collect": "playwright test e2e/vision-audit-collect.spec.ts --project=chromium",
+    "vision:analyze": "node scripts/vision-audit-analyze.mjs",
+    "e2e:a11y": "playwright test e2e/a11y-audit.spec.ts --project=chromium"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -34,6 +37,7 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.97.1",
     "@axe-core/playwright": "^4.11.3",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.59.1",
