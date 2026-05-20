@@ -2,6 +2,7 @@
 import { ArrowLeft, FileText, Upload, X } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { SearchableSelect } from "../../components/ui/SearchableSelect";
 import { DOC_LABELS, STATUS_BADGES, STATUS_LABELS, type DocType } from "./_mock";
 import {
   useAssignLawyer, useCompleteOrder, useLawyersInMyFirm, useLegalOrder,
@@ -237,10 +238,18 @@ function AssignLawyerCard({ order }: { order: LegalOrderDTO }) {
           订单已派到本所（{order.law_firm_name ?? "—"}），请从本所律师中选择承办人。承办律师收到通知后即可起草文书。
         </p>
         <div style={{ display: "flex", gap: 8 }}>
-          <select className="form-control" value={lawyerId} onChange={(e) => setLawyerId(e.target.value)} style={{ flex: 1 }} disabled={isLoading || isPending}>
-            <option value="">{isLoading ? "加载本所律师…" : "请选择本所律师"}</option>
-            {lawyers.map((l) => <option key={l.id} value={l.id}>{l.name}{l.specialties.length ? `（专长：${l.specialties.join("、")}）` : ""}</option>)}
-          </select>
+          <div style={{ flex: 1 }}>
+            <SearchableSelect
+              value={lawyerId}
+              onChange={(v) => setLawyerId(String(v))}
+              disabled={isLoading || isPending}
+              placeholder={isLoading ? "加载本所律师…" : "请选择本所律师"}
+              options={lawyers.map((l) => ({
+                value: String(l.id),
+                label: `${l.name}${l.specialties.length ? `（专长:${l.specialties.join("、")}）` : ""}`,
+              }))}
+            />
+          </div>
           <button type="button" className="ds-btn ds-btn-primary" disabled={!lawyerId || isPending} onClick={submit}>
             {isPending ? "分配中…" : "确认分配"}
           </button>

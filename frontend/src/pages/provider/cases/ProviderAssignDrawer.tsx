@@ -117,7 +117,7 @@ export function ProviderAssignDrawer({
               本服务商暂无有效员工 — 请先到「团队管理」激活成员
             </div>
           ) : (
-            <div className="space-y-1.5 max-h-96 overflow-y-auto border border-[var(--color-neutral-200)] rounded">
+            <div className="space-y-1.5 max-h-[60vh] overflow-y-auto border border-[var(--color-neutral-200)] rounded">
               {activeMembers.map((m) => (
                 <label
                   key={m.user_id}

@@ -3,6 +3,7 @@ import { useCustom, useCustomMutation, useInvalidate } from "@refinedev/core";
 import { Calendar, Clock, Crown, Lock, UserCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { HelpPanel } from "../../../components/ui/HelpPanel";
+import { SearchableSelect } from "../../../components/ui/SearchableSelect";
 
 interface ShiftRow {
   date: string;
@@ -171,15 +172,13 @@ export function SupervisorShiftsPage() {
                   if (isLead) {
                     return (
                       <td key={slot}>
-                        <select
-                          className="filter-select"
-                          style={{ width: "100%" }}
+                        <SearchableSelect
                           value={occupant}
-                          onChange={(e) => update(s.date, slot, e.target.value)}
-                        >
-                          <option value="">未排班</option>
-                          {supervisors.map((sv) => <option key={sv} value={sv}>{sv}</option>)}
-                        </select>
+                          onChange={(v) => update(s.date, slot, String(v))}
+                          placeholder="未排班"
+                          options={supervisors.map((sv) => ({ value: sv, label: sv }))}
+                          style={{ width: "100%" }}
+                        />
                       </td>
                     );
                   }
@@ -249,10 +248,12 @@ function SwapModal({ target, supervisors, onClose, onConfirm, isPending }: {
           <p style={{ fontSize: 13, color: "#374151", marginBottom: 12, lineHeight: 1.7 }}>
             申请把这班次顶给：
           </p>
-          <select className="form-control" value={agent} onChange={(e) => setAgent(e.target.value)}>
-            <option value="">请选择顶班人</option>
-            {candidates.map((n) => <option key={n} value={n}>{n}</option>)}
-          </select>
+          <SearchableSelect
+            value={agent}
+            onChange={(v) => setAgent(String(v))}
+            placeholder="请选择顶班人"
+            options={candidates.map((n) => ({ value: n, label: n }))}
+          />
           <div style={{ background: "#fffbeb", padding: 10, borderRadius: 6, fontSize: 12, color: "#78350f", marginTop: 12 }}>
             ⚠ 顶班人需在小程序点「同意」才生效；本周内调班自动通知物业 admin。
           </div>
