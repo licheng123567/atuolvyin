@@ -1,10 +1,12 @@
 // 督导侧案件详情 — v1.6.9
 // 重写：复用 admin/agent 同款 build_case_detail_response 后端 + 共享组件
 // 三栏布局（与 agent 详情页一致）：左 业主+项目+欠费 / 中 时间线+备注 / 右 sticky 操作
-import { useGetIdentity, useInvalidate, useOne } from "@refinedev/core";
+import { useCustomMutation, useGetIdentity, useInvalidate, useOne } from "@refinedev/core";
 import {
   ArrowLeft,
   BadgePercent,
+  ClipboardList,
+  CreditCard,
   Eye,
   Headphones,
   Phone,
@@ -18,6 +20,11 @@ import { FollowUpNoteCard } from "../../../components/case/FollowUpNoteCard";
 import { OwnerInfoCard } from "../../../components/case/OwnerInfoCard";
 import { ProjectInfoCard } from "../../../components/case/ProjectInfoCard";
 import { DiscountRequestModal } from "../../../components/discount/DiscountRequestModal";
+import {
+  PaymentLinkQrModal,
+  type PaymentBreakdown,
+} from "../../../components/admin/PaymentLinkQrModal";
+import { WorkOrderCreateModal } from "../../../components/admin/WorkOrderCreateModal";
 import {
   SupervisorCaseActionModal,
   type SupervisorActionType,
@@ -34,10 +41,44 @@ export function SupervisorCaseDetailPage() {
   // v0.5.4 — 督导动作弹窗 state
   const [actionType, setActionType] = useState<SupervisorActionType | null>(null);
   const [reassignOpen, setReassignOpen] = useState(false);
+  // v0.5.4 — Wave 6:督导也可发缴费链接 / 创建工单(后端守卫已含 supervisor)
+  const [workOrderOpen, setWorkOrderOpen] = useState(false);
+  const [paymentLink, setPaymentLink] = useState<{
+    token: string;
+    breakdown: PaymentBreakdown;
+    sent_to: string;
+  } | null>(null);
+  const { mutate: sendPaymentLink, mutation: paymentLinkMutation } =
+    useCustomMutation();
   const invalidate = useInvalidate();
 
   function refresh() {
     void invalidate({ resource: "supervisor/cases", invalidates: ["all"] });
+  }
+
+  function handleSendPaymentLink(caseId: number) {
+    sendPaymentLink(
+      {
+        url: `admin/cases/${caseId}/send-payment-link`,
+        method: "post",
+        values: {},
+      },
+      {
+        onSuccess: (resp) => {
+          const d = resp.data as {
+            token: string;
+            sent_to: string;
+            breakdown: PaymentBreakdown;
+          };
+          setPaymentLink({
+            token: d.token,
+            breakdown: d.breakdown,
+            sent_to: d.sent_to,
+          });
+        },
+        onError: () => alert("生成缴费链接失败,请重试"),
+      },
+    );
   }
 
   const { query } = useOne<CaseDetailResponse>({
@@ -205,16 +246,30 @@ export function SupervisorCaseDetailPage() {
                   催回访
                 </button>
               )}
+              {/* v0.5.4 Wave 6 — 督导也可发缴费链接(后端守卫含 supervisor)*/}
               <button
                 type="button"
-                className="ds-btn ds-btn-ghost"
+                onClick={() => handleSendPaymentLink(detail.id)}
+                disabled={paymentLinkMutation.isPending}
+                className="ds-btn ds-btn-secondary"
                 style={{ width: "100%", justifyContent: "center" }}
-                onClick={() => navigate(`/calls/?case_id=${detail.id}`)}
-                title="查看本案件所有通话明细"
+                title="生成业主缴费链接(明细 + 二维码弹窗)"
               >
-                <Phone className="w-3.5 h-3.5" />
-                通话历史
+                <CreditCard className="w-3.5 h-3.5" />
+                {paymentLinkMutation.isPending ? "生成中…" : "发送缴费链接"}
               </button>
+              {/* v0.5.4 Wave 6 — 督导也可建工单 */}
+              <button
+                type="button"
+                onClick={() => setWorkOrderOpen(true)}
+                className="ds-btn ds-btn-secondary"
+                style={{ width: "100%", justifyContent: "center" }}
+                title="对此案件相关问题创建工单,自动派单给协调员"
+              >
+                <ClipboardList className="w-3.5 h-3.5" />
+                创建工单
+              </button>
+              {/* v0.5.4 — 通话历史按钮删除:案件通话已在中栏 ActivityTimeline 里以「📞 通话」事件呈现,不再需要单独入口 */}
             </div>
           </div>
 
@@ -286,6 +341,26 @@ export function SupervisorCaseDetailPage() {
             refresh();
             alert("✓ 案件已重新分配,新催收员收到通知");
           }}
+        />
+      )}
+
+      {workOrderOpen && (
+        <WorkOrderCreateModal
+          caseId={detail.id}
+          onClose={() => setWorkOrderOpen(false)}
+          onSuccess={(orderId) => {
+            setWorkOrderOpen(false);
+            alert(`工单 #${orderId ?? "?"} 已创建,已自动派单给协调员`);
+          }}
+        />
+      )}
+
+      {paymentLink && (
+        <PaymentLinkQrModal
+          token={paymentLink.token}
+          breakdown={paymentLink.breakdown}
+          sentTo={paymentLink.sent_to}
+          onClose={() => setPaymentLink(null)}
         />
       )}
     </div>
