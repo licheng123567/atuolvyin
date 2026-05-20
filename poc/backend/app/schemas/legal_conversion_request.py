@@ -45,7 +45,19 @@ class LegalConversionRequestOut(BaseModel):
 
 
 class ApproveLegalConversionRequestBody(BaseModel):
-    """督导/admin 批准申请：需选服务包 + 可填备注。"""
+    """督导/admin 批准转法务申请。
+
+    v0.5.4 起,批准 = 仅同意「转出案件」,**不**选服务包(服务包改由法务在
+    /legal-finalize 端点接单时选择)。请求体可选填 notes 给法务参考。
+    package_id 字段保留(向后兼容旧客户端),但已不再使用 —— 服务端会忽略。
+    """
+
+    package_id: int | None = Field(None, gt=0, description="DEPRECATED v0.5.4 — 服务端忽略;由法务接单时选包")
+    notes: str | None = Field(None, max_length=2000)
+
+
+class FinalizeLegalConversionRequestBody(BaseModel):
+    """v0.5.4 — 法务接单选服务包,把 approved_pending_legal 请求转为 approved + 建 Order。"""
 
     package_id: int = Field(..., gt=0)
     notes: str | None = Field(None, max_length=2000)

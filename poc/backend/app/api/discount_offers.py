@@ -299,20 +299,18 @@ def create_offer(
         )
     discount_pct = max(0, min(100, discount_pct))
 
-    # 决策路由
+    # v0.5.4 — 决策路由(2 层):
+    # 第一层:< 自动阈值 → 系统自动批准(无人审,保留)
+    # 第二层:>= 自动阈值 → 督导审批(supervisor_max 阈值字段保留作 UI 提示用,不再强制升 admin)
+    # 第三层(已废除):按金额自动升 admin —— 改由督导主动「上报 admin」走 /escalate 端点
     if discount_pct < auto_threshold:
         status = "approved"
         approver_role_required = "supervisor"
         approved_by_user_id: int | None = None  # 系统自动
         approved_at: datetime | None = datetime.now(UTC)
-    elif discount_pct <= supervisor_max:
+    else:
         status = "pending_supervisor"
         approver_role_required = "supervisor"
-        approved_by_user_id = None
-        approved_at = None
-    else:
-        status = "pending_admin"
-        approver_role_required = "admin"
         approved_by_user_id = None
         approved_at = None
 
@@ -572,6 +570,8 @@ def escalate_offer(
         )
     offer.status = "pending_admin"
     offer.approver_role_required = "admin"
+    # v0.5.4 — 督导手动上报 admin 时间戳(供报表统计)
+    offer.escalated_to_admin_at = datetime.now(UTC)
     note = body.note or ""
     _append_audit(offer, actor_name, f"转交 admin 审批{('（' + note + '）') if note else ''}")
     log_audit(

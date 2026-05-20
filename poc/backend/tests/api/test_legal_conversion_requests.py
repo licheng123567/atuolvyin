@@ -238,20 +238,68 @@ async def test_supervisor_approve_creates_order(
         .one()
     )
 
-    # 2) 督导批准
+    # 2) 督导批准(v0.5.4:不选包,只确认转出 → status=approved_pending_legal,不建 Order)
     resp = await client.post(
         f"/api/v1/legal-conversion-requests/{request_row.id}/approve",
-        json={"package_id": pkg.id, "notes": "情况属实，建议律师函"},
+        json={"notes": "情况属实,建议转法务"},
         headers=supervisor_auth_headers,
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["status"] == "approved_pending_legal"
+    assert body["related_order_id"] is None  # Order 待法务接单时创建
+    assert body["reviewer_role"] == "supervisor"
+    assert body["reviewed_at"] is not None
+
+    # 3) DB 校验:状态推进到「待法务接单」,无 Order
+    db_session.expire_all()
+    request_row = db_session.get(LegalConversionRequest, request_row.id)
+    assert request_row.status == "approved_pending_legal"
+    assert request_row.related_order_id is None
+
+    # 4) 法务接单选服务包 → 建 Order,状态推进到 approved
+    from app.core.crypto import encrypt_phone
+    from app.core.security import create_access_token, get_password_hash
+    from app.models.tenant import UserTenantMembership
+    from app.models.user import UserAccount
+
+    legal_user = UserAccount(
+        phone_enc=encrypt_phone("13700199001"),
+        name="物业法务对接人",
+        password_hash=get_password_hash("Legal@1234"),
+        is_active=True,
+    )
+    db_session.add(legal_user)
+    db_session.flush()
+    db_session.add(
+        UserTenantMembership(
+            user_id=legal_user.id,
+            tenant_id=case.tenant_id,
+            role="legal",
+            provider_id=None,
+            is_active=True,
+        )
+    )
+    db_session.flush()
+    legal_token = create_access_token({
+        "sub": str(legal_user.id),
+        "user_id": legal_user.id,
+        "tenant_id": case.tenant_id,
+        "role": "legal",
+        "scope": f"tenant:{case.tenant_id}",
+    })
+    legal_headers = {"Authorization": f"Bearer {legal_token}"}
+
+    resp = await client.post(
+        f"/api/v1/legal-conversion-requests/{request_row.id}/legal-finalize",
+        json={"package_id": pkg.id, "notes": "建议律师函"},
+        headers=legal_headers,
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["status"] == "approved"
     assert body["related_order_id"] is not None
-    assert body["reviewer_role"] == "supervisor"
-    assert body["reviewed_at"] is not None
 
-    # 3) DB 校验：request 状态 + Order 已创建
     db_session.expire_all()
     request_row = db_session.get(LegalConversionRequest, request_row.id)
     assert request_row.status == "approved"
@@ -259,8 +307,102 @@ async def test_supervisor_approve_creates_order(
     assert order is not None
     assert order.case_id == case.id
     assert order.package_id == pkg.id
-    # v1.9.0 — supervisor 审批通过后订单进物业法务内部处理（不再直接 pending 等 admin 撮合律所）
+    # v1.9.0 — Order 进物业法务内部处理(不直接 pending 等撮合律所)
     assert order.status == "internal_processing"
+
+
+# ── v0.5.4 — 督导上报 admin + 法务接单端点 ─────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_escalate_to_admin_and_admin_approve(
+    client: AsyncClient,
+    db_session,
+    seeded_assigned_case,
+    seeded_packages,
+    agent_auth_headers,
+    supervisor_auth_headers,
+    admin_auth_headers,
+):
+    """督导上报 admin → admin 批准 → 推到 approved_pending_legal。"""
+    from app.models.legal_conversion import LegalConversionRequest
+
+    case = seeded_assigned_case
+
+    # 催收员申请
+    await client.post(
+        f"/api/v1/agent/cases/{case.id}/intent",
+        json={"action": "transfer_legal", "note": "请审批"},
+        headers=agent_auth_headers,
+    )
+    request_row = (
+        db_session.query(LegalConversionRequest)
+        .filter(LegalConversionRequest.case_id == case.id)
+        .one()
+    )
+
+    # 督导上报 admin
+    resp = await client.post(
+        f"/api/v1/legal-conversion-requests/{request_row.id}/escalate-to-admin",
+        json={"reason": "金额超出督导权限,请 admin 决定"},
+        headers=supervisor_auth_headers,
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["status"] == "pending_admin"
+    db_session.expire_all()
+    request_row = db_session.get(LegalConversionRequest, request_row.id)
+    assert request_row.escalated_to_admin_at is not None
+
+    # 督导不能再批已上报的单(权限断言:pending_admin 只能 admin 批)
+    resp = await client.post(
+        f"/api/v1/legal-conversion-requests/{request_row.id}/approve",
+        json={"notes": "..."},
+        headers=supervisor_auth_headers,
+    )
+    assert resp.status_code == 403
+    assert resp.json()["code"] == "ERR_NOT_ADMIN"
+
+    # admin 批准 → approved_pending_legal
+    resp = await client.post(
+        f"/api/v1/legal-conversion-requests/{request_row.id}/approve",
+        json={"notes": "同意转出"},
+        headers=admin_auth_headers,
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["status"] == "approved_pending_legal"
+    assert body["related_order_id"] is None  # 仍待法务接单
+
+
+@pytest.mark.asyncio
+async def test_agent_cannot_escalate_to_admin(
+    client: AsyncClient,
+    db_session,
+    seeded_assigned_case,
+    agent_auth_headers,
+):
+    """催收员无权调用 escalate-to-admin。"""
+    from app.models.legal_conversion import LegalConversionRequest
+
+    case = seeded_assigned_case
+    await client.post(
+        f"/api/v1/agent/cases/{case.id}/intent",
+        json={"action": "transfer_legal", "note": "请审批"},
+        headers=agent_auth_headers,
+    )
+    request_row = (
+        db_session.query(LegalConversionRequest)
+        .filter(LegalConversionRequest.case_id == case.id)
+        .one()
+    )
+
+    resp = await client.post(
+        f"/api/v1/legal-conversion-requests/{request_row.id}/escalate-to-admin",
+        json={"reason": "试图越权"},
+        headers=agent_auth_headers,
+    )
+    assert resp.status_code == 403
 
 
 @pytest.mark.asyncio

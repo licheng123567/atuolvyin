@@ -3,9 +3,16 @@
 催收员通过 `POST /agent/cases/{id}/intent action=transfer_legal` 提交申请
 （写入 LegalConversionRequest），督导/admin 在此 inbox 审批。
 
-GET    /api/v1/legal-conversion-requests              列表（按角色过滤）
-POST   /api/v1/legal-conversion-requests/{id}/approve 批准 → 创建 Order（复用 build_legal_conversion_order）
-POST   /api/v1/legal-conversion-requests/{id}/reject  驳回（必填理由）
+v0.5.4 起,审批流改为三层模型 + 法务接单选包:
+  pending(督导待审)→ 督导批准 / 拒绝 / 上报 admin(pending_admin)
+  pending_admin → admin 批准 / 拒绝
+  批准后状态 approved_pending_legal,等物业法务在 /legal-finalize 选服务包 → Order 创建 + 状态 approved
+
+GET    /api/v1/legal-conversion-requests                       列表（按角色过滤）
+POST   /api/v1/legal-conversion-requests/{id}/approve          批准（不选服务包,改流到法务接单）
+POST   /api/v1/legal-conversion-requests/{id}/reject           驳回（必填理由）
+POST   /api/v1/legal-conversion-requests/{id}/escalate-to-admin 督导上报 admin
+POST   /api/v1/legal-conversion-requests/{id}/legal-finalize   法务接单选包 → 建 Order
 """
 
 from __future__ import annotations
@@ -36,6 +43,7 @@ from app.models.user import UserAccount
 from app.schemas.common import PaginatedResponse
 from app.schemas.legal_conversion_request import (
     ApproveLegalConversionRequestBody,
+    FinalizeLegalConversionRequestBody,
     LegalConversionRequestDetailOut,
     LegalConversionRequestMaterialDownloadOut,
     LegalConversionRequestMaterialOut,
@@ -52,8 +60,10 @@ router = APIRouter()
 REVIEWER_ROLES = ("supervisor", "admin", "superadmin")
 # 申请人角色：催收员
 REQUESTER_ROLES = ("agent",)
-# 列表查看者：审批人 + 申请人（自己的）
-VIEWER_ROLES = REVIEWER_ROLES + REQUESTER_ROLES
+# v0.5.4 — 物业法务角色:接「approved_pending_legal」请求选服务包建 Order
+LEGAL_ROLES = ("legal",)
+# 列表查看者：审批人 + 申请人（自己的）+ 法务（仅看待接单的）
+VIEWER_ROLES = REVIEWER_ROLES + REQUESTER_ROLES + LEGAL_ROLES
 
 
 def _require_tenant(payload: dict) -> int:
@@ -189,6 +199,12 @@ def list_requests(
     if role in REQUESTER_ROLES and role not in REVIEWER_ROLES:
         base = base.where(LegalConversionRequest.requester_user_id == user_id)
         count_stmt = count_stmt.where(LegalConversionRequest.requester_user_id == user_id)
+    # v0.5.4 — 物业法务只看「待法务接单」(approved_pending_legal) 的请求
+    if role in LEGAL_ROLES and role not in REVIEWER_ROLES:
+        base = base.where(LegalConversionRequest.status == "approved_pending_legal")
+        count_stmt = count_stmt.where(
+            LegalConversionRequest.status == "approved_pending_legal"
+        )
 
     if status:
         base = base.where(LegalConversionRequest.status == status)
@@ -255,13 +271,26 @@ def approve_request(
     request_row, case, owner, project_name, requester_name, _ = _load_request_with_context(
         db, request_id, tenant_id
     )
-    if request_row.status != "pending":
+    # v0.5.4 — 三层审批模型:
+    #   pending(督导待审)→ 督导批 → approved_pending_legal(待法务接单选包)
+    #   pending_admin(督导上报后)→ admin 批 → approved_pending_legal
+    if request_row.status not in {"pending", "pending_admin"}:
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,
             detail={
                 "code": "ERR_INVALID_STATUS",
                 "message": f"申请当前状态 {request_row.status}，无法批准",
             },
+        )
+    if request_row.status == "pending" and role != "supervisor":
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_NOT_SUPERVISOR", "message": "督导待审单需督导批准"},
+        )
+    if request_row.status == "pending_admin" and role != "admin":
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_NOT_ADMIN", "message": "admin 待审单需 admin 批准"},
         )
     if case is None:
         # FK ondelete=CASCADE 应保证 case 删除时 request 也删，理论上不可达
@@ -270,23 +299,14 @@ def approve_request(
             detail={"code": "ERR_CASE_GONE", "message": "关联案件已不存在"},
         )
 
-    # v1.9.0 — supervisor 审批通过后订单进物业法务内部处理（不直接派律所）
-    order = build_legal_conversion_order(
-        db,
-        case=case,
-        package_id=body.package_id,
-        notes=body.notes,
-        created_by_user_id=user_id,
-        initial_status="internal_processing",
-    )
-
+    # v0.5.4 — 不再在此处建 Order;status → approved_pending_legal 等法务接单选包
+    # (旧 v1.9.0 流程:这里 build_legal_conversion_order(initial_status="internal_processing"))
     now = datetime.now(UTC)
-    request_row.status = "approved"
+    request_row.status = "approved_pending_legal"
     request_row.reviewer_user_id = user_id
     request_row.reviewer_role = role
     request_row.reviewed_at = now
     request_row.reviewer_note = body.notes
-    request_row.related_order_id = order.id
 
     log_audit(
         db,
@@ -298,9 +318,8 @@ def approve_request(
         target_id=request_id,
         payload={
             "case_id": request_row.case_id,
-            "package_id": body.package_id,
-            "order_id": order.id,
             "notes": body.notes,
+            "new_status": "approved_pending_legal",
         },
     )
     db.commit()
@@ -343,13 +362,24 @@ def reject_request(
     request_row, case, owner, project_name, requester_name, _ = _load_request_with_context(
         db, request_id, tenant_id
     )
-    if request_row.status != "pending":
+    # v0.5.4 — pending(督导)/ pending_admin(admin)均可驳回;按角色匹配
+    if request_row.status not in {"pending", "pending_admin"}:
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,
             detail={
                 "code": "ERR_INVALID_STATUS",
                 "message": f"申请当前状态 {request_row.status}，无法驳回",
             },
+        )
+    if request_row.status == "pending" and role != "supervisor":
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_NOT_SUPERVISOR", "message": "督导待审单需督导驳回"},
+        )
+    if request_row.status == "pending_admin" and role != "admin":
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_NOT_ADMIN", "message": "admin 待审单需 admin 驳回"},
         )
 
     now = datetime.now(UTC)
@@ -374,6 +404,172 @@ def reject_request(
     reviewer_name = (
         db.execute(select(UserAccount.name).where(UserAccount.id == user_id)).scalar_one_or_none()
         if user_id
+        else None
+    )
+    return _row_to_out(
+        request_row=request_row,
+        case=case,
+        owner=owner,
+        project_name=project_name,
+        requester_name=requester_name,
+        reviewer_name=reviewer_name,
+        owner_phone_reveal=should_reveal_owner_phone(
+            role=role,
+            provider_id=payload.get("provider_id"),
+            contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
+        ),
+    )
+
+
+# ── v0.5.4 — 督导上报 admin ────────────────────────────────────────
+
+
+@router.post(
+    "/legal-conversion-requests/{request_id}/escalate-to-admin",
+    response_model=LegalConversionRequestOut,
+)
+def escalate_request_to_admin(
+    request_id: int,
+    body: RejectLegalConversionRequestBody,  # 复用:reason 字段 = 上报理由
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles("supervisor"))],
+    db: Annotated[Session, Depends(get_db)],
+) -> LegalConversionRequestOut:
+    """v0.5.4 — 督导对超出自己决断范围的转法务申请,主动上报给 admin 审批。
+
+    pending → pending_admin,写 escalated_to_admin_at。
+    """
+    tenant_id = _require_tenant(payload)
+    user_id = int(payload.get("user_id") or 0) or None
+    role = str(payload.get("role") or "")
+
+    request_row, case, owner, project_name, requester_name, _ = _load_request_with_context(
+        db, request_id, tenant_id
+    )
+    if request_row.status != "pending":
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail={
+                "code": "ERR_INVALID_STATUS",
+                "message": f"申请当前状态 {request_row.status},无法上报 admin",
+            },
+        )
+
+    now = datetime.now(UTC)
+    request_row.status = "pending_admin"
+    request_row.escalated_to_admin_at = now
+    # 上报理由写入 reviewer_note,以便 admin 阅读;reviewer_user_id 此时不写(admin 才是 reviewer)
+    request_row.reviewer_note = f"督导上报: {body.reason}"
+
+    log_audit(
+        db,
+        actor_user_id=user_id,
+        actor_role=role,
+        tenant_id=tenant_id,
+        action="legal_conversion_request.escalated_to_admin",
+        target_type="legal_conversion_request",
+        target_id=request_id,
+        payload={"case_id": request_row.case_id, "reason": body.reason},
+    )
+    db.commit()
+    db.refresh(request_row)
+    reviewer_name = (
+        db.execute(select(UserAccount.name).where(UserAccount.id == request_row.reviewer_user_id)).scalar_one_or_none()
+        if request_row.reviewer_user_id
+        else None
+    )
+    return _row_to_out(
+        request_row=request_row,
+        case=case,
+        owner=owner,
+        project_name=project_name,
+        requester_name=requester_name,
+        reviewer_name=reviewer_name,
+        owner_phone_reveal=should_reveal_owner_phone(
+            role=role,
+            provider_id=payload.get("provider_id"),
+            contract_active=is_provider_contract_active(db, tenant_id, payload.get("provider_id")),
+        ),
+    )
+
+
+# ── v0.5.4 — 法务接单选服务包(approved_pending_legal → approved + 建 Order)──
+
+
+@router.post(
+    "/legal-conversion-requests/{request_id}/legal-finalize",
+    response_model=LegalConversionRequestOut,
+)
+def legal_finalize_request(
+    request_id: int,
+    body: FinalizeLegalConversionRequestBody,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles("legal"))],
+    db: Annotated[Session, Depends(get_db)],
+) -> LegalConversionRequestOut:
+    """v0.5.4 — 物业法务接「已批准待法务接单」的转法务请求,选服务包后建 Order。
+
+    approved_pending_legal → approved + related_order_id;同时建 LegalConversionOrder。
+    """
+    tenant_id = _require_tenant(payload)
+    user_id = int(payload.get("user_id") or 0) or None
+    role = str(payload.get("role") or "")
+
+    request_row, case, owner, project_name, requester_name, _ = _load_request_with_context(
+        db, request_id, tenant_id
+    )
+    if request_row.status != "approved_pending_legal":
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail={
+                "code": "ERR_INVALID_STATUS",
+                "message": f"申请当前状态 {request_row.status},非「待法务接单」",
+            },
+        )
+    if case is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_CASE_GONE", "message": "关联案件已不存在"},
+        )
+
+    # 建 Order(沿用 v1.9.0 流程:initial_status='internal_processing'物业法务内部处理)
+    order = build_legal_conversion_order(
+        db,
+        case=case,
+        package_id=body.package_id,
+        notes=body.notes,
+        created_by_user_id=user_id,
+        initial_status="internal_processing",
+    )
+
+    request_row.status = "approved"
+    request_row.related_order_id = order.id
+    # 不覆盖 reviewer_*(那是督导/admin 审批人记录);法务接单的备注追加到 reviewer_note
+    if body.notes:
+        prefix = request_row.reviewer_note or ""
+        sep = "\n— 法务接单: " if prefix else "法务接单: "
+        request_row.reviewer_note = f"{prefix}{sep}{body.notes}"
+
+    log_audit(
+        db,
+        actor_user_id=user_id,
+        actor_role=role,
+        tenant_id=tenant_id,
+        action="legal_conversion_request.legal_finalized",
+        target_type="legal_conversion_request",
+        target_id=request_id,
+        payload={
+            "case_id": request_row.case_id,
+            "package_id": body.package_id,
+            "order_id": order.id,
+            "notes": body.notes,
+        },
+    )
+    db.commit()
+    db.refresh(request_row)
+    reviewer_name = (
+        db.execute(select(UserAccount.name).where(UserAccount.id == request_row.reviewer_user_id)).scalar_one_or_none()
+        if request_row.reviewer_user_id
         else None
     )
     return _row_to_out(

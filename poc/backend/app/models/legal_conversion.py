@@ -152,7 +152,8 @@ class LegalConversionRequest(Base, TimestampMixin):
     requester_role: Mapped[str] = mapped_column(sa.String(32), nullable=False)
     # v0.5.4 — 申请理由改 NOT NULL（前端必填，预设原因 + 可选补充）
     reason: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    status: Mapped[str] = mapped_column(sa.String(20), nullable=False, default="pending")
+    # v0.5.4 — status 列加宽到 32 (原 20 不够装 "approved_pending_legal")
+    status: Mapped[str] = mapped_column(sa.String(32), nullable=False, default="pending")
     reviewer_user_id: Mapped[int | None] = mapped_column(
         sa.BigInteger, sa.ForeignKey("user_account.id", ondelete="SET NULL")
     )
