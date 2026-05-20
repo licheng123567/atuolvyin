@@ -74,20 +74,35 @@ import { RightDrawer } from "@/components/ui/RightDrawer";
 
 ---
 
-## 迁移计划
+## 迁移进度
 
-v0.5.6 落地:
+### v0.5.6(已落地)
+- `SupervisorReassignModal`(督导重新分配)— 样板迁移
 
-1. **样板迁移**:`SupervisorReassignModal`(督导重新分配)从中间 Modal 改 RightDrawer。这是用户特别指出的「分配」场景。
-2. 其他 14 个 modal **本期不动**,等下期按业务优先级渐进改。
-3. 优先级建议(从高到低):
-   - `LegalFinalizeModal`(法务接单选包 — 需边看服务包列表)
-   - `ConvertToLegalModal`(申请/审批转法务 — 多字段大表单,目前 max-w-2xl)
-   - `LegalDocumentModal`(查看文书列表 — 信息密集)
-   - `PaymentLinkQrModal`(发缴费链接 — 含明细 + 二维码,信息较多)
-   - 其他多按是否「需边看左侧列表」判断
+### v0.5.6 同期新增(直接用 Drawer 起步)
+- `ProviderAssignDrawer`(服务商管理员分配案件)
 
-每次改 1 个 modal 一个 PR,不要批量改。
+### v0.5.8(2026-05-20 完成)— 6 个 modal 批量迁
+- `LegalFinalizeModal`(法务接单选包,640px)
+- `LegalDocumentModal`(文书查看,720px,大量信息)
+- `ConvertToLegalModal`(申请/审批转法务,640px,2 模式)
+- `MarkPromiseModal`(标记承诺缴费,520px,4 字段 + 需对照金额)
+- `DiscountRequestModal`(减免申请,520px,4 字段)
+- `RequestLegalConversionModal`(催收员申请转法务,520px,7 预设原因)
+
+### 不迁(已对齐矩阵,中间 Dialog 合适)
+- `RejectRequestModal` / `EscalateToAdminModal` / `EscalateSupervisorModal`(1-2 字段简单确认)
+- `WorkOrderCreateModal` / `FollowUpNoteModal`(3 字段表单)
+- `SupervisorCaseActionModal`(单 textarea)
+- `PaymentLinkQrModal` / `InviteQrModal`(二维码扫码场景,居中合适)
+- `AppIntroModal`(全屏引导)
+
+### 总览
+
+| 模态 类型 | 数量 | 比例 |
+|---|---|---|
+| 右侧 Drawer | 8 | 50% |
+| 中间 Dialog | 8 | 50% |
 
 ---
 

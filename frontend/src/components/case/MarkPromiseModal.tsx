@@ -5,10 +5,14 @@
 // 本组件在前端把这 3 件事拆成结构化字段,后端写到 CollectionCase.promise_content /
 // promise_amount / promise_due_at,详见 PRD §13.5 + alembic 24025_v056_promise_fields。
 //
+// v0.5.8 — 从中间 Modal 迁移到 RightDrawer 520px(决策矩阵:表单 ≥ 4 字段 + 需边看
+// 案件金额/时间线对得上承诺金额);详见 docs/UI_PATTERNS_MODAL.md
+//
 // 同一组件同时给催收员工作台 + 案件详情 + 督导 + 物业管理员四端复用。
 import { useCustomMutation } from "@refinedev/core";
-import { CheckCircle2, X } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import { useState } from "react";
+import { RightDrawer } from "../ui/RightDrawer";
 
 const PRESET_CONTENTS = [
   "全额缴清",
@@ -108,31 +112,39 @@ export function MarkPromiseModal({
   const minDate = new Date().toISOString().slice(0, 10);
 
   return (
-    <div
-      role="presentation"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-lg shadow-2xl w-full max-w-md"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-neutral-200)]">
-          <h2 className="text-base font-semibold flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-green-600" />
-            标记承诺缴费 — 案件 #{caseId}
-          </h2>
+    <RightDrawer
+      open
+      onClose={onClose}
+      drawerKey="mark-promise"
+      defaultWidth={520}
+      title={
+        <span className="flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-green-600" />
+          标记承诺缴费 — 案件 #{caseId}
+        </span>
+      }
+      footer={
+        <>
           <button
             type="button"
             onClick={onClose}
-            className="text-[var(--color-neutral-400)] hover:text-[var(--color-neutral-700)]"
-            aria-label="关闭"
+            className="px-3 py-1.5 text-sm rounded border border-[var(--color-neutral-300)] text-[var(--color-neutral-700)] hover:bg-[var(--color-neutral-50)]"
           >
-            <X className="w-5 h-5" />
+            取消
           </button>
-        </div>
-
-        <div className="p-5 space-y-4">
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+            className="px-4 py-1.5 text-sm rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 flex items-center gap-1.5"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            {submitting ? "提交中…" : "标记承诺缴费"}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
           <div className="text-xs text-[var(--color-neutral-600)] bg-blue-50 border border-blue-200 rounded p-2">
             <strong>提示</strong>:把业主的承诺写成结构化字段(承诺什么/金额/日期),系统
             会在到期前 24 小时自动提醒你回访,兑现追踪也能上报。
@@ -213,27 +225,7 @@ export function MarkPromiseModal({
               {error}
             </div>
           )}
-        </div>
-
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-[var(--color-neutral-200)]">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3 py-1.5 text-sm rounded border border-[var(--color-neutral-300)] text-[var(--color-neutral-700)] hover:bg-[var(--color-neutral-50)]"
-          >
-            取消
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-            className="px-4 py-1.5 text-sm rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 flex items-center gap-1.5"
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            {submitting ? "提交中…" : "标记承诺缴费"}
-          </button>
-        </div>
       </div>
-    </div>
+    </RightDrawer>
   );
 }
