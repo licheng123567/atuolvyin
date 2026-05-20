@@ -10,6 +10,11 @@ import { ActivityTimeline } from "../../../components/case/ActivityTimeline";
 import { FollowUpNoteCard } from "../../../components/case/FollowUpNoteCard";
 import { OwnerInfoCard } from "../../../components/case/OwnerInfoCard";
 import { ProjectInfoCard } from "../../../components/case/ProjectInfoCard";
+import { EscalateSupervisorModal } from "../../../components/agent/EscalateSupervisorModal";
+import {
+  PaymentLinkQrModal,
+  type PaymentBreakdown,
+} from "../../../components/admin/PaymentLinkQrModal";
 import { DiscountRequestModal } from "../../../components/discount/DiscountRequestModal";
 import { QrDialDialog } from "../../../components/dial/QrDialDialog";
 import { RequestLegalConversionModal } from "../../../components/legal-conversion/RequestLegalConversionModal";
@@ -22,6 +27,14 @@ export function AgentWorkstationPage() {
   const [showDiscountModal, setShowDiscountModal] = useState(false);
   // v0.5.4 — 申请转法务弹窗 state(替代 window.prompt 流)
   const [transferLegalOpen, setTransferLegalOpen] = useState(false);
+  // v0.5.4 Wave 7 — 升级督导弹窗 state(加「什么情况下升级督导」指引)
+  const [escalateOpen, setEscalateOpen] = useState(false);
+  // v0.5.4 Wave 7 — 发缴费链接 → PaymentLinkQrModal(明细 + 二维码),与物业 admin 同款
+  const [paymentLink, setPaymentLink] = useState<{
+    token: string;
+    breakdown: PaymentBreakdown;
+    sent_to: string;
+  } | null>(null);
   // v1.9.7 — 建工单 Modal（替换 window.prompt）
   const [woModalOpen, setWoModalOpen] = useState(false);
   const [woType, setWoType] = useState<"quality" | "reduction" | "dispute" | "other">("quality");
@@ -88,27 +101,24 @@ export function AgentWorkstationPage() {
     );
   }
 
-  function handleIntent(action: "transfer_supervisor" | "transfer_legal", label: string) {
-    if (!detail) return;
-    customMutate(
-      { url: `agent/cases/${detail.id}/intent`, method: "post", values: { action } },
-      {
-        onSuccess: () => alert(`✓ ${label} 已记录，等待业务流程接入`),
-        onError: (err) => alert(`${label} 失败：${err.message}`),
-      },
-    );
-  }
-
   function handleSendPaymentLink() {
     if (!detail) return;
     customMutate(
       { url: `agent/cases/${detail.id}/send-payment-link`, method: "post", values: {} },
       {
         onSuccess: (resp) => {
-          const data = resp.data as { short_link?: string; sent_to?: string };
-          alert(`✓ 已发送缴费链接到 ${data.sent_to ?? "业主"}\n短链：${data.short_link ?? "—"}`);
+          const d = resp.data as {
+            token: string;
+            sent_to: string;
+            breakdown: PaymentBreakdown;
+          };
+          setPaymentLink({
+            token: d.token,
+            breakdown: d.breakdown,
+            sent_to: d.sent_to,
+          });
         },
-        onError: (err) => alert(`发送失败：${err.message}`),
+        onError: (err) => alert(`发送失败:${err.message}`),
       },
     );
   }
@@ -223,7 +233,7 @@ export function AgentWorkstationPage() {
                 type="button"
                 className="ds-btn ds-btn-secondary"
                 style={{ width: "100%", justifyContent: "center" }}
-                onClick={() => handleIntent("transfer_supervisor", "升级督导")}
+                onClick={() => setEscalateOpen(true)}
               >
                 <Headphones className="w-3.5 h-3.5" />
                 升级督导
@@ -265,6 +275,26 @@ export function AgentWorkstationPage() {
             setTransferLegalOpen(false);
             alert("✓ 申请转法务已提交,等待督导/admin 审批");
           }}
+        />
+      )}
+
+      {escalateOpen && detail && (
+        <EscalateSupervisorModal
+          caseId={detail.id}
+          onClose={() => setEscalateOpen(false)}
+          onSubmitted={() => {
+            setEscalateOpen(false);
+            alert("✓ 已升级到督导队列");
+          }}
+        />
+      )}
+
+      {paymentLink && (
+        <PaymentLinkQrModal
+          token={paymentLink.token}
+          breakdown={paymentLink.breakdown}
+          sentTo={paymentLink.sent_to}
+          onClose={() => setPaymentLink(null)}
         />
       )}
 

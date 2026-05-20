@@ -8,6 +8,11 @@ import { Mic, MicOff, PauseCircle, Phone, PhoneOff, Search } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react";
 import { OwnerInfoCard } from "../../../components/case/OwnerInfoCard";
 import { ProjectInfoCard } from "../../../components/case/ProjectInfoCard";
+import { EscalateSupervisorModal } from "../../../components/agent/EscalateSupervisorModal";
+import {
+  PaymentLinkQrModal,
+  type PaymentBreakdown,
+} from "../../../components/admin/PaymentLinkQrModal";
 import { DiscountRequestModal } from "../../../components/discount/DiscountRequestModal";
 import { QrDialDialog } from "../../../components/dial/QrDialDialog";
 import { RequestLegalConversionModal } from "../../../components/legal-conversion/RequestLegalConversionModal";
@@ -234,25 +239,37 @@ export function AgentWorkstationIndexPage() {
   });
   const caseDetail = caseDetailQuery.data?.data ?? null;
 
-  // ── E4 发送缴费链接 ─────────────────────────────────
+  // ── E4 发送缴费链接 — v0.5.4 Wave 7:统一到 PaymentLinkQrModal(明细 + 二维码 + 短链)─
   const { mutate: sendPaymentMutate } = useCustomMutation();
+  const [paymentLink, setPaymentLink] = useState<{
+    token: string;
+    breakdown: PaymentBreakdown;
+    sent_to: string;
+  } | null>(null);
   function sendPaymentLink(caseId: number) {
     sendPaymentMutate(
       { url: `agent/cases/${caseId}/send-payment-link`, method: "post", values: {} },
       {
         onSuccess: (resp) => {
-          const data = resp.data as { short_link?: string; sent_to?: string };
-          alert(`✓ 已发送缴费链接到 ${data.sent_to ?? "业主"}\n短链：${data.short_link ?? "—"}`);
+          const d = resp.data as {
+            token: string;
+            sent_to: string;
+            breakdown: PaymentBreakdown;
+          };
+          setPaymentLink({
+            token: d.token,
+            breakdown: d.breakdown,
+            sent_to: d.sent_to,
+          });
         },
-        onError: (err) => alert(`发送失败：${err.message}`),
+        onError: (err) => alert(`发送失败:${err.message}`),
       },
     );
   }
 
-  // ── 工作台 quick-actions（创建工单 / 标记承诺 / 升级督导）──────
+  // ── 工作台 quick-actions（创建工单 / 标记承诺;升级督导 / 申请转法务走专用 modal）──
   const { mutate: workOrderMutate } = useCustomMutation();
   const { mutate: stageMutate } = useCustomMutation();
-  const { mutate: intentMutate } = useCustomMutation();
 
   function handleCreateWorkOrder(caseId: number) {
     const description = window.prompt("工单内容（必填）：");
@@ -290,20 +307,8 @@ export function AgentWorkstationIndexPage() {
     );
   }
 
-  function handleEscalateSupervisor(caseId: number) {
-    const note = window.prompt("升级原因（可选）：") ?? "";
-    intentMutate(
-      {
-        url: `agent/cases/${caseId}/intent`,
-        method: "post",
-        values: { action: "transfer_supervisor", note: note.trim() || undefined },
-      },
-      {
-        onSuccess: () => alert("✓ 已升级到督导队列"),
-        onError: (err) => alert(`升级失败：${err.message}`),
-      },
-    );
-  }
+  // v0.5.4 — 升级督导弹窗 state(替代 window.prompt,加「什么情况下升级督导」指引)
+  const [escalateSupervisorCaseId, setEscalateSupervisorCaseId] = useState<number | null>(null);
 
   // v0.5.4 — 申请转法务弹窗 state(替代 window.prompt;reason 必填 + 预设原因)
   const [transferLegalCaseId, setTransferLegalCaseId] = useState<number | null>(null);
@@ -983,7 +988,7 @@ export function AgentWorkstationIndexPage() {
                 type="button"
                 className="ws-quick-btn danger"
                 disabled={!selectedCaseId}
-                onClick={() => selectedCaseId && handleEscalateSupervisor(selectedCaseId)}
+                onClick={() => selectedCaseId && setEscalateSupervisorCaseId(selectedCaseId)}
               >
                 🔺 升级督导
               </button>
@@ -1025,6 +1030,26 @@ export function AgentWorkstationIndexPage() {
             setTransferLegalCaseId(null);
             alert("✓ 申请转法务已提交,等待督导/admin 审批");
           }}
+        />
+      )}
+
+      {escalateSupervisorCaseId !== null && (
+        <EscalateSupervisorModal
+          caseId={escalateSupervisorCaseId}
+          onClose={() => setEscalateSupervisorCaseId(null)}
+          onSubmitted={() => {
+            setEscalateSupervisorCaseId(null);
+            alert("✓ 已升级到督导队列");
+          }}
+        />
+      )}
+
+      {paymentLink && (
+        <PaymentLinkQrModal
+          token={paymentLink.token}
+          breakdown={paymentLink.breakdown}
+          sentTo={paymentLink.sent_to}
+          onClose={() => setPaymentLink(null)}
         />
       )}
     </>
