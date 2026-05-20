@@ -67,12 +67,14 @@ App 端字体同上，最小可交互元素字号 ≥ 14px。
 ### 2.1 组件优先级
 
 > **必须**优先使用 shadcn/ui 内置组件，禁止重复造轮子。
+> **弹窗交互模式详细规范**:[`docs/UI_PATTERNS_MODAL.md`](./UI_PATTERNS_MODAL.md)(SSOT,v0.5.6 起)
 
 | 场景 | 使用组件 |
 |------|---------|
 | 数据表格 | `<DataTable>` + Refine `useTable` |
 | 表单 | `<Form>` + Refine `useForm` |
-| 弹窗/确认框 | `<Dialog>` / `<AlertDialog>` |
+| **弹窗(中间居中)** — 简单确认 / 表单 ≤ 3 字段 | `<Dialog>` / `<AlertDialog>` 或 `.ds-modal` |
+| **弹窗(右侧 Drawer 可拖动)** — 表单 ≥ 4 字段 / 大量信息 / 需边看列表 | `<RightDrawer>`(`components/ui/RightDrawer.tsx`)|
 | 下拉选择 | `<Select>` / `<Combobox>` |
 | 日期选择 | `<DatePicker>` |
 | 通知 | `<Toast>`（右下角，最多 3 条堆叠）|

@@ -231,12 +231,16 @@ v1.0–v1.3 完成基础多租户结构后，v1.4 落地以下治理与协作要
 
 | 角色 | 英文标识 | 典型人数 | 核心职责 |
 |------|----------|----------|----------|
-| 公司管理员 | `admin` | 1-3 人 | 用户管理、全局数据、系统配置、任务发起 |
+| **物业管理员** | `admin`(scope=tenant) | 1-3 人 | 用户管理、全局数据、系统配置、任务发起 |
 | 主管/督导 | `supervisor` | 2-5 人 | 管理本组催收员、质检复核、处理升级案件 |
-| 内部催收员 | `agent_internal` | 5-50 人 | 正式员工，日常外呼催收 |
-| 外部兼职催收员 | `agent_external` | 不定 | 合同制/兼职，受限账号，号码脱敏 |
-| 法务专员 | `legal` | 1-3 人 | 处理升级至法务阶段的案件 |
-| 工单处理员 | `workorder` | 1-10 人 | 处理通话中产生的维修/投诉工单 |
+| 催收员(内勤) | `agent` + `work_mode='internal'` | 5-50 人 | 正式员工，日常外呼催收 |
+| 催收员(外勤兼职) | `agent` + `work_mode='external'` | 不定 | 合同制/兼职，受限账号，号码脱敏 |
+| 法务对接人 | `legal` | 1-3 人 | 处理升级至法务阶段的案件 |
+| 运营协调 | `coordinator` | 1-10 人 | 处理通话中产生的维修/投诉工单 |
+
+> **v0.5.6 术语统一**:对外展示文案统一用「物业管理员」(不再裸写「admin」/「管理员」);服务商侧对应「服务商管理员」(`admin` 在 `scope=provider:{id}` 上下文下)。前端 ROLE_LABEL 已集中到 `frontend/src/lib/roleLabel.ts`(SSOT),按 scope 自动选词。代码逻辑里 `role === "admin"` 字段标识符不动。
+>
+> **v2.2 四维正交角色模型**:催收员的 internal/external 已从单独的 role 收敛为 `agent` + `work_mode` 字段,详见 §16 数据模型。
 
 ### 4.2 权限矩阵
 
@@ -949,6 +953,43 @@ PC 批量上传 / App 上传单条录音
 
 数据库层 CHECK 约束保证只接受这 4 个值；前端工单列表支持按 priority
 过滤；新建工单时必填，详情页可修改。
+
+### 10.5 标记承诺缴费(v0.5.6 结构化字段)
+
+v0.5.6 之前,催收员「标记承诺缴费」只把案件 stage 改成 `promised` + 写一条自由文本备注;业主到底**承诺什么 / 承诺多少 / 何时缴**全部丢在 note 自由文本里,无法上报、无法追踪兑现、报表抓不到结构化数据。
+
+v0.5.6 起新增 3 个结构化字段(`CollectionCase` 表,迁移 `24025_v056_promise_fields`):
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `promise_content` | VARCHAR(500) | ✅ | 承诺什么:6 个预设选项 + 可选自由文本补充 |
+| `promise_due_at` | DATETIME(tz) | ✅ | 承诺缴费日期 — 复用 v1.6 已有字段(原用于到期提醒) |
+| `promise_amount` | NUMERIC(12,2) | ❌ | 承诺金额(业主只口头承诺不报金额时可空) |
+
+**6 个预设承诺内容**:全额缴清 / 先缴本金,违约金后续协商 / 先缴一半,剩余分期 / 分期 2 次(50%+50%) / 分期 3 次(每月 1/3) / 其他(必填自由文本)。
+
+**前端 SSOT 组件**:`frontend/src/components/case/MarkPromiseModal.tsx`,供以下入口共用:
+- 催收员工作台快捷操作 → 「✅ 标记承诺缴费」按钮
+- 催收员/督导/admin 案件详情 → 跟进备注卡阶段下拉选「承诺缴费」时自动弹出
+
+**API**:`PATCH /api/v1/agent/cases/{id}/stage`,当 `stage='promised'` 时接收 3 字段写入 case 行 + AuditLog payload;其他阶段切换不动 promise_* 字段(避免误清空历史承诺)。
+
+**报表收益**:到期前 24 小时自动提醒回访(scan_and_notify_promise_expiring 已有,只是之前没结构化数据可用);后续兑现追踪可对账 `paid_at` vs `promise_due_at`。
+
+### 10.6 工单创建入口统一(v0.5.6)
+
+v0.5.6 之前,「创建工单」在 4 处入口有 3 套不同实现:
+
+| 入口 | 旧实现 | 字段 |
+|---|---|---|
+| 催收员工作台 | `window.prompt` | 仅 description |
+| 催收员案件详情 | 自写 Modal | 3 字段(type/priority/description) |
+| 督导案件详情 | 共享 `WorkOrderCreateModal` | 3 字段 |
+| 物业 admin 案件详情 | 共享 `WorkOrderCreateModal` | 3 字段 |
+
+催收员工作台缺工单类型 + 优先级选择 → 一律 `case_followup + normal`(后端 422 风险);两套实现散落不易维护。
+
+v0.5.6 起 **5 处统一使用** `frontend/src/components/admin/WorkOrderCreateModal.tsx`(SSOT)。组件 props 仅 `caseId + onClose + onSuccess`,POST `/workorders` 后端逻辑不变。
 
 ---
 
@@ -2996,6 +3037,40 @@ app.youcuihuicui.com       ← 租户侧所有角色（物业公司管理员/主
 - ✅ 当前方案：admin 与 supervisor 在租户范围内的 stage 写权限本就一致（督导是租户全权角色），扩 require_roles 是最小改动
 
 **影响范围**：1 行代码改动（`admin_cases.py` `update_case_stage` 的 `require_roles`）；测试覆盖
+
+---
+
+## 23. UI 模式与术语约定(v0.5.6 起)
+
+### 23.1 弹窗交互模式
+
+详见 [`docs/UI_PATTERNS_MODAL.md`](./UI_PATTERNS_MODAL.md)(SSOT)。要点:
+
+| 内容类型 | 推荐 | 实现 |
+|---|---|---|
+| 简单确认(是/否、驳回理由) | 中间 Dialog ≤ 420px | `.modal-overlay` + `.ds-modal` |
+| 表单 ≤ 3 字段 | 中间 Dialog ≤ 520px | 同上 |
+| 表单 ≥ 4 字段 / 需边看列表上下文 | **右侧 Drawer 可拖动宽度** | `RightDrawer`(基于 @radix-ui/react-dialog) |
+| 大量信息展示 | 右侧 Drawer ≥ 700px / 全屏页 | 同上 |
+| 移动端 | BottomSheet | App-only |
+
+样板:`SupervisorReassignModal`(督导重新分配)v0.5.6 已迁移到 RightDrawer;其他 14 modal 按业务优先级渐进改。
+
+### 23.2 角色文案术语
+
+**SSOT**:`frontend/src/lib/roleLabel.ts`。
+
+- 物业租户内:`admin` → **「物业管理员」**(对外文案);`supervisor` → 督导;`agent` → 催收员;`legal` → 法务对接人;`coordinator` → 运营协调;`project_manager` → 项目负责人
+- 服务商:`admin` → **「服务商管理员」**;`agent` → 服务商催收员;其余同上
+- 平台:`superadmin` → 平台超管;`ops` → 平台运营
+
+**禁止**:用户可见文案里直接写「admin」「Admin」「admin 视角」「转 admin」等英文+中文混排。
+
+代码逻辑里 `role === "admin"` 字段标识符**不受影响**。
+
+### 23.3 AI 视觉巡检 / a11y(可选)
+
+`docs/QA_PLAYBOOKS/vision-audit.md` 落地了一套手动跑的 UX 巡检流程:Playwright 截图 → Claude Vision 分析 → Markdown 报告。同时 `e2e/a11y-audit.spec.ts` 用 axe-core 跑 WCAG 2.1 A+AA 扫描。两者均**不进 CI**,定位「发版冒烟 checklist 的手动步骤」。
 
 ---
 
