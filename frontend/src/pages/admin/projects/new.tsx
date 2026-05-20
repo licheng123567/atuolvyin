@@ -438,7 +438,7 @@ export function AdminProjectNewPage() {
               >
                 <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
                 <span>
-                  服务商项目经理（PM）和外勤团队由服务商管理员在其工作台「我的项目」自行指派，物业 admin 不需在此选择。
+                  服务商项目经理（PM）和外勤团队由服务商管理员在其工作台「我的项目」自行指派，物业管理员不需在此选择。
                 </span>
               </div>
             </div>
@@ -727,7 +727,7 @@ export function AdminProjectNewPage() {
                     onChange={(e) => setDiscountSupervisorMax(e.target.value)}
                     placeholder="租户默认 30"
                   />
-                  <div className="form-hint">本金打折 ≤ X% 督导批；&gt; X% 转 admin</div>
+                  <div className="form-hint">本金打折 ≤ X% 督导批；&gt; X% 转物业管理员</div>
                 </div>
               </div>
               <div className="form-group">
@@ -777,7 +777,7 @@ export function AdminProjectNewPage() {
                     onChange={(e) => setLateFeeSupervisorMax(e.target.value)}
                     placeholder="租户默认 100"
                   />
-                  <div className="form-hint">滞纳金减免 ≤ X% 督导批；&gt; X% 转 admin</div>
+                  <div className="form-hint">滞纳金减免 ≤ X% 督导批；&gt; X% 转物业管理员</div>
                 </div>
               </div>
               <div className="form-group">

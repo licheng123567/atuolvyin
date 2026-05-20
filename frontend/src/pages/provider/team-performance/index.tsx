@@ -18,17 +18,9 @@ function pct(v: number | null): string {
   return v === null ? "—" : `${(v * 100).toFixed(1)}%`;
 }
 
-const ROLE_LABEL: Record<string, string> = {
-  // admin with scope=provider:{id} is the "provider admin"
-  admin: "管理员",
-  project_manager: "项目经理",
-  // agent covers both internal and external work_mode
-  agent: "催收员",
-  supervisor: "督导",
-  legal: "法务对接人",
-  coordinator: "协调员",
-  workorder: "协调员",
-};
+// v0.5.6 — ROLE_LABEL 已迁出到 src/lib/roleLabel.ts;服务商团队绩效页 scope=provider
+import { roleLabel as roleLabelFn } from "../../../lib/roleLabel";
+const ROLE_LABEL = (r: string) => roleLabelFn(r, "provider");
 
 const TOP_N = 10;
 
@@ -123,7 +115,7 @@ export function ProviderTeamPerformancePage() {
                   </td>
                   <td className="px-4 py-3 font-medium">{m.name}</td>
                   <td className="px-4 py-3 text-[var(--color-neutral-600)]">
-                    {ROLE_LABEL[m.role] ?? m.role}
+                    {ROLE_LABEL(m.role)}
                   </td>
                   <td className="px-4 py-3 text-right">{m.total_calls}</td>
                   <td className="px-4 py-3 text-right">{m.connected_calls}</td>

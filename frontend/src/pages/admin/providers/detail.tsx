@@ -40,11 +40,10 @@ interface TerminationStatus {
   timeout_days_remaining: number | null;
 }
 
-const ROLE_LABEL: Record<string, string> = {
-  // agent covers both internal and external; work_mode distinguishes them
-  agent: "催收员",
-  legal: "法务专员",
-};
+// v0.5.6 — ROLE_LABEL 已迁出到 src/lib/roleLabel.ts(SSOT);
+// 此页展示「服务商成员」列表,scope=provider
+import { roleLabel as roleLabelFn } from "../../../lib/roleLabel";
+const ROLE_LABEL = (r: string) => roleLabelFn(r, "provider");
 
 const PROJECT_STATUS_LABEL: Record<string, string> = {
   active: "进行中",
@@ -896,7 +895,7 @@ function MemberRow({
     <tr className="text-[var(--color-neutral-700)]">
       <td className="py-2 font-medium">{member.name}</td>
       <td className="py-2 text-[var(--color-neutral-500)]">{member.phone_masked}</td>
-      <td className="py-2">{ROLE_LABEL[member.role] ?? member.role}</td>
+      <td className="py-2">{ROLE_LABEL(member.role)}</td>
       <td className="py-2">
         <input
           type="number"

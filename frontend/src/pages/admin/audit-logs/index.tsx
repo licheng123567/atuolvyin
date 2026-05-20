@@ -45,17 +45,9 @@ const ACTION_LABEL: Record<string, string> = {
   "script.updated": "更新话术",
 };
 
-const ROLE_LABEL: Record<string, string> = {
-  admin: "管理员",
-  supervisor: "督导",
-  agent: "催收员",
-  legal: "法务",
-  coordinator: "协调员",
-  workorder: "协调员",
-  project_manager: "项目经理",
-  superadmin: "平台超管",
-  ops: "平台运营",
-};
+// v0.5.6 — ROLE_LABEL 已迁出到 src/lib/roleLabel.ts(SSOT)。
+// 审计日志的 actor 可能跨 scope(平台 ops / 物业 admin / 服务商 admin 等),用 roleLabelAny 兜底。
+import { roleLabelAny } from "../../../lib/roleLabel";
 
 export function AdminAuditLogPage() {
   const [page, setPage] = useState(1);
@@ -98,7 +90,7 @@ export function AdminAuditLogPage() {
       items.map((it) => ({
         created_at: new Date(it.created_at).toLocaleString("zh-CN"),
         actor: it.actor_user_id
-          ? `${ROLE_LABEL[it.actor_role ?? ""] ?? it.actor_role ?? ""} #${it.actor_user_id}`
+          ? `${roleLabelAny(it.actor_role ?? "")} #${it.actor_user_id}`
           : "—",
         action_label: ACTION_LABEL[it.action] ?? it.action,
         action: it.action,
@@ -234,7 +226,7 @@ export function AdminAuditLogPage() {
                   {it.actor_user_id ? (
                     <>
                       <span className="ds-badge ds-badge-blue" style={{ fontSize: 10 }}>
-                        {ROLE_LABEL[it.actor_role ?? ""] ?? it.actor_role ?? "未知"}
+                        {roleLabelAny(it.actor_role ?? "") || "未知"}
                       </span>
                       <span style={{ marginLeft: 4, color: "#9ca3af" }}>#{it.actor_user_id}</span>
                     </>

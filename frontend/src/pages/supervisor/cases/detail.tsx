@@ -184,7 +184,7 @@ export function SupervisorCaseDetailPage() {
                     borderColor: "#b45309",
                   }}
                   onClick={() => setShowDiscountModal(true)}
-                  title="发起减免/分期/违约金减免，按金额自动判定走督导/admin 审批"
+                  title="发起减免/分期/违约金减免，按金额自动判定走督导/物业管理员审批"
                 >
                   <BadgePercent className="w-3.5 h-3.5" />
                   发起减免

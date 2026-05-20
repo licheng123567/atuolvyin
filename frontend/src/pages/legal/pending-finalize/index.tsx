@@ -74,7 +74,7 @@ export function LegalPendingFinalizePage() {
             <div className="page-title">待法务接单</div>
           </div>
           <div className="page-subtitle">
-            督导/admin 已批准的转法务申请等你选服务包并建单 — 总{total} 单
+            督导/物业管理员已批准的转法务申请等你选服务包并建单 — 总{total} 单
           </div>
         </div>
       </div>

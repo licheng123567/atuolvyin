@@ -9,6 +9,7 @@ import { useCustom, useGetIdentity } from "@refinedev/core";
 import { Bell, Info, Lock } from "lucide-react";
 import type { AuthUser } from "../../../providers/auth-provider";
 import { Bridge, type CapabilityState } from "../../../lib/jsBridge";
+import { roleLabel as roleLabelFn } from "../../../lib/roleLabel";
 
 /**
  * v2.3.1 — 录音设置内联 section（替代 v2.3 的 BottomSheet）。
@@ -159,13 +160,8 @@ interface AgentPerformance {
   rank_in_tenant: number;
 }
 
-const ROLE_LABEL: Record<string, string> = {
-  // agent role covers both internal and external (work_mode distinguishes them)
-  agent: "催收员",
-  supervisor: "督导",
-  admin: "管理员",
-};
-
+// v0.5.6 — ROLE_LABEL 已迁出到 src/lib/roleLabel.ts(SSOT);此处统一用 tenant scope
+// (App-only WebView 当前仅服务于物业催收员/督导/admin)
 const TOKEN_KEY = "autoluyin_token";
 const USER_KEY = "autoluyin_user";
 
@@ -197,7 +193,7 @@ export function MobileProfilePage() {
   const name = identity?.name ?? "";
   const initial = name.slice(0, 1) || "用";
   const role = identity?.role ?? "";
-  const roleLabel = ROLE_LABEL[role] ?? role ?? "用户";
+  const roleLabel = role ? roleLabelFn(role, "tenant") : "用户";
 
   const monthCalls = perf?.month_calls ?? 0;
   const monthPromised = perf?.month_promised_cases ?? 0;

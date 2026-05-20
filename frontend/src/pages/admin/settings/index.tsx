@@ -471,7 +471,7 @@ export function AdminSettingsPage() {
           <div className="setting-row">
             <div>
               <div className="setting-label">督导审批上限</div>
-              <div className="setting-hint">折扣 ≤ X% 督导可批；&gt; X% 转 admin。一般物业建议 30%</div>
+              <div className="setting-hint">折扣 ≤ X% 督导可批；&gt; X% 转物业管理员。一般物业建议 30%</div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <input
@@ -501,7 +501,7 @@ export function AdminSettingsPage() {
               ) : (
                 <>催收员可独立打折 0–{form.discount_auto_approve_threshold_pct - 1}%；</>
               )}
-              督导可批 {form.discount_auto_approve_threshold_pct}–{form.discount_supervisor_max_pct}%；&gt; {form.discount_supervisor_max_pct}% 转 admin
+              督导可批 {form.discount_auto_approve_threshold_pct}–{form.discount_supervisor_max_pct}%；&gt; {form.discount_supervisor_max_pct}% 转物业管理员
             </div>
           )}
         </div>
@@ -586,7 +586,7 @@ export function AdminSettingsPage() {
             <div style={{ background: "#f0fdfa", border: "1px solid #99f6e4", borderRadius: 6, padding: 10, marginTop: 4, fontSize: 12.5, color: "#0f766e", lineHeight: 1.7 }}>
               <strong>规则</strong>：催收员可独立减免 0–{Math.max(0, form.late_fee_waive_auto_approve_threshold_pct - 1)}%；
               督导可批 {form.late_fee_waive_auto_approve_threshold_pct}–{form.late_fee_waive_supervisor_max_pct}%；
-              &gt; {form.late_fee_waive_supervisor_max_pct}% 转 admin
+              &gt; {form.late_fee_waive_supervisor_max_pct}% 转物业管理员
             </div>
           )}
         </div>

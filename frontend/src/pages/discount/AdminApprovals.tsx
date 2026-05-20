@@ -5,7 +5,7 @@ export function AdminDiscountApprovalsPage() {
   return (
     <ApprovalListPage
       approverRole="admin"
-      approverName="物业 admin"
+      approverName="物业管理员"
       detailBasePath="/admin/discount-approvals"
     />
   );

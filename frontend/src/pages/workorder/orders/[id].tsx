@@ -87,17 +87,9 @@ interface FormState {
   priority: WorkOrderPriority;
 }
 
-const ROLE_LABEL: Record<string, string> = {
-  admin: "管理员",
-  supervisor: "督导",
-  agent: "催收员",
-  legal: "法务对接人",
-  coordinator: "协调员",
-  workorder: "协调员",
-  project_manager: "项目经理",
-  superadmin: "平台超管",
-  ops: "平台运营",
-};
+// v0.5.6 — 工单转交时下拉显示多类用户,roleLabelAny 跨 scope 兜底
+import { roleLabelAny } from "../../../lib/roleLabel";
+const ROLE_LABEL = (r: string) => roleLabelAny(r);
 
 function detailToForm(detail: WorkOrderDetail): FormState {
   return {
@@ -416,7 +408,7 @@ export function WorkOrderDetailPage() {
                   >
                     <option value="">未分配</option>
                     {users.map((u) => (
-                      <option key={u.id} value={u.id}>{u.name}（{ROLE_LABEL[u.role] ?? u.role}）</option>
+                      <option key={u.id} value={u.id}>{u.name}（{ROLE_LABEL(u.role)}）</option>
                     ))}
                     {form.assigned_to !== null && !users.some((u) => u.id === form.assigned_to) && (
                       <option value={form.assigned_to}>用户 #{form.assigned_to} ({detail.assignee_name ?? "未知"})</option>

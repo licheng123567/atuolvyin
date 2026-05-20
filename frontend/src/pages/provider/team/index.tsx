@@ -26,16 +26,9 @@ interface ProviderTenant {
   tenant_name: string;
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  // admin with scope=provider:{id} is the "provider admin"
-  admin: "服务商管理员",
-  legal: "法务专员",
-  workorder: "工单处理员",
-  // agent covers both internal and external work_mode
-  agent: "催收员",
-  supervisor: "通话质量督导",
-  project_manager: "项目负责人",
-};
+// v0.5.6 — ROLE_LABELS 已迁出到 src/lib/roleLabel.ts;服务商团队管理 scope=provider
+import { roleLabel as roleLabelFn } from "../../../lib/roleLabel";
+const ROLE_LABELS = (r: string) => roleLabelFn(r, "provider");
 
 const CREATABLE_ROLES = [
   // work_mode (internal/external) is set separately; role is just "agent"
@@ -155,7 +148,7 @@ export function ProviderTeamPage() {
                   <td>{m.phone_masked}</td>
                   <td>
                     <span className={ROLE_BADGE_CLASS[m.role] ?? "ds-badge ds-badge-gray"}>
-                      {ROLE_LABELS[m.role] ?? m.role}
+                      {ROLE_LABELS(m.role)}
                     </span>
                   </td>
                   <td>{formatDate(m.created_at)}</td>

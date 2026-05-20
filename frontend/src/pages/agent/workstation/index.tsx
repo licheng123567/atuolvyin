@@ -970,7 +970,7 @@ export function AgentWorkstationIndexPage() {
                 disabled={!selectedCaseId}
                 data-testid="ws-discount-request"
                 onClick={() => selectedCaseId && setDiscountForCaseId(selectedCaseId)}
-                title="发起减免/分期/违约金减免，督导或 admin 审批"
+                title="发起减免/分期/违约金减免，督导或物业管理员审批"
               >
                 💸 申请减免
               </button>
@@ -980,7 +980,7 @@ export function AgentWorkstationIndexPage() {
                 disabled={!selectedCaseId}
                 data-testid="ws-transfer-legal"
                 onClick={() => selectedCaseId && setTransferLegalCaseId(selectedCaseId)}
-                title="申请转法务,督导/admin 审批后由法务接单选服务包建单"
+                title="申请转法务,督导/物业管理员审批后由法务接单选服务包建单"
               >
                 ⚖️ 申请转法务
               </button>
@@ -1028,7 +1028,7 @@ export function AgentWorkstationIndexPage() {
           onClose={() => setTransferLegalCaseId(null)}
           onSubmitted={() => {
             setTransferLegalCaseId(null);
-            alert("✓ 申请转法务已提交,等待督导/admin 审批");
+            alert("✓ 申请转法务已提交,等待督导/物业管理员审批");
           }}
         />
       )}

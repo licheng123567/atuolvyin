@@ -48,17 +48,9 @@ const ROLE_BADGE_CLASS: Record<string, string> = {
   ops: "ds-badge ds-badge-gray",
 };
 
-const ROLE_LABEL: Record<string, string> = {
-  admin: "管理员",
-  supervisor: "督导",
-  agent: "催收员",
-  legal: "法务对接人",
-  workorder: "协调员",
-  coordinator: "协调员",
-  project_manager: "项目经理",
-  superadmin: "平台超管",
-  ops: "平台运营",
-};
+// v0.5.6 — ROLE_LABEL 已迁出到 src/lib/roleLabel.ts;此页是物业 admin 管理本租户用户
+import { roleLabel as roleLabelFn } from "../../../lib/roleLabel";
+const ROLE_LABEL = (r: string) => roleLabelFn(r, "tenant");
 
 export function UserListPage() {
   const go = useGo();
@@ -195,7 +187,7 @@ export function UserListPage() {
                         ROLE_BADGE_CLASS[u.role] ?? "ds-badge ds-badge-gray"
                       }
                     >
-                      {ROLE_LABEL[u.role] ?? u.role}
+                      {ROLE_LABEL(u.role)}
                     </span>
                     {u.all_roles && u.all_roles.length > 1 && (
                       <span

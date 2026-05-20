@@ -41,7 +41,7 @@ export function EscalateToAdminModal({
       <div className="bg-white rounded-lg shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-neutral-200)]">
           <h2 className="text-base font-semibold">
-            上报 admin 审批 — 转法务申请 #{requestId}
+            上报物业管理员审批 — 转法务申请 #{requestId}
           </h2>
           <button
             type="button"
@@ -54,7 +54,7 @@ export function EscalateToAdminModal({
 
         <div className="p-5 space-y-3">
           <div className="text-xs text-[var(--color-neutral-600)] bg-amber-50 border border-amber-200 rounded p-2">
-            上报后此申请将进入 admin 待审批列表,你不再能批/驳此申请。请说明为何需 admin 决定(如:超出督导决断范围 / 金额过大 / 业主投诉到公司)。
+            上报后此申请将进入物业管理员待审批列表,你不再能批/驳此申请。请说明为何需物业管理员决定(如:超出督导决断范围 / 金额过大 / 业主投诉到公司)。
           </div>
           <label className="block text-sm font-medium text-[var(--color-neutral-700)]">
             上报理由 <span className="text-red-500">*</span>
@@ -63,7 +63,7 @@ export function EscalateToAdminModal({
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={4}
-            placeholder="必填,说明为何需 admin 决定"
+            placeholder="必填,说明为何需物业管理员决定"
             className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-300)] rounded resize-none"
             autoFocus
           />
@@ -84,7 +84,7 @@ export function EscalateToAdminModal({
             className="px-4 py-1.5 text-sm rounded bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 flex items-center gap-1.5"
           >
             {mutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            上报 admin
+            上报物业管理员
           </button>
         </div>
       </div>

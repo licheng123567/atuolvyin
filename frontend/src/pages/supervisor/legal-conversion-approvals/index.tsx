@@ -56,7 +56,7 @@ interface ListResp {
 
 const STATUS_LABEL: Record<RequestStatus, string> = {
   pending: "待督导审批",
-  pending_admin: "待 admin 审批",
+  pending_admin: "待物业管理员审批",
   approved: "已完结",
   approved_pending_legal: "已批·待法务接单",
   rejected: "已驳回",
@@ -157,7 +157,7 @@ export function SupervisorLegalConversionApprovalsPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Scale size={20} style={{ color: "#7e3af2" }} />
             <div className="page-title">
-              法务转化审批{isAdmin ? " — admin 视角" : " — 督导视角"}
+              法务转化审批{isAdmin ? " — 物业管理员视角" : " — 督导视角"}
             </div>
           </div>
           <div className="page-subtitle">
@@ -375,10 +375,10 @@ export function SupervisorLegalConversionApprovalsPage() {
                               type="button"
                               className="ds-btn ds-btn-ghost ds-btn-sm"
                               style={{ color: "#b45309" }}
-                              title="超出督导决断范围,上报 admin 决"
+                              title="超出督导决断范围,上报物业管理员决"
                               onClick={() => setEscalateTarget(r)}
                             >
-                              上报 admin
+                              上报物业管理员
                             </button>
                           )}
                         </>

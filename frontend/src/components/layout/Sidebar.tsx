@@ -5,20 +5,9 @@ import { Home, LogOut } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import type { AuthUser } from "../../providers/auth-provider";
 import { getNavSections } from "../../config/nav";
+import { roleLabelFromUser } from "../../lib/roleLabel";
 
-const ROLE_LABELS: Record<string, string> = {
-  superadmin: "平台超管",
-  ops: "平台运营员",
-  // admin: label is scope-dependent, resolved at render time
-  admin: "管理员",
-  supervisor: "主管/督导",
-  // agent: work_mode (internal/external) is not shown in sidebar label
-  agent: "催收员",
-  legal: "法务专员",
-  workorder: "工单处理员",
-  coordinator: "协调员",
-  project_manager: "项目负责人",
-};
+// v0.5.6 — ROLE_LABELS 已迁出到 src/lib/roleLabel.ts(SSOT)
 
 type LucideMap = Record<string, React.ElementType>;
 function resolveIcon(name: string | undefined): React.ElementType {
@@ -98,7 +87,7 @@ export function Sidebar() {
                 {user.name}
               </p>
               <p className="text-xs text-[var(--color-neutral-400)] truncate">
-                {ROLE_LABELS[user.role] ?? user.role}
+                {roleLabelFromUser(user)}
               </p>
             </div>
           </div>

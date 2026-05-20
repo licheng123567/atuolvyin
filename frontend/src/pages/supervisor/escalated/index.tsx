@@ -227,7 +227,7 @@ export function SupervisorEscalatedPage() {
                     className="ds-btn ds-btn-secondary ds-btn-sm"
                     style={{ color: "#b45309", borderColor: "#fcd34d" }}
                     onClick={() => setDiscountTarget(c)}
-                    title="发起减免/分期/违约金减免，按金额自动判定走督导/admin 审批"
+                    title="发起减免/分期/违约金减免，按金额自动判定走督导/物业管理员审批"
                   >
                     <BadgePercent className="w-3.5 h-3.5" /> 发起减免
                   </button>
@@ -312,15 +312,15 @@ export function SupervisorEscalatedPage() {
             <ActionRow
               icon={<ExternalLink className="w-4 h-4" />}
               title="模式 3：直接结案 / 标坏账"
-              desc="评估后认为无回收价值，标记结案进入坏账清单，需物业 admin 二次确认"
-              onClick={() => { alert("已提交 admin 审批"); setAction(null); }}
+              desc="评估后认为无回收价值，标记结案进入坏账清单，需物业管理员二次确认"
+              onClick={() => { alert("已提交物业管理员审批"); setAction(null); }}
               actionLabel="提交审批"
             />
             {/* v1.6.9 — 模式 4：发起减免谈判（督导直接代催收员发起 offer）*/}
             <ActionRow
               icon={<BadgePercent className="w-4 h-4" />}
               title="模式 4：发起减免 / 分期申请"
-              desc="业主明确「无力一次性缴清 / 服务异议 / 需分期」时，督导直接代催收员发起减免 offer，按金额自动决定督导/admin 审批"
+              desc="业主明确「无力一次性缴清 / 服务异议 / 需分期」时，督导直接代催收员发起减免 offer，按金额自动决定督导/物业管理员审批"
               onClick={() => {
                 setDiscountTarget(activeCase);
                 setAction(null);

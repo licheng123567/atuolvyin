@@ -224,7 +224,7 @@ export function AgentWorkstationPage() {
                   color: "#b45309", borderColor: "#fcd34d",
                 }}
                 onClick={() => setShowDiscountModal(true)}
-                title="发起减免 / 分期 / 违约金减免申请，督导或 admin 审批"
+                title="发起减免 / 分期 / 违约金减免申请，督导或物业管理员审批"
               >
                 <BadgePercent className="w-3.5 h-3.5" />
                 申请减免
@@ -246,7 +246,7 @@ export function AgentWorkstationPage() {
                   color: "#7e3af2", borderColor: "#c4b5fd",
                 }}
                 onClick={() => setTransferLegalOpen(true)}
-                title="提交转法务申请,督导/admin 审批后由法务接单选服务包建单"
+                title="提交转法务申请,督导/物业管理员审批后由法务接单选服务包建单"
               >
                 <Scale className="w-3.5 h-3.5" />
                 申请转法务
@@ -255,7 +255,7 @@ export function AgentWorkstationPage() {
           </div>
 
           <div style={{ fontSize: 11, color: "var(--color-neutral-400)", textAlign: "center", lineHeight: 1.6 }}>
-            「申请转法务」会提交申请单<br/>督导/admin 审批后才会真正转化
+            「申请转法务」会提交申请单<br/>督导/物业管理员审批后才会真正转化
           </div>
 
           {/* v1.6.11 — 跟进备注移到右栏（操作完直接写） */}
@@ -273,7 +273,7 @@ export function AgentWorkstationPage() {
           onClose={() => setTransferLegalOpen(false)}
           onSubmitted={() => {
             setTransferLegalOpen(false);
-            alert("✓ 申请转法务已提交,等待督导/admin 审批");
+            alert("✓ 申请转法务已提交,等待督导/物业管理员审批");
           }}
         />
       )}

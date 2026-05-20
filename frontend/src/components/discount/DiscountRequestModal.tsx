@@ -72,7 +72,7 @@ export function DiscountRequestModal({
 
   // 大致预测审批走向（仅用于 UX 提示，最终以后端为准）
   let approvalHint = "";
-  if (discountPct >= 30) approvalHint = "比例较大，将转 admin 审批";
+  if (discountPct >= 30) approvalHint = "比例较大，将转物业管理员审批";
   else if (discountPct >= 10) approvalHint = "需督导审批";
   else if (discountPct > 0) approvalHint = "比例较小，可能自动通过";
 

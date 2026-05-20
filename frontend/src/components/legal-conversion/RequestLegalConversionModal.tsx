@@ -86,7 +86,7 @@ export function RequestLegalConversionModal({
         <div className="p-5 space-y-3">
           <div className="text-xs text-[var(--color-neutral-600)] bg-amber-50 border border-amber-200 rounded p-2">
             <strong>什么情况下转法务?</strong> 当本案件已无法通过电话/上门催回,
-            且业主有偿还能力却拒绝履行时,可申请转法务。提交后督导/admin 审批,
+            且业主有偿还能力却拒绝履行时,可申请转法务。提交后督导/物业管理员审批,
             通过后由物业法务接单选服务包(律师函 / 调解 / 诉讼)。
           </div>
 
