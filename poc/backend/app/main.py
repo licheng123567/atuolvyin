@@ -42,6 +42,7 @@ from app.api import (
     ops,
     ops_extras,
     ops_law_firms,
+    ops_legal_packages,
     ops_providers,
     pm_dashboard,
     provider_admin,
@@ -225,6 +226,9 @@ app.include_router(ops.router, prefix="/api/v1/ops", tags=["ops"])
 app.include_router(ops_providers.router, prefix="/api/v1/ops", tags=["ops-providers"])
 app.include_router(ops_extras.router, prefix="/api/v1/ops", tags=["ops-extras"])
 app.include_router(ops_law_firms.router, prefix="/api/v1/ops", tags=["ops-law-firms"])
+app.include_router(
+    ops_legal_packages.router, prefix="/api/v1/ops", tags=["ops-legal-packages"]
+)
 app.include_router(
     legal_workstation.router, prefix="/api/v1/legal-workstation", tags=["legal-workstation"]
 )

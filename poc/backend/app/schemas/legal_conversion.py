@@ -52,6 +52,10 @@ class LegalConversionOrderOut(BaseModel):
     owner_name: str | None = None
     owner_room: str | None = None
     project_name: str | None = None
+    # v0.5.5 — 详情页业主手机号脱敏 + 服务包内容/平台费率(拆价展示用)
+    owner_phone_masked: str | None = None
+    package_description: str | None = None
+    package_platform_fee_rate: Decimal | None = None
 
     model_config = {"from_attributes": True}
 

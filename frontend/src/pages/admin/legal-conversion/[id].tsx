@@ -1,7 +1,7 @@
-// 法务转化订单详情 — v1.5.7
-// admin 点列表行进详情，看到订单全貌 + 关联案件 + 文书 + 状态时间线
+// 法务转化订单详情 — v1.5.7 + v0.5.5(业主信息卡 + 拆价 + 服务包内容)
+// admin 点列表行进详情,看到订单全貌 + 业主信息 + 关联案件 + 服务包内容 + 文书 + 时间线
 import { useCustom } from "@refinedev/core";
-import { ArrowLeft, Briefcase, FileText, Scale } from "lucide-react";
+import { ArrowLeft, Briefcase, FileText, Scale, User } from "lucide-react";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { LegalDocumentModal } from "../../../components/legal-conversion/LegalDocumentModal";
@@ -20,6 +20,13 @@ interface OrderDetail {
   completed_at: string | null;
   created_at: string;
   notes: string | null;
+  // v0.5.4 业主上下文 + v0.5.5 详情扩展字段
+  owner_name: string | null;
+  owner_room: string | null;
+  owner_phone_masked: string | null;
+  project_name: string | null;
+  package_description: string | null;
+  package_platform_fee_rate: string | null;
 }
 
 const STATUS_LABEL: Record<OrderDetail["status"], string> = {
@@ -87,22 +94,104 @@ export function AdminLegalConversionDetailPage() {
 
       {order && (
         <>
+          {/* v0.5.5 — 业主信息卡(优先展示,替换原孤立的案件 #ID) */}
+          <div className="ds-card" style={{ marginBottom: 16 }}>
+            <div className="card-body" style={{ padding: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
+                <User style={{ width: 16, height: 16, color: "var(--color-neutral-500)" }} />
+                <div style={{ fontSize: 14, fontWeight: 600 }}>业主信息</div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px 24px" }}>
+                <Field
+                  label="业主姓名"
+                  value={order.owner_name ?? <span style={{ color: "var(--color-neutral-400)" }}>—</span>}
+                />
+                <Field
+                  label="房号"
+                  value={order.owner_room ?? <span style={{ color: "var(--color-neutral-400)" }}>—</span>}
+                />
+                <Field
+                  label="所属项目"
+                  value={order.project_name ?? <span style={{ color: "var(--color-neutral-400)" }}>—</span>}
+                />
+                <Field
+                  label="联系电话"
+                  value={
+                    order.owner_phone_masked ? (
+                      <span style={{ fontFamily: "monospace" }}>{order.owner_phone_masked}</span>
+                    ) : (
+                      <span style={{ color: "var(--color-neutral-400)" }}>—</span>
+                    )
+                  }
+                />
+                <Field
+                  label="关联案件"
+                  value={
+                    <Link to={`/admin/cases/${order.case_id}`} style={{ color: "var(--color-primary)" }}>
+                      案件 #{order.case_id}
+                    </Link>
+                  }
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* v0.5.5 — 订单信息(去重业主部分,聚焦法务履约 + 拆价) */}
           <div className="ds-card" style={{ marginBottom: 16 }}>
             <div className="card-body" style={{ padding: 16 }}>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>订单信息</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px 24px" }}>
-                <Field label="关联案件" value={
-                  <Link to={`/admin/cases/${order.case_id}`} style={{ color: "var(--color-primary)" }}>
-                    案件 #{order.case_id}
-                  </Link>
-                } />
                 <Field label="服务包" value={order.package_name ?? "—"} />
                 <Field label="律所" value={order.assigned_law_firm ?? <span style={{ color: "var(--color-neutral-400)" }}>未派</span>} />
                 <Field label="律师" value={order.assigned_lawyer_name ?? <span style={{ color: "var(--color-neutral-400)" }}>未派</span>} />
-                <Field label="报价" value={<span style={{ fontWeight: 600 }}>¥{order.price_quoted}</span>} />
+                <Field
+                  label="报价拆分"
+                  value={
+                    <PriceBreakdown
+                      total={order.price_quoted}
+                      platformFee={order.platform_fee_amount}
+                      rate={order.package_platform_fee_rate}
+                    />
+                  }
+                />
+              </div>
+              <div
+                style={{
+                  marginTop: 12,
+                  fontSize: 11.5,
+                  color: "var(--color-neutral-500)",
+                  background: "var(--color-neutral-50)",
+                  padding: "8px 10px",
+                  borderRadius: 6,
+                  lineHeight: 1.6,
+                }}
+              >
+                💡 服务包报价由律所提交、<strong>平台 OPS 统一维护</strong>,对所有物业租户公开同价;
+                平台抽成比例可在 OPS 后台调整(详见 PRD §20.4 服务包定价归属)。
               </div>
             </div>
           </div>
+
+          {/* v0.5.5 — 服务包内容卡(含什么服务) */}
+          {order.package_description && (
+            <div className="ds-card" style={{ marginBottom: 16 }}>
+              <div className="card-body" style={{ padding: 16 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+                  服务包内容 — {order.package_name ?? ""}
+                </div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: "var(--color-neutral-700)",
+                    whiteSpace: "pre-wrap",
+                    lineHeight: 1.65,
+                  }}
+                >
+                  {order.package_description}
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="ds-card" style={{ marginBottom: 16 }}>
             <div className="card-body" style={{ padding: 16 }}>
@@ -147,6 +236,36 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
     <div>
       <div style={{ fontSize: 12, color: "var(--color-neutral-500)", marginBottom: 2 }}>{label}</div>
       <div style={{ fontSize: 13.5 }}>{value}</div>
+    </div>
+  );
+}
+
+/**
+ * v0.5.5 — 拆价展示:律所承接价 + 平台服务费 = 总报价。
+ * 平台服务费 = 总价 × platform_fee_rate;律所承接价 = 总价 − 平台费。
+ */
+function PriceBreakdown({
+  total,
+  platformFee,
+  rate,
+}: {
+  total: string;
+  platformFee: string;
+  rate: string | null;
+}) {
+  const totalNum = Number(total);
+  const feeNum = Number(platformFee);
+  const lawFirmShare = Math.max(0, totalNum - feeNum);
+  const ratePct = rate ? (Number(rate) * 100).toFixed(0) : null;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <span style={{ fontSize: 16, fontWeight: 700, color: "var(--color-neutral-900)" }}>
+        ¥{total}
+      </span>
+      <span style={{ fontSize: 11.5, color: "var(--color-neutral-500)" }}>
+        ＝ 律所承接 ¥{lawFirmShare.toFixed(2)} ＋ 平台服务费 ¥{Number(platformFee).toFixed(2)}
+        {ratePct && `(${ratePct}%)`}
+      </span>
     </div>
   );
 }

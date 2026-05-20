@@ -21,6 +21,7 @@ from fastapi import status as http_status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.core.crypto import mask_phone
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles, require_tenant_roles
 from app.models.case import CollectionCase, OwnerProfile, Project
@@ -94,6 +95,9 @@ def _order_to_out(
     owner_name: str | None = None,
     owner_room: str | None = None,
     project_name: str | None = None,
+    owner_phone_masked: str | None = None,
+    package_description: str | None = None,
+    package_platform_fee_rate: Decimal | None = None,
 ) -> LegalConversionOrderOut:
     return LegalConversionOrderOut(
         id=order.id,
@@ -118,6 +122,9 @@ def _order_to_out(
         owner_name=owner_name,
         owner_room=owner_room,
         project_name=project_name,
+        owner_phone_masked=owner_phone_masked,
+        package_description=package_description,
+        package_platform_fee_rate=package_platform_fee_rate,
     )
 
 
@@ -298,13 +305,18 @@ async def list_orders(
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[LegalConversionOrderOut]:
     tenant_id = _require_tenant(payload)
-    # v0.5.4 — LEFT JOIN 业主/项目，列表项展示「业主姓名 · 房号 · 项目名」替代冷案件编号
+    # v0.5.4 — LEFT JOIN 业主/项目,展示「业主姓名 · 房号 · 项目名」替代冷案件编号
+    # v0.5.5 — 多 select 服务包 description/platform_fee_rate + 业主 phone_enc(脱敏后透出),
+    #         给详情页拆价 + 业主信息卡使用
     stmt = (
         select(
             LegalConversionOrder,
             LegalServicePackage.name,
+            LegalServicePackage.description.label("pkg_desc"),
+            LegalServicePackage.platform_fee_rate.label("pkg_fee_rate"),
             OwnerProfile.name.label("o_name"),
             OwnerProfile.room.label("o_room"),
+            OwnerProfile.phone_enc.label("o_phone_enc"),
             Project.name.label("p_name"),
         )
         .join(LegalServicePackage, LegalServicePackage.id == LegalConversionOrder.package_id)
@@ -334,8 +346,11 @@ async def list_orders(
             owner_name=o_name,
             owner_room=o_room,
             project_name=p_name,
+            owner_phone_masked=mask_phone(o_phone_enc) if o_phone_enc else None,
+            package_description=pkg_desc,
+            package_platform_fee_rate=pkg_fee_rate,
         )
-        for o, pkg_name, o_name, o_room, p_name in rows
+        for o, pkg_name, pkg_desc, pkg_fee_rate, o_name, o_room, o_phone_enc, p_name in rows
     ]
     return PaginatedResponse[LegalConversionOrderOut](
         items=items,
@@ -356,13 +371,17 @@ async def get_order(
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalConversionOrderOut:
     tenant_id = _require_tenant(payload)
-    # v0.5.4 — 同 list 端点：LEFT JOIN 业主/项目以便详情页也能拿到上下文
+    # v0.5.4 — 同 list 端点:LEFT JOIN 业主/项目;v0.5.5 — 加 package description /
+    #         platform_fee_rate + 业主 phone_enc(脱敏)
     row = db.execute(
         select(
             LegalConversionOrder,
             LegalServicePackage.name,
+            LegalServicePackage.description.label("pkg_desc"),
+            LegalServicePackage.platform_fee_rate.label("pkg_fee_rate"),
             OwnerProfile.name.label("o_name"),
             OwnerProfile.room.label("o_room"),
+            OwnerProfile.phone_enc.label("o_phone_enc"),
             Project.name.label("p_name"),
         )
         .join(LegalServicePackage, LegalServicePackage.id == LegalConversionOrder.package_id)
@@ -379,13 +398,16 @@ async def get_order(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail={"code": "ERR_NOT_FOUND", "message": "订单不存在"},
         )
-    order_obj, pkg_name, o_name, o_room, p_name = row
+    order_obj, pkg_name, pkg_desc, pkg_fee_rate, o_name, o_room, o_phone_enc, p_name = row
     return _order_to_out(
         order_obj,
         pkg_name,
         owner_name=o_name,
         owner_room=o_room,
         project_name=p_name,
+        owner_phone_masked=mask_phone(o_phone_enc) if o_phone_enc else None,
+        package_description=pkg_desc,
+        package_platform_fee_rate=pkg_fee_rate,
     )
 
 

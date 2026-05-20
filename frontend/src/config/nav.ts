@@ -205,6 +205,7 @@ const NAV_CONFIG: Partial<Record<UserRole | "workorder", NavSection[]>> = {
       title: "法务",
       items: [
         { label: "律所池", path: "/ops/law-firms", icon: "Building2" },
+        { label: "服务包目录", path: "/ops/legal-packages", icon: "Package" },
         { label: "法务工作台", path: "/ops/legal-workstation", icon: "Scale" },
       ],
     },
@@ -226,6 +227,7 @@ const NAV_CONFIG: Partial<Record<UserRole | "workorder", NavSection[]>> = {
         { label: "服务商管理", path: "/ops/providers", icon: "Briefcase" },
         { label: "结算总览", path: "/ops/settlements", icon: "Receipt" },
         { label: "律所池", path: "/ops/law-firms", icon: "Building2" },
+        { label: "服务包目录", path: "/ops/legal-packages", icon: "Package" },
         { label: "法务工作台", path: "/ops/legal-workstation", icon: "Scale" },
         { label: "系统公告", path: "/ops/announcements", icon: "Megaphone" },
       ],
