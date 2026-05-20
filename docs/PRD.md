@@ -249,13 +249,22 @@ v1.0–v1.3 完成基础多租户结构后，v1.4 落地以下治理与协作要
 | 查看完整手机号 | ✅ | ✅ | ✅ | ❌ 脱敏 | 仅负责案件 | ❌ |
 | 实时 AI 辅助通话 | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ |
 | 查看通话录音/转写 | ✅ 全量 | ✅ 本组 | 仅自己 | 仅自己 | 负责案件 | ❌ |
-| 升级转主管 | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
-| 升级转法务 | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| 案件升级到督导 | ✅ | — | ✅ | ✅ | ❌ | ❌ |
+| 申请转法务（提单子）| ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| 审批转法务申请 | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| 法务接单选服务包（v0.5.4）| ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
+| 上报 admin（减免单/转法务单）| ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| 督导侧案件动作（催回访/催办/介入/重派）| ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| 发送缴费链接 | ✅ | ✅ | ✅ 自己案件 | ✅ 自己案件 | ❌ | ❌ |
 | 处理法务案件 | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
 | 处理工单 | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | 话术库配置 | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | 导出数据 | ✅ | 本组 | 仅自己 | ❌ 禁止 | 负责案件 | ❌ |
 | 系统配置 | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+
+**v0.5.4 注**:
+- 案件升级链已收窄为 **一级**(催收员→督导),取消「督导→admin 案件 transfer」(督导接案后自己负责到底)
+- 重大事项走**审批单**(减免/转法务)而非案件 transfer;督导可在审批单上点「上报 admin」转交 admin 决
 
 ### 4.3 内部催收员 vs 外部兼职催收员
 
@@ -904,12 +913,30 @@ PC 批量上传 / App 上传单条录音
     ↓ 工单进入工单处理员队列
     ↓ 工单处理员处理完成后系统通知催收员
 
-催收员/主管点击「转法务」
-    ↓ 系统自动打包：案件信息 + 全部通话记录摘要 + 欠费凭证
-    ↓ 法务案件进入法务专员队列
-    ↓ 法务专员处理，更新进展（律师函/立案/结案）
-    ↓ 状态变更通知管理员和原催收员
+催收员/督导 点「申请转法务」(reason 必填,7 个预设原因 + 「其他」需补充)
+    ↓ 督导审批「是否转出」(不再选服务包) — 批准 / 驳回 / 上报 admin
+    ↓ admin 审批(若上报)— 批准 / 驳回
+    ↓ 状态变 approved_pending_legal,进入物业法务工作台「待法务接单」队列
+    ↓ 物业法务接单 → 选服务包(律师函/调解/小额诉讼/完整代理)— 此时才看金额
+    ↓ 创建 LegalConversionOrder + 状态 approved → 物业法务内部处理
+    ↓(可选)升级到合作律所 → 平台 OPS 撮合 → 律所接单
+    ↓ 状态变更通知管理员 / 原催收员 / 督导 / 法务
 ```
+
+**v0.5.4 转法务三段式新流程要点**:
+
+| 阶段 | 谁来做 | 看不看金额 | 看不看服务包 |
+|---|---|---|---|
+| 1. 提单子(申请) | 催收员(或物业 admin 直建) | ❌ | ❌ |
+| 2. 审批(是否转出) | 督导(可上报 admin)/ admin | ❌ | ❌ |
+| 3. 接单选包 | 物业法务 | ✅ | ✅ |
+| 4. 撮合律所 | 平台 OPS / 服务商 | ✅ | ✅ |
+
+**理由**:服务包是法务专业判断,跟金额绑定;让催收员/审批人决定不合理。催收员只填「为什么转」(预设 7 类),督导/admin 只判断「是否转出」,法务接单时再选合适的服务包。
+
+**催收员申请理由 7 类(预设单选 + 「其他」需补充)**:
+业主长期失联(>1 个月) / 业主反复拒绝沟通 / 大额欠费且账龄长 / 业主明确否认债务 /
+已多次承诺但反复违约 / 走司法可能性高(业主有资产)/ 其他
 
 **v1.6 — 工单优先级（4 档）**
 
@@ -1121,11 +1148,20 @@ ASR 文本（含 speaker: agent/customer/unknown）
 | 失联≥7次 | 生成上门工单 |
 | 小额(<¥200) + 拨打≥5 + 90天无进展 | 标记「低优先级/暂停」，回公海底部队列，不自动关闭（关闭需管理员手动确认）|
 
-### 13.4 升级路径
+### 13.4 升级路径(v0.5.4 简化为一级)
 
 ```
-催收员 → 主管（协商分期）→ 法务（律师函/立案）→ 上门催收 → 结案
+催收员 → 督导(接案后自己负责到底)
+                ↓
+       重大事项不走案件 transfer,改走审批单:
+         · 大额减免 → DiscountOffer → 督导审批 → 可上报 admin
+         · 转法务   → LegalConversionRequest → 督导审批 → 可上报 admin → 法务接单选包
 ```
+
+**v0.5.4 关键变化**:
+- 取消「督导→admin」案件 transfer:督导一旦接案就自己负责到底,不再把案件本身上交 admin
+- 重大事项的把关改用「**审批单 + 上报机制**」(更细粒度,且可审计每一单的决策路径)
+- 督导有「上报 admin」按钮(单据级,不是案件级),把超出自己决断范围的单子转 admin 决
 
 ### 13.5 联系频次自动控制
 
@@ -1224,6 +1260,15 @@ ASR 文本（含 speaker: agent/customer/unknown）
 #### 待审批减免非阻断提醒
 
 发送时若该案件有 `status ∈ (pending_supervisor, pending_admin)` 的减免，**照常发送**，仅在弹窗顶部加提示：「⚠ 该案件有待审批减免，当前链接金额按已审批结果计算；减免审批通过后业主刷新链接即见更新。」
+
+#### 发送方角色(v0.5.4)
+
+三类角色都可发送缴费链接,弹窗 UI 同源(`PaymentLinkQrModal`),展示明细 + 二维码 + 短链:
+
+| 角色 | 端点 | 范围 |
+|---|---|---|
+| 内勤/外部催收员 | `POST /api/v1/agent/cases/{id}/send-payment-link` | 仅 `assigned_to == 自己` 的案件(`require_roles("agent")` + 自有 case 校验)|
+| 物业 admin / 督导 | `POST /api/v1/admin/cases/{id}/send-payment-link` | 本租户任意案件(`require_tenant_roles("admin","supervisor")`)|
 
 #### 公开端点 + 公开页（业主侧，免登录）
 
@@ -1560,8 +1605,20 @@ CREATE TABLE performance_record (
 | ScriptTemplate | 话术模板，按异议类型分类，含使用统计 |
 | SuggestionFeedback | 话术推送反馈：催收员采用/忽略、督导标注、业务结果推断信号 |
 | PaymentLink | 业主缴费链接 token 持久化（v2.2 取代 PaymentQRRecord）：token (unique)、case_id、project_id、created_by_user_id、payment_mode、expires_at（默认 +7 天）；业主凭 token 经公开端点 `/api/v1/public/payment/{token}` 打开 H5 账单页，详见 §14 |
+| DiscountOffer | 减免/分期申请：offer_type、original_amount→proposed_amount、status（pending_supervisor/pending_admin/approved/rejected/executed/expired）、approver_role_required、approved_at、**escalated_to_admin_at**（v0.5.4 督导上报 admin 的时间戳）、expires_at（7 天有效）、audit_trail |
+| LegalConversionRequest | 转法务申请单（v1.6.8 + v0.5.4）：requester_user_id、reason（NOT NULL,预设原因 + 「其他」补充）、status（pending→approved_pending_legal→approved 或 pending_admin / rejected / cancelled）、reviewer_*、**escalated_to_admin_at**（督导上报）、related_order_id（法务接单后回填）|
+| LegalConversionOrder | 法务转化订单：case_id、package_id、price_quoted、status、assigned_law_firm、assigned_lawyer_name、internal_close_reason / internal_closed_at（物业法务内部处理结果）— 法务接单 /legal-finalize 时由 LegalConversionRequest 衍生 |
+| LegalServicePackage | 法务服务包目录：lawyer_letter/mediation/small_claims/full_agency 4 种,price + platform_fee_rate;平台级 + 租户可定制 |
 | PaymentRecord | 业主在线付款记录：payment_type(direct/escrow)、channel、status、escrow_cert_url、platform_fee（v1.1）|
 | BlockchainProof | 区块链存证回执：data_id、data_type、data_hash、tx_hash、chain、block_height（v1.1）|
+
+**v0.5.4 timeline event_type 新增**(`services/case_timeline.py` 聚合自 `AuditLog`):
+- `case.reassigned` — 督导重新分配
+- `case.supervisor_remind_callback` — 督导催回访
+- `case.supervisor_urge` — 督导催办
+- `case.supervisor_intervene` — 督导介入处理
+
+每动作除 timeline 外,还推送 `Notification(event_type=supervisor_action)` 给原催收员(reassign 时为新+原催收员两条)。
 
 ### 结算层
 
