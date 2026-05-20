@@ -48,6 +48,10 @@ class LegalConversionOrderOut(BaseModel):
     completed_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    # v0.5.4 — 案件业主上下文(列表/详情显示用,替换冷案件编号)
+    owner_name: str | None = None
+    owner_room: str | None = None
+    project_name: str | None = None
 
     model_config = {"from_attributes": True}
 

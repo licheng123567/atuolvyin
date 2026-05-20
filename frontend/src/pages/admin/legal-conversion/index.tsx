@@ -17,6 +17,10 @@ interface OrderItem {
   dispatched_at: string | null;
   completed_at: string | null;
   created_at: string;
+  // v0.5.4 — 案件业主上下文
+  owner_name: string | null;
+  owner_room: string | null;
+  project_name: string | null;
 }
 
 interface ListResp {
@@ -109,8 +113,7 @@ export function AdminLegalConversionListPage() {
           <table className="w-full text-sm">
             <thead className="bg-[var(--color-neutral-50)] text-[var(--color-neutral-600)] text-xs uppercase">
               <tr>
-                <th className="px-4 py-3 text-left">订单</th>
-                <th className="px-4 py-3 text-left">案件</th>
+                <th className="px-4 py-3 text-left">业主信息</th>
                 <th className="px-4 py-3 text-left">服务包</th>
                 <th className="px-4 py-3 text-left">报价</th>
                 <th className="px-4 py-3 text-left">律所</th>
@@ -120,18 +123,28 @@ export function AdminLegalConversionListPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-neutral-100)]">
-              {items.map((o) => (
+              {items.map((o) => {
+                // v0.5.4 — 业主信息组合行：张三 · 5-203 · 金桂园;副行展示订单/案件冷编号供排查
+                const primary = [o.owner_name, o.owner_room, o.project_name]
+                  .filter((x) => x)
+                  .join(" · ");
+                return (
                 <tr
                   key={o.id}
                   onClick={() =>
                     go({ to: `/admin/legal-conversion/${o.id}` })
                   }
                   className="hover:bg-[var(--color-neutral-50)] cursor-pointer"
+                  title={`订单 #${o.id} · 案件 #${o.case_id}`}
                 >
-                  <td className="px-4 py-3 font-mono text-xs text-[var(--color-neutral-700)]">
-                    #{o.id}
+                  <td className="px-4 py-3">
+                    <div className="text-sm text-[var(--color-neutral-900)]">
+                      {primary || <span className="text-[var(--color-neutral-400)]">—</span>}
+                    </div>
+                    <div className="text-xs text-[var(--color-neutral-400)] font-mono">
+                      订单 #{o.id} · 案件 #{o.case_id}
+                    </div>
                   </td>
-                  <td className="px-4 py-3">案件 #{o.case_id}</td>
                   <td className="px-4 py-3">{o.package_name ?? "—"}</td>
                   <td className="px-4 py-3 font-mono">¥{o.price_quoted}</td>
                   <td className="px-4 py-3">
@@ -169,7 +182,8 @@ export function AdminLegalConversionListPage() {
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}

@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles, require_tenant_roles
-from app.models.case import CollectionCase
+from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.law_firm import LawFirm, LawFirmLawyer
 from app.models.legal_conversion import LegalConversionOrder, LegalServicePackage
 from app.models.legal_document_template import (
@@ -88,7 +88,12 @@ def _enabled_packages(db: Session, tenant_id: int) -> list[LegalServicePackage]:
 
 
 def _order_to_out(
-    order: LegalConversionOrder, package_name: str | None = None
+    order: LegalConversionOrder,
+    package_name: str | None = None,
+    *,
+    owner_name: str | None = None,
+    owner_room: str | None = None,
+    project_name: str | None = None,
 ) -> LegalConversionOrderOut:
     return LegalConversionOrderOut(
         id=order.id,
@@ -110,6 +115,9 @@ def _order_to_out(
         completed_at=order.completed_at,
         created_at=order.created_at,
         updated_at=order.updated_at,
+        owner_name=owner_name,
+        owner_room=owner_room,
+        project_name=project_name,
     )
 
 
@@ -289,9 +297,19 @@ async def list_orders(
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[LegalConversionOrderOut]:
     tenant_id = _require_tenant(payload)
+    # v0.5.4 — LEFT JOIN 业主/项目，列表项展示「业主姓名 · 房号 · 项目名」替代冷案件编号
     stmt = (
-        select(LegalConversionOrder, LegalServicePackage.name)
+        select(
+            LegalConversionOrder,
+            LegalServicePackage.name,
+            OwnerProfile.name.label("o_name"),
+            OwnerProfile.room.label("o_room"),
+            Project.name.label("p_name"),
+        )
         .join(LegalServicePackage, LegalServicePackage.id == LegalConversionOrder.package_id)
+        .outerjoin(CollectionCase, CollectionCase.id == LegalConversionOrder.case_id)
+        .outerjoin(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
+        .outerjoin(Project, Project.id == CollectionCase.project_id)
         .where(LegalConversionOrder.tenant_id == tenant_id)
     )
     if status:
@@ -308,7 +326,16 @@ async def list_orders(
         total_stmt = total_stmt.where(LegalConversionOrder.status == status)
     total = int(db.execute(total_stmt).scalar_one())
 
-    items = [_order_to_out(o, name) for o, name in rows]
+    items = [
+        _order_to_out(
+            o,
+            pkg_name,
+            owner_name=o_name,
+            owner_room=o_room,
+            project_name=p_name,
+        )
+        for o, pkg_name, o_name, o_room, p_name in rows
+    ]
     return PaginatedResponse[LegalConversionOrderOut](
         items=items,
         total=total,
@@ -328,9 +355,19 @@ async def get_order(
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalConversionOrderOut:
     tenant_id = _require_tenant(payload)
+    # v0.5.4 — 同 list 端点：LEFT JOIN 业主/项目以便详情页也能拿到上下文
     row = db.execute(
-        select(LegalConversionOrder, LegalServicePackage.name)
+        select(
+            LegalConversionOrder,
+            LegalServicePackage.name,
+            OwnerProfile.name.label("o_name"),
+            OwnerProfile.room.label("o_room"),
+            Project.name.label("p_name"),
+        )
         .join(LegalServicePackage, LegalServicePackage.id == LegalConversionOrder.package_id)
+        .outerjoin(CollectionCase, CollectionCase.id == LegalConversionOrder.case_id)
+        .outerjoin(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
+        .outerjoin(Project, Project.id == CollectionCase.project_id)
         .where(
             LegalConversionOrder.id == order_id,
             LegalConversionOrder.tenant_id == tenant_id,
@@ -341,7 +378,14 @@ async def get_order(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail={"code": "ERR_NOT_FOUND", "message": "订单不存在"},
         )
-    return _order_to_out(row[0], row[1])
+    order_obj, pkg_name, o_name, o_room, p_name = row
+    return _order_to_out(
+        order_obj,
+        pkg_name,
+        owner_name=o_name,
+        owner_room=o_room,
+        project_name=p_name,
+    )
 
 
 # ── 状态流转 ─────────────────────────────────────────────────────
