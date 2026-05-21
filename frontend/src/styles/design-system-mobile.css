@@ -924,19 +924,25 @@
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow: hidden;
+  /* v2.5 — 允许整页滚动:小屏(<700px)或键盘弹起时,inputs 不再被挤到屏底 */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-/* 顶部渐变 hero */
+/* 顶部渐变 hero — v2.5 改自适应高度 */
 .app-login-hero {
-  flex: 0 0 55%;
-  min-height: 320px;
+  /* v2.5 — 之前 flex:0 0 55%(viewport 55%),在长屏手机上 hero 占 500+px,
+     把卡片挤短 → 输入框被推到屏底。现在 hero 只占自身内容高度,卡片从
+     屏幕中上部开始 → 输入框落在视觉中段,符合系统级登录页规范。 */
+  flex: 0 0 auto;
+  min-height: 280px;
   background: linear-gradient(160deg, #0f172a 0%, #1e3a6e 50%, #1A56DB 100%);
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px 24px 40px;
+  /* 顶部增加 env(safe-area-inset-top) 适配刘海/灵动岛 */
+  padding: max(32px, calc(env(safe-area-inset-top) + 16px)) 24px 48px;
   overflow: hidden;
 }
 
@@ -968,10 +974,11 @@
 }
 
 .app-login-logo {
-  width: 80px;
-  height: 80px;
-  margin: 0 auto 16px;
-  border-radius: 22px;
+  /* v2.5 — 从 80px → 72px,hero 高度收紧 */
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 14px;
+  border-radius: 20px;
   background: rgba(255, 255, 255, 0.14);
   display: flex;
   align-items: center;
@@ -982,10 +989,11 @@
 }
 
 .app-login-brand-name {
-  font-size: 28px;
+  /* v2.5 — 从 28px → 26px,与紧凑后的 logo 匹配 */
+  font-size: 26px;
   font-weight: 700;
   letter-spacing: 1px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   color: #fff;
 }
 .app-login-brand-accent {
@@ -997,14 +1005,16 @@
   letter-spacing: 0.5px;
 }
 
-/* 下半 sticky 卡 */
+/* 下半 sticky 卡 — v2.5 改自然占用剩余空间,padding 适配安全区 */
 .app-login-card {
-  flex: 1 1 auto;
+  flex: 1 0 auto;
   background: #fff;
   border-top-left-radius: 24px;
   border-top-right-radius: 24px;
-  margin-top: -24px;
-  padding: 8px 24px 32px;
+  margin-top: -28px;
+  /* v2.5 — bottom padding 加 env(safe-area-inset-bottom) 避免内容贴底部物理边
+     (老 iPhone 仍有 32px tabBar 区) */
+  padding: 8px 24px max(40px, calc(env(safe-area-inset-bottom) + 24px));
   position: relative;
   z-index: 2;
   box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.08);
@@ -1024,12 +1034,13 @@
   font-size: 22px;
   font-weight: 700;
   color: #111827;
-  margin: 4px 0 4px;
+  /* v2.5 — 标题与抓手间距收紧,卡顶留白少 → 表单整体上移 */
+  margin: 2px 0 4px;
 }
 .app-login-sub {
   font-size: 13px;
   color: #6B7280;
-  margin: 0 0 18px;
+  margin: 0 0 16px;
 }
 
 /* Tab */
