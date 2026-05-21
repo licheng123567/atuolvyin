@@ -194,7 +194,9 @@ def list_internal_orders(
     reveal = (
         True
         if role == "legal"
-        else should_reveal_owner_phone(role=role, provider_id=payload.get("provider_id"), contract_active=contract_active)
+        else should_reveal_owner_phone(
+            role=role, provider_id=payload.get("provider_id"), contract_active=contract_active
+        )
     )
 
     stmt = (
@@ -326,7 +328,9 @@ def get_internal_order(
     reveal = (
         True
         if role == "legal"
-        else should_reveal_owner_phone(role=role, provider_id=payload.get("provider_id"), contract_active=contract_active)
+        else should_reveal_owner_phone(
+            role=role, provider_id=payload.get("provider_id"), contract_active=contract_active
+        )
     )
 
     action_rows = (

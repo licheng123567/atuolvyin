@@ -150,7 +150,7 @@ export function useCallSocket(callId: number, opts?: { demo?: boolean }): CallSo
     }
 
     const handleMessage = (ev: MessageEvent<unknown>) => {
-      let raw: RawMsg | null = null
+      let raw: RawMsg
       try {
         const data = typeof ev.data === "string" ? ev.data : String(ev.data ?? "")
         raw = JSON.parse(data) as RawMsg

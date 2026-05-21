@@ -1,4 +1,5 @@
 """§9.1 — 服务商法务端点 Pydantic schema。"""
+
 from __future__ import annotations
 
 from datetime import datetime

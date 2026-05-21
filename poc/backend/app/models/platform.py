@@ -71,9 +71,14 @@ class BlockchainConfig(Base):
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
     provider: Mapped[str] = mapped_column(
         sa.String(64), nullable=False
-    )  # antchain / fisco-bcos / mock
+    )  # ebaoquan / antchain / fisco-bcos / mock
     api_endpoint: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    api_key_enc: Mapped[str | None] = mapped_column(sa.Text, nullable=True)  # AES-256
+    api_key_enc: Mapped[str | None] = mapped_column(
+        sa.Text, nullable=True
+    )  # AES-256 (appKeySecret)
+    app_key: Mapped[str | None] = mapped_column(
+        sa.String(128), nullable=True
+    )  # 易保全公钥标识 appKey，非密钥，明文存
     is_active: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=False)
     last_failure_at: Mapped[datetime | None] = mapped_column(
         sa.DateTime(timezone=True), nullable=True

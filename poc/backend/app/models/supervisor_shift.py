@@ -46,14 +46,19 @@ class SupervisorShift(Base, TimestampMixin):
         # 物业侧（provider_id IS NULL）唯一：tenant + date + slot
         sa.Index(
             "uq_supervisor_shift_property",
-            "tenant_id", "shift_date", "slot",
+            "tenant_id",
+            "shift_date",
+            "slot",
             unique=True,
             postgresql_where=sa.text("provider_id IS NULL"),
         ),
         # 服务商侧（provider_id 非空）唯一：tenant + provider + date + slot
         sa.Index(
             "uq_supervisor_shift_provider",
-            "tenant_id", "provider_id", "shift_date", "slot",
+            "tenant_id",
+            "provider_id",
+            "shift_date",
+            "slot",
             unique=True,
             postgresql_where=sa.text("provider_id IS NOT NULL"),
         ),

@@ -137,6 +137,7 @@ def _config_to_out(c: BlockchainConfig) -> BlockchainConfigOut:
         id=c.id,
         provider=c.provider,
         api_endpoint=c.api_endpoint,
+        app_key=c.app_key,
         has_api_key=bool(c.api_key_enc),
         is_active=c.is_active,
         last_failure_at=c.last_failure_at,
@@ -169,12 +170,14 @@ async def put_blockchain_config(
         c = BlockchainConfig(
             provider=body.provider,
             api_endpoint=body.api_endpoint,
+            app_key=body.app_key,
             api_key_enc=encrypt_phone(body.api_key) if body.api_key else None,
             is_active=body.is_active,
         )
         db.add(c)
     else:
         c.api_endpoint = body.api_endpoint
+        c.app_key = body.app_key
         if body.api_key is not None:
             c.api_key_enc = encrypt_phone(body.api_key) if body.api_key else None
         c.is_active = body.is_active

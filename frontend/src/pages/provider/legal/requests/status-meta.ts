@@ -12,4 +12,4 @@ export const STATUS_META: Record<string, StatusMeta> = {
   cancelled: { label: "已取消", background: "#F3F4F6", color: "#4B5563" },
 };
 
-export const UNKNOWN_STATUS_META: StatusMeta = { background: "#F3F4F6", color: "#4B5563" };
+export const UNKNOWN_STATUS_META: StatusMeta = { label: "未知", background: "#F3F4F6", color: "#4B5563" };

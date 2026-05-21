@@ -52,7 +52,7 @@ describe("ProviderMemberCommissionPage", () => {
         },
         isLoading: false,
       },
-    } as ReturnType<typeof useCustom>);
+    } as unknown as ReturnType<typeof useCustom>);
 
     renderPage();
 
@@ -76,7 +76,7 @@ describe("ProviderMemberCommissionPage", () => {
         },
         isLoading: false,
       },
-    } as ReturnType<typeof useCustom>);
+    } as unknown as ReturnType<typeof useCustom>);
 
     renderPage();
 
@@ -89,7 +89,7 @@ describe("ProviderMemberCommissionPage", () => {
         data: undefined,
         isLoading: true,
       },
-    } as ReturnType<typeof useCustom>);
+    } as unknown as ReturnType<typeof useCustom>);
 
     renderPage();
 

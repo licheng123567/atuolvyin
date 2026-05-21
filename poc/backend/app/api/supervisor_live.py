@@ -82,7 +82,9 @@ def list_live_calls(
 
     role = payload.get("role", "")
     contract_active = is_provider_contract_active(db, scope.tenant_id, scope.provider_id)
-    owner_phone_reveal = should_reveal_owner_phone(role=role, provider_id=scope.provider_id, contract_active=contract_active)
+    owner_phone_reveal = should_reveal_owner_phone(
+        role=role, provider_id=scope.provider_id, contract_active=contract_active
+    )
 
     now = datetime.now(UTC)
     items: list[LiveCallItem] = []

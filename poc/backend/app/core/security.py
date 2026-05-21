@@ -90,6 +90,7 @@ async def get_token_payload(
             if token_hash not in rows:
                 # v2.2 临时调试日志
                 import logging
+
                 logging.warning(
                     "EVICTED user=%s got=%s want=%s",
                     user_id,

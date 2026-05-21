@@ -1,10 +1,12 @@
-"""Sprint 13.1 — BlockchainAttestation (PRD §20.3 v1.1).
+"""BlockchainAttestation —— 每次"上链"操作的回执（PRD §20.3）。
 
-记录每次"上链"操作的回执：data_sha256 + 链上 tx_hash + block_height。
-当前用 mock provider（chain_provider="mock"），生成本地确定性 tx_hash；
-后续接入蚂蚁链/至信链 SDK 时替换 chain_provider 与 tx_hash 来源即可。
+mock 分支：data_sha256 + 本地确定性 tx_hash + 自增 block_height。
+易保全分支：data_sha512 + provider_evidence_id（evidenceId）+ preservation_id（保全备案号），
+            tx_hash / block_height 留空。
+分发逻辑见 app/services/blockchain.py 的 submit_attestation()。
 
-公开核验入口（GET /api/v1/public/verify/{tx_hash}）查询本表。
+公开核验入口 GET /api/v1/public/verify/{tx_hash} 仅服务 mock 分支记录；
+易保全分支记录由易保全平台凭保全备案号核验。
 """
 
 from __future__ import annotations
@@ -42,14 +44,25 @@ class BlockchainAttestation(Base):
     )
 
     data_sha256: Mapped[str] = mapped_column(sa.String(64), nullable=False)
+    data_sha512: Mapped[str | None] = mapped_column(
+        sa.String(128), nullable=True
+    )  # 送易保全的 SHA-512 hex
     data_type: Mapped[str] = mapped_column(
         sa.String(32), nullable=False
     )  # "call_recording" / "transcript" / "analysis" / "evidence_bundle"
 
     chain_provider: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     chain_endpoint: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
-    tx_hash: Mapped[str] = mapped_column(sa.String(64), nullable=False, unique=True)
-    block_height: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
+    # mock 分支填本地 tx_hash + block_height；易保全分支留 NULL。
+    tx_hash: Mapped[str | None] = mapped_column(sa.String(64), nullable=True, unique=True)
+    block_height: Mapped[int | None] = mapped_column(sa.BigInteger, nullable=True)
+    # 易保全分支字段
+    provider_evidence_id: Mapped[int | None] = mapped_column(
+        sa.BigInteger, nullable=True
+    )  # 易保全 evidenceId
+    preservation_id: Mapped[int | None] = mapped_column(
+        sa.BigInteger, nullable=True
+    )  # 易保全保全备案号
 
     status: Mapped[str] = mapped_column(sa.String(16), nullable=False)  # "confirmed"/"failed"
     submitted_at: Mapped[datetime] = mapped_column(

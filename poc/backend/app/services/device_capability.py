@@ -9,6 +9,7 @@
 如果 last_recording_scan_failed=True，调用方应直接降级 incompatible（覆盖矩阵）。
 此降级逻辑放在调用方（self-check endpoint），本 service 只做静态判定。
 """
+
 from __future__ import annotations
 
 from typing import Literal

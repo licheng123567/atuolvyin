@@ -150,6 +150,7 @@ async def log_unauthorized(request: Request, call_next):
     response = await call_next(request)
     if response.status_code == 401 and "/agent/" in request.url.path:
         import logging
+
         auth = request.headers.get("authorization", "")
         origin = request.headers.get("origin", "")
         logging.warning(
@@ -168,6 +169,7 @@ async def validation_exception_handler(
     first = exc.errors()[0] if exc.errors() else {}
     # v2.2 临时日志：打印 422 来源（path/loc/收到的 body），用于真机调试
     import logging
+
     # multipart 请求的流已被 FastAPI 解析消耗，不能再读 body；只对 JSON 请求记录原始 body
     content_type = request.headers.get("content-type", "")
     if "multipart/" in content_type or "application/x-www-form-urlencoded" in content_type:
@@ -180,7 +182,10 @@ async def validation_exception_handler(
             body_preview = "<body unavailable>"
     logging.warning(
         "VAL_422 path=%s loc=%s msg=%s body=%s",
-        request.url.path, first.get("loc"), first.get("msg"), body_preview,
+        request.url.path,
+        first.get("loc"),
+        first.get("msg"),
+        body_preview,
     )
     loc = first.get("loc", ())
     loc_str = ".".join(str(x) for x in loc[1:]) if len(loc) > 1 else "?"
@@ -198,6 +203,7 @@ async def validation_exception_handler(
 @app.post("/api/v1/_debug/client-error")
 async def _debug_client_error(request: Request) -> dict:
     import logging
+
     try:
         body = await request.json()
     except Exception:
@@ -210,7 +216,10 @@ async def _debug_client_error(request: Request) -> dict:
 @app.get("/api/v1/_debug/client-error-beacon")
 async def _debug_client_error_beacon(request: Request) -> dict:
     import logging
-    logging.warning("CLIENT_BEACON %s ua=%s", dict(request.query_params), request.headers.get("user-agent", "?"))
+
+    logging.warning(
+        "CLIENT_BEACON %s ua=%s", dict(request.query_params), request.headers.get("user-agent", "?")
+    )
     return {"received": True}
 
 
@@ -312,9 +321,7 @@ app.include_router(admin_compliance.router, prefix="/api/v1/admin", tags=["admin
 app.include_router(admin_settings.router, prefix="/api/v1/admin", tags=["admin-settings"])
 app.include_router(legal_cases.router, prefix="/api/v1/legal", tags=["legal"])
 app.include_router(legal_documents.router, prefix="/api/v1/legal", tags=["legal-documents"])
-app.include_router(
-    provider_legal.router, prefix="/api/v1/provider/legal", tags=["provider-legal"]
-)
+app.include_router(provider_legal.router, prefix="/api/v1/provider/legal", tags=["provider-legal"])
 app.include_router(work_orders.router, prefix="/api/v1/workorders", tags=["workorders"])
 app.include_router(pm_dashboard.router, prefix="/api/v1/pm", tags=["pm"])
 app.include_router(provider_admin.router, prefix="/api/v1/provider", tags=["provider"])

@@ -44,7 +44,7 @@ function setupMocks() {
       isLoading: false,
       refetch: vi.fn(),
     },
-  } as ReturnType<typeof useCustom>);
+  } as unknown as ReturnType<typeof useCustom>);
 
   vi.mocked(useCustomMutation).mockReturnValue({
     mutate: mockMutate,

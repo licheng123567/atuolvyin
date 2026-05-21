@@ -80,6 +80,7 @@ async def ws_calls(
 
         _tenant_id = call.tenant_id
         from app.api._supervisor_scope import resolve_call_provider_id
+
         _call_provider_id = resolve_call_provider_id(db, call.case_id)
 
         async def broadcast_risk(event: dict) -> None:

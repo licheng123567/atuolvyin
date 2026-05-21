@@ -11,6 +11,7 @@ from decimal import Decimal
 import pytest
 from httpx import AsyncClient
 
+from app.core.crypto import encrypt_phone
 
 # ── fixtures ─────────────────────────────────────────────────────────
 
@@ -393,10 +394,13 @@ async def test_bundle_blockchain_unconfigured(
         zf.read(f"case_{seeded_case.id}/calls/call_{call.id}/attestation.json")
     )
     # Sprint 13.1 — 无 BlockchainConfig 时落到 mock provider，仍产出真实 tx_hash
-    assert attestation["blockchain"]["provider"] == "mock"
-    assert attestation["blockchain"]["status"] == "confirmed"
-    assert len(attestation["blockchain"]["transaction_id"]) == 64
-    assert attestation["blockchain"]["block_height"] >= 1
+    chain = attestation["blockchain"]
+    assert isinstance(chain, list)
+    rec = next(m for m in chain if m["data_type"] == "call_recording")
+    assert rec["provider"] == "mock"
+    assert rec["status"] == "confirmed"
+    assert len(rec["transaction_id"]) == 64
+    assert rec["block_height"] >= 1
 
 
 @pytest.mark.asyncio
@@ -432,10 +436,12 @@ async def test_bundle_blockchain_active_provider(
     attestation = json.loads(
         zf.read(f"case_{seeded_case.id}/calls/call_{call.id}/attestation.json")
     )
-    assert attestation["blockchain"]["provider"] == "antchain"
-    assert attestation["blockchain"]["endpoint"].endswith("/attest")
-    assert attestation["blockchain"]["status"] == "confirmed"
-    assert len(attestation["blockchain"]["transaction_id"]) == 64
+    chain = attestation["blockchain"]
+    rec = next(m for m in chain if m["data_type"] == "call_recording")
+    assert rec["provider"] == "antchain"
+    assert rec["endpoint"].endswith("/attest")
+    assert rec["status"] == "confirmed"
+    assert len(rec["transaction_id"]) == 64
 
 
 @pytest.mark.asyncio
@@ -478,3 +484,100 @@ async def test_bundle_manifest_has_bundle_sha256(
     assert manifest["call_count"] == 1
     assert len(manifest["bundle_sha256"]) == 64  # SHA-256 hex
     assert manifest["tenant_id"] == seeded_tenant.id
+
+
+@pytest.mark.asyncio
+async def test_bundle_attests_recording_transcript_analysis(
+    client: AsyncClient,
+    db_session,
+    seeded_tenant,
+    seeded_case,
+    seeded_legal_case,
+    seeded_member_user,
+    legal_auth_headers,
+):
+    """一通有录音 + 转写 + 分析的电话 → blockchain 列表含 3 条 mock 存证。"""
+    from app.models.call import AnalysisResult, Transcript
+
+    call, _ = _make_call_with_recording(
+        db_session,
+        seeded_tenant,
+        seeded_case,
+        seeded_member_user,
+        audio_bytes=b"audio",
+        add_transcript=False,
+        add_analysis=False,
+    )
+    db_session.add(Transcript(call_id=call.id, full_text="业主你好，关于物业费"))
+    db_session.add(
+        AnalysisResult(
+            call_id=call.id,
+            summary="业主承诺月底缴费",
+            key_segments=[],
+            needs_review=False,
+        )
+    )
+    db_session.flush()
+
+    resp = await client.get(
+        f"/api/v1/legal/cases/{seeded_legal_case.id}/evidence-bundle",
+        headers=legal_auth_headers,
+    )
+    zf = zipfile.ZipFile(io.BytesIO(resp.content))
+    attestation = json.loads(
+        zf.read(f"case_{seeded_case.id}/calls/call_{call.id}/attestation.json")
+    )
+    chain = attestation["blockchain"]
+    data_types = {m["data_type"] for m in chain}
+    assert data_types == {"call_recording", "transcript", "analysis"}
+    assert all(m["status"] == "confirmed" for m in chain)
+
+
+@pytest.mark.asyncio
+async def test_bundle_ebaoquan_failure_does_not_block(
+    client: AsyncClient,
+    db_session,
+    seeded_tenant,
+    seeded_case,
+    seeded_legal_case,
+    seeded_member_user,
+    legal_auth_headers,
+    monkeypatch,
+):
+    """易保全上链失败 → ZIP 仍生成，attestation.json 的 blockchain 项标 failed。"""
+    from app.models.platform import BlockchainConfig
+    from app.services import blockchain
+    from app.services.ebaoquan import EbaoquanHashResult
+
+    db_session.add(
+        BlockchainConfig(
+            provider="ebaoquan",
+            api_endpoint="https://bs.sandbox.ebaoquan.org",
+            app_key="appkey1",
+            api_key_enc=encrypt_phone("secret1"),
+            is_active=True,
+        )
+    )
+    db_session.flush()
+    monkeypatch.setattr(
+        blockchain.ebaoquan,
+        "create_evidence_hash",
+        lambda **kw: EbaoquanHashResult(ok=False, error="系统错误"),
+    )
+
+    call, _ = _make_call_with_recording(
+        db_session, seeded_tenant, seeded_case, seeded_member_user, audio_bytes=b"audio"
+    )
+    resp = await client.get(
+        f"/api/v1/legal/cases/{seeded_legal_case.id}/evidence-bundle",
+        headers=legal_auth_headers,
+    )
+    assert resp.status_code == 200
+    zf = zipfile.ZipFile(io.BytesIO(resp.content))
+    attestation = json.loads(
+        zf.read(f"case_{seeded_case.id}/calls/call_{call.id}/attestation.json")
+    )
+    rec = next(m for m in attestation["blockchain"] if m["data_type"] == "call_recording")
+    assert rec["provider"] == "ebaoquan"
+    assert rec["status"] == "failed"
+    assert rec["transaction_id"] is None

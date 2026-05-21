@@ -30,7 +30,9 @@ from .admin_scripts import _to_out, _write_snapshot
 
 router = APIRouter()
 
-PROVIDER_ROLES = ("admin",)  # provider-side admin; access guarded by _provider_id_for checking provider_id
+PROVIDER_ROLES = (
+    "admin",
+)  # provider-side admin; access guarded by _provider_id_for checking provider_id
 VALID_INTENTS = frozenset({"房屋质量", "经济困难", "服务不满", "联系困难", "其他"})
 
 
