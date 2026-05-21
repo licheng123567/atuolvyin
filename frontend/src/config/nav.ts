@@ -278,6 +278,8 @@ const PROVIDER_ADMIN_NAV: NavSection[] = [
       { label: "团队管理", path: "/provider/team", icon: "Users" },
       { label: "团队绩效", path: "/provider/team-performance", icon: "TrendingUp" },
       { label: "话术库", path: "/provider/scripts", icon: "MessageSquare" },
+      // v0.7.0 — 对齐物业 admin/scripts/effectiveness
+      { label: "话术效果", path: "/provider/scripts/effectiveness", icon: "BarChart3" },
     ],
   },
   {

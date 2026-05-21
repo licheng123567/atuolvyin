@@ -102,12 +102,14 @@ async def list_provider_cases(
 
     # 核心过滤:Project.provider_id == 本服务商
     # v0.7.0 — LEFT JOIN UserAccount 补 assigned_to_name(原前端只能显 #15)
+    #         + 项目名直接 select 出来(原本写死 None,B.2 案件列表要按项目过滤)
     stmt = (
         select(
             CollectionCase,
             OwnerProfile,
             Project.provider_id,
-            ServiceProvider.name,
+            Project.name.label("project_name"),
+            ServiceProvider.name.label("provider_name"),
             UserAccount.name.label("assigned_to_name"),
         )
         .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
@@ -148,8 +150,9 @@ async def list_provider_cases(
                 case_obj, owner, proj_provider_id, sp_name,
                 owner_phone_reveal=owner_phone_reveal,
                 assigned_to_name=assigned_to_name,
+                project_name=project_name,
             )
-            for case_obj, owner, proj_provider_id, sp_name, assigned_to_name in rows
+            for case_obj, owner, proj_provider_id, project_name, sp_name, assigned_to_name in rows
         ],
         total=total,
         page=page,
@@ -165,13 +168,14 @@ def _to_case_response(
     *,
     owner_phone_reveal: bool,
     assigned_to_name: str | None = None,  # v0.7.0 A.3
+    project_name: str | None = None,  # v0.7.0 B.2 — 不再 N+1,直接 SELECT 出来
 ) -> CaseWithOwnerResponse:
     """v0.5.6 — 列表行 → CaseWithOwnerResponse(与 admin_cases _case_row_to_response 同形)。"""
     return CaseWithOwnerResponse(
         id=case_obj.id,
         tenant_id=case_obj.tenant_id,
         project_id=case_obj.project_id,
-        project_name=None,  # 列表 N+1 优化:不 join project name;前端按需另查
+        project_name=project_name,  # v0.7.0 — 已 JOIN Project.name 拿到
         owner=OwnerInfo(
             id=owner.id,
             name=owner.name,

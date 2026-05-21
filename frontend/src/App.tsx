@@ -126,7 +126,11 @@ import { ProviderLegalCaseDetailPage } from "./pages/provider/legal/cases/[id]";
 import { ProviderLegalRequestsPage } from "./pages/provider/legal/requests";
 import { ProviderLegalRequestDetailPage } from "./pages/provider/legal/requests/[id]";
 import { ProviderProjectsPage } from "./pages/provider/projects";
+// v0.7.0 — 服务商「我的项目」独立详情页(只读)
+import { ProviderProjectDetailPage } from "./pages/provider/projects/[id]";
 import { ProviderScriptListPage } from "./pages/provider/scripts";
+// v0.7.0 — 服务商话术效果看板
+import { ProviderScriptsEffectivenessPage } from "./pages/provider/scripts/effectiveness";
 import { ProviderTenantsPage } from "./pages/provider/tenants";
 import { ProviderTeamPage } from "./pages/provider/team";
 import { ProviderCasesPage, ProviderPoolPage } from "./pages/provider/cases";
@@ -567,12 +571,16 @@ function App() {
             <Route path="/provider/tenants" element={<ProviderTenantsPage />} />
             <Route path="/provider/team" element={<ProviderTeamPage />} />
             <Route path="/provider/scripts" element={<ProviderScriptListPage />} />
+            {/* v0.7.0 — 服务商话术效果看板 */}
+            <Route path="/provider/scripts/effectiveness" element={<ProviderScriptsEffectivenessPage />} />
             <Route path="/provider/settlements" element={<ProviderSettlementListPage />} />
             <Route path="/provider/settlements/:id" element={<ProviderSettlementDetailPage />} />
             {/* v0.5.9 — 服务商跨租户分钟消费 */}
             <Route path="/provider/billing/minute-usage" element={<ProviderBillingMinuteUsagePage />} />
             <Route path="/provider/historical-reports" element={<ProviderHistoricalReportsPage />} />
             <Route path="/provider/projects" element={<ProviderProjectsPage />} />
+            {/* v0.7.0 — 服务商项目详情(只读) */}
+            <Route path="/provider/projects/:id" element={<ProviderProjectDetailPage />} />
             {/* §9 — 服务商法务 (provider legal) */}
             <Route path="/provider/legal/cases" element={<ProviderLegalCasesPage />} />
             <Route path="/provider/legal/cases/:id" element={<ProviderLegalCaseDetailPage />} />

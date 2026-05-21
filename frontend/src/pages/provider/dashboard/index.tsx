@@ -1,6 +1,7 @@
 // frontend/src/pages/provider/dashboard/index.tsx
 //
 // PA.3.1 — Service provider dashboard.
+// v0.7.0 — 顶部加 PmAlertsSection 共享组件(对齐物业 PM dashboard 5 卡片)
 import { useCustom, useCustomMutation } from "@refinedev/core";
 import {
   AlertTriangle,
@@ -12,6 +13,7 @@ import {
   Users,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { PmAlertsSection } from "../../../components/dashboard/PmAlertsSection";  // v0.7.0
 import {
   formatDate,
   formatRevenue,
@@ -214,6 +216,9 @@ export function ProviderDashboardPage() {
           {stats.provider_name}
         </span>
       </div>
+
+      {/* v0.7.0 — 运营提醒 5 卡片(与物业 PM dashboard 同款,后端 /pm/dashboard/alerts) */}
+      <PmAlertsSection />
 
       {/* 4 KPI cards */}
       <div className="grid grid-cols-4 gap-4">

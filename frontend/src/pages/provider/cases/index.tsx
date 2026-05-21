@@ -1,15 +1,22 @@
 // v0.5.6 — 服务商管理员案件列表页
 //
 // 数据源:GET /api/v1/provider/cases(后端按 Project.provider_id == 本服务商过滤)
-// 操作:只读 + 分配/重新分配(右侧 ReassignDrawer)+ 释放回公海(详情页里);本期不开放
-// 修改 stage / 跟进备注 / 发缴费链接 等(产品决策见 PRD §13.x 服务商 admin 范围)
-import { useCustom, useGetIdentity, useGo } from "@refinedev/core";
-import { Briefcase, Filter, Inbox, KanbanSquare, Search, UserCheck } from "lucide-react";
-import { useState } from "react";
+// v0.7.0:
+//   - 加按项目过滤(下拉 select);支持 URL ?project_id=X(项目详情页跳过来)
+//   - 表格加「项目」「最后联系」列对齐物业 admin
+import { useCustom, useGetIdentity, useGo, useList } from "@refinedev/core";
+import { Briefcase, FolderKanban, Filter, Inbox, KanbanSquare, Search, UserCheck } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { AuthUser } from "../../../providers/auth-provider";
 import { ProviderAssignDrawer } from "./ProviderAssignDrawer";
 import { PriorityBadge } from "../../../components/ui/PriorityBadge";  // v0.7.0
 import type { PaginatedResponse } from "../../../types";
+
+interface ProviderProjectOption {
+  project_id: number;
+  project_name: string;
+}
 
 interface OwnerInfo {
   id: number;
@@ -65,11 +72,42 @@ interface Props {
 export function ProviderCasesPage({ poolViewOnly = false }: Props = {}) {
   const go = useGo();
   const { data: identity } = useGetIdentity<AuthUser>();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [stage, setStage] = useState<string>("");
   const [poolType, setPoolType] = useState<string>(poolViewOnly ? "public" : "");
   const [keyword, setKeyword] = useState("");
   const [page, setPage] = useState(1);
   const [assignCase, setAssignCase] = useState<CaseItem | null>(null);
+  // v0.7.0 — 按项目过滤;支持 URL ?project_id=X(项目详情页跳过来时锁定)
+  const initialProjectId = searchParams.get("project_id");
+  const [projectId, setProjectId] = useState<number | "">(
+    initialProjectId ? Number(initialProjectId) : "",
+  );
+
+  // v0.7.0 — 拉本服务商项目列表作为过滤下拉
+  const { query: projectsQuery } = useList<ProviderProjectOption>({
+    resource: "provider/projects",
+    queryOptions: { staleTime: 10 * 60 * 1000 },
+  });
+  const projectsRaw = projectsQuery.data?.data;
+  const projectOptions: ProviderProjectOption[] =
+    (projectsRaw as unknown as { items?: ProviderProjectOption[] })?.items
+    ?? (projectsRaw as ProviderProjectOption[] | undefined)
+    ?? [];
+
+  // 项目下拉变化时,同步到 URL search params(便于刷新保留)
+  useEffect(() => {
+    if (projectId === "") {
+      if (searchParams.has("project_id")) {
+        searchParams.delete("project_id");
+        setSearchParams(searchParams, { replace: true });
+      }
+    } else if (searchParams.get("project_id") !== String(projectId)) {
+      searchParams.set("project_id", String(projectId));
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [projectId, searchParams, setSearchParams]);
 
   const { query } = useCustom<PaginatedResponse<CaseItem>>({
     url: "provider/cases",
@@ -78,6 +116,7 @@ export function ProviderCasesPage({ poolViewOnly = false }: Props = {}) {
       query: {
         stage: stage || undefined,
         pool_type: poolViewOnly ? "public" : (poolType || undefined),
+        project_id: projectId !== "" ? projectId : undefined,
         keyword: keyword || undefined,
         page,
         page_size: 30,
@@ -159,6 +198,27 @@ export function ProviderCasesPage({ poolViewOnly = false }: Props = {}) {
           </>
         )}
 
+        {/* v0.7.0 — 按项目过滤(必有,跨多物业服务商场景核心) */}
+        <span className="text-sm text-[var(--color-neutral-700)] ml-3 flex items-center gap-1">
+          <FolderKanban className="w-3.5 h-3.5" />项目:
+        </span>
+        <select
+          value={projectId}
+          onChange={(e) => {
+            setProjectId(e.target.value === "" ? "" : Number(e.target.value));
+            setPage(1);
+          }}
+          className="px-3 py-1 text-xs border border-[var(--color-neutral-300)] rounded bg-white"
+          style={{ maxWidth: 200 }}
+        >
+          <option value="">全部项目</option>
+          {projectOptions.map((p) => (
+            <option key={p.project_id} value={p.project_id}>
+              {p.project_name}
+            </option>
+          ))}
+        </select>
+
         <div className="ml-auto flex items-center gap-2">
           <Search className="w-4 h-4 text-[var(--color-neutral-500)]" />
           <input
@@ -188,6 +248,7 @@ export function ProviderCasesPage({ poolViewOnly = false }: Props = {}) {
             <thead className="bg-[var(--color-neutral-50)] text-[var(--color-neutral-600)] text-xs uppercase">
               <tr>
                 <th className="px-4 py-3 text-left">业主 / 房号</th>
+                <th className="px-4 py-3 text-left">项目</th>
                 <th className="px-4 py-3 text-left">欠费 / 月数</th>
                 <th className="px-4 py-3 text-left">阶段</th>
                 <th className="px-4 py-3 text-left">归属</th>
@@ -208,6 +269,28 @@ export function ProviderCasesPage({ poolViewOnly = false }: Props = {}) {
                     <div className="text-xs text-[var(--color-neutral-500)]">
                       {[c.owner.building, c.owner.room].filter(Boolean).join(" ")}
                     </div>
+                  </td>
+                  {/* v0.7.0 — 项目名列(点击 row 跳详情;此列单独显项目以便切项目过滤) */}
+                  <td
+                    className="px-4 py-3 text-xs"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (c.project_id != null) {
+                        setProjectId(c.project_id);
+                        setPage(1);
+                      }
+                    }}
+                  >
+                    {c.project_name ? (
+                      <span
+                        className="text-[var(--color-primary)] hover:underline cursor-pointer"
+                        title="点击按此项目过滤"
+                      >
+                        📁 {c.project_name}
+                      </span>
+                    ) : (
+                      <span className="text-[var(--color-neutral-400)]">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="font-mono">¥{c.amount_owed ?? "0"}</div>

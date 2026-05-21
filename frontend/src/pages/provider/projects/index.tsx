@@ -1,7 +1,9 @@
 // v1.5.7 — 服务商工作台「我的项目」：列表 + 指派项目经理 + 设置佣金率
+// v0.7.0 — 加「详情」按钮跳 /provider/projects/{id}(只读详情页)
 import { useCustom, useCustomMutation, useList } from "@refinedev/core";
-import { Building2, FolderKanban, Percent, UserCheck, X } from "lucide-react";
+import { Building2, Eye, FolderKanban, Percent, UserCheck, X } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { SearchableSelect } from "../../../components/ui/SearchableSelect";
 import type { PaginatedResponse } from "../../../types";
 
@@ -32,7 +34,18 @@ function dateOnly(iso: string | null): string {
   return iso.slice(0, 10);
 }
 
+// v0.7.0 — 服务期 badge(对齐物业 admin/projects 风格:剩余 <7 天红 / 30 天橙 / 长期绿)
+function servicePeriodBadge(plan_end: string | null): { cls: string; label: string } {
+  if (!plan_end) return { cls: "ds-badge ds-badge-green", label: "长期合作" };
+  const days = Math.floor((new Date(plan_end).getTime() - Date.now()) / (24 * 3600 * 1000));
+  if (days < 0) return { cls: "ds-badge ds-badge-gray", label: `已到期 ${-days} 天` };
+  if (days < 7) return { cls: "ds-badge ds-badge-red", label: `剩余 ${days} 天 ⚠` };
+  if (days < 30) return { cls: "ds-badge ds-badge-orange", label: `剩余 ${days} 天` };
+  return { cls: "ds-badge ds-badge-green", label: `剩余 ${days} 天` };
+}
+
 export function ProviderProjectsPage() {
+  const navigate = useNavigate();
   const customResult = useCustom<ProviderProjectsResp>({
     url: "provider/projects",
     method: "get",
@@ -97,7 +110,15 @@ export function ProviderProjectsPage() {
                   </span>
                 </td>
                 <td style={{ fontSize: 12, color: "#6b7280" }}>
-                  {dateOnly(p.plan_start)} → {dateOnly(p.plan_end)}
+                  <div>{dateOnly(p.plan_start)} → {dateOnly(p.plan_end)}</div>
+                  {(() => {
+                    const meta = servicePeriodBadge(p.plan_end);
+                    return (
+                      <span className={meta.cls} style={{ fontSize: 10, marginTop: 2, display: "inline-block" }}>
+                        {meta.label}
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td>
                   {p.provider_pm_name ? (
@@ -119,6 +140,16 @@ export function ProviderProjectsPage() {
                   )}
                 </td>
                 <td style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {/* v0.7.0 — 详情(只读)放最前,最常用 */}
+                  <button
+                    type="button"
+                    className="ds-btn ds-btn-primary ds-btn-sm"
+                    onClick={() => navigate(`/provider/projects/${p.project_id}`)}
+                    title="查看项目详情:KPI / 收费 / 合同 / 团队 / 案件列表(只读)"
+                  >
+                    <Eye className="inline w-3 h-3" style={{ verticalAlign: "-2px", marginRight: 2 }} />
+                    详情
+                  </button>
                   <button
                     type="button"
                     className="ds-btn ds-btn-ghost ds-btn-sm"

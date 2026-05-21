@@ -3,13 +3,17 @@
 // 6 列对应 6 stage:待联系 / 跟进中 / 承诺缴费 / 已缴费 / 升级中 / 已关闭
 // 每张卡片:业主名 + 房号 + 金额 + 月数 + 分配状态 + 点击进详情
 // 数据源:GET /provider/cases?page_size=200(不分页,一次拿够;后续若超 200 加分页)
-import { useCustom, useGo } from "@refinedev/core";
-import { ArrowLeft, KanbanSquare } from "lucide-react";
+// v0.7.0:加按项目过滤;卡片显项目名小标签
+import { useCustom, useGo, useList } from "@refinedev/core";
+import { ArrowLeft, FolderKanban, KanbanSquare } from "lucide-react";
+import { useState } from "react";
 import { PriorityBadge } from "../../../components/ui/PriorityBadge";  // v0.7.0
 import type { PaginatedResponse } from "../../../types";
 
 interface CaseItem {
   id: number;
+  project_id: number | null;  // v0.7.0
+  project_name: string | null;  // v0.7.0
   owner: { name: string; building: string | null; room: string | null };
   stage: string;
   amount_owed: string | null;
@@ -18,6 +22,11 @@ interface CaseItem {
   assigned_to: number | null;
   pool_type: string;
   priority_score: number;
+}
+
+interface ProviderProjectOption {
+  project_id: number;
+  project_name: string;
 }
 
 const STAGES: Array<{ key: string; label: string; color: string }> = [
@@ -31,10 +40,28 @@ const STAGES: Array<{ key: string; label: string; color: string }> = [
 
 export function ProviderCasesKanbanPage() {
   const go = useGo();
+  const [projectId, setProjectId] = useState<number | "">("");  // v0.7.0
+
+  const { query: projectsQuery } = useList<ProviderProjectOption>({
+    resource: "provider/projects",
+    queryOptions: { staleTime: 10 * 60 * 1000 },
+  });
+  const projectsRaw = projectsQuery.data?.data;
+  const projectOptions: ProviderProjectOption[] =
+    (projectsRaw as unknown as { items?: ProviderProjectOption[] })?.items
+    ?? (projectsRaw as ProviderProjectOption[] | undefined)
+    ?? [];
+
   const { query } = useCustom<PaginatedResponse<CaseItem>>({
     url: "provider/cases",
     method: "get",
-    config: { query: { page: 1, page_size: 200 } },
+    config: {
+      query: {
+        page: 1,
+        page_size: 200,
+        project_id: projectId !== "" ? projectId : undefined,
+      },
+    },
   });
   const items = query.data?.data?.items ?? [];
   const total = query.data?.data?.total ?? 0;
@@ -69,6 +96,25 @@ export function ProviderCasesKanbanPage() {
             (仅展示前 200 单;完整请回列表视图按阶段筛选)
           </span>
         )}
+        {/* v0.7.0 — 按项目过滤 */}
+        <span className="ml-auto text-sm text-[var(--color-neutral-700)] flex items-center gap-1">
+          <FolderKanban className="w-3.5 h-3.5" />项目:
+        </span>
+        <select
+          value={projectId}
+          onChange={(e) =>
+            setProjectId(e.target.value === "" ? "" : Number(e.target.value))
+          }
+          className="px-3 py-1 text-xs border border-[var(--color-neutral-300)] rounded bg-white"
+          style={{ maxWidth: 240 }}
+        >
+          <option value="">全部项目</option>
+          {projectOptions.map((p) => (
+            <option key={p.project_id} value={p.project_id}>
+              {p.project_name}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div
@@ -149,6 +195,19 @@ export function ProviderCasesKanbanPage() {
                     >
                       {[c.owner.building, c.owner.room].filter(Boolean).join(" ")}
                     </div>
+                    {/* v0.7.0 — 项目名小标签(切项目快捷) */}
+                    {c.project_name && (
+                      <div
+                        style={{
+                          fontSize: 10,
+                          color: "var(--color-primary)",
+                          marginTop: 2,
+                        }}
+                        title={`项目:${c.project_name}`}
+                      >
+                        📁 {c.project_name}
+                      </div>
+                    )}
                     <div
                       style={{
                         display: "flex",
