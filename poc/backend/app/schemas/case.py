@@ -166,6 +166,8 @@ class CaseDetailResponse(BaseModel):
     assigned_role: str | None = (
         None  # v1.4 — 协作来源 badge：agent(internal) / agent(external) / null
     )
+    # v1.0.0 — 案件详情显示催收员姓名(物业 + 服务商 admin 都需要)
+    assigned_to_name: str | None = None
     pool_type: str
     stage: str
     amount_owed: Decimal | None

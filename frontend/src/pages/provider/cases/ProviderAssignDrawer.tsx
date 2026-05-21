@@ -40,7 +40,8 @@ export function ProviderAssignDrawer({
   });
   const teamRaw = teamQuery.data?.data;
   const team: TeamMember[] = Array.isArray(teamRaw) ? teamRaw : (teamRaw?.items ?? []);
-  const activeMembers = team.filter((m) => m.is_active);
+  // v1.0.0 — 仅 agent 可被分配案件(督导/PM/法务不在范围内)
+  const activeMembers = team.filter((m) => m.is_active && m.role === "agent");
 
   const validTarget = targetId !== null && targetId !== currentAssignedTo;
 

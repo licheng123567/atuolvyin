@@ -48,6 +48,8 @@ export interface CaseDetailResponse {
   project_id: number | null;
   owner: OwnerInfo;
   assigned_to: number | null;
+  // v1.0.0 — 案件详情显示催收员姓名(物业 + 服务商 admin 详情页都用)
+  assigned_to_name?: string | null;
   pool_type: string;
   stage: string;
   amount_owed: string | null;
