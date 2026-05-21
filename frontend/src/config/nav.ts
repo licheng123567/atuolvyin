@@ -292,6 +292,8 @@ const PROVIDER_ADMIN_NAV: NavSection[] = [
       // v0.5.9 — 跨租户分钟消费(我接的每个租户贡献多少分钟 / 金额)
       { label: "分钟消费", path: "/provider/billing/minute-usage", icon: "Phone" },
       { label: "历史报表", path: "/provider/historical-reports", icon: "Archive" },
+      // v0.9.0 — 服务商系统配置(目前仅含自动释放阈值)
+      { label: "系统配置", path: "/provider/settings", icon: "Settings" },
     ],
   },
 ];

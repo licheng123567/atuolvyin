@@ -29,6 +29,8 @@ class TenantSettingsOut(BaseModel):
     notify_case_escalated: bool = True
     notify_promise_expiring: bool = True
     notify_channels: list[NotifyChannel] = ["system"]
+    # v0.9.0 — N 天未联系自动释放公海(0 = 关闭)
+    auto_release_stale_days: int = 0
 
 
 class TenantSettingsUpdate(BaseModel):
@@ -49,6 +51,8 @@ class TenantSettingsUpdate(BaseModel):
     notify_case_escalated: bool | None = None
     notify_promise_expiring: bool | None = None
     notify_channels: list[NotifyChannel] | None = None
+    # v0.9.0 — 自动释放阈值
+    auto_release_stale_days: int | None = Field(None, ge=0, le=180)
 
     @model_validator(mode="after")
     def _check_thresholds(self) -> TenantSettingsUpdate:
@@ -65,3 +69,12 @@ class TenantSettingsUpdate(BaseModel):
                 "late_fee_waive_auto_approve_threshold_pct 不可超过 late_fee_waive_supervisor_max_pct"
             )
         return self
+
+
+# v0.9.0 — 服务商 Settings(目前仅含自动释放配置,后续可扩展)
+class ProviderSettingsOut(BaseModel):
+    auto_release_stale_days: int = 0
+
+
+class ProviderSettingsUpdate(BaseModel):
+    auto_release_stale_days: int | None = Field(None, ge=0, le=180)

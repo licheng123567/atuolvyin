@@ -142,6 +142,8 @@ import { ProviderSettlementListPage } from "./pages/provider/settlements";
 import { ProviderSettlementDetailPage } from "./pages/provider/settlements/[id]";
 // v0.5.9 — 服务商跨租户分钟消费
 import { ProviderBillingMinuteUsagePage } from "./pages/provider/billing/minute-usage";
+// v0.9.0 — 服务商系统配置(N 天自动释放阈值)
+import { ProviderSettingsPage } from "./pages/provider/settings";
 import { SuperHealthPage } from "./pages/super/health";
 import { SuperAuditPage } from "./pages/super/audit";
 import { SuperCostPage } from "./pages/super/cost";
@@ -582,6 +584,8 @@ function App() {
             {/* v0.5.9 — 服务商跨租户分钟消费 */}
             <Route path="/provider/billing/minute-usage" element={<ProviderBillingMinuteUsagePage />} />
             <Route path="/provider/historical-reports" element={<ProviderHistoricalReportsPage />} />
+            {/* v0.9.0 — 服务商系统配置(N 天自动释放阈值,后续可扩展) */}
+            <Route path="/provider/settings" element={<ProviderSettingsPage />} />
             <Route path="/provider/projects" element={<ProviderProjectsPage />} />
             {/* v0.7.0 — 服务商项目详情(只读) */}
             <Route path="/provider/projects/:id" element={<ProviderProjectDetailPage />} />

@@ -46,6 +46,7 @@ DEFAULTS = TenantSettingsOut(
     notify_case_escalated=True,
     notify_promise_expiring=True,
     notify_channels=["system"],
+    auto_release_stale_days=0,
 )
 
 
@@ -71,6 +72,8 @@ def _to_out(s: TenantSettings) -> TenantSettingsOut:
         notify_case_escalated=s.notify_case_escalated,
         notify_promise_expiring=s.notify_promise_expiring,
         notify_channels=list(s.notify_channels) if s.notify_channels else ["system"],  # type: ignore[arg-type]
+        # v0.9.0 — getattr 兜底:旧迁移未跑前 attribute 不存在
+        auto_release_stale_days=getattr(s, "auto_release_stale_days", 0) or 0,
     )
 
 

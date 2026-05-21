@@ -39,6 +39,8 @@ interface TenantSettings {
   notify_case_escalated: boolean;
   notify_promise_expiring: boolean;
   notify_channels: NotifyChannel[];
+  // v0.9.0 — N 天未联系自动释放公海(0 = 关闭)
+  auto_release_stale_days: number;
 }
 
 interface RiskKeyword {
@@ -80,6 +82,7 @@ const DEFAULT_TENANT_SETTINGS: TenantSettings = {
   notify_case_escalated: true,
   notify_promise_expiring: true,
   notify_channels: ["system"],
+  auto_release_stale_days: 0,
 };
 
 export function AdminSettingsPage() {
@@ -389,6 +392,39 @@ export function AdminSettingsPage() {
               style={{ width: 80 }}
             />
             <span style={{ fontSize: 13, color: "#374151" }}>次/天</span>
+          </div>
+        </div>
+
+        {/* v0.9.0 — N 天未联系自动释放公海 */}
+        <div className="setting-row">
+          <div>
+            <div className="setting-label">未联系自动释放公海</div>
+            <div className="setting-hint">
+              催收员手中案件 N 天无业主联系 → 自动释放回物业公海(可重新分配)。
+              <strong>0 = 关闭此功能</strong>;1-180 = 阈值天数。每日 02:00 扫描。
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input
+              type="number"
+              className="form-control"
+              value={form.auto_release_stale_days}
+              min={0}
+              max={180}
+              style={{ width: 80 }}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  auto_release_stale_days: Math.max(
+                    0,
+                    Math.min(180, Number(e.target.value) || 0),
+                  ),
+                })
+              }
+            />
+            <span style={{ fontSize: 13, color: "#374151" }}>
+              天 {form.auto_release_stale_days === 0 && "(已关闭)"}
+            </span>
           </div>
         </div>
 

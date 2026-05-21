@@ -69,6 +69,13 @@ class TenantSettings(Base):
         sa.SmallInteger, nullable=False, default=50, server_default=sa.text("50")
     )
 
+    # v0.9.0 — N 天未联系自动释放回公海(0 = 关闭功能,1-180 = 阈值)
+    # 定时任务每日扫描:assigned_to IS NOT NULL + last_contact_at < now - N days
+    # + stage IN (new/callback/contacting) → assigned_to=None + pool_type=public
+    auto_release_stale_days: Mapped[int] = mapped_column(
+        sa.SmallInteger, nullable=False, default=0, server_default=sa.text("0")
+    )
+
     # Sprint 12.3 — 通知规则 (PRD §L412)
     notify_quota_warning: Mapped[bool] = mapped_column(
         sa.Boolean, nullable=False, default=True, server_default=sa.true()
@@ -139,5 +146,47 @@ class TenantSettings(Base):
         sa.CheckConstraint(
             "public_pool_claim_max BETWEEN 1 AND 1000",
             name="ck_tenant_settings_pool_claim_max",
+        ),
+        sa.CheckConstraint(
+            "auto_release_stale_days BETWEEN 0 AND 180",
+            name="ck_tenant_settings_auto_release_stale_days",
+        ),
+    )
+
+
+class ProviderSettings(Base):
+    """v0.9.0 — 服务商级配置项。
+
+    与 TenantSettings 对称(服务商 admin 设置作用于自家服务商接的项目案件)。
+    当前仅含一个字段 auto_release_stale_days,后续可扩展。
+    """
+
+    __tablename__ = "provider_settings"
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    provider_id: Mapped[int] = mapped_column(
+        sa.BigInteger,
+        sa.ForeignKey("service_provider.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+
+    # N 天未联系自动释放回服务商内部公海(0 = 关闭,1-180 = 阈值)
+    # 与物业侧等价但作用域是「服务商接的案件 + 服务商内催收员持有」
+    auto_release_stale_days: Mapped[int] = mapped_column(
+        sa.SmallInteger, nullable=False, default=0, server_default=sa.text("0")
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True),
+        server_default=sa.func.now(),
+        onupdate=sa.func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        sa.CheckConstraint(
+            "auto_release_stale_days BETWEEN 0 AND 180",
+            name="ck_provider_settings_auto_release_stale_days",
         ),
     )
