@@ -50,6 +50,7 @@ from app.api import (
     provider_billing,
     provider_cases,
     provider_legal,
+    provider_risk_keywords,
     provider_scripts,
     provider_settings,
     provider_termination,
@@ -359,6 +360,8 @@ app.include_router(provider_billing.router, prefix="/api/v1/provider", tags=["pr
 app.include_router(provider_scripts.router, prefix="/api/v1/provider", tags=["provider-scripts"])
 # v0.9.0 — 服务商 admin 设置(N 天自动释放阈值)
 app.include_router(provider_settings.router, prefix="/api/v1/provider", tags=["provider-settings"])
+# v1.0.0 — 服务商风控关键词管理
+app.include_router(provider_risk_keywords.router, prefix="/api/v1/provider", tags=["provider-risk-keywords"])
 app.include_router(
     provider_termination.admin_router,
     prefix="/api/v1/admin",

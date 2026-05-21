@@ -283,6 +283,8 @@ const PROVIDER_ADMIN_NAV: NavSection[] = [
       { label: "话术库", path: "/provider/scripts", icon: "MessageSquare" },
       // v0.7.0 — 对齐物业 admin/scripts/effectiveness
       { label: "话术效果", path: "/provider/scripts/effectiveness", icon: "BarChart3" },
+      // v1.0.0 — 服务商风控关键词(对齐物业 admin)
+      { label: "风控关键词", path: "/provider/risk-keywords", icon: "ShieldAlert" },
     ],
   },
   {

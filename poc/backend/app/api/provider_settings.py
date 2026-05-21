@@ -71,9 +71,7 @@ def get_provider_settings(
     ).scalar_one_or_none()
     if s is None:
         return ProviderSettingsOut()  # 默认值
-    return ProviderSettingsOut(
-        auto_release_stale_days=s.auto_release_stale_days or 0,
-    )
+    return _to_out(s)
 
 
 @router.patch("/settings", response_model=ProviderSettingsOut)
@@ -108,6 +106,19 @@ def patch_provider_settings(
     )
     db.commit()
     db.refresh(s)
+    return _to_out(s)
+
+
+def _to_out(s: ProviderSettings) -> ProviderSettingsOut:
+    """v1.0.0 — getattr 兜底:旧迁移未跑前 attribute 不存在,回落默认值。"""
     return ProviderSettingsOut(
         auto_release_stale_days=s.auto_release_stale_days or 0,
+        recording_mode=getattr(s, "recording_mode", "auto") or "auto",
+        contact_freq_max=getattr(s, "contact_freq_max", 3) or 3,
+        notify_quota_warning=getattr(s, "notify_quota_warning", True),
+        notify_script_disabled=getattr(s, "notify_script_disabled", True),
+        notify_work_order_completed=getattr(s, "notify_work_order_completed", True),
+        notify_case_escalated=getattr(s, "notify_case_escalated", True),
+        notify_promise_expiring=getattr(s, "notify_promise_expiring", True),
+        notify_channels=list(getattr(s, "notify_channels", ["system"]) or ["system"]),
     )
