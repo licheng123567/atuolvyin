@@ -12,6 +12,11 @@ export interface AuthUser {
   tenant_id: number | null;
   tenant_name: string | null;
   scope: string;
+  // v0.7.0 — 服务商催收员标识(work_mode='external')便于前端按需展示差异化 UI;
+  // 物业催收员 work_mode='internal';非 agent 角色为 null。
+  // 后端 /auth/me 已返回(若没有,前端 default null,UI 走通用路径)。
+  work_mode?: "internal" | "external" | null;
+  provider_id?: number | null;
 }
 
 export function getToken(): string | null {

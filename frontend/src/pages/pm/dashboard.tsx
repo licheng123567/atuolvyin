@@ -268,6 +268,7 @@ export function PMDashboardPage() {
 }
 
 function PropertyView() {
+  const navigate = useNavigate();  // v0.7.0 — Top 5 案件点击跳详情
   const { query } = useCustom<PMPropertyStats>({
     url: "pm/dashboard/property",
     method: "get",
@@ -362,7 +363,9 @@ function PropertyView() {
             {stats.top_overdue.map((item) => (
               <tr
                 key={item.case_id}
-                style={{ borderTop: "1px solid #f3f4f6" }}
+                style={{ borderTop: "1px solid #f3f4f6", cursor: "pointer" }}
+                onClick={() => navigate(`/admin/cases/${item.case_id}`)}
+                title="点击查看案件详情"
               >
                 <td style={{ padding: "8px 10px" }}>{item.owner_name}</td>
                 <td style={{ padding: "8px 10px", fontWeight: 600 }}>
@@ -468,7 +471,7 @@ function ProviderView() {
         <table style={{ width: "100%", fontSize: 14, borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ color: "#6b7280", textAlign: "left" }}>
-              <th style={{ padding: "8px 10px", fontWeight: 500 }}>租户</th>
+              <th style={{ padding: "8px 10px", fontWeight: 500 }}>物业</th>
               <th style={{ padding: "8px 10px", fontWeight: 500 }}>累计通话</th>
               <th style={{ padding: "8px 10px", fontWeight: 500 }}>合同状态</th>
             </tr>

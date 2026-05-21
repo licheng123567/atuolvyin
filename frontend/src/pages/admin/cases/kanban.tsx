@@ -10,6 +10,7 @@ import {
 import { KanbanSquare, List } from "lucide-react";
 import { useRef } from "react";
 import { useSearchParams } from "react-router-dom";
+import { PriorityBadge } from "../../../components/ui/PriorityBadge";  // v0.7.0 — 物业看板补优先级 badge
 import type { AuthUser } from "../../../providers/auth-provider";
 import type { PaginatedResponse } from "../../../types";
 import {
@@ -285,6 +286,10 @@ export function CaseKanbanPage() {
                           ? `${c.months_overdue}个月欠费`
                           : "—"}
                         {c.assigned_to ? " · 已分配" : " · 未分配"}
+                      </div>
+                      {/* v0.7.0 — 看板卡片加优先级 badge(对齐服务商侧) */}
+                      <div style={{ marginTop: 4 }}>
+                        <PriorityBadge score={c.priority_score} showScore={false} />
                       </div>
                     </div>
                   ))}

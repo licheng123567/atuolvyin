@@ -449,6 +449,25 @@ export function AgentWorkstationIndexPage() {
         >
           <div style={{ fontWeight: 600, color: "#374151", flexShrink: 0 }}>
             我的项目({byProject.year_month})
+            {/* v0.7.0 — work_mode 身份徽章(便于催收员看清自己佣金率走哪种 rate) */}
+            {byProject.work_mode === "external" && (
+              <span
+                className="ds-badge ds-badge-blue"
+                style={{ marginLeft: 6, fontSize: 10 }}
+                title="服务商催收员:佣金按 project.provider_agent_commission_rate"
+              >
+                服务商
+              </span>
+            )}
+            {byProject.work_mode === "internal" && (
+              <span
+                className="ds-badge ds-badge-green"
+                style={{ marginLeft: 6, fontSize: 10 }}
+                title="物业内部催收员:佣金按 project.internal_agent_commission_rate"
+              >
+                物业内部
+              </span>
+            )}
             <span style={{ marginLeft: 6, fontSize: 11, color: "#6b7280" }}>
               本月共回款 ¥{byProject.total_recovered_amount} · 预估佣金 ¥{byProject.total_estimated_commission}
             </span>
