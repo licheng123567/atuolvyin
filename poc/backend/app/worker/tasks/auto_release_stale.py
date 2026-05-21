@@ -184,9 +184,7 @@ def auto_release_stale_cases() -> dict:
     with _get_db() as db:
         # 1) 物业租户
         tenant_settings = (
-            db.execute(
-                select(TenantSettings).where(TenantSettings.auto_release_stale_days > 0)
-            )
+            db.execute(select(TenantSettings).where(TenantSettings.auto_release_stale_days > 0))
             .scalars()
             .all()
         )
@@ -196,7 +194,9 @@ def auto_release_stale_cases() -> dict:
                 if released > 0:
                     logger.info(
                         "auto_release tenant=%d n_days=%d released=%d",
-                        ts.tenant_id, ts.auto_release_stale_days, released,
+                        ts.tenant_id,
+                        ts.auto_release_stale_days,
+                        released,
                     )
                 total_tenant += released
                 tenant_count += 1
@@ -205,21 +205,19 @@ def auto_release_stale_cases() -> dict:
 
         # 2) 服务商
         provider_settings = (
-            db.execute(
-                select(ProviderSettings).where(ProviderSettings.auto_release_stale_days > 0)
-            )
+            db.execute(select(ProviderSettings).where(ProviderSettings.auto_release_stale_days > 0))
             .scalars()
             .all()
         )
         for ps in provider_settings:
             try:
-                released = _release_one_provider(
-                    db, ps.provider_id, ps.auto_release_stale_days
-                )
+                released = _release_one_provider(db, ps.provider_id, ps.auto_release_stale_days)
                 if released > 0:
                     logger.info(
                         "auto_release provider=%d n_days=%d released=%d",
-                        ps.provider_id, ps.auto_release_stale_days, released,
+                        ps.provider_id,
+                        ps.auto_release_stale_days,
+                        released,
                     )
                 total_provider += released
                 provider_count += 1

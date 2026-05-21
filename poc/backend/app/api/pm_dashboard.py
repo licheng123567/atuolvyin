@@ -12,7 +12,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi import status as http_status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -634,22 +635,24 @@ def _detail_pending_approval_backlog(
     total = 0
 
     # discount
-    rows = db.execute(
-        select(DiscountOffer)
-        .where(DiscountOffer.tenant_id == tenant_id)
-        .where(DiscountOffer.status.in_(("pending_supervisor", "pending_admin")))
-        .where(DiscountOffer.created_at < three_days_ago)
-        .order_by(DiscountOffer.created_at.asc())
-        .limit(limit)
-    ).scalars().all()
-    discount_count = (
+    rows = (
         db.execute(
-            select(func.count(DiscountOffer.id))
+            select(DiscountOffer)
             .where(DiscountOffer.tenant_id == tenant_id)
             .where(DiscountOffer.status.in_(("pending_supervisor", "pending_admin")))
             .where(DiscountOffer.created_at < three_days_ago)
-        ).scalar_one()
+            .order_by(DiscountOffer.created_at.asc())
+            .limit(limit)
+        )
+        .scalars()
+        .all()
     )
+    discount_count = db.execute(
+        select(func.count(DiscountOffer.id))
+        .where(DiscountOffer.tenant_id == tenant_id)
+        .where(DiscountOffer.status.in_(("pending_supervisor", "pending_admin")))
+        .where(DiscountOffer.created_at < three_days_ago)
+    ).scalar_one()
     total += int(discount_count or 0)
     for r in rows:
         days = max(0, (datetime.now(UTC) - r.created_at).days)
@@ -667,22 +670,24 @@ def _detail_pending_approval_backlog(
         )
 
     # legal
-    rows2 = db.execute(
-        select(LegalConversionRequest)
-        .where(LegalConversionRequest.tenant_id == tenant_id)
-        .where(LegalConversionRequest.status.in_(("pending", "pending_admin")))
-        .where(LegalConversionRequest.created_at < three_days_ago)
-        .order_by(LegalConversionRequest.created_at.asc())
-        .limit(limit)
-    ).scalars().all()
-    legal_count = (
+    rows2 = (
         db.execute(
-            select(func.count(LegalConversionRequest.id))
+            select(LegalConversionRequest)
             .where(LegalConversionRequest.tenant_id == tenant_id)
             .where(LegalConversionRequest.status.in_(("pending", "pending_admin")))
             .where(LegalConversionRequest.created_at < three_days_ago)
-        ).scalar_one()
+            .order_by(LegalConversionRequest.created_at.asc())
+            .limit(limit)
+        )
+        .scalars()
+        .all()
     )
+    legal_count = db.execute(
+        select(func.count(LegalConversionRequest.id))
+        .where(LegalConversionRequest.tenant_id == tenant_id)
+        .where(LegalConversionRequest.status.in_(("pending", "pending_admin")))
+        .where(LegalConversionRequest.created_at < three_days_ago)
+    ).scalar_one()
     total += int(legal_count or 0)
     for r in rows2:
         days = max(0, (datetime.now(UTC) - r.created_at).days)
@@ -730,11 +735,7 @@ def _detail_promise_overdue(
     )
     items = []
     for case, owner in rows:
-        days = (
-            max(0, (now - case.promise_due_at).days)
-            if case.promise_due_at
-            else None
-        )
+        days = max(0, (now - case.promise_due_at).days) if case.promise_due_at else None
         room = (owner.building or "") + (owner.room or "") if owner else ""
         items.append(
             AlertDetailItem(
@@ -757,16 +758,14 @@ def _detail_agent_anomaly(
     """7 天无通话的催收员(active 但未发 CallRecord)。"""
     from app.models.user import UserAccount
 
-    active_agents = (
-        db.execute(
-            select(UserAccount.id, UserAccount.name, UserAccount.phone_enc)
-            .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
-            .where(UserTenantMembership.tenant_id == tenant_id)
-            .where(UserTenantMembership.role == "agent")
-            .where(UserTenantMembership.is_active.is_(True))
-            .where(UserAccount.is_active.is_(True))
-        ).all()
-    )
+    active_agents = db.execute(
+        select(UserAccount.id, UserAccount.name, UserAccount.phone_enc)
+        .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
+        .where(UserTenantMembership.tenant_id == tenant_id)
+        .where(UserTenantMembership.role == "agent")
+        .where(UserTenantMembership.is_active.is_(True))
+        .where(UserAccount.is_active.is_(True))
+    ).all()
     active_ids = [r[0] for r in active_agents]
     if not active_ids:
         return 0, []
@@ -777,7 +776,9 @@ def _detail_agent_anomaly(
             .where(CallRecord.tenant_id == tenant_id)
             .where(CallRecord.caller_user_id.in_(active_ids))
             .where(CallRecord.created_at >= seven_days_ago)
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
     silent_agents = [r for r in active_agents if r[0] not in agents_with_calls]
     total = len(silent_agents)

@@ -589,9 +589,13 @@ def batch_assign(
             failed.append(
                 BatchAssignFailureItem(
                     case_id=cid,
-                    code=str(exc.detail.get("code") if isinstance(exc.detail, dict) else "ERR_NOT_FOUND"),
+                    code=str(
+                        exc.detail.get("code") if isinstance(exc.detail, dict) else "ERR_NOT_FOUND"
+                    ),
                     message=str(
-                        exc.detail.get("message") if isinstance(exc.detail, dict) else "案件不可访问"
+                        exc.detail.get("message")
+                        if isinstance(exc.detail, dict)
+                        else "案件不可访问"
                     ),
                 )
             )
