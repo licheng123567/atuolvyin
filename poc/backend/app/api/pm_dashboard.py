@@ -595,3 +595,318 @@ async def get_pm_alerts(
         ),
     ]
     return PMAlertsOut(scope=scope, alerts=alerts)
+
+
+# ── v0.9.0 — PM Dashboard 5 类提醒明细端点 ─────────────────────
+# 替代之前的「点击 detail_path 跳全管理页」,改为右侧 Drawer 展示该类别明细列表。
+
+
+class AlertDetailItem(BaseModel):
+    """统一明细项 schema(5 类不同字段都装这里,前端按 alert_key 渲染)。"""
+
+    # 通用
+    id: int  # 案件 id / 申请 id / 用户 id / 项目 id
+    detail_path: str  # 一键跳转处理
+
+    # 共用展示字段(选填,5 类各取所需)
+    title: str | None = None  # 主标题:业主姓名 / 申请人 / 催收员 / 项目名
+    subtitle: str | None = None  # 副标题:房号 / 申请理由前 30 / 项目名等
+    amount: str | None = None  # 金额(申请金额 / 欠款额),decimal as str
+    timestamp: str | None = None  # 关键时间 ISO 串
+    days: int | None = None  # 天数(逾期 / 停留 / 未通话)
+    tag: str | None = None  # 类型标签(discount / legal / stage)
+
+
+class AlertDetailsOut(BaseModel):
+    alert_key: str
+    total: int
+    items: list[AlertDetailItem]
+
+
+def _detail_pending_approval_backlog(
+    db: Session, tenant_id: int, three_days_ago: datetime, limit: int
+) -> tuple[int, list[AlertDetailItem]]:
+    """审批积压明细:>3 天的 pending discount + legal 申请,合并按时间倒序。"""
+    from app.models.discount_offer import DiscountOffer
+    from app.models.legal_conversion import LegalConversionRequest
+
+    items: list[AlertDetailItem] = []
+    total = 0
+
+    # discount
+    rows = db.execute(
+        select(DiscountOffer)
+        .where(DiscountOffer.tenant_id == tenant_id)
+        .where(DiscountOffer.status.in_(("pending_supervisor", "pending_admin")))
+        .where(DiscountOffer.created_at < three_days_ago)
+        .order_by(DiscountOffer.created_at.asc())
+        .limit(limit)
+    ).scalars().all()
+    discount_count = (
+        db.execute(
+            select(func.count(DiscountOffer.id))
+            .where(DiscountOffer.tenant_id == tenant_id)
+            .where(DiscountOffer.status.in_(("pending_supervisor", "pending_admin")))
+            .where(DiscountOffer.created_at < three_days_ago)
+        ).scalar_one()
+    )
+    total += int(discount_count or 0)
+    for r in rows:
+        days = max(0, (datetime.now(UTC) - r.created_at).days)
+        items.append(
+            AlertDetailItem(
+                id=r.id,
+                title=f"减免申请 #{r.id}",
+                subtitle=f"状态:{r.status} · 等待 {days} 天",
+                amount=str(r.discount_amount) if r.discount_amount is not None else None,
+                timestamp=r.created_at.isoformat(),
+                days=days,
+                tag="discount",
+                detail_path=f"/admin/discount-approvals?focus={r.id}",
+            )
+        )
+
+    # legal
+    rows2 = db.execute(
+        select(LegalConversionRequest)
+        .where(LegalConversionRequest.tenant_id == tenant_id)
+        .where(LegalConversionRequest.status.in_(("pending", "pending_admin")))
+        .where(LegalConversionRequest.created_at < three_days_ago)
+        .order_by(LegalConversionRequest.created_at.asc())
+        .limit(limit)
+    ).scalars().all()
+    legal_count = (
+        db.execute(
+            select(func.count(LegalConversionRequest.id))
+            .where(LegalConversionRequest.tenant_id == tenant_id)
+            .where(LegalConversionRequest.status.in_(("pending", "pending_admin")))
+            .where(LegalConversionRequest.created_at < three_days_ago)
+        ).scalar_one()
+    )
+    total += int(legal_count or 0)
+    for r in rows2:
+        days = max(0, (datetime.now(UTC) - r.created_at).days)
+        items.append(
+            AlertDetailItem(
+                id=r.id,
+                title=f"转法务申请 #{r.id}",
+                subtitle=f"状态:{r.status} · 等待 {days} 天",
+                timestamp=r.created_at.isoformat(),
+                days=days,
+                tag="legal",
+                detail_path=f"/admin/legal-conversion-approvals?focus={r.id}",
+            )
+        )
+    # 合并后再按 timestamp 升序(等待最久的在前)
+    items.sort(key=lambda x: x.timestamp or "")
+    return total, items[:limit]
+
+
+def _detail_promise_overdue(
+    db: Session, tenant_id: int, limit: int
+) -> tuple[int, list[AlertDetailItem]]:
+    from app.models.case import OwnerProfile
+
+    now = datetime.now(UTC)
+    rows = db.execute(
+        select(CollectionCase, OwnerProfile)
+        .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id, isouter=True)
+        .where(CollectionCase.tenant_id == tenant_id)
+        .where(CollectionCase.promise_due_at.isnot(None))
+        .where(CollectionCase.promise_due_at < now - timedelta(days=1))
+        .where(CollectionCase.stage != "paid")
+        .order_by(CollectionCase.promise_due_at.asc())
+        .limit(limit)
+    ).all()
+    total = int(
+        db.execute(
+            select(func.count(CollectionCase.id))
+            .where(CollectionCase.tenant_id == tenant_id)
+            .where(CollectionCase.promise_due_at.isnot(None))
+            .where(CollectionCase.promise_due_at < now - timedelta(days=1))
+            .where(CollectionCase.stage != "paid")
+        ).scalar_one()
+        or 0
+    )
+    items = []
+    for case, owner in rows:
+        days = (
+            max(0, (now - case.promise_due_at).days)
+            if case.promise_due_at
+            else None
+        )
+        room = (owner.building or "") + (owner.room or "") if owner else ""
+        items.append(
+            AlertDetailItem(
+                id=case.id,
+                title=owner.name if owner else f"案件 #{case.id}",
+                subtitle=f"{room} · 承诺日 {case.promise_due_at.date().isoformat() if case.promise_due_at else '—'}",
+                amount=str(case.amount_owed) if case.amount_owed is not None else None,
+                timestamp=case.promise_due_at.isoformat() if case.promise_due_at else None,
+                days=days,
+                tag="promise",
+                detail_path=f"/admin/cases/{case.id}",
+            )
+        )
+    return total, items
+
+
+def _detail_agent_anomaly(
+    db: Session, tenant_id: int, seven_days_ago: datetime, limit: int
+) -> tuple[int, list[AlertDetailItem]]:
+    """7 天无通话的催收员(active 但未发 CallRecord)。"""
+    from app.models.user import UserAccount
+
+    active_agents = (
+        db.execute(
+            select(UserAccount.id, UserAccount.name, UserAccount.phone_enc)
+            .join(UserTenantMembership, UserTenantMembership.user_id == UserAccount.id)
+            .where(UserTenantMembership.tenant_id == tenant_id)
+            .where(UserTenantMembership.role == "agent")
+            .where(UserTenantMembership.is_active.is_(True))
+            .where(UserAccount.is_active.is_(True))
+        ).all()
+    )
+    active_ids = [r[0] for r in active_agents]
+    if not active_ids:
+        return 0, []
+
+    agents_with_calls = set(
+        db.execute(
+            select(func.distinct(CallRecord.caller_user_id))
+            .where(CallRecord.tenant_id == tenant_id)
+            .where(CallRecord.caller_user_id.in_(active_ids))
+            .where(CallRecord.created_at >= seven_days_ago)
+        ).scalars().all()
+    )
+    silent_agents = [r for r in active_agents if r[0] not in agents_with_calls]
+    total = len(silent_agents)
+    items = []
+    for uid, name, _phone_enc in silent_agents[:limit]:
+        items.append(
+            AlertDetailItem(
+                id=int(uid),
+                title=name or f"用户 #{uid}",
+                subtitle="近 7 天未发起通话",
+                days=7,
+                tag="agent",
+                detail_path="/admin/agent-devices",
+            )
+        )
+    return total, items
+
+
+def _detail_cost_warning(
+    db: Session, tenant_id: int, year_month: str
+) -> tuple[int, list[AlertDetailItem]]:
+    """本月超 2000 分钟的租户/项目。当前简化为本租户级一行。"""
+    from app.models.tenant import TenantMinuteUsage
+
+    row = db.execute(
+        select(TenantMinuteUsage)
+        .where(TenantMinuteUsage.tenant_id == tenant_id)
+        .where(TenantMinuteUsage.year_month == year_month)
+    ).scalar_one_or_none()
+    if not row or int(row.used_minutes or 0) <= 2000:
+        return 0, []
+    return 1, [
+        AlertDetailItem(
+            id=row.id,
+            title=f"{year_month} 月度通话",
+            subtitle=f"已用 {row.used_minutes} 分钟 / 预警阈值 2000 分钟",
+            amount=str(row.used_minutes),
+            timestamp=year_month,
+            tag="cost",
+            detail_path="/admin/billing/minute-usage",
+        )
+    ]
+
+
+def _detail_case_stage_stuck(
+    db: Session, tenant_id: int, fourteen_days_ago: datetime, limit: int
+) -> tuple[int, list[AlertDetailItem]]:
+    from app.models.case import OwnerProfile
+
+    rows = db.execute(
+        select(CollectionCase, OwnerProfile)
+        .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id, isouter=True)
+        .where(CollectionCase.tenant_id == tenant_id)
+        .where(CollectionCase.updated_at < fourteen_days_ago)
+        .where(CollectionCase.stage.in_(("new", "in_progress", "promised", "escalated")))
+        .order_by(CollectionCase.updated_at.asc())
+        .limit(limit)
+    ).all()
+    total = int(
+        db.execute(
+            select(func.count(CollectionCase.id))
+            .where(CollectionCase.tenant_id == tenant_id)
+            .where(CollectionCase.updated_at < fourteen_days_ago)
+            .where(CollectionCase.stage.in_(("new", "in_progress", "promised", "escalated")))
+        ).scalar_one()
+        or 0
+    )
+    items = []
+    now = datetime.now(UTC)
+    for case, owner in rows:
+        days = max(0, (now - case.updated_at).days) if case.updated_at else None
+        room = (owner.building or "") + (owner.room or "") if owner else ""
+        items.append(
+            AlertDetailItem(
+                id=case.id,
+                title=owner.name if owner else f"案件 #{case.id}",
+                subtitle=f"{room} · 阶段 {case.stage} · 停留 {days} 天",
+                amount=str(case.amount_owed) if case.amount_owed is not None else None,
+                timestamp=case.updated_at.isoformat() if case.updated_at else None,
+                days=days,
+                tag=case.stage,
+                detail_path=f"/admin/cases/{case.id}",
+            )
+        )
+    return total, items
+
+
+@router.get("/dashboard/alerts/{alert_key}/details", response_model=AlertDetailsOut)
+async def get_alert_details(
+    alert_key: str,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles("project_manager", "admin"))],
+    db: Annotated[Session, Depends(get_db)],
+    limit: int = 50,
+) -> AlertDetailsOut:
+    """按 alert_key 返回该类别完整明细列表(每项含 detail_path 一键跳处理)。
+
+    支持 5 类(对应 GET /pm/dashboard/alerts 返回的 5 张卡片):
+      - pending_approval_backlog
+      - promise_overdue_uncalled
+      - agent_anomaly
+      - cost_warning
+      - case_stage_stuck
+    """
+    tenant_id = payload.get("tenant_id")
+    if not tenant_id:
+        return AlertDetailsOut(alert_key=alert_key, total=0, items=[])
+
+    now = datetime.now(UTC)
+    three_days_ago = now - timedelta(days=3)
+    fourteen_days_ago = now - timedelta(days=14)
+    seven_days_ago = now - timedelta(days=7)
+    year_month = now.strftime("%Y-%m")
+    limit = max(1, min(200, int(limit)))
+
+    if alert_key == "pending_approval_backlog":
+        total, items = _detail_pending_approval_backlog(db, int(tenant_id), three_days_ago, limit)
+    elif alert_key == "promise_overdue_uncalled":
+        total, items = _detail_promise_overdue(db, int(tenant_id), limit)
+    elif alert_key == "agent_anomaly":
+        total, items = _detail_agent_anomaly(db, int(tenant_id), seven_days_ago, limit)
+    elif alert_key == "cost_warning":
+        total, items = _detail_cost_warning(db, int(tenant_id), year_month)
+    elif alert_key == "case_stage_stuck":
+        total, items = _detail_case_stage_stuck(db, int(tenant_id), fourteen_days_ago, limit)
+    else:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail={"code": "ERR_UNKNOWN_ALERT", "message": f"未知的 alert_key: {alert_key}"},
+        )
+
+    return AlertDetailsOut(alert_key=alert_key, total=total, items=items)
