@@ -256,6 +256,7 @@ v1.0–v1.3 完成基础多租户结构后，v1.4 落地以下治理与协作要
 | 案件升级到督导 | ✅ | — | ✅ | ✅ | ❌ | ❌ |
 | 申请转法务（提单子）| ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | 审批转法务申请 | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **直接移交法务**(v0.6.0,无申请也可越权转,需填原因) | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | 法务接单选服务包（v0.5.4）| ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
 | 上报 admin（减免单/转法务单）| ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | 督导侧案件动作（催回访/催办/介入/重派）| ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -282,6 +283,42 @@ v1.0–v1.3 完成基础多租户结构后，v1.4 落地以下治理与协作要
 | 可访问时段 | 无限制 | 可配置（如仅工作日 9:00-18:00）|
 | 数据导出 | 仅自己相关数据 | **禁止任何导出** |
 | PC 工作台 | ✅ 可登录 PC | ❌ 仅限 App |
+
+### 4.4 法务转化双路径(v0.6.0)
+
+法务转化有两条互斥路径,后端 `POST /supervisor/cases/{id}/transfer-legal` 校验本案件无 pending 申请(409 防双轨):
+
+**路径 A:催收员申请 → 督导审批(主流程)**
+
+```
+催收员 RequestLegalConversionModal(选预设原因 + 备注)
+  → POST /agent/cases/{id}/intent  body={action:"transfer_legal", note}
+  → 写 LegalConversionRequest(status=pending,requester_role=agent)
+
+  ↓ 督导侧:案件详情页按钮条件渲染
+
+if (case.pending_legal_conversion_request_id != null) {
+  显示「审批转法务」按钮 → 打开 LegalConversionApprovalModal
+  → POST /legal-conversion-requests/{id}/approve|reject
+  → 状态 → approved_pending_legal / rejected
+} else {
+  显示「移交法务」按钮 → 路径 B
+}
+```
+
+**路径 B:督导直接移交(越权,v0.6.0 新)**
+
+```
+督导 TransferLegalDirectModal(必填原因)
+  → POST /supervisor/cases/{id}/transfer-legal  body={reason}
+  → 后端校验:本案件无 LegalConversionRequest status ∈ (pending, pending_admin)
+              否则 409 ERR_PENDING_REQUEST_EXISTS
+  → case.stage = 'legal'
+  → 写 audit log(action=case.supervisor_transfer_legal_direct,payload={reason})
+  → 通知原催收员「案件已直接转法务」
+```
+
+**为何提供路径 B**:业主长期失联 + 大额欠费 + 资产线索充足的案件,无需催收员介入即可直接进法务流;但写明 audit reason 留痕可追溯,防止滥用。
 
 ---
 
@@ -542,6 +579,17 @@ re.sub(r'(1[3-9]\d)\d{4}(\d{4})', r'\1****\2', transcript)
 - 首次登录后 AuthenticatedShell 检查 `preferences.app_intro_dismissed`：false → 弹 `AppIntroModal`（含 QR + 4 章节摘要 + "不再提示"勾选）
 - 公开页 `/help/app`（不登录可访问，所有角色可分享给坐席）：完整 4 章节（为什么需要 / 安装步骤 / 权限授予含 MIUI 注意事项 / 服务器地址扫码注入）
 - 主菜单常驻入口（避免一次性 modal 关掉就找不到）
+
+#### 各角色菜单/工作台 v0.6.0 增量
+
+| 角色 | 入口 | 内容 |
+|------|------|------|
+| **催收员**(agent)| nav 新增「提醒中心」`/agent/reminders`(图标 Bell)| 整合 3 类软提醒(承诺到期 72h / 法务申请状态变化 / 案件 SLA 告警 30d 停滞) + 站内信(mark-read / read-all);后端 GET `/agent/me/reminders/synthetic` |
+| **催收员**工作台 | KPI bar 下方加「我的项目」横滚卡片条 | 按项目分组展示:案件数 / 本月缴清数 / 已回款金额 / 预估佣金(按 work_mode internal/external 走 project.internal/provider_agent_commission_rate) |
+| **物业管理员**(admin)| 「结算与报表」段(v0.5.9 已加 2 项) | 新增 settlement_statement.billing_method 字段中文映射;法务转化页加「区块链存证」section |
+| **服务商管理员**(provider admin)| 「结算与报表」段(v0.5.9 已加 1 项) | 同物业 admin 计费方式中文化 |
+| **物业/服务商项目经理**(project_manager)| dashboard 顶部加「运营提醒」5 卡片网格(GET `/pm/dashboard/alerts`)| 5 类:审批积压 / 承诺逾期未催 / 坐席 7 天无通话 / 本月分钟超 2000 / 案件 stage 停留 >14 天;count>0 时整张卡片 Link 到 detail_path |
+| **物业督导**(supervisor)| 案件详情 + 升级案件 + 承诺催付 + 超期预警 + 风险事件 5 页大重构 | 法务转化按钮条件渲染 / 升级案件 4→2 按钮(介入处理 5 选项弹窗)/ 承诺催付催回访接通真实 API / 超期预警重派 + 释放公海实装后端 / 风险事件 EventDetailModal 加可写处置区(status + handle_result_note) |
 
 ### 8.3 录音上传模式配置
 
@@ -1671,6 +1719,77 @@ CREATE TABLE performance_record (
 | SettlementPaymentRecord | 结算付款凭证：结算单ID、金额、时间、凭证图片URL、操作人（区别于业主付款的 PaymentRecord）|
 | DisputeRecord | 结算异议记录：关联结算单、异议原因、处理状态、解决结果 |
 
+### 16.X v0.6.0 新增字段 / 新表汇总
+
+5 个 alembic 迁移(24027v060a → 24031v060e)交付,字段名为**最终生产实际名**(与本节其他段一致):
+
+```
+表:settlement_statement(改)
+  + billing_method VARCHAR(32) NULL — 计费方式枚举
+    CHECK 约束 ck_settlement_billing_method
+    枚举:monthly_fee(月度套餐费)/ per_case(按案件计费)/
+         percent_of_recovered(按回款比例分成)
+    迁移:24027v060a
+
+表:collection_case(改)
+  + shadow_supervisor_id BIGINT FK user_account.id NULL
+    — 督导陪同监听标记;非 NULL = 该案件在实时通话墙高亮,催收员拨号时
+      督导自动收通知,可监听或强制接管(B.2 介入处理选项 ②)
+  + close_reason TEXT NULL
+    — 「直接结案/标坏账」必填原因(B.2 介入处理选项 ③);
+      stage='pending_close' 时设置,等物业管理员二审
+    迁移:24028v060b
+
+表:risk_event(改)
+  + handle_status VARCHAR(32) NULL — 督导处置状态枚举
+    CHECK 约束 ck_risk_event_handle_status
+    枚举:resolved(已处置)/ escalated(升级督导队列)/
+         transferred_training(转培训案例)/ transferred_legal(转法务)
+    迁移:24029v060c
+
+  注:disposition_note / disposition_by / disposition_at(Sprint 9.4 已有)
+      复用为「处理结果说明」+ 处置人 + 处置时间。
+
+表:script_template(改)
+  + ai_score NUMERIC(5,2) NULL — AI 评分 0-100
+  + ai_score_updated_at TIMESTAMPTZ NULL — 最近重算时间
+  + ai_score_sample_count INTEGER NULL — 样本数;<5 不算分,
+    5-9 UI 提示「样本不足」⚠
+    迁移:24030v060d
+    算法:见 §22.9
+
+表:training_case(新)— 培训案例库,替代纯 mock
+  - id BIGINT PK AUTOINCREMENT
+  - tenant_id BIGINT FK CASCADE
+  - title VARCHAR(256) / category VARCHAR(32) / scenario TEXT / lesson TEXT
+  - raw_call_id BIGINT FK SET NULL — 来源通话
+  - raw_risk_event_id BIGINT FK SET NULL — 从风险事件转入时的源 event
+  - source VARCHAR(16) DEFAULT 'manual' — auto(自动 curate)/ manual(督导手工)
+  - created_by BIGINT FK user_account.id NULL
+  - rating SMALLINT 0-5 / views INTEGER DEFAULT 0
+  - created_at / updated_at(TimestampMixin)
+  - CHECK 约束:
+    - category IN ('negotiate','escalate','objection','investigate')
+    - source IN ('auto','manual')
+    - rating BETWEEN 0 AND 5
+  - INDEX:tenant_id + created_at(列表分页)
+    迁移:24031v060e
+```
+
+**关联端点(本波新加)**:
+- `GET /admin/legal-conversion-orders/{order_id}/attestations` — 法务转化订单页区块链存证 section(走 LegalConversionOrder → CollectionCase → LegalCase → BlockchainAttestation 链)
+- `POST /supervisor/cases/{id}/transfer-legal` — 督导直接移交法务(§4.4 路径 B)
+- `POST /supervisor/escalated/{id}/mark-shadow-listening` — 标记陪同监听
+- `POST /supervisor/escalated/{id}/close-as-uncollectible` — 直接结案审批
+- `POST /supervisor/cases/{id}/release-to-pool` — 释放回公海
+- 扩 `PATCH /supervisor/risk-events/{id}` — 支持 handle_status 同步写
+- 培训库 CRUD:`GET/POST/PATCH/DELETE /supervisor/training-cases` + `POST /{id}/view`
+- `POST /admin/scripts/recompute-ai-scores` — 手动触发 AI 评分重算
+- `GET /agent/me/by-project` — 催收员按项目维度统计
+- `GET /agent/me/reminders/synthetic` — 3 类软提醒整合
+- 扩 `GET /users/me/notifications` — event_type 多值过滤
+- `GET /pm/dashboard/alerts` — PM 5 类运营提醒
+
 ---
 
 ## 17. 账号注册与开通策略
@@ -2452,6 +2571,17 @@ CRM 案件 → 多次催收无果 → 一键"转法务追诉"
 平台收取介绍费（法律服务费的 20-30%）
 ```
 
+**转法务入口(v0.6.0)— 双路径**
+
+转法务有两条互斥路径,详见 [§4.4 法务转化双路径](#44-法务转化双路径v060):
+
+- 路径 A:**催收员申请 → 督导审批**(主流程,有 LegalConversionRequest 单据)
+- 路径 B:**督导直接移交**(越权,无单据,需填原因 audit log)
+
+后端 `POST /supervisor/cases/{id}/transfer-legal` 校验:若本案件已有 status ∈ (pending, pending_admin) 的 LegalConversionRequest,返回 409 防双轨。督导侧案件详情页按钮按 `pending_legal_conversion_request_id` 是否为 NULL 条件渲染「移交法务」或「审批转法务」。
+
+法务转化订单详情页(v0.6.0)新增「区块链存证」section,后端 `GET /admin/legal-conversion-orders/{id}/attestations` 走 `LegalConversionOrder → CollectionCase → LegalCase → BlockchainAttestation` 链,展示该案件下所有 confirmed 上链记录(时间 / 类型 / 金额 / tx_hash 链接到公开核验页)。
+
 **服务包设计**
 
 | 服务包 | 内容 | 参考定价 |
@@ -3078,6 +3208,103 @@ app.youcuihuicui.com       ← 租户侧所有角色（物业公司管理员/主
 - ✅ 当前方案：admin 与 supervisor 在租户范围内的 stage 写权限本就一致（督导是租户全权角色），扩 require_roles 是最小改动
 
 **影响范围**：1 行代码改动（`admin_cases.py` `update_case_stage` 的 `require_roles`）；测试覆盖
+
+---
+
+### 22.8 v0.6.0 UX 大盘修复 — 13 反馈一波收口(2026-05-20)
+
+**背景**:人工测试一次性反馈 13 个 UX / 产品问题,横跨 4 个角色(物业管理员/物业督导/催收员/项目经理)+ 公共修复 + 后端缺字段。用户决策:**一次性收口全做**(不分多版本),拆 5 个 Wave 串行(5-7 天,实际 4 天交付)。
+
+**Wave A — 公共修复 + 物业管理员小修(`18938ff`)**
+- 物业「分配/重分配」弹窗参考服务商风格改 RightDrawer 520px(`AdminAssignDrawer.tsx`,修「下拉只能看 2-3 个名字」)
+- 残留 admin 字面量清查:减免 mock STATUS_LABELS / 律所升级 confirm / 排班说明等改「物业管理员」
+- 业主名单导入修文件上传(原是纯视觉占位)— 加 ref input + 拖拽 + UTF-8 BOM 兼容 CSV 解析
+- `settlement_statement.billing_method` 字段补齐 + 中文映射(三枚举)
+- 法务转化订单页加「区块链存证」section + 后端端点
+
+**Wave B — 督导工作流大重构(`d15b5b8`)**
+- 案件详情「法务转化按钮」按 `pending_legal_conversion_request_id` 条件渲染(详 §4.4)
+- 升级案件页:外层 4 按钮 → 2 按钮(介入处理 + 详情);介入处理弹窗 5 选项(亲自致电 / 陪同监听 / 标坏账 / 减免 / 转法务);后端 2 新端点 + alembic 加 `case.shadow_supervisor_id` + `case.close_reason`
+- 承诺催付「催回访」改用 SupervisorCaseActionModal(走真实催办端点);移除「升级督导」按钮(语义错误,督导自己升级自己不通)
+- 案件超期预警催办 / 重派 / 释放公海全部接通真实后端(新增 `POST /supervisor/cases/{id}/release-to-pool`)
+- 风险事件 EventDetailModal 由只读改可写:select 处置类型 + textarea 处理结果;`risk_event.handle_status` 字段 + PATCH 端点扩展;handle_status='transferred_training' 联动 §22.10 培训库自动入库
+
+**Wave C — 话术 AI 评分 + 培训案例库(`426a050`)**
+- 话术 AI 评分:`script_template.ai_score / ai_score_updated_at / ai_score_sample_count` 字段 + asyncio loop 每 6h 重算 + 手动触发端点(算法见 §22.9)
+- 前端 admin/scripts/effectiveness 表加「AI 评分」列(颜色分级 + ⚠ 样本不足提示);supervisor/script-labels 同步
+- 培训案例库:新建 `training_case` 表 + 7 端点 CRUD(分页 / 手工入库 / 编辑 / view +1 / 删除);自动入库链路:督导处置风险事件 status=transferred_training → 后端 PATCH 联动 `from_risk_event()` 自动建训练案;asyncio 兜底 loop 每 24h 扫漏建
+- 前端 training 页接通真实 API + 「手动入库」modal + category / source 双维度过滤;mock fallback 当后端 0 条
+
+**Wave D — 催收员 + PM 提醒中心(`f80f245`)**
+- 催收员工作台 KPI bar 下加「我的项目」横滚卡片条 — 按 project 分组:案件数 / 缴清数 / 已回款 / 预估佣金(按 work_mode 走 internal/external commission rate)
+- 催收员 nav 新菜单「提醒中心」`/agent/reminders` — 整合 3 类软提醒(promise 72h / legal 状态变化 / case SLA 30d 停滞)+ 站内信(mark-read / read-all);后端 `/agent/me/reminders/synthetic`
+- PM dashboard 顶部加「运营提醒」5 卡片网格(物业 + 服务商 PM 共用)— 审批积压 / 承诺逾期未催 / 坐席异常 / 成本预警 / 案件阶段停滞;5 分钟自动刷;count>0 整张卡片 Link 到 detail_path
+
+**Wave E — PRD 文档同步(本提交)**
+- §4.4 法务转化双路径 + 权限矩阵加「直接移交法务」越权权
+- §8.2 各角色新菜单增量表
+- §16.X v0.6.0 新增字段 / 新表汇总 + 11 端点列表
+- §20.4 法务转化页双路径说明
+- §22.8(本节)+ §22.9(话术 AI 算法)+ §22.10(培训案例自动入库)
+
+**关键决策记录**
+- **路径互斥防双轨**:督导直接移交端点校验本案件无 pending 申请(409 ERR_PENDING_REQUEST_EXISTS),不允许两条路径同时跑同一案件
+- **风险事件处理结果复用 disposition 字段**:不新建 handled_at / handled_by 字段(Sprint 9.4 已有 disposition_note / disposition_by / disposition_at),只加 handle_status 状态机
+- **培训库自动入库幂等**:`raw_risk_event_id` 唯一性 + `from_risk_event()` 已存在 case 直接返回(防 PATCH 重试时重复建)
+- **PM 提醒不下沉为通知**:运营提醒是「实时计算的状态指标」(类似 dashboard 数字),没有读 / 未读语义;站内信是另一条事件流(详 §16 Notification)
+
+---
+
+### 22.9 话术 AI 评分算法(v0.6.0)
+
+**公式**:`ai_score = recovery_rate × 70 + adoption_rate × 30`(clip 到 [0, 100])
+
+**样本窗**:近 30 天(`lookback_days = 30`,可参数化)
+
+**分子分母定义**:
+- `total_shown = COUNT(SuggestionFeedback WHERE script_template_id=X AND created_at >= now - 30d)`
+- `total_adopted = COUNT(... AND action='adopt')` — 催收员实际采用的次数
+- `total_adopted_paid = COUNT(... AND action='adopt' AND case.stage='paid')` — 采用且案件已回款的次数
+- `adoption_rate = total_adopted / total_shown`
+- `recovery_rate = total_adopted_paid / total_adopted`
+
+**为何 70/30**:PRD §20.1 核心 KPI 是回款,采用率是过程指标。回款率为终极指标加 70% 权重;采用率作为「催收员认可度」加 30%。后续可在本节调权重(单点修改 `app/services/script_ai_score.py:WEIGHT_RECOVERY / WEIGHT_ADOPTION`)。
+
+**样本量保护**:
+- `total_shown < 5`:不算分(`ai_score = NULL`),避免小样本误导
+- `5-9`:正常算分,但 UI 显示「样本不足」⚠ 徽章(`ai_score_sample_count` 字段驱动)
+- `>= 10`:正常展示
+
+**调度**:
+- 后端 `app/services/script_ai_score.py:recompute_ai_scores_loop()` — FastAPI lifespan 启动的 asyncio 循环
+- 每 6h(`RECOMPUTE_INTERVAL_SEC`)检查一次「`ScriptTemplate.ai_score_updated_at` 最旧值 > 24h 前」,触发全量重算
+- 手动触发:`POST /admin/scripts/recompute-ai-scores`(物业 admin,本租户范围)
+
+**前端展示**:
+- `admin/scripts/effectiveness.tsx` — 综合评分(0.6×采用率 + 0.4×好评率)+ AI 评分**并列**展示,加 tooltip 解释算法
+- `supervisor/script-labels.tsx` — 表格加 AI 评分列(颜色分级:≥70 绿 / 40-70 橙 / <40 红);样本不足时灰显「样本不足(N)」
+
+### 22.10 培训案例自动入库链路(v0.6.0)
+
+**两条入库路径**(`app/services/training_curate.py`):
+
+1. **风险事件 → 培训(联动)**
+   - 督导在 supervisor/risk-events EventDetailModal 选 status=`transferred_training`
+   - PATCH `/supervisor/risk-events/{id}` 调 `from_risk_event(db, risk_event_id, tenant_id, actor_user_id)`
+   - 幂等:若同一 `raw_risk_event_id` 已有 training_case 直接返回
+   - 自动文案:title="风险事件复盘:{trigger_text[:40]}";scenario 拼 level + category + trigger_text;lesson 取 disposition_note;category='escalate';rating=3 默认
+
+2. **督导手工录入**
+   - POST `/supervisor/training-cases` body={title, category, scenario, lesson, raw_call_id, rating}
+   - source='manual',created_by=当前督导
+
+**兜底循环** `scan_auto_ingest_loop()` — 每 24h 扫近 7 天「`handle_status='transferred_training'` 但 raw_risk_event_id 未建训练案」的事件,自动补建,防 PATCH 时联动失败。
+
+**前端 training 页**:
+- `useCustom` 拉真实 `/supervisor/training-cases`(mock fallback 当后端 0 条)
+- 「自动入库」徽章(card 上 Sparkles 图标 + 蓝色)区分 source=auto vs manual
+- category(4 类)+ source(auto/manual/all)双维度过滤
+- 点「听原通话录音」+1 view 计数(POST `/{id}/view`,轻量端点不写 audit)
 
 ---
 
