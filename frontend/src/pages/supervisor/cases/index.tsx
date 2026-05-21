@@ -3,8 +3,8 @@
 // v1.6.5 — 加分页 + debounce 搜索
 // v1.6.10 — 左侧改用真实后端 GET /supervisor/cases，case.id 与 detail endpoint 对齐（修复 404）
 import type { CrudFilter } from "@refinedev/core";
-import { useList } from "@refinedev/core";
-import { Eye, Info, MessageSquarePlus } from "lucide-react";
+import { useInvalidate, useList } from "@refinedev/core";
+import { Eye, Info, MessageSquarePlus, Users } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FollowUpNoteModal } from "../../../components/case/FollowUpNoteModal";
@@ -13,6 +13,8 @@ import { SearchInput } from "../../../components/ui/SearchInput";
 import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 import type { PaginatedResponse } from "../../../types";
 import { SUPERVISOR_PROJECT_FILTERS } from "../_shared/projectFilters";
+// v0.9.0 — 督导批量分配走 SupervisorAssignDrawer(SearchableSelect + batch-assign 端点)
+import { SupervisorAssignDrawer } from "../../../components/supervisor/SupervisorAssignDrawer";
 
 const PAGE_SIZE = 15;
 
@@ -76,8 +78,15 @@ function fmtRelative(iso: string | null): string {
 
 export function SupervisorCasesPage() {
   const navigate = useNavigate();
+  const invalidate = useInvalidate();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [showAssign, setShowAssign] = useState(false);
+  // v0.9.0 — 行内「分配/重派」单条 Drawer
+  const [singleAssign, setSingleAssign] = useState<{
+    caseId: number;
+    ownerName: string;
+    currentAssignedTo: number | null;
+  } | null>(null);
   const [projectFilter, setProjectFilter] = useState<string>("全部项目");
   const [keyword, setKeyword] = useState("");
   const [page, setPage] = useState(1);
@@ -231,6 +240,23 @@ export function SupervisorCasesPage() {
                   >
                     <MessageSquarePlus className="w-3 h-3" /> 记录跟进
                   </button>
+                  {/* v0.9.0 — 督导对任意案件单条分配/重派 */}
+                  <button
+                    type="button"
+                    className="ds-btn ds-btn-ghost ds-btn-sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSingleAssign({
+                        caseId: c.id,
+                        ownerName: c.owner.name,
+                        currentAssignedTo: c.assigned_to,
+                      });
+                    }}
+                    title={c.assigned_to ? "重派给其他催收员" : "分配给催收员"}
+                    style={{ flexShrink: 0 }}
+                  >
+                    <Users className="w-3 h-3" /> {c.assigned_to ? "重派" : "分配"}
+                  </button>
                 </div>
               );
             })}
@@ -275,15 +301,29 @@ export function SupervisorCasesPage() {
         </div>
       </div>
 
-      {showAssign && (
-        <AssignModal
-          selectedCount={selected.size}
-          loads={MOCK_LOAD}
+      {/* v0.9.0 — 批量分配 Drawer(替换原 fake AssignModal) */}
+      {showAssign && selected.size > 0 && (
+        <SupervisorAssignDrawer
+          caseIds={Array.from(selected)}
           onClose={() => setShowAssign(false)}
-          onConfirm={() => {
-            alert(`已分配 ${selected.size} 条案件`);
-            setSelected(new Set());
+          onAssigned={() => {
             setShowAssign(false);
+            setSelected(new Set());
+            void invalidate({ resource: "supervisor/cases", invalidates: ["list"] });
+          }}
+        />
+      )}
+
+      {/* v0.9.0 — 单条分配/重派 Drawer */}
+      {singleAssign && (
+        <SupervisorAssignDrawer
+          caseIds={[singleAssign.caseId]}
+          ownerName={singleAssign.ownerName}
+          currentAssignedTo={singleAssign.currentAssignedTo}
+          onClose={() => setSingleAssign(null)}
+          onAssigned={() => {
+            setSingleAssign(null);
+            void invalidate({ resource: "supervisor/cases", invalidates: ["list"] });
           }}
         />
       )}
@@ -302,43 +342,4 @@ export function SupervisorCasesPage() {
   );
 }
 
-function AssignModal({ selectedCount, loads, onClose, onConfirm }: { selectedCount: number; loads: AgentLoad[]; onClose: () => void; onConfirm: () => void }) {
-  const [agent, setAgent] = useState("");
-  return (
-    <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}
-      onClick={onClose}
-    >
-      <div
-        style={{ background: "white", borderRadius: 8, width: 460, maxWidth: "92%" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ padding: 16, borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontWeight: 600 }}>批量分配案件</span>
-          <button type="button" onClick={onClose} style={{ border: "none", background: "transparent", fontSize: 20, cursor: "pointer" }}>×</button>
-        </div>
-        <div style={{ padding: 16 }}>
-          <div style={{ marginBottom: 16, fontSize: 13.5, color: "var(--color-neutral-700)" }}>
-            已选择 <strong>{selectedCount}</strong> 条案件，分配给：
-          </div>
-          <div className="form-group">
-            <label className="form-label">选择催收员<span className="req">*</span></label>
-            <select className="form-control" value={agent} onChange={(e) => setAgent(e.target.value)}>
-              <option value="">请选择催收员</option>
-              {loads.filter((l) => l.status !== "full").map((l) => (
-                <option key={l.name} value={l.name}>{l.name}（可接 {l.capacity - l.current} 条）</option>
-              ))}
-            </select>
-          </div>
-          <div style={{ background: "var(--color-neutral-50)", borderRadius: 6, padding: 12, fontSize: 13, color: "var(--color-neutral-600)" }}>
-            分配后案件将进入催收员私海，系统将自动推送任务通知。
-          </div>
-        </div>
-        <div style={{ padding: 16, borderTop: "1px solid #e5e7eb", display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button type="button" className="ds-btn ds-btn-secondary" onClick={onClose}>取消</button>
-          <button type="button" className="ds-btn ds-btn-primary" disabled={!agent} onClick={onConfirm}>确认分配</button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// v0.9.0 — 旧 AssignModal 已弃用,改用 SupervisorAssignDrawer (上方导入)

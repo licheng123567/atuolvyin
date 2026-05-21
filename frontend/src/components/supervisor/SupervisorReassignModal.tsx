@@ -3,15 +3,26 @@
 //       body: { target_user_id: int, note?: str }
 //
 // v0.5.6 — 从中间 Modal 迁移到 RightDrawer(用户反馈:分配时需要持续看到左侧案件列表,
-// 中间弹窗挡住了上下文)。这是 RightDrawer 的样板迁移,后续 modal 渐进改,详见
-// docs/UI_PATTERNS_MODAL.md。
+// 中间弹窗挡住了上下文)。
 //
-// 目标催收员选择:输入 user_id(MVP);后续可扩展为内勤催收员下拉(需新增
-// supervisor-accessible agent 列表端点)。
-import { useCustomMutation } from "@refinedev/core";
+// v0.9.0 — 用户反馈手填 user_id 不友好:
+//   - 改用 SearchableSelect(姓名 + 手机号 / id),可搜索
+//   - defaultValue 设为 currentAssignedTo(默认指向当前催收员,用户可清空再选)
+//   - 数据源:复用 /admin/users(v0.9.0 已放宽给督导读)
+import { useCustomMutation, useList } from "@refinedev/core";
 import { Loader2, Users } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { PaginatedResponse, UserRole } from "../../types";
+import { SearchableSelect } from "../ui/SearchableSelect";
 import { RightDrawer } from "../ui/RightDrawer";
+
+interface UserListItem {
+  id: number;
+  name: string;
+  role: UserRole;
+  is_active?: boolean;
+  phone_masked?: string;
+}
 
 export function SupervisorReassignModal({
   caseId,
@@ -24,12 +35,40 @@ export function SupervisorReassignModal({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [targetIdStr, setTargetIdStr] = useState("");
+  // v0.9.0 — 默认指向当前催收员(用户可清空再选别人;空字符串=未选)
+  const [targetId, setTargetId] = useState<number | "">(currentAssignedTo ?? "");
   const [note, setNote] = useState("");
   const { mutate, mutation } = useCustomMutation();
 
-  const targetId = Number(targetIdStr);
-  const validTarget = targetId > 0 && targetId !== currentAssignedTo;
+  // 拉用户列表(/admin/users 已 v0.9.0 允许督导读)
+  const { query: usersQuery } = useList<UserListItem>({
+    resource: "admin/users",
+    pagination: { currentPage: 1, pageSize: 200 },
+  });
+  const rawUsers = usersQuery.data?.data;
+  const allUsers: UserListItem[] = Array.isArray(rawUsers)
+    ? (rawUsers as UserListItem[])
+    : ((rawUsers as unknown as PaginatedResponse<UserListItem>)?.items ?? []);
+  // 仅展示有效的催收员(role=agent)
+  const agents = allUsers.filter(
+    (u) => u.role === "agent" && (u.is_active === undefined || u.is_active),
+  );
+
+  // 当 agents 加载完成后,确保默认值仍在选项内;若 currentAssignedTo 不是有效 agent 则清空
+  useEffect(() => {
+    if (
+      targetId !== "" &&
+      agents.length > 0 &&
+      !agents.some((a) => a.id === targetId)
+    ) {
+      setTargetId("");
+    }
+  }, [agents, targetId]);
+
+  const validTarget =
+    typeof targetId === "number" &&
+    targetId > 0 &&
+    targetId !== currentAssignedTo;
 
   const handleSubmit = () => {
     if (!validTarget) return;
@@ -37,7 +76,10 @@ export function SupervisorReassignModal({
       {
         url: `supervisor/cases/${caseId}/reassign`,
         method: "post",
-        values: { target_user_id: targetId, note: note.trim() || undefined },
+        values: {
+          target_user_id: targetId,
+          note: note.trim() || undefined,
+        },
       },
       {
         onSuccess: () => onDone(),
@@ -48,6 +90,14 @@ export function SupervisorReassignModal({
       },
     );
   };
+
+  const options = agents.map((a) => ({
+    value: a.id,
+    label: a.name + (a.id === currentAssignedTo ? "(当前)" : ""),
+    subtitle: a.phone_masked
+      ? `${a.phone_masked} · #${a.id}`
+      : `#${a.id}`,
+  }));
 
   return (
     <RightDrawer
@@ -89,26 +139,32 @@ export function SupervisorReassignModal({
 
         {currentAssignedTo && (
           <div className="text-xs text-[var(--color-neutral-500)]">
-            当前催收员: user #{currentAssignedTo}
+            当前催收员: 默认指向其姓名(可清空再选别人)— user #{currentAssignedTo}
           </div>
         )}
 
         <div>
           <label className="block text-sm font-medium text-[var(--color-neutral-700)] mb-1.5">
-            目标催收员 user_id <span className="text-red-500">*</span>
+            目标催收员 <span className="text-red-500">*</span>
           </label>
-          <input
-            type="number"
-            min={1}
-            value={targetIdStr}
-            onChange={(e) => setTargetIdStr(e.target.value)}
-            placeholder="请输入新催收员的 user_id"
-            className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-300)] rounded"
-            autoFocus
-          />
-          {targetId > 0 && targetId === currentAssignedTo && (
+          {usersQuery.isLoading ? (
+            <div className="text-sm text-[var(--color-neutral-500)]">加载中…</div>
+          ) : agents.length === 0 ? (
+            <div className="text-sm text-red-600">
+              本租户暂无有效催收员 — 请先到「用户管理」激活成员
+            </div>
+          ) : (
+            <SearchableSelect
+              value={targetId}
+              onChange={(v) => setTargetId(v === "" ? "" : Number(v))}
+              options={options}
+              placeholder="搜索姓名 / 手机号 / ID 选择催收员"
+              emptyText="无匹配的催收员"
+            />
+          )}
+          {typeof targetId === "number" && targetId === currentAssignedTo && (
             <div className="mt-1 text-xs text-red-600">
-              目标不能与当前催收员相同
+              目标不能与当前催收员相同(请清空后选择别的)
             </div>
           )}
         </div>

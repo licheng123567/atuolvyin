@@ -12,6 +12,8 @@ import { QrDialDialog } from "../../../components/dial/QrDialDialog";
 import { PaginationBar } from "../../../components/ui/PaginationBar";
 import { SearchInput } from "../../../components/ui/SearchInput";
 import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
+// v0.9.0 — 放回公海改 Drawer + 必填理由
+import { AgentReleaseToPoolDrawer } from "../../../components/agent/AgentReleaseToPoolDrawer";
 
 interface OwnerInfo {
   id: number;
@@ -118,7 +120,7 @@ export function AgentCaseListPage() {
   const quota = quotaQuery.data?.data;
 
   const { mutate: claimMutate } = useCustomMutation();
-  const { mutate: releaseMutate } = useCustomMutation();
+  // v0.9.0 — releaseMutate 已下沉到 AgentReleaseToPoolDrawer
 
   function handleClaim(caseId: number) {
     setActingId(caseId);
@@ -139,24 +141,11 @@ export function AgentCaseListPage() {
     );
   }
 
-  function handleRelease(caseId: number) {
-    if (!window.confirm("确认把案件放回公海？放回后其他催收员可抢")) return;
-    setActingId(caseId);
-    releaseMutate(
-      { url: `agent/cases/${caseId}/release`, method: "post", values: {} },
-      {
-        onSuccess: () => {
-          setActingId(null);
-          void invalidate({ resource: "agent/cases", invalidates: ["list"] });
-          void quotaQuery.refetch();
-          alert("✓ 已放回公海");
-        },
-        onError: (err) => {
-          setActingId(null);
-          alert(`释放失败：${err.message ?? "请重试"}`);
-        },
-      },
-    );
+  // v0.9.0 — 放回公海改 Drawer + 必填理由(替换原 window.confirm)
+  const [releaseTarget, setReleaseTarget] = useState<{ id: number; name: string } | null>(null);
+
+  function handleRelease(caseId: number, ownerName: string) {
+    setReleaseTarget({ id: caseId, name: ownerName });
   }
 
   // 项目下拉来自专属端点（distinct project visible to agent）
@@ -446,15 +435,14 @@ export function AgentCaseListPage() {
                           >
                             <MessageSquarePlus className="w-3 h-3" /> 记录跟进
                           </button>
-                          {/* v1.6.9 — 自己持有的未结案案件可放回公海 */}
+                          {/* v1.6.9 — 自己持有的未结案案件可放回公海;v0.9.0 — 改 Drawer + 必填理由 */}
                           {c.stage !== "paid" && c.stage !== "closed" && (
                             <button
                               type="button"
                               className="ds-btn ds-btn-ghost ds-btn-sm"
                               style={{ color: "var(--color-neutral-500)" }}
-                              onClick={() => handleRelease(c.id)}
-                              disabled={actingId === c.id}
-                              title="把案件放回公海（其他催收员可抢；释放后该案件不再属于你）"
+                              onClick={() => handleRelease(c.id, c.owner.name)}
+                              title="把案件放回公海(其他催收员可抢;释放后该案件不再属于你 — 必填理由)"
                             >
                               <RotateCcw className="w-3 h-3" /> 放回公海
                             </button>
@@ -493,6 +481,20 @@ export function AgentCaseListPage() {
           endpoint={`agent/cases/${followUpCase.id}/stage`}
           invalidateResource="agent/cases"
           onClose={() => setFollowUpCase(null)}
+        />
+      )}
+
+      {/* v0.9.0 — 放回公海 Drawer(替换 window.confirm,必填理由) */}
+      {releaseTarget && (
+        <AgentReleaseToPoolDrawer
+          caseId={releaseTarget.id}
+          ownerName={releaseTarget.name}
+          onClose={() => setReleaseTarget(null)}
+          onDone={() => {
+            setReleaseTarget(null);
+            void invalidate({ resource: "agent/cases", invalidates: ["list"] });
+            void quotaQuery.refetch();
+          }}
         />
       )}
     </div>
