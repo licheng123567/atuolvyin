@@ -158,6 +158,25 @@ UserTenantMembership  -- 用户↔租户多对多 + 同一租户内多角色
 - 所有 API 强制携带 `tenant_id`，中间件层校验，禁止跨租户访问
 - MVP 阶段服务单一租户，v1.1 启用完整多租户 + 服务商体系
 
+#### 3.5.1 服务商数据可见性边界(v0.7.0 锁定)
+
+**核心约束**:服务商对案件 / 通话 / 业主等业务数据的可见性由 `project.provider_id` 决定,**不走 `ProviderTenantContract` 表**。这是 v0.7.0 Wave C 调研确认的现状。
+
+```
+服务商可见案件集合 SQL:
+SELECT cc.* FROM collection_case cc
+JOIN project p ON cc.project_id = p.id
+WHERE p.provider_id = :self_provider_id
+```
+
+**为什么不走 Contract**:`ProviderTenantContract` 管签约关系(谁和谁签约 / 服务期 / 结算周期),但**具体可见的案件**由「物业 admin 创建项目时把 `Project.provider_id` 设给该服务商」决定。一个签约关系下,物业可能有多个项目,只把其中 N 个外包给该服务商。
+
+**督导/法务/PM/催收员的 scope 实现**(都用 `_supervisor_scope.py` 同款模式):
+- 物业侧(scope=tenant):看本租户内 + **非服务商接案**(`project.provider_id IS NULL` 或 `project.provider_id` 不属本租户内任何服务商)
+- 服务商侧(scope=provider):看本租户内 + **本服务商接的项目**(`project.provider_id == self_provider_id`)
+
+后端 `supervisor_case_filter` / `supervisor_call_filter` / `supervisor_agent_filter` 三个共享函数封装此逻辑,已应用于 11+ 端点(reviews / risk-events / live-wall / cases / escalated 等)。详 `poc/backend/app/api/_supervisor_scope.py`。
+
 ### 3.6 v1.4 治理增量（已交付）
 
 v1.0–v1.3 完成基础多租户结构后，v1.4 落地以下治理与协作要素：
@@ -241,6 +260,22 @@ v1.0–v1.3 完成基础多租户结构后，v1.4 落地以下治理与协作要
 > **v0.5.6 术语统一**:对外展示文案统一用「物业管理员」(不再裸写「admin」/「管理员」);服务商侧对应「服务商管理员」(`admin` 在 `scope=provider:{id}` 上下文下)。前端 ROLE_LABEL 已集中到 `frontend/src/lib/roleLabel.ts`(SSOT),按 scope 自动选词。代码逻辑里 `role === "admin"` 字段标识符不动。
 >
 > **v2.2 四维正交角色模型**:催收员的 internal/external 已从单独的 role 收敛为 `agent` + `work_mode` 字段,详见 §16 数据模型。
+
+### 4.1.1 物业 ↔ 服务商 5 角色对齐表(v0.7.0)
+
+人工测试反馈:**「物业的 5 个角色 ↔ 服务商对应的 5 个角色应功能、UI 对齐;只是数据权限有差异」**。v0.7.0 一波收口对齐。原则:
+
+- **同 role 名 + 同 UI 组件 + 同后端端点路径**(`/supervisor/*`、`/agent/*`、`/pm/*`、`/legal/*` 物业服务商共用)
+- **scope 决定数据范围**:scope=`tenant:{id}`(物业)vs scope=`provider:{id}:tenant:{id}`(服务商) — 后端在端点入口用 `SupervisorScope` / `provider_id` / `work_mode` 切换 SQL where 子句
+- **唯一功能差异**:**仅物业管理员可创建项目 + 导入案件**(服务商管理员无)
+
+| 维度 | 物业侧 | 服务商侧对应 | 功能差异 | 数据范围差异 |
+|---|---|---|---|---|
+| 管理员 | `admin`(scope=tenant) | `admin`(scope=provider) | 物业 admin 独有:**创建项目**(`POST /admin/projects`)+ **导入业主名单**(`POST /admin/cases/import`)。其余 CRUD / 团队 / 话术 / 结算等完全对称 | 物业 admin 看本租户全部;服务商 admin 看 `project.provider_id == self_provider_id`(唯一约束,不走 ProviderTenantContract) |
+| 督导 | `supervisor`(scope=tenant) | `supervisor`(scope=provider) | **无功能差异**(v0.7.0 Wave C 已对齐 nav 15 项);UI 完全一致 | 物业督导:本租户内 + 非服务商接案;服务商督导:本租户内 + 本服务商接的项目案件(`supervisor_case_filter` 守卫) |
+| 项目经理 | `project_manager`(scope=tenant)| `project_manager`(scope=provider)| 无功能差异;dashboard PropertyView vs ProviderView 区块结构对称(KPI / 多项目 / Top 5 / 运营提醒) | 物业 PM:管理 `property_pm_user_id == self` 的项目;服务商 PM:管理 `provider_pm_user_id == self` 的项目 |
+| 催收员 | `agent` + `work_mode='internal'` | `agent` + `work_mode='external'` | **无功能差异**(工作台 / 提醒中心 / 培训库共用);差异仅在佣金率字段 — 后端 `/agent/me/by-project` 按 `work_mode` 切换 `internal_agent_commission_rate` vs `provider_agent_commission_rate` | 同督导(scope=provider 时仅看本服务商接的案件) |
+| 法务 | `legal`(scope=tenant) | `legal`(scope=provider) | **物业法务专属**:`/legal/pending-finalize`(接督导批准的转化请求 → 内部处理) + `/legal/internal-orders`(物业内部对接人完整流程)。**服务商法务专属**:`/provider/legal/requests`(跨多物业转化请求汇总)。两侧职责本就不同 — 服务商法务无内部订单概念 | 物业法务:本租户案件;服务商法务:本服务商承接项目下的案件 |
 
 ### 4.2 权限矩阵
 
@@ -1999,6 +2034,23 @@ CREATE TABLE performance_record (
 
 > 核心目标：让每个物业公司/服务商能把自己积累的话术经验沉淀到 AI 里，同时平台持续优化基础模型，使 AI 提示准确率随使用量增长。
 
+### 18.0 话术三层归属(v0.7.0 锁定)
+
+`ScriptTemplate` 由 `tenant_id` + `provider_id` 两个字段决定归属:
+
+| 层 | tenant_id | provider_id | 谁可读 | 谁可写 |
+|---|---|---|---|---|
+| 平台预置 | NULL | NULL | 所有人(物业 admin / 服务商 admin / agent) | 仅平台 OPS |
+| 物业私有 | NOT NULL | NULL | 本租户内所有人(物业 admin / supervisor / agent) | 本租户 admin |
+| 服务商私有 | NULL | NOT NULL | 本服务商内所有人 + 本服务商签约物业的 agent | 本服务商 admin |
+
+**关键隔离规则**:
+- **服务商不可读物业私有话术**(避免商业敏感)
+- **物业不可读服务商私有话术**(同理)
+- agent 在 PC 工作台看到的话术合并 = `平台预置 + 本租户私有 + (若属服务商)本服务商私有`
+
+实现:`poc/backend/app/api/{admin_scripts,provider_scripts}.py` GET 端点用 `or_(...)` 表达三层合并;CRUD 写端点严格按所属层校验。
+
 ### 18.1 话术库管理（租户级）
 
 #### 话术条目结构
@@ -3305,6 +3357,60 @@ app.youcuihuicui.com       ← 租户侧所有角色（物业公司管理员/主
 - 「自动入库」徽章(card 上 Sparkles 图标 + 蓝色)区分 source=auto vs manual
 - category(4 类)+ source(auto/manual/all)双维度过滤
 - 点「听原通话录音」+1 view 计数(POST `/{id}/view`,轻量端点不写 audit)
+
+---
+
+### 22.11 v0.7.0 服务商侧 5 角色与物业全面对齐(2026-05-21)
+
+**背景**:人工测试反馈服务商管理员 7 个具体 UX 问题(优先级显数字 / 分配显 user_id / 「租户」文案 / 案件列表与看板对齐 / 团队 UI / 话术库参考物业 / App 培训等),并提出总方针:「物业管理员/督导/催收员/项目经理/法务对应的服务商 5 角色应功能、UI 对齐;唯一差异是数据权限 + 物业 admin 才能创建项目/导入案件」。Phase 1 调研发现服务商 nav 已 80% 对齐(12 项 vs 物业 admin 12 项),主要差距是 UI 细节 + 缺功能(话术 effectiveness / 项目详情页 / App 培训),**不是结构性差异**。
+
+**6 Wave 拆分**:
+
+| Wave | commit | 核心动作 |
+|---|---|---|
+| A 公共对齐基础 | `53f4c99` | 「合作租户→合作物业」13 处文案 + 抽离 `PriorityBadge` 共享组件 + 服务商案件 `assigned_to_name` 后端 JOIN + 团队 modal 改 RightDrawer + OTP 首登 |
+| B 服务商 admin 5 大缺口 | `c7e48d2` | 「我的项目」独立详情页(后端 2 端点 + 整页只读 detail + KPI 3 卡)/ 案件列表+看板按项目过滤 + 项目列 / 话术 effectiveness 看板(后端 + 前端新页)/ dashboard 加 PmAlertsSection(抽离共享)/ 项目列表服务期 badge |
+| C 督导 + 法务对齐 | `d1f0f51` | 服务商督导 nav 9→15 项全对齐(补案件管理 5 项 + 培训案例库)+ `supervisor_escalated` / `supervisor_actions` 9 端点加 scope 守卫(填 P0 安全缺口)+ 服务商法务无需改(职责本就窄,结论记录) |
+| D 催收员 + PM 补全 | `fe74c87` | 物业 admin 案件看板加 PriorityBadge(对齐服务商)+ AuthUser 扩 work_mode/provider_id 字段 + agent 工作台显「服务商/物业内部」work_mode 徽章 + PM Top 5 点击跳详情 |
+| E 催收员培训案例库 | `e56fe20` | 后端 2 agent 端点(GET 列表 + POST view +1)+ 前端 `/agent/training` 整页(只读浏览 + 4 类 filter + 详情 modal)+ nav 入口;App WebView 可访问 |
+| F PRD 文档同步 | (本提交) | §3.5.1 服务商可见性边界 + §4.1.1 5 角色对齐表 + §18.0 话术三层归属 + §22.11 本节 |
+
+**关键决策**:
+
+1. **统一文案 vs 不动 path**:
+   - 用户可见层:「租户」→「物业」(对齐用户心智)
+   - 内部标识符:path / type / role 字段名不动(保持稳定 + 不破坏 grep / 现有引用)
+   - OPS_NAV「租户管理」保留(平台 OPS 视角 vs 外部「物业」区分)
+
+2. **PriorityBadge 抽离共享组件**:
+   - 原物业 admin pool 有 inline `priorityBadge` helper,服务商侧 cases/index.tsx 裸数字「1800」用户看了懵
+   - 抽到 `components/ui/PriorityBadge.tsx`,4 处(admin pool / admin kanban / provider cases / provider kanban)共用
+   - 算法:`amount × 0.4 + months × 0.3` → 阈值分级(≥80 红 / 60-80 橙 / 40-60 蓝 / <40 灰)
+
+3. **服务商团队改 OTP 首登**(对齐 admin/users):
+   - 原 modal 写死默认密码 `Demo@123!` — 用户反馈 UI 有问题
+   - 改 RightDrawer + 移除密码字段;后端 `password` 可选,缺省生成随机密码(后续走 OTP 短信邀请)
+   - 跟物业 admin/users/new 体验完全一致
+
+4. **服务商可见性 = `project.provider_id == self_provider_id`**(不走 Contract):
+   - 这是 v0.7.0 调研确认的现状,**已锁定**(详 §3.5.1)
+   - `ProviderTenantContract` 管签约关系(谁和谁签了 / 服务期 / 结算周期);**Project.provider_id 管「这个项目外包给哪个服务商」**
+   - 复用 `_supervisor_scope.py` 三函数(`supervisor_case_filter` / `supervisor_call_filter` / `supervisor_agent_filter`)在 11+ 端点
+
+5. **App 培训库走 WebView**(非 native Compose):
+   - Android App 主屏是 4 tab WebView(home/cases/call-history/profile),非纯 Compose
+   - 加 native Compose Screen 要新 Activity + 嵌套 navigation + 学习成本高
+   - **改做 React 页面 `/agent/training` + nav 入口**;App WebView 自动可访问,跨平台一致
+   - 后续如需 native 体验:Retrofit + Moshi DTO 已就绪,可在 `poc/android/screens/training/` 新增 List/Detail Screen + nested nav(`screens/dial/` `screens/realtime/` 等已有模板)
+
+**P0 安全修复**(本期):
+- 服务商督导可访问 `/supervisor/escalated` / `/supervisor/cases/*` 等端点时,原仅 `tenant_id` 过滤 → **服务商督导可越权看到该物业内非自家服务商接的案件**。Wave C 在 9 端点加 `supervisor_case_filter`,严格限定服务商督导只看本服务商接的项目。
+
+**人工验收点**(全 push 完):
+- 服务商 admin(13000000010):看「合作物业」+ 优先级 badge + 真实催收员姓名 + 「我的项目」详情页 + 团队 OTP 风格 + 话术效果页
+- 服务商督导(13000000011):看 15 项 nav + 跨多物业接案的升级/承诺/超期管理(scope 守卫)
+- 服务商催收员(work_mode=external):工作台看「服务商」徽章 + 培训案例库可浏览
+- 服务商 PM:dashboard 看「合作物业 Top 5」(原「租户」)+ Top 5 跳详情
 
 ---
 
