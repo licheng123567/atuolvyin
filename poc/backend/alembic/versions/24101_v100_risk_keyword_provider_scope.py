@@ -37,10 +37,12 @@ def upgrade() -> None:
     op.drop_constraint(
         "uq_risk_keyword_tenant_cat_kw", "risk_keyword", type_="unique"
     )
+    # PG 16 nulls_not_distinct=True — 让 NULL 参与去重(对齐原 (tenant_id, cat, keyword) 行为)
     op.create_unique_constraint(
         "uq_risk_keyword_scope_cat_kw",
         "risk_keyword",
         ["tenant_id", "provider_id", "category", "keyword"],
+        postgresql_nulls_not_distinct=True,
     )
 
     # provider 维度索引

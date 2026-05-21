@@ -31,12 +31,15 @@ class RiskKeyword(Base, TimestampMixin):
 
     __table_args__ = (
         # 原 unique 约束改为含 provider_id(允许相同 keyword 在物业 vs 服务商各存一份)
+        # PG 16:`nulls_not_distinct=True` 让 NULL 也参与去重(否则 (1, NULL, x, y)
+        # 和 (1, NULL, x, y) 因 NULL ≠ NULL 不冲突,与原 (tenant_id, cat, keyword) 行为对齐)
         sa.UniqueConstraint(
             "tenant_id",
             "provider_id",
             "category",
             "keyword",
             name="uq_risk_keyword_scope_cat_kw",
+            postgresql_nulls_not_distinct=True,
         ),
         sa.Index(
             "idx_riskkw_tenant_cat_speaker_active",
