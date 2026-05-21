@@ -18,7 +18,10 @@ from typing import Any
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
+from decimal import Decimal
+
 from app.core.crypto import decrypt_phone
+from app.models.billing_pricing import BillingPricing
 from app.models.blockchain_attestation import BlockchainAttestation
 from app.models.platform import BlockchainConfig
 from app.services import ebaoquan
@@ -35,6 +38,19 @@ _EBAOQUAN_TYPE = {
     "analysis": "2",
     "evidence_bundle": "99",
 }
+
+
+def _resolve_cost(db: Session, data_type: str) -> Decimal | None:
+    """v0.5.9 — 查 active BillingPricing 拿单价(evidence_bundle 走 per_case 价,
+    其他走 per_attestation 价)。NULL 兼容 — 没配置 active 价时不冻结金额。"""
+    pricing = db.execute(
+        select(BillingPricing).where(BillingPricing.is_active.is_(True)).limit(1)
+    ).scalar_one_or_none()
+    if pricing is None:
+        return None
+    if data_type == "evidence_bundle":
+        return pricing.blockchain_price_per_case_bundle
+    return pricing.blockchain_price_per_attestation
 
 
 def _resolve_config(db: Session) -> BlockchainConfig | None:
@@ -104,6 +120,9 @@ def submit_attestation(
         config is not None and config.provider == "ebaoquan" and config.is_active
     )
 
+    # v0.5.9 — 查单价(active BillingPricing);data_type 决定 per_case vs per_attestation
+    cost_amount = _resolve_cost(db, data_type)
+
     if not use_ebaoquan:
         # ── mock 分支（行为与历史一致）──
         provider = config.provider if config is not None else DEFAULT_PROVIDER
@@ -123,6 +142,7 @@ def submit_attestation(
             status="confirmed",
             submitted_at=now,
             confirmed_at=now,
+            cost_amount=cost_amount,
             payload_metadata=payload_metadata,
         )
         db.add(record)
@@ -145,6 +165,7 @@ def submit_attestation(
         status="failed",
         submitted_at=now,
         confirmed_at=None,
+        cost_amount=cost_amount,
         payload_metadata=dict(payload_metadata or {}),
     )
 

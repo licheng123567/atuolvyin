@@ -1,6 +1,7 @@
 from .active_session import ActiveSession  # noqa: F401
 from .audit import AuditLog, PlanConfig
 from .base import Base
+from .billing_pricing import BillingPricing  # noqa: F401
 from .blockchain_attestation import BlockchainAttestation  # noqa: F401
 from .call import AnalysisResult, CallRecord, RiskEvent, Transcript
 from .case import CollectionCase, OwnerProfile, Project

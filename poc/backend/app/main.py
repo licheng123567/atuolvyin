@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from app.api import (
     admin,
     admin_agent_devices,
+    admin_billing,
     admin_cases,
     admin_compliance,
     admin_dashboard,
@@ -46,6 +47,7 @@ from app.api import (
     ops_providers,
     pm_dashboard,
     provider_admin,
+    provider_billing,
     provider_cases,
     provider_legal,
     provider_scripts,
@@ -332,6 +334,8 @@ app.include_router(work_orders.router, prefix="/api/v1/workorders", tags=["worko
 app.include_router(pm_dashboard.router, prefix="/api/v1/pm", tags=["pm"])
 app.include_router(provider_admin.router, prefix="/api/v1/provider", tags=["provider"])
 app.include_router(provider_cases.router, prefix="/api/v1/provider", tags=["provider-cases"])
+app.include_router(admin_billing.router, prefix="/api/v1/admin", tags=["admin-billing"])
+app.include_router(provider_billing.router, prefix="/api/v1/provider", tags=["provider-billing"])
 app.include_router(provider_scripts.router, prefix="/api/v1/provider", tags=["provider-scripts"])
 app.include_router(
     provider_termination.admin_router,
