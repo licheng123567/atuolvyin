@@ -313,7 +313,10 @@ const LEGAL_PROVIDER_NAV: NavSection[] = [
   },
 ];
 
-// 服务商督导 nav（scope=provider:{id}）— Phase 1 九项
+// 服务商督导 nav（scope=provider:{id}）
+// v0.7.0 — 全面对齐物业督导:案件管理段补 5 项(升级/承诺/超期/减免/法务转化审批)+
+//          质检培训段补「培训案例库」;后端 supervisor_escalated.py 已加
+//          supervisor_case_filter scope 守卫,确保服务商督导只能看自己接的项目案件。
 const SUPERVISOR_PROVIDER_NAV: NavSection[] = [
   {
     title: "实时监控",
@@ -327,6 +330,12 @@ const SUPERVISOR_PROVIDER_NAV: NavSection[] = [
     title: "案件管理",
     items: [
       { label: "案件分配", path: "/supervisor/cases", icon: "ClipboardList" },
+      // v0.7.0 — 服务商督导也需处理升级案件/承诺/超期(本服务商接的项目)
+      { label: "升级案件处理", path: "/supervisor/escalated", icon: "AlertCircle" },
+      { label: "承诺催付", path: "/supervisor/promises", icon: "CalendarClock" },
+      { label: "案件超期报警", path: "/supervisor/case-alerts", icon: "BellRing" },
+      { label: "减免审批", path: "/supervisor/discount-approvals", icon: "BadgePercent" },
+      { label: "法务转化审批", path: "/supervisor/legal-conversion-approvals", icon: "Scale" },
     ],
   },
   {
@@ -335,6 +344,8 @@ const SUPERVISOR_PROVIDER_NAV: NavSection[] = [
       { label: "质检复核", path: "/supervisor/reviews", icon: "ShieldCheck" },
       { label: "话术反馈", path: "/supervisor/script-labels", icon: "MessageCircle" },
       { label: "风控事件", path: "/supervisor/risk-events", icon: "AlertTriangle" },
+      // v0.7.0 — 培训案例库本租户内可见(切 tenant scope 看不同物业训练案)
+      { label: "培训案例库", path: "/supervisor/training", icon: "BookMarked" },
     ],
   },
   {

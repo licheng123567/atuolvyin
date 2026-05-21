@@ -7,6 +7,10 @@ GET /api/v1/supervisor/escalated-cases?page=&page_size=
 v0.6.0 — 介入处理 5 选项扩展:
 POST /api/v1/supervisor/escalated/{case_id}/mark-shadow-listening  陪同监听
 POST /api/v1/supervisor/escalated/{case_id}/close-as-uncollectible 直接结案/标坏账
+
+v0.7.0 — 加 supervisor_case_filter scope 守卫:
+  物业督导:看本租户内 + 非服务商接案的升级案件
+  服务商督导:仅看本服务商接的项目内升级案件(跨服务商隔离)
 """
 
 from __future__ import annotations
@@ -25,11 +29,18 @@ from app.core.phone_visibility import (
     is_provider_contract_active,
     should_reveal_owner_phone,
 )
-from app.core.security import get_token_payload, require_tenant_roles
+# v0.7.0 — 改用 require_roles + supervisor_scope(对齐服务商督导 scope=provider:*)
+from app.core.security import get_token_payload, require_roles
 from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.notification import Notification
 from app.models.user import UserAccount
 from app.services.audit import log_audit
+
+from ._supervisor_scope import (
+    SupervisorScope,
+    supervisor_case_filter,
+    supervisor_scope,
+)
 
 router = APIRouter()
 
@@ -46,31 +57,36 @@ def _require_tenant(payload: dict) -> int:
     return int(tenant_id)
 
 
-def _load_escalated_case(db: Session, case_id: int, tenant_id: int) -> CollectionCase:
-    case = db.get(CollectionCase, case_id)
-    if case is None or case.tenant_id != tenant_id:
+def _load_escalated_case(
+    db: Session, case_id: int, scope: SupervisorScope
+) -> CollectionCase:
+    """v0.7.0 — 改用 supervisor_case_filter 校验,服务商督导只看自己接的项目案件。"""
+    case = db.execute(
+        select(CollectionCase)
+        .where(CollectionCase.id == case_id)
+        .where(supervisor_case_filter(scope))
+    ).scalar_one_or_none()
+    if case is None:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
-            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在或不属于本租户"},
+            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在或不在本督导可见范围"},
         )
     return case
 
 
 @router.get("/escalated-cases")
 async def list_escalated_cases(
+    _user: Annotated[object, Depends(require_roles(*SUPERVISOR_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[object, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> dict:
-    tenant_id = payload.get("tenant_id")
-    if tenant_id is None:
-        raise HTTPException(
-            status_code=http_status.HTTP_403_FORBIDDEN,
-            detail={"code": "ERR_NO_TENANT", "message": "需要租户上下文"},
-        )
-    tenant_id = int(tenant_id)
+    # v0.7.0 — scope 由 supervisor_case_filter 注入:
+    #   物业督导 → tenant 内 + 非服务商接案
+    #   服务商督导 → tenant 内 + 本服务商接的项目
+    tenant_id = scope.tenant_id
 
     base = (
         select(
@@ -82,16 +98,13 @@ async def list_escalated_cases(
         .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
         .join(Project, Project.id == CollectionCase.project_id, isouter=True)
         .join(UserAccount, UserAccount.id == CollectionCase.assigned_to, isouter=True)
-        .where(
-            CollectionCase.tenant_id == tenant_id,
-            CollectionCase.stage == "escalated",
-        )
+        .where(supervisor_case_filter(scope))
+        .where(CollectionCase.stage == "escalated")
     )
     total = db.execute(
-        select(func.count(CollectionCase.id)).where(
-            CollectionCase.tenant_id == tenant_id,
-            CollectionCase.stage == "escalated",
-        )
+        select(func.count(CollectionCase.id))
+        .where(supervisor_case_filter(scope))
+        .where(CollectionCase.stage == "escalated")
     ).scalar_one()
 
     rows = db.execute(
@@ -180,15 +193,17 @@ def mark_shadow_listening(
     case_id: int,
     body: MarkShadowBody,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_roles(*SUPERVISOR_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
 ) -> EscalatedActionOut:
     """介入处理 ②:把案件标记为「督导陪同」 — case.shadow_supervisor_id = 当前督导。
 
     催收员下一次拨打该案件时,实时通话墙会高亮 + 督导自动收通知,可监听或强制接管。
+    v0.7.0 — 用 supervisor_case_filter 校验,服务商督导无法操作非本服务商接的案件。
     """
-    tenant_id = _require_tenant(payload)
-    case = _load_escalated_case(db, case_id, tenant_id)
+    tenant_id = scope.tenant_id
+    case = _load_escalated_case(db, case_id, scope)
     user_id = int(payload.get("user_id") or 0)
     user = db.get(UserAccount, user_id)
     actor_name = user.name if user else "督导"
@@ -243,7 +258,8 @@ def close_as_uncollectible(
     case_id: int,
     body: CloseUncollectibleBody,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_roles(*SUPERVISOR_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
 ) -> EscalatedActionOut:
     """介入处理 ③:申请直接结案 / 标坏账。
@@ -252,9 +268,11 @@ def close_as_uncollectible(
       - case.stage → 'pending_close'(等物业管理员二审)
       - case.close_reason = 原因
       - 写 audit log + 通知原催收员 + 通知所有 admin
+
+    v0.7.0 — scope 守卫,服务商督导无法对非本服务商接的案件结案。
     """
-    tenant_id = _require_tenant(payload)
-    case = _load_escalated_case(db, case_id, tenant_id)
+    tenant_id = scope.tenant_id
+    case = _load_escalated_case(db, case_id, scope)
     user_id = int(payload.get("user_id") or 0)
     user = db.get(UserAccount, user_id)
     actor_name = user.name if user else "督导"

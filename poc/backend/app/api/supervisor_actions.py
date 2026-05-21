@@ -18,7 +18,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import get_token_payload, require_tenant_roles
+from app.core.security import get_token_payload, require_roles, require_tenant_roles  # noqa: F401
+# v0.7.0 — 引入 supervisor_scope,允许服务商督导对自己接的项目案件执行动作
+from ._supervisor_scope import (
+    SupervisorScope,
+    supervisor_case_filter,
+    supervisor_scope,
+)
 from app.models.case import CollectionCase
 from app.models.notification import Notification
 from app.models.tenant import UserTenantMembership
@@ -41,11 +47,36 @@ def _require_tenant(payload: dict) -> int:
 
 
 def _load_case(db: Session, case_id: int, tenant_id: int) -> CollectionCase:
+    """v0.5.4 老签名 — 仅 tenant_id 校验。新代码请用 _load_case_scoped。"""
     case = db.get(CollectionCase, case_id)
     if case is None or case.tenant_id != tenant_id:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail={"code": "ERR_NOT_FOUND", "message": "案件不存在或不属于本租户"},
+        )
+    return case
+
+
+def _load_case_scoped(
+    db: Session, case_id: int, scope: SupervisorScope
+) -> CollectionCase:
+    """v0.7.0 — 用 supervisor_case_filter 校验:
+       物业督导看本租户内 + 非服务商接案;服务商督导看本服务商接的项目案件。
+    """
+    from sqlalchemy import select
+
+    case = db.execute(
+        select(CollectionCase)
+        .where(CollectionCase.id == case_id)
+        .where(supervisor_case_filter(scope))
+    ).scalar_one_or_none()
+    if case is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "ERR_NOT_FOUND",
+                "message": "案件不存在或不在本督导可见范围",
+            },
         )
     return case
 
@@ -154,12 +185,15 @@ def remind_callback(
     case_id: int,
     body: CaseActionBody,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_roles(*SUPERVISOR_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseActionOut:
-    """督导提醒催收员回访该案件 — 推一条通知 + 写 timeline。"""
-    tenant_id = _require_tenant(payload)
-    case = _load_case(db, case_id, tenant_id)
+    """督导提醒催收员回访该案件 — 推一条通知 + 写 timeline。
+    v0.7.0 — scope 校验,服务商督导只能对自己接的项目案件做催回访。
+    """
+    tenant_id = scope.tenant_id
+    case = _load_case_scoped(db, case_id, scope)
     user_id = int(payload.get("user_id") or 0)
     user = db.get(UserAccount, user_id)
     return _do_action(
@@ -181,12 +215,13 @@ def urge(
     case_id: int,
     body: CaseActionBody,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_roles(*SUPERVISOR_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseActionOut:
-    """督导对停滞案件发催办,提醒催收员尽快推进。"""
-    tenant_id = _require_tenant(payload)
-    case = _load_case(db, case_id, tenant_id)
+    """督导对停滞案件发催办,提醒催收员尽快推进。v0.7.0 — scope 守卫。"""
+    tenant_id = scope.tenant_id
+    case = _load_case_scoped(db, case_id, scope)
     user_id = int(payload.get("user_id") or 0)
     user = db.get(UserAccount, user_id)
     return _do_action(
@@ -208,12 +243,13 @@ def intervene(
     case_id: int,
     body: CaseInterveneBody,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_roles(*SUPERVISOR_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseActionOut:
-    """督导接管/介入处理 — note 必填(说明介入原因)。"""
-    tenant_id = _require_tenant(payload)
-    case = _load_case(db, case_id, tenant_id)
+    """督导接管/介入处理 — note 必填(说明介入原因)。v0.7.0 — scope 守卫。"""
+    tenant_id = scope.tenant_id
+    case = _load_case_scoped(db, case_id, scope)
     user_id = int(payload.get("user_id") or 0)
     user = db.get(UserAccount, user_id)
     return _do_action(
@@ -235,12 +271,13 @@ def reassign(
     case_id: int,
     body: CaseReassignBody,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_roles(*SUPERVISOR_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseActionOut:
-    """督导重新分配案件给另一个催收员 — 更新 assigned_to + 通知双方。"""
-    tenant_id = _require_tenant(payload)
-    case = _load_case(db, case_id, tenant_id)
+    """督导重新分配案件给另一个催收员 — 更新 assigned_to + 通知双方。v0.7.0 — scope 守卫。"""
+    tenant_id = scope.tenant_id
+    case = _load_case_scoped(db, case_id, scope)
     user_id = int(payload.get("user_id") or 0)
     user = db.get(UserAccount, user_id)
     actor_name = user.name if user else "督导"
@@ -332,7 +369,8 @@ def transfer_legal_direct(
     case_id: int,
     body: TransferLegalBody,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_roles(*SUPERVISOR_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseActionOut:
     """督导跳过申请-审批流,直接把案件移交法务。
@@ -344,12 +382,15 @@ def transfer_legal_direct(
       - case.stage → 'legal'
       - 写 audit (case.supervisor_transfer_legal_direct,payload={reason})
       - 给原催收员发通知「已直接转法务」
+
+    v0.7.0 — scope 守卫:服务商督导可直接移交本服务商接的项目案件;
+              不能操作非本服务商接案。
     """
     from app.models.legal_conversion import LegalConversionRequest
     from sqlalchemy import select
 
-    tenant_id = _require_tenant(payload)
-    case = _load_case(db, case_id, tenant_id)
+    tenant_id = scope.tenant_id
+    case = _load_case_scoped(db, case_id, scope)
     user_id = int(payload.get("user_id") or 0)
     user = db.get(UserAccount, user_id)
 
@@ -423,15 +464,17 @@ def release_to_pool(
     case_id: int,
     body: ReleaseToPoolBody,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_roles(*SUPERVISOR_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseActionOut:
     """督导把案件从私海释放回公海 — case.assigned_to = NULL + pool_type='public'。
 
     适用场景:业主连续多通无接 / 拉黑 / 催收员长期无进展,释放让其他催收员尝试。
+    v0.7.0 — scope 守卫。
     """
-    tenant_id = _require_tenant(payload)
-    case = _load_case(db, case_id, tenant_id)
+    tenant_id = scope.tenant_id
+    case = _load_case_scoped(db, case_id, scope)
     user_id = int(payload.get("user_id") or 0)
     user = db.get(UserAccount, user_id)
 
