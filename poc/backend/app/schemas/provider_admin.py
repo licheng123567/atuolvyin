@@ -89,7 +89,9 @@ class TeamMemberCreateIn(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=50)
     phone: str = Field(..., pattern=r"^1[3-9]\d{9}$")
-    password: str = Field(..., min_length=8, max_length=72)
+    # v0.7.0 — password 改可选(对齐 admin/users:OTP 首登)。
+    # NULL/缺省时后端生成随机一次性密码,员工首次走「手机+短信验证码」登录后改。
+    password: str | None = Field(None, min_length=8, max_length=72)
     role: str = Field(
         ...,
         pattern=r"^(supervisor|agent|project_manager)$",

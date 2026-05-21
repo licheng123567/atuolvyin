@@ -464,7 +464,7 @@ function ProviderView() {
           boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
         }}
       >
-        <h3 className="font-semibold text-sm mb-3">合作租户 Top 5（按通话量）</h3>
+        <h3 className="font-semibold text-sm mb-3">合作物业 Top 5（按通话量）</h3>
         <table style={{ width: "100%", fontSize: 14, borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ color: "#6b7280", textAlign: "left" }}>
@@ -494,7 +494,7 @@ function ProviderView() {
                   colSpan={3}
                   style={{ padding: 24, textAlign: "center", color: "#9ca3af" }}
                 >
-                  暂无合作租户
+                  暂无合作物业
                 </td>
               </tr>
             )}

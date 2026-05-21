@@ -11,6 +11,8 @@ import { SearchInput } from "../../../components/ui/SearchInput";
 import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 // v0.6.0 — 公海分配也改用右侧 Drawer
 import { AdminAssignDrawer } from "../../../components/admin/AdminAssignDrawer";
+// v0.7.0 — 优先级 badge 抽到共享组件
+import { PriorityBadge } from "../../../components/ui/PriorityBadge";
 
 const PAGE_SIZE = 20;
 
@@ -51,13 +53,7 @@ function formatJoinedAgo(iso: string): string {
   return d.toISOString().slice(0, 10);
 }
 
-function priorityBadge(score: number): { className: string; label: string } {
-  if (score >= 80) return { className: "ds-badge ds-badge-red", label: `${score}分` };
-  if (score >= 60)
-    return { className: "ds-badge ds-badge-orange", label: `${score}分` };
-  if (score >= 40) return { className: "ds-badge ds-badge-blue", label: `${score}分` };
-  return { className: "ds-badge ds-badge-gray", label: `${score}分` };
-}
+// v0.7.0 — priorityBadge helper 已抽到 components/ui/PriorityBadge.tsx
 
 interface ProjectOption {
   id: number;
@@ -266,7 +262,6 @@ export function AdminPoolPage() {
                 </tr>
               )}
               {cases.map((c) => {
-                const priority = priorityBadge(c.priority_score);
                 const room =
                   c.owner.building && c.owner.room
                     ? `${c.owner.building}${c.owner.room}`
@@ -297,7 +292,7 @@ export function AdminPoolPage() {
                     </td>
                     <td className="text-muted">{c.release_reason ?? "超时未跟进"}</td>
                     <td>
-                      <span className={priority.className}>{priority.label}</span>
+                      <PriorityBadge score={c.priority_score} />
                     </td>
                     <td>{formatJoinedAgo(c.created_at)}</td>
                     <td>

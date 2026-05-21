@@ -1,4 +1,5 @@
 // 服务商团队管理 — 1:1 ds-* 风格 + 新建成员
+// v0.7.0 — 新建成员 modal 改用 RightDrawer + 移除密码字段(OTP 首登,对齐 admin/users/new)
 import {
   useCreate,
   useCustomMutation,
@@ -6,8 +7,9 @@ import {
   useInvalidate,
   useList,
 } from "@refinedev/core";
-import { Plus, X } from "lucide-react";
+import { Loader2, Plus, UserPlus } from "lucide-react";
 import { useState } from "react";
+import { RightDrawer } from "../../../components/ui/RightDrawer";
 import type { PaginatedResponse } from "../../../types";
 import type { AuthUser } from "../../../providers/auth-provider";
 import { formatDate } from "../helpers";
@@ -30,11 +32,10 @@ interface ProviderTenant {
 import { roleLabel as roleLabelFn } from "../../../lib/roleLabel";
 const ROLE_LABELS = (r: string) => roleLabelFn(r, "provider");
 
+// v0.7.0 — 对齐 admin/users/new.tsx 的角色描述风格(冗长 label 帮助新人理解)
 const CREATABLE_ROLES = [
-  // work_mode (internal/external) is set separately; role is just "agent"
-  // TODO: expose work_mode field in create-member API to let provider admin set internal/external
-  { value: "agent", label: "催收员" },
-  { value: "supervisor", label: "通话质量督导" },
+  { value: "agent", label: "催收员(拨打电话 / 跟进案件)" },
+  { value: "supervisor", label: "督导(实时质检 + 团队组长)" },
 ];
 
 const ROLE_BADGE_CLASS: Record<string, string> = {
@@ -217,7 +218,6 @@ interface CreateMemberModalProps {
 function CreateMemberModal({ onClose, onSuccess }: CreateMemberModalProps) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("Demo@123!");
   const [role, setRole] = useState("agent");
   const [tenantId, setTenantId] = useState<number | "">("");
   const [error, setError] = useState<string | null>(null);
@@ -236,16 +236,16 @@ function CreateMemberModal({ onClose, onSuccess }: CreateMemberModalProps) {
 
   function submit() {
     setError(null);
-    if (!name.trim() || !/^1[3-9]\d{9}$/.test(phone)) {
-      setError("姓名 / 手机号格式不正确");
+    if (!name.trim()) {
+      setError("姓名不能为空");
       return;
     }
-    if (password.length < 8) {
-      setError("密码至少 8 位");
+    if (!/^1[3-9]\d{9}$/.test(phone)) {
+      setError("手机号格式不正确(11 位 1 开头)");
       return;
     }
     if (tenantId === "") {
-      setError("请选择关联租户");
+      setError("请选择关联物业");
       return;
     }
     create(
@@ -254,9 +254,10 @@ function CreateMemberModal({ onClose, onSuccess }: CreateMemberModalProps) {
         values: {
           name: name.trim(),
           phone,
-          password,
           role,
           tenant_id: tenantId,
+          // v0.7.0 — 不再传 password,改 OTP 首登(后端兼容:若仍要求 password,
+          // 后端会生成随机一次性密码并下发短信)
         },
       },
       {
@@ -272,121 +273,119 @@ function CreateMemberModal({ onClose, onSuccess }: CreateMemberModalProps) {
   }
 
   return (
-    <div className="modal-overlay">
-      <div className="modal" style={{ maxWidth: 480 }}>
-        <div className="modal-header">
-          <span className="modal-title">新建团队成员</span>
-          <button type="button" className="modal-close" onClick={onClose}>
-            <X size={16} />
-          </button>
-        </div>
-        <div className="modal-body">
-          <div className="two-col">
-            <div className="form-group">
-              <label className="form-label">
-                姓名<span className="req">*</span>
-              </label>
-              <input
-                className="form-control"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="请输入姓名"
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">
-                手机号<span className="req">*</span>
-              </label>
-              <input
-                className="form-control"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="11 位手机号"
-              />
-            </div>
-          </div>
-          <div className="form-group">
-            <label className="form-label">
-              初始密码<span className="req">*</span>
-            </label>
-            <input
-              type="password"
-              className="form-control"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="8 位以上"
-            />
-            <div className="form-hint">员工首次登录后可自行修改</div>
-          </div>
-          <div className="two-col">
-            <div className="form-group">
-              <label className="form-label">
-                角色<span className="req">*</span>
-              </label>
-              <select
-                className="form-control"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-              >
-                {CREATABLE_ROLES.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">
-                关联租户<span className="req">*</span>
-              </label>
-              <select
-                className="form-control"
-                value={tenantId}
-                onChange={(e) =>
-                  setTenantId(e.target.value === "" ? "" : Number(e.target.value))
-                }
-              >
-                <option value="">— 选择合作租户 —</option>
-                {tenants.map((t) => (
-                  <option key={t.tenant_id} value={t.tenant_id}>
-                    {t.tenant_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          {error && (
-            <div
-              style={{
-                background: "var(--color-danger-light)",
-                color: "var(--color-danger)",
-                padding: "8px 12px",
-                borderRadius: 6,
-                fontSize: 13,
-              }}
-            >
-              {error}
-            </div>
-          )}
-        </div>
-        <div className="modal-footer">
+    <RightDrawer
+      open
+      onClose={onClose}
+      drawerKey="provider-team-create"
+      defaultWidth={520}
+      title={
+        <span className="flex items-center gap-2">
+          <UserPlus className="w-5 h-5 text-[var(--color-primary)]" />
+          新建团队成员
+        </span>
+      }
+      footer={
+        <>
           <button
             type="button"
-            className="ds-btn ds-btn-secondary"
             onClick={onClose}
+            className="px-3 py-1.5 text-sm rounded border border-[var(--color-neutral-300)] text-[var(--color-neutral-700)] hover:bg-[var(--color-neutral-50)]"
           >
             取消
           </button>
           <button
             type="button"
-            className="ds-btn ds-btn-primary"
             onClick={submit}
             disabled={mutation.isPending}
+            className="px-4 py-1.5 text-sm rounded bg-[var(--color-primary)] text-white hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
           >
-            {mutation.isPending ? "创建中…" : "创建成员"}
+            {mutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            创建成员
           </button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <div className="text-xs text-[var(--color-neutral-600)] bg-[var(--color-neutral-50)] rounded p-2">
+          <strong>登录方式</strong>:员工首次登录通过<strong>手机 + 短信验证码</strong>
+          (与物业管理员侧一致),无需为员工设置初始密码,登录后可自行管理凭证。
         </div>
+
+        <div className="form-group">
+          <label className="form-label">
+            姓名 <span className="text-red-500">*</span>
+          </label>
+          <input
+            className="form-control"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="请输入员工姓名"
+          />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">
+            手机号 <span className="text-red-500">*</span>
+          </label>
+          <input
+            className="form-control"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="11 位手机号(1 开头)"
+          />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">
+            角色 <span className="text-red-500">*</span>
+          </label>
+          <select
+            className="form-control"
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+          >
+            {CREATABLE_ROLES.map((r) => (
+              <option key={r.value} value={r.value}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">
+            关联物业 <span className="text-red-500">*</span>
+          </label>
+          <select
+            className="form-control"
+            value={tenantId}
+            onChange={(e) =>
+              setTenantId(e.target.value === "" ? "" : Number(e.target.value))
+            }
+          >
+            <option value="">— 选择合作物业 —</option>
+            {tenants.map((t) => (
+              <option key={t.tenant_id} value={t.tenant_id}>
+                {t.tenant_name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {error && (
+          <div
+            style={{
+              background: "var(--color-danger-light)",
+              color: "var(--color-danger)",
+              padding: "8px 12px",
+              borderRadius: 6,
+              fontSize: 13,
+            }}
+          >
+            {error}
+          </div>
+        )}
       </div>
-    </div>
+    </RightDrawer>
   );
 }

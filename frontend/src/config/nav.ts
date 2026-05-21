@@ -261,7 +261,7 @@ const PROVIDER_ADMIN_NAV: NavSection[] = [
     items: [
       { label: "总览", path: "/provider/dashboard", icon: "LayoutDashboard" },
       { label: "我的项目", path: "/provider/projects", icon: "FolderKanban" },
-      { label: "合作租户", path: "/provider/tenants", icon: "Building2" },
+      { label: "合作物业", path: "/provider/tenants", icon: "Building2" },
     ],
   },
   {

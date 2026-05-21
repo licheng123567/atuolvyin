@@ -8,6 +8,7 @@ import { Briefcase, Filter, Inbox, KanbanSquare, Search, UserCheck } from "lucid
 import { useState } from "react";
 import type { AuthUser } from "../../../providers/auth-provider";
 import { ProviderAssignDrawer } from "./ProviderAssignDrawer";
+import { PriorityBadge } from "../../../components/ui/PriorityBadge";  // v0.7.0
 import type { PaginatedResponse } from "../../../types";
 
 interface OwnerInfo {
@@ -25,6 +26,7 @@ interface CaseItem {
   project_name: string | null;
   owner: OwnerInfo;
   assigned_to: number | null;
+  assigned_to_name?: string | null;  // v0.7.0 后端 JOIN user.name
   pool_type: string;
   stage: string;
   amount_owed: string | null;
@@ -226,9 +228,15 @@ export function ProviderCasesPage({ poolViewOnly = false }: Props = {}) {
                     )}
                   </td>
                   <td className="px-4 py-3 text-xs">
-                    {c.assigned_to ? `#${c.assigned_to}` : "—"}
+                    {c.assigned_to_name
+                      ? <span title={`user #${c.assigned_to}`}>{c.assigned_to_name}</span>
+                      : c.assigned_to
+                        ? <span title={`user #${c.assigned_to}`}>已分配</span>
+                        : "—"}
                   </td>
-                  <td className="px-4 py-3 font-mono">{c.priority_score}</td>
+                  <td className="px-4 py-3">
+                    <PriorityBadge score={c.priority_score} />
+                  </td>
                   <td
                     className="px-4 py-3"
                     onClick={(e) => e.stopPropagation()}

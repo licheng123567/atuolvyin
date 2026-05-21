@@ -74,6 +74,7 @@ class CaseWithOwnerResponse(BaseModel):
     project_name: str | None = None
     owner: OwnerInfo
     assigned_to: int | None
+    assigned_to_name: str | None = None  # v0.7.0 — JOIN UserAccount.name(列表展示用)
     pool_type: str
     stage: str
     amount_owed: Decimal | None

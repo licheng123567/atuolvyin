@@ -30,6 +30,15 @@ from sqlalchemy.orm import Session
 from app.core.crypto import encrypt_phone, mask_phone
 from app.core.db import get_db
 from app.core.security import get_password_hash, get_token_payload, require_provider_roles
+
+
+def _gen_random_password() -> str:
+    """v0.7.0 — 生成一次性随机密码(16 位 alphanumeric)。员工首次 OTP 登录后改。"""
+    import secrets
+    import string
+
+    chars = string.ascii_letters + string.digits
+    return "".join(secrets.choice(chars) for _ in range(16))
 from app.models.call import CallRecord
 from app.models.case import CollectionCase, OwnerProfile
 from app.models.settlement import DisputeRecord, SettlementStatement
@@ -335,10 +344,12 @@ async def create_team_member(
             },
         )
 
+    # v0.7.0 — password 可选,缺省时生成随机一次性密码;员工首次走 OTP 登录
+    raw_password = body.password or _gen_random_password()
     new_user = UserAccount(
         phone_enc=encrypt_phone(body.phone),
         name=body.name,
-        password_hash=get_password_hash(body.password),
+        password_hash=get_password_hash(raw_password),
         is_active=True,
     )
     db.add(new_user)

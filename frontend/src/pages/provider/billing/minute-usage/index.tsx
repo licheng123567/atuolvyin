@@ -63,7 +63,7 @@ export function ProviderBillingMinuteUsagePage() {
       {/* KPI */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white border border-[var(--color-neutral-200)] rounded-lg p-4 border-l-4 border-l-[var(--color-primary)]">
-          <div className="text-sm text-[var(--color-neutral-600)] mb-2">合作租户</div>
+          <div className="text-sm text-[var(--color-neutral-600)] mb-2">合作物业</div>
           <div className="text-2xl font-bold">{tenants.length}</div>
           <div className="text-xs text-[var(--color-neutral-500)] mt-1">
             active 合作中的物业租户数
@@ -100,7 +100,7 @@ export function ProviderBillingMinuteUsagePage() {
         )}
         {!query.isLoading && tenants.length === 0 && (
           <div className="p-12 text-center text-sm text-[var(--color-neutral-500)]">
-            本月暂无消费,或当前账号未绑定合作租户
+            本月暂无消费,或当前账号未绑定合作物业
           </div>
         )}
         {tenants.length > 0 && (
@@ -177,7 +177,7 @@ export function ProviderBillingMinuteUsagePage() {
       </div>
 
       <div className="text-xs text-[var(--color-neutral-500)] bg-amber-50 border border-amber-200 rounded p-3">
-        <strong>说明:</strong>本表统计的是「本服务商接手的 active 合作租户」当月的分钟消费。
+        <strong>说明:</strong>本表统计的是「本服务商接手的 active 合作物业」当月的分钟消费。
         单价由平台 OPS 维护(BillingPricing 表);金额按业主侧实际拨打的实时 / 事后分钟拆分计算。
         服务商分成、回款明细另见结算报表(后续期次)。
       </div>

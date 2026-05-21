@@ -101,11 +101,19 @@ async def list_provider_cases(
     provider_id = _resolve_provider_id(user_id, db)
 
     # 核心过滤:Project.provider_id == 本服务商
+    # v0.7.0 — LEFT JOIN UserAccount 补 assigned_to_name(原前端只能显 #15)
     stmt = (
-        select(CollectionCase, OwnerProfile, Project.provider_id, ServiceProvider.name)
+        select(
+            CollectionCase,
+            OwnerProfile,
+            Project.provider_id,
+            ServiceProvider.name,
+            UserAccount.name.label("assigned_to_name"),
+        )
         .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
         .join(Project, Project.id == CollectionCase.project_id)  # INNER:外包必有项目
         .join(ServiceProvider, ServiceProvider.id == Project.provider_id, isouter=True)
+        .join(UserAccount, UserAccount.id == CollectionCase.assigned_to, isouter=True)
         .where(Project.provider_id == provider_id)
     )
 
@@ -137,9 +145,11 @@ async def list_provider_cases(
     return PaginatedResponse(
         items=[
             _to_case_response(
-                case_obj, owner, proj_provider_id, sp_name, owner_phone_reveal=owner_phone_reveal,
+                case_obj, owner, proj_provider_id, sp_name,
+                owner_phone_reveal=owner_phone_reveal,
+                assigned_to_name=assigned_to_name,
             )
-            for case_obj, owner, proj_provider_id, sp_name in rows
+            for case_obj, owner, proj_provider_id, sp_name, assigned_to_name in rows
         ],
         total=total,
         page=page,
@@ -154,6 +164,7 @@ def _to_case_response(
     provider_name: str | None,
     *,
     owner_phone_reveal: bool,
+    assigned_to_name: str | None = None,  # v0.7.0 A.3
 ) -> CaseWithOwnerResponse:
     """v0.5.6 — 列表行 → CaseWithOwnerResponse(与 admin_cases _case_row_to_response 同形)。"""
     return CaseWithOwnerResponse(
@@ -170,6 +181,7 @@ def _to_case_response(
             do_not_call=owner.do_not_call,
         ),
         assigned_to=case_obj.assigned_to,
+        assigned_to_name=assigned_to_name,  # v0.7.0
         pool_type=case_obj.pool_type,
         stage=case_obj.stage,
         amount_owed=case_obj.amount_owed,

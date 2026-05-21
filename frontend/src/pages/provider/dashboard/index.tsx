@@ -218,7 +218,7 @@ export function ProviderDashboardPage() {
       {/* 4 KPI cards */}
       <div className="grid grid-cols-4 gap-4">
         <KpiCard
-          label="合作租户"
+          label="合作物业"
           value={`${stats.partner_tenant_count}`}
           icon={<Building2 className="w-4 h-4" />}
         />

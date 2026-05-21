@@ -375,7 +375,7 @@ function App() {
           {
             name: "provider/tenants",
             list: "/provider/tenants",
-            meta: { label: "合作租户" },
+            meta: { label: "合作物业" },
           },
           {
             name: "provider/team",

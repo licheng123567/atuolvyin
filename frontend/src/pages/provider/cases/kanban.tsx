@@ -5,6 +5,7 @@
 // 数据源:GET /provider/cases?page_size=200(不分页,一次拿够;后续若超 200 加分页)
 import { useCustom, useGo } from "@refinedev/core";
 import { ArrowLeft, KanbanSquare } from "lucide-react";
+import { PriorityBadge } from "../../../components/ui/PriorityBadge";  // v0.7.0
 import type { PaginatedResponse } from "../../../types";
 
 interface CaseItem {
@@ -13,6 +14,7 @@ interface CaseItem {
   stage: string;
   amount_owed: string | null;
   months_overdue: number | null;
+  assigned_to_name?: string | null;  // v0.7.0 A.3 后端补
   assigned_to: number | null;
   pool_type: string;
   priority_score: number;
@@ -162,16 +164,31 @@ export function ProviderCasesKanbanPage() {
                         欠 {c.months_overdue ?? 0} 月
                       </span>
                     </div>
+                    {/* v0.7.0 — 加优先级 badge + 分配状态 */}
                     <div
                       style={{
-                        fontSize: 10,
-                        color: c.assigned_to
-                          ? "var(--color-success)"
-                          : "var(--color-warning)",
-                        marginTop: 4,
+                        marginTop: 6,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        flexWrap: "wrap",
                       }}
                     >
-                      {c.assigned_to ? `已分配 #${c.assigned_to}` : "未分配"}
+                      <PriorityBadge score={c.priority_score} showScore={false} />
+                      <span
+                        style={{
+                          fontSize: 10,
+                          color: c.assigned_to
+                            ? "var(--color-success)"
+                            : "var(--color-warning)",
+                        }}
+                      >
+                        {c.assigned_to_name
+                          ? `已分配:${c.assigned_to_name}`
+                          : c.assigned_to
+                            ? "已分配"
+                            : "未分配"}
+                      </span>
                     </div>
                   </div>
                 ))
