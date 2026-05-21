@@ -328,22 +328,44 @@ async def create_team_member(
     user_id = _user_id_from_payload(payload)
     provider_id = _resolve_provider_id(user_id, db)
 
-    # tenant must be a partner the provider has an active contract with
-    contract = db.execute(
-        select(ProviderTenantContract).where(
-            ProviderTenantContract.provider_id == provider_id,
-            ProviderTenantContract.tenant_id == body.tenant_id,
-            ProviderTenantContract.status == "active",
-        )
-    ).scalar_one_or_none()
-    if contract is None:
-        raise HTTPException(
-            status_code=http_status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": "ERR_NO_CONTRACT",
-                "message": "未与该租户建立合作合同",
-            },
-        )
+    # v1.0.0 — body.tenant_id 可选:不传时自动挑 first active 合作物业作为挂载点
+    # (UserTenantMembership.tenant_id NOT NULL 约束;服务商成员实际跨物业工作)
+    resolved_tenant_id = body.tenant_id
+    if resolved_tenant_id is None:
+        first_contract = db.execute(
+            select(ProviderTenantContract)
+            .where(
+                ProviderTenantContract.provider_id == provider_id,
+                ProviderTenantContract.status == "active",
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        if first_contract is None:
+            raise HTTPException(
+                status_code=http_status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "ERR_NO_ACTIVE_CONTRACT",
+                    "message": "本服务商无任何合作物业,无法创建团队成员",
+                },
+            )
+        resolved_tenant_id = first_contract.tenant_id
+    else:
+        # 传了 tenant_id 仍校验合同有效
+        contract = db.execute(
+            select(ProviderTenantContract).where(
+                ProviderTenantContract.provider_id == provider_id,
+                ProviderTenantContract.tenant_id == resolved_tenant_id,
+                ProviderTenantContract.status == "active",
+            )
+        ).scalar_one_or_none()
+        if contract is None:
+            raise HTTPException(
+                status_code=http_status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "ERR_NO_CONTRACT",
+                    "message": "未与该租户建立合作合同",
+                },
+            )
 
     # v0.7.0 — password 可选,缺省时生成随机一次性密码;员工首次走 OTP 登录
     raw_password = body.password or _gen_random_password()
@@ -363,11 +385,14 @@ async def create_team_member(
             detail={"code": "ERR_DUPLICATE_PHONE", "message": "手机号已被注册"},
         ) from None
 
+    # v1.0.0 — 服务商 agent 默认 work_mode="external"(对齐四维角色模型 CHECK 约束)
+    work_mode = "external" if body.role == "agent" else None
     membership = UserTenantMembership(
         user_id=new_user.id,
-        tenant_id=body.tenant_id,
+        tenant_id=resolved_tenant_id,
         role=body.role,
         provider_id=provider_id,
+        work_mode=work_mode,
         is_active=True,
     )
     db.add(membership)

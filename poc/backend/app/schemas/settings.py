@@ -71,10 +71,27 @@ class TenantSettingsUpdate(BaseModel):
         return self
 
 
-# v0.9.0 — 服务商 Settings(目前仅含自动释放配置,后续可扩展)
+# v0.9.0 — 服务商 Settings(v1.0.0 扩展对齐 TenantSettings 3 类)
 class ProviderSettingsOut(BaseModel):
     auto_release_stale_days: int = 0
+    # v1.0.0 — 与 TenantSettings 对齐(录音 / 频次 / 通知)
+    recording_mode: Literal["live", "post", "auto"] = "auto"
+    contact_freq_max: int = 3
+    notify_quota_warning: bool = True
+    notify_script_disabled: bool = True
+    notify_work_order_completed: bool = True
+    notify_case_escalated: bool = True
+    notify_promise_expiring: bool = True
+    notify_channels: list[NotifyChannel] = ["system"]
 
 
 class ProviderSettingsUpdate(BaseModel):
     auto_release_stale_days: int | None = Field(None, ge=0, le=180)
+    recording_mode: Literal["live", "post", "auto"] | None = None
+    contact_freq_max: int | None = Field(None, ge=1, le=30)
+    notify_quota_warning: bool | None = None
+    notify_script_disabled: bool | None = None
+    notify_work_order_completed: bool | None = None
+    notify_case_escalated: bool | None = None
+    notify_promise_expiring: bool | None = None
+    notify_channels: list[NotifyChannel] | None = None

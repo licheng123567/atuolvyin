@@ -144,6 +144,14 @@ import { ProviderSettlementDetailPage } from "./pages/provider/settlements/[id]"
 import { ProviderBillingMinuteUsagePage } from "./pages/provider/billing/minute-usage";
 // v0.9.0 — 服务商系统配置(N 天自动释放阈值)
 import { ProviderSettingsPage } from "./pages/provider/settings";
+// v1.0.0 — 服务商风控关键词
+import { ProviderRiskKeywordListPage } from "./pages/provider/risk-keywords/list";
+import { ProviderRiskKeywordCreatePage } from "./pages/provider/risk-keywords/create";
+// v1.0.0 — 服务商合规月报
+import { ProviderComplianceListPage } from "./pages/provider/compliance";
+import { ProviderComplianceDetailPage } from "./pages/provider/compliance/detail";
+// v1.0.0 — 服务商审计日志
+import { ProviderAuditLogPage } from "./pages/provider/audit-logs";
 import { SuperHealthPage } from "./pages/super/health";
 import { SuperAuditPage } from "./pages/super/audit";
 import { SuperCostPage } from "./pages/super/cost";
@@ -584,8 +592,16 @@ function App() {
             {/* v0.5.9 — 服务商跨租户分钟消费 */}
             <Route path="/provider/billing/minute-usage" element={<ProviderBillingMinuteUsagePage />} />
             <Route path="/provider/historical-reports" element={<ProviderHistoricalReportsPage />} />
-            {/* v0.9.0 — 服务商系统配置(N 天自动释放阈值,后续可扩展) */}
+            {/* v0.9.0 — 服务商系统配置(N 天自动释放阈值,v1.0.0 扩展 3 类) */}
             <Route path="/provider/settings" element={<ProviderSettingsPage />} />
+            {/* v1.0.0 — 服务商风控关键词 */}
+            <Route path="/provider/risk-keywords" element={<ProviderRiskKeywordListPage />} />
+            <Route path="/provider/risk-keywords/new" element={<ProviderRiskKeywordCreatePage />} />
+            {/* v1.0.0 — 服务商合规月报 */}
+            <Route path="/provider/compliance" element={<ProviderComplianceListPage />} />
+            <Route path="/provider/compliance/:yearMonth" element={<ProviderComplianceDetailPage />} />
+            {/* v1.0.0 — 服务商审计日志 */}
+            <Route path="/provider/audit-logs" element={<ProviderAuditLogPage />} />
             <Route path="/provider/projects" element={<ProviderProjectsPage />} />
             {/* v0.7.0 — 服务商项目详情(只读) */}
             <Route path="/provider/projects/:id" element={<ProviderProjectDetailPage />} />

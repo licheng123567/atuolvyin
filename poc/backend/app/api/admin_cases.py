@@ -197,6 +197,8 @@ def build_case_detail_response(
     # 协作来源 role
     # v1.6.10 — 用户可能有多 membership（如督导同时是催收员），优先取 agent 角色（assigned_to 语义）
     assigned_role: str | None = None
+    # v1.0.0 — 取催收员姓名(物业 + 服务商 detail 页都要展示)
+    assigned_to_name: str | None = None
     if case.assigned_to is not None:
         m = db.execute(
             select(UserTenantMembership.work_mode)
@@ -209,6 +211,9 @@ def build_case_detail_response(
         ).scalar_one_or_none()
         # Preserve old badge format for frontend compatibility; None if not an agent
         assigned_role = f"agent_{m}" if m else None
+        # Fetch user.name
+        u = db.get(UserAccount, case.assigned_to)
+        assigned_to_name = u.name if u else None
 
     # 法务团队（最近一条非 cancelled 的转化订单）
     legal_law_firm_name: str | None = None
@@ -324,6 +329,7 @@ def build_case_detail_response(
         ),
         assigned_to=case.assigned_to,
         assigned_role=assigned_role,
+        assigned_to_name=assigned_to_name,
         pool_type=case.pool_type,
         stage=case.stage,
         amount_owed=case.amount_owed,

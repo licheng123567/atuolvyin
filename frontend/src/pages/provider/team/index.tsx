@@ -23,19 +23,18 @@ interface TeamMember {
   created_at: string;
 }
 
-interface ProviderTenant {
-  tenant_id: number;
-  tenant_name: string;
-}
+// v1.0.0 — 删除 ProviderTenant interface(原用于「关联物业」下拉,已弃用)
 
 // v0.5.6 — ROLE_LABELS 已迁出到 src/lib/roleLabel.ts;服务商团队管理 scope=provider
 import { roleLabel as roleLabelFn } from "../../../lib/roleLabel";
 const ROLE_LABELS = (r: string) => roleLabelFn(r, "provider");
 
 // v0.7.0 — 对齐 admin/users/new.tsx 的角色描述风格(冗长 label 帮助新人理解)
+// v1.0.0 — 服务商支持 3 个组织角色(对齐物业 admin 但无 legal,服务商不做法务)
 const CREATABLE_ROLES = [
   { value: "agent", label: "催收员(拨打电话 / 跟进案件)" },
   { value: "supervisor", label: "督导(实时质检 + 团队组长)" },
+  { value: "project_manager", label: "项目经理(项目运营 + 全员看板)" },
 ];
 
 const ROLE_BADGE_CLASS: Record<string, string> = {
@@ -219,18 +218,10 @@ function CreateMemberModal({ onClose, onSuccess }: CreateMemberModalProps) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState("agent");
-  const [tenantId, setTenantId] = useState<number | "">("");
   const [error, setError] = useState<string | null>(null);
 
-  const { query: tenantQuery } = useList<ProviderTenant>({
-    resource: "provider/tenants",
-    pagination: { currentPage: 1, pageSize: 100 },
-  });
-  const tenantsRaw = tenantQuery.data?.data;
-  const tenants: ProviderTenant[] =
-    (tenantsRaw as unknown as PaginatedResponse<ProviderTenant>)?.items ??
-    (tenantsRaw as ProviderTenant[] | undefined) ??
-    [];
+  // v1.0.0 — 删除「关联物业」字段(后端自动挑 first active 合作物业)
+  // 服务商成员实际跨多物业工作,user-facing 不暴露 tenant_id
 
   const { mutate: create, mutation } = useCreate();
 
@@ -244,10 +235,6 @@ function CreateMemberModal({ onClose, onSuccess }: CreateMemberModalProps) {
       setError("手机号格式不正确(11 位 1 开头)");
       return;
     }
-    if (tenantId === "") {
-      setError("请选择关联物业");
-      return;
-    }
     create(
       {
         resource: "provider/team",
@@ -255,9 +242,8 @@ function CreateMemberModal({ onClose, onSuccess }: CreateMemberModalProps) {
           name: name.trim(),
           phone,
           role,
-          tenant_id: tenantId,
-          // v0.7.0 — 不再传 password,改 OTP 首登(后端兼容:若仍要求 password,
-          // 后端会生成随机一次性密码并下发短信)
+          // v1.0.0 — 不再传 tenant_id;后端自动挑 first active 合作物业
+          // v0.7.0 — 不再传 password,改 OTP 首登
         },
       },
       {
@@ -352,25 +338,8 @@ function CreateMemberModal({ onClose, onSuccess }: CreateMemberModalProps) {
           </select>
         </div>
 
-        <div className="form-group">
-          <label className="form-label">
-            关联物业 <span className="text-red-500">*</span>
-          </label>
-          <select
-            className="form-control"
-            value={tenantId}
-            onChange={(e) =>
-              setTenantId(e.target.value === "" ? "" : Number(e.target.value))
-            }
-          >
-            <option value="">— 选择合作物业 —</option>
-            {tenants.map((t) => (
-              <option key={t.tenant_id} value={t.tenant_id}>
-                {t.tenant_name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* v1.0.0 — 已删除「关联物业」字段(服务商成员跨物业工作,
+            后端自动挑首个有效合作物业作为挂载点) */}
 
         {error && (
           <div

@@ -177,6 +177,38 @@ class ProviderSettings(Base):
         sa.SmallInteger, nullable=False, default=0, server_default=sa.text("0")
     )
 
+    # v1.0.0 — 与 TenantSettings 对齐的 3 类配置(用户反馈:服务商 settings 信息太少)
+    # 1) 录音模式 — 服务商接的项目上传什么录音
+    recording_mode: Mapped[str] = mapped_column(
+        sa.String(16), nullable=False, default="auto", server_default=sa.text("'auto'")
+    )  # live / post / auto
+    # 2) 联系频次上限 — 服务商可设比物业更严格的频次
+    contact_freq_max: Mapped[int] = mapped_column(
+        sa.SmallInteger, nullable=False, default=3, server_default=sa.text("3")
+    )  # 1-30,每月每个业主最多联系次数
+    # 3) 通知规则 — 服务商自己的提醒
+    notify_quota_warning: Mapped[bool] = mapped_column(
+        sa.Boolean, nullable=False, default=True, server_default=sa.true()
+    )
+    notify_script_disabled: Mapped[bool] = mapped_column(
+        sa.Boolean, nullable=False, default=True, server_default=sa.true()
+    )
+    notify_work_order_completed: Mapped[bool] = mapped_column(
+        sa.Boolean, nullable=False, default=True, server_default=sa.true()
+    )
+    notify_case_escalated: Mapped[bool] = mapped_column(
+        sa.Boolean, nullable=False, default=True, server_default=sa.true()
+    )
+    notify_promise_expiring: Mapped[bool] = mapped_column(
+        sa.Boolean, nullable=False, default=True, server_default=sa.true()
+    )
+    notify_channels: Mapped[list[str]] = mapped_column(
+        ARRAY(sa.String(16)),
+        nullable=False,
+        default=lambda: ["system"],
+        server_default=sa.text("ARRAY['system']::varchar[]"),
+    )
+
     updated_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True),
         server_default=sa.func.now(),
@@ -188,5 +220,13 @@ class ProviderSettings(Base):
         sa.CheckConstraint(
             "auto_release_stale_days BETWEEN 0 AND 180",
             name="ck_provider_settings_auto_release_stale_days",
+        ),
+        sa.CheckConstraint(
+            "recording_mode IN ('live','post','auto')",
+            name="ck_provider_settings_recording_mode",
+        ),
+        sa.CheckConstraint(
+            "contact_freq_max BETWEEN 1 AND 30",
+            name="ck_provider_settings_freq",
         ),
     )

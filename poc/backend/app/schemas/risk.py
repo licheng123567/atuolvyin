@@ -52,6 +52,8 @@ class RiskKeywordOut(BaseModel):
 
     id: int
     tenant_id: int | None = None
+    # v1.0.0 — 服务商私有关键词 scope
+    provider_id: int | None = None
     category: str
     speaker: str
     level: str

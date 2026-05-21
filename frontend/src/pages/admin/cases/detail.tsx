@@ -135,6 +135,41 @@ export function AdminCaseDetailPage() {
             gap: 8,
           }}
         >
+          {/* v1.0.0 — 当前催收员小卡片(替代之前显示 user_id) */}
+          <div
+            className="ds-card"
+            style={{
+              padding: 12,
+              borderLeft: detail.assigned_to
+                ? "3px solid var(--color-primary)"
+                : "3px solid #E5E7EB",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 12,
+                color: "#6B7280",
+                marginBottom: 4,
+                fontWeight: 500,
+              }}
+            >
+              当前催收员
+            </div>
+            <div
+              style={{
+                fontSize: 14,
+                fontWeight: 600,
+                color: detail.assigned_to
+                  ? "var(--color-neutral-900)"
+                  : "#9CA3AF",
+              }}
+            >
+              {detail.assigned_to
+                ? (detail.assigned_to_name ?? `user #${detail.assigned_to}`)
+                : "未分配 — 在公海"}
+            </div>
+          </div>
+
           {/* v0.8.0 Wave C — 证据状态小卡片(admin/PM/supervisor 都看得到) */}
           <EvidenceStatusBadge caseId={detail.id} />
 

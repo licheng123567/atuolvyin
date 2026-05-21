@@ -79,6 +79,8 @@ export function ProviderCasesPage({ poolViewOnly = false }: Props = {}) {
   const [keyword, setKeyword] = useState("");
   const [page, setPage] = useState(1);
   const [assignCase, setAssignCase] = useState<CaseItem | null>(null);
+  // v1.0.0 — 按催收员过滤
+  const [assignedTo, setAssignedTo] = useState<number | "">("");
   // v0.7.0 — 按项目过滤;支持 URL ?project_id=X(项目详情页跳过来时锁定)
   const initialProjectId = searchParams.get("project_id");
   const [projectId, setProjectId] = useState<number | "">(
@@ -95,6 +97,19 @@ export function ProviderCasesPage({ poolViewOnly = false }: Props = {}) {
     (projectsRaw as unknown as { items?: ProviderProjectOption[] })?.items
     ?? (projectsRaw as ProviderProjectOption[] | undefined)
     ?? [];
+
+  // v1.0.0 — 拉本服务商团队成员(仅 agent)作为催收员过滤下拉
+  const { query: teamQuery } = useList<{ user_id: number; name: string; role: string; is_active: boolean }>({
+    resource: "provider/team",
+    queryOptions: { staleTime: 10 * 60 * 1000 },
+  });
+  const teamRaw = teamQuery.data?.data;
+  const teamMembers = (
+    (teamRaw as unknown as { items?: Array<{ user_id: number; name: string; role: string; is_active: boolean }> })
+      ?.items
+    ?? (teamRaw as Array<{ user_id: number; name: string; role: string; is_active: boolean }> | undefined)
+    ?? []
+  ).filter((m) => m.is_active && m.role === "agent");
 
   // 项目下拉变化时,同步到 URL search params(便于刷新保留)
   useEffect(() => {
@@ -117,6 +132,7 @@ export function ProviderCasesPage({ poolViewOnly = false }: Props = {}) {
         stage: stage || undefined,
         pool_type: poolViewOnly ? "public" : (poolType || undefined),
         project_id: projectId !== "" ? projectId : undefined,
+        assigned_to: assignedTo !== "" ? assignedTo : undefined,
         keyword: keyword || undefined,
         page,
         page_size: 30,
@@ -215,6 +231,25 @@ export function ProviderCasesPage({ poolViewOnly = false }: Props = {}) {
           {projectOptions.map((p) => (
             <option key={p.project_id} value={p.project_id}>
               {p.project_name}
+            </option>
+          ))}
+        </select>
+
+        {/* v1.0.0 — 按催收员筛选 */}
+        <span className="text-sm text-[var(--color-neutral-700)] ml-3">催收员:</span>
+        <select
+          value={assignedTo}
+          onChange={(e) => {
+            setAssignedTo(e.target.value === "" ? "" : Number(e.target.value));
+            setPage(1);
+          }}
+          className="px-3 py-1 text-xs border border-[var(--color-neutral-300)] rounded bg-white"
+          style={{ maxWidth: 180 }}
+        >
+          <option value="">全部催收员</option>
+          {teamMembers.map((m) => (
+            <option key={m.user_id} value={m.user_id}>
+              {m.name}
             </option>
           ))}
         </select>

@@ -96,7 +96,9 @@ class TeamMemberCreateIn(BaseModel):
         ...,
         pattern=r"^(supervisor|agent|project_manager)$",
     )
-    tenant_id: int
+    # v1.0.0 — tenant_id 改可选;若不传,后端自动选 first active 合作物业作为
+    # membership 挂载点。服务商成员实际跨物业工作,这只是技术 bookkeeping。
+    tenant_id: int | None = None
 
 
 # ── Settlements (PA.3.4) — read-only ────────────────────────────────────
