@@ -56,6 +56,10 @@ interface ProjectDetail {
   // §9.2 — 佣金率
   internal_agent_commission_rate: number | null;
   provider_agent_commission_rate: number | null;
+  // v2.2 — 项目收款信息
+  payee_name: string | null;
+  payee_account: string | null;
+  payment_instructions: string | null;
 }
 
 function toDateInput(iso: string | null): string {
@@ -106,6 +110,10 @@ export function AdminProjectEditPage() {
   const [lateFeeDisabled, setLateFeeDisabled] = useState<"" | "true" | "false">("");
   // §9.2 — 内勤催收员佣金率（百分比录入，提交时除以 100）
   const [internalCommRate, setInternalCommRate] = useState("");
+  // v2.2 — 项目收款信息
+  const [payeeName, setPayeeName] = useState("");
+  const [payeeAccount, setPayeeAccount] = useState("");
+  const [paymentInstructions, setPaymentInstructions] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [confirmRelease, setConfirmRelease] = useState(false);
@@ -235,6 +243,10 @@ export function AdminProjectEditPage() {
           ? ""
           : String(project.internal_agent_commission_rate * 100),
       );
+      // v2.2 — 项目收款信息
+      setPayeeName(project.payee_name ?? "");
+      setPayeeAccount(project.payee_account ?? "");
+      setPaymentInstructions(project.payment_instructions ?? "");
       setInitialized(true);
     }
   }, [project, initialized]);
@@ -298,6 +310,10 @@ export function AdminProjectEditPage() {
           // §9.2 — 内勤催收员佣金率（÷100 转为 0-1 小数）
           internal_agent_commission_rate:
             internalCommRate === "" ? null : Number(internalCommRate) / 100,
+          // v2.2 — 项目收款信息
+          payee_name: payeeName.trim() || null,
+          payee_account: payeeAccount.trim() || null,
+          payment_instructions: paymentInstructions.trim() || null,
         },
       },
       {
@@ -638,6 +654,53 @@ export function AdminProjectEditPage() {
                 className="form-control"
                 value={chargeNotes}
                 onChange={(e) => setChargeNotes(e.target.value)}
+                style={{ minHeight: 60 }}
+              />
+            </div>
+          </div>
+
+          {/* v2.2 — 项目收款信息 */}
+          <div
+            className="form-group"
+            style={{
+              background: "#f9fafb",
+              padding: 12,
+              borderRadius: 6,
+              border: "1px solid #e5e7eb",
+              marginBottom: 16,
+            }}
+          >
+            <div className="setting-label" style={{ marginBottom: 4 }}>
+              🏦 收款信息（业主缴费链接展示）
+            </div>
+            <div className="setting-hint" style={{ marginBottom: 12 }}>
+              业主扫描缴费二维码后看到的收款账户与缴费说明，按项目分别配置。
+            </div>
+            <div className="form-group">
+              <label className="form-label">收款户名</label>
+              <input
+                className="form-control"
+                value={payeeName}
+                onChange={(e) => setPayeeName(e.target.value)}
+                placeholder="例：金桂物业管理有限公司"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">收款账户</label>
+              <input
+                className="form-control"
+                value={payeeAccount}
+                onChange={(e) => setPayeeAccount(e.target.value)}
+                placeholder="例：工行 6222 0000 0000 1234"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">缴费说明</label>
+              <textarea
+                className="form-control"
+                value={paymentInstructions}
+                onChange={(e) => setPaymentInstructions(e.target.value)}
+                placeholder="例：工作日 9:00-17:00 到物业服务中心缴费；银行转账请注明房号"
                 style={{ minHeight: 60 }}
               />
             </div>

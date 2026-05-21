@@ -301,6 +301,7 @@ def _create_request(db_session, env):
     req = LegalConversionRequest(
         tenant_id=env.case.tenant_id, case_id=env.case.id,
         requester_user_id=env.user.id, requester_role="legal", status="pending",
+        reason="服务商法务测试请求",
     )
     db_session.add(req)
     db_session.flush()

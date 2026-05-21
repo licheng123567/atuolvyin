@@ -39,6 +39,7 @@ from app.schemas.case import (
 )
 from app.schemas.common import PaginatedResponse
 from app.services.case_timeline import build_case_timeline
+from app.services.payment_link import PaymentLinkOut, build_and_record_payment_link
 
 router = APIRouter()
 
@@ -232,6 +233,26 @@ def build_case_detail_response(
         legal_lawyer_name = legal_order.assigned_lawyer_name
         legal_order_status = legal_order.status
 
+    # v0.6.0 — 等审批的法务转化申请(状态 pending/pending_admin)。
+    # 用于督导端「移交法务 / 审批转法务」按钮条件渲染。
+    pending_legal_conversion_request_id: int | None = None
+    from app.models.legal_conversion import LegalConversionRequest
+
+    pending_req_id = (
+        db.execute(
+            select(LegalConversionRequest.id)
+            .where(
+                LegalConversionRequest.case_id == case_id,
+                LegalConversionRequest.status.in_(("pending", "pending_admin")),
+            )
+            .order_by(LegalConversionRequest.created_at.desc())
+        )
+        .scalars()
+        .first()
+    )
+    if pending_req_id is not None:
+        pending_legal_conversion_request_id = int(pending_req_id)
+
     # 手机号
     phone_plain = None
     if include_phone_plain:
@@ -327,6 +348,7 @@ def build_case_detail_response(
         legal_law_firm_name=legal_law_firm_name,
         legal_lawyer_name=legal_lawyer_name,
         legal_order_status=legal_order_status,
+        pending_legal_conversion_request_id=pending_legal_conversion_request_id,
     )
 
 
@@ -704,3 +726,154 @@ async def update_case_stage(
         )
         db.commit()
     return case
+
+
+@router.post(
+    "/cases/{case_id}/send-payment-link",
+    response_model=PaymentLinkOut,
+    status_code=201,
+)
+def admin_send_payment_link(
+    case_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles("admin", "supervisor"))],
+    db: Annotated[Session, Depends(get_db)],
+) -> PaymentLinkOut:
+    """v2.2 — 物业管理端发送缴费链接。
+
+    与坐席端（/agent/cases/{id}/send-payment-link）共用生成逻辑，区别在于：
+    管理员 / 督导可对本租户任意案件发送，不要求 assigned_to == 自己 —— 便于把
+    缴费二维码 / 短链转给催收人员通过微信发给业主。
+    """
+    tenant_id = _require_tenant(payload)
+    case = db.get(CollectionCase, case_id)
+    if not case or case.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
+        )
+    owner = db.get(OwnerProfile, case.owner_id) if case.owner_id else None
+    if not owner:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_OWNER_MISSING", "message": "案件未关联业主"},
+        )
+    return build_and_record_payment_link(
+        db,
+        case=case,
+        owner=owner,
+        actor_user_id=int(payload.get("user_id") or 0),
+        actor_role=str(payload.get("role") or ""),
+        tenant_id=tenant_id,
+    )
+
+
+# v0.8.0 — 物业 admin 案件详情右栏「证据状态」小卡片专用端点
+# 与法务 /legal/cases/{lc_id}/evidence-status 互补:法务侧入参是 LegalCase id,
+# admin 侧入参直接是 CollectionCase id;返回字段更精简(badge 不需要 4 类细分)。
+@router.get("/cases/{case_id}/evidence-status")
+async def get_admin_case_evidence_status(
+    case_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*READ_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    """返回案件证据状态摘要 (admin/PM/supervisor 共用):
+    - local_count: 本地哈希证据总件数(通话录音 + 转写 + 分析 + L2 风险事件)
+    - chain_count: 已上司法链(confirmed)件数
+    - pending_count: 待上链(pending, 多为 L2 风险事件)件数
+    - is_in_legal: 是否已转法务
+    - legal_case_id: 若已转法务,LegalCase id(供前端跳转「查看证据中心」)
+    - has_strong: chain_count > 0 — 是否已有强证据
+    """
+    from sqlalchemy import func as sa_func
+
+    from app.models.blockchain_attestation import BlockchainAttestation
+    from app.models.call import RiskEvent
+    from app.models.legal_case import LegalCase
+
+    tenant_id = _require_tenant(payload)
+    cc = db.get(CollectionCase, case_id)
+    if not cc or cc.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
+        )
+
+    call_ids = (
+        db.execute(
+            select(CallRecord.id)
+            .where(CallRecord.tenant_id == tenant_id)
+            .where(CallRecord.case_id == cc.id)
+        )
+        .scalars()
+        .all()
+    )
+    call_count = len(call_ids)
+
+    transcript_count = 0
+    analysis_count = 0
+    l2_count = 0
+    chain_count = 0
+    pending_count = 0
+    if call_ids:
+        transcript_count = int(
+            db.execute(
+                select(sa_func.count(Transcript.id))
+                .where(Transcript.call_id.in_(call_ids))
+                .where(Transcript.full_text.isnot(None))
+            ).scalar_one()
+            or 0
+        )
+        analysis_count = int(
+            db.execute(
+                select(sa_func.count(AnalysisResult.id)).where(AnalysisResult.call_id.in_(call_ids))
+            ).scalar_one()
+            or 0
+        )
+        l2_count = int(
+            db.execute(
+                select(sa_func.count(RiskEvent.id))
+                .where(RiskEvent.call_id.in_(call_ids))
+                .where(RiskEvent.level == "L2")
+            ).scalar_one()
+            or 0
+        )
+        chain_count = int(
+            db.execute(
+                select(sa_func.count(BlockchainAttestation.id))
+                .where(BlockchainAttestation.tenant_id == tenant_id)
+                .where(BlockchainAttestation.call_id.in_(call_ids))
+                .where(BlockchainAttestation.status == "confirmed")
+            ).scalar_one()
+            or 0
+        )
+        pending_count = int(
+            db.execute(
+                select(sa_func.count(BlockchainAttestation.id))
+                .where(BlockchainAttestation.tenant_id == tenant_id)
+                .where(BlockchainAttestation.call_id.in_(call_ids))
+                .where(BlockchainAttestation.status == "pending")
+            ).scalar_one()
+            or 0
+        )
+
+    local_count = call_count + transcript_count + analysis_count + l2_count
+
+    legal_case_id = db.execute(
+        select(LegalCase.id)
+        .where(LegalCase.tenant_id == tenant_id)
+        .where(LegalCase.case_id == cc.id)
+        .order_by(LegalCase.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+    return {
+        "case_id": cc.id,
+        "local_count": local_count,
+        "chain_count": chain_count,
+        "pending_count": pending_count,
+        "is_in_legal": legal_case_id is not None,
+        "legal_case_id": legal_case_id,
+        "has_strong": chain_count > 0,
+    }

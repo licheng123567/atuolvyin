@@ -36,6 +36,11 @@ function eventMeta(type: string): { cls: string; title: string; icon: React.Reac
     case "case.stage_changed": return { cls: "tl-system", title: "阶段更新",     icon: <FileText size={11} stroke="white" /> };
     case "case.escalated":     return { cls: "tl-system", title: "升级处理",     icon: <FileText size={11} stroke="white" /> };
     case "case.released":      return { cls: "tl-system", title: "释放至公海",   icon: <FileText size={11} stroke="white" /> };
+    // v0.5.4 — 督导动作 4 类(supervisor_actions.py 写入)
+    case "case.reassigned":                return { cls: "tl-system", title: "重新分配",   icon: <Users size={11} stroke="white" /> };
+    case "case.supervisor_remind_callback":return { cls: "tl-system", title: "督导催回访", icon: <Phone size={11} stroke="white" /> };
+    case "case.supervisor_urge":           return { cls: "tl-system", title: "督导催办",   icon: <Phone size={11} stroke="white" /> };
+    case "case.supervisor_intervene":      return { cls: "tl-system", title: "督导介入处理", icon: <Headphones size={11} stroke="white" /> };
     default:                   return { cls: "tl-system", title: type,           icon: <FileText size={11} stroke="white" /> };
   }
 }

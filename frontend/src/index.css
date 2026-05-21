@@ -36,7 +36,8 @@
     --color-primary-light: #EBF5FF;
     --color-danger: #E02424;
     --color-danger-light: #FDF2F2;
-    --color-warning: #D97706;
+    /* v0.5.7 a11y:warning 从 #D97706 → #B45309(contrast w/ white 3.5:1 → 4.5:1 pass AA) */
+    --color-warning: #B45309;
     --color-warning-light: #FFFBEB;
     --color-success: #057A55;
     --color-success-light: #F0FDF4;
@@ -45,7 +46,9 @@
     --color-neutral-900: #111827;
     --color-neutral-700: #374151;
     --color-neutral-600: #4B5563;
-    --color-neutral-400: #9CA3AF;
+    /* v0.5.7 a11y:neutral-400 从 #9CA3AF → #6B7280(contrast w/ white 2.52:1 → 4.27:1
+       接近 AA 4.5;若仍报 fail 再降到 #4B5563 同 neutral-600 — 但会失去层级感) */
+    --color-neutral-400: #6B7280;
     --color-neutral-300: #D1D5DB;
     --color-neutral-200: #E5E7EB;
     --color-neutral-100: #F3F4F6;

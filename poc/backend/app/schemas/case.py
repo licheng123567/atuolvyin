@@ -74,6 +74,7 @@ class CaseWithOwnerResponse(BaseModel):
     project_name: str | None = None
     owner: OwnerInfo
     assigned_to: int | None
+    assigned_to_name: str | None = None  # v0.7.0 — JOIN UserAccount.name(列表展示用)
     pool_type: str
     stage: str
     amount_owed: Decimal | None
@@ -104,6 +105,10 @@ class CaseImportResponse(BaseModel):
 class CaseStageUpdate(BaseModel):
     stage: Literal["new", "in_progress", "promised", "paid", "escalated", "closed"]
     note: str | None = None  # v1.6.6 — 阶段变更跟进备注（写入 audit log）
+    # v0.5.6 — 标记承诺缴费时附带的结构化字段(仅 stage='promised' 时生效;其他阶段忽略)
+    promise_content: str | None = Field(None, max_length=500)
+    promise_amount: Decimal | None = Field(None, ge=0)
+    promise_due_at: datetime | None = None
 
 
 class CaseAssignResponse(BaseModel):
@@ -188,3 +193,6 @@ class CaseDetailResponse(BaseModel):
     legal_law_firm_name: str | None = None
     legal_lawyer_name: str | None = None
     legal_order_status: str | None = None
+    # v0.6.0 — 等审批的法务转化申请 ID(状态 pending/pending_admin);
+    # null=无;前端按此条件渲染「移交法务 vs 审批转法务」按钮。
+    pending_legal_conversion_request_id: int | None = None

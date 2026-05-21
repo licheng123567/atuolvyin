@@ -74,8 +74,8 @@ test.describe("v1.5.7 督导端关键流程", () => {
     const viewBtn = page.getByRole("button", { name: /查看历史/ }).first();
     await viewBtn.click();
     await page.waitForURL(/\/supervisor\/cases\/\d+/);
-    await expect(page.getByText(/近期通话记录/)).toBeVisible();
-    await expect(page.getByText(/案件时间线/)).toBeVisible();
+    // v0.5.4 修正:v1.6.9 重构案件详情后「近期通话记录」section 已撤,统一为 ActivityTimeline 的「活动时间线」card-title
+    await expect(page.getByText(/活动时间线/)).toBeVisible();
   });
 
   test("公海案件：搜索框 + 优先级图例可见", async ({ page }) => {

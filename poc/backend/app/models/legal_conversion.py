@@ -150,8 +150,10 @@ class LegalConversionRequest(Base, TimestampMixin):
         nullable=False,
     )
     requester_role: Mapped[str] = mapped_column(sa.String(32), nullable=False)
-    reason: Mapped[str | None] = mapped_column(sa.Text)
-    status: Mapped[str] = mapped_column(sa.String(20), nullable=False, default="pending")
+    # v0.5.4 — 申请理由改 NOT NULL（前端必填，预设原因 + 可选补充）
+    reason: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    # v0.5.4 — status 列加宽到 32 (原 20 不够装 "approved_pending_legal")
+    status: Mapped[str] = mapped_column(sa.String(32), nullable=False, default="pending")
     reviewer_user_id: Mapped[int | None] = mapped_column(
         sa.BigInteger, sa.ForeignKey("user_account.id", ondelete="SET NULL")
     )
@@ -162,10 +164,14 @@ class LegalConversionRequest(Base, TimestampMixin):
         sa.BigInteger,
         sa.ForeignKey("legal_conversion_order.id", ondelete="SET NULL"),
     )
+    # v0.5.4 — 督导手动「上报 admin」时间戳
+    escalated_to_admin_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
 
     __table_args__ = (
+        # v0.5.4 — status 加 pending_admin（督导上报后）+ approved_pending_legal（已批待法务接单选包，Stream 3）
         sa.CheckConstraint(
-            "status IN ('pending','approved','rejected','cancelled')",
+            "status IN ('pending','approved','rejected','cancelled',"
+            "'pending_admin','approved_pending_legal')",
             name="ck_legal_conv_req_status",
         ),
         sa.Index("ix_legal_conv_req_tenant_status", "tenant_id", "status"),

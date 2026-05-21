@@ -4,24 +4,13 @@ import { ChevronDown, LogOut, RefreshCw, Search, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { AuthUser } from "../../providers/auth-provider";
+import { roleLabelFromMembership, roleLabelFromUser } from "../../lib/roleLabel";
 import { NotificationBell } from "../notifications/NotificationBell";
 import { AlertNotificationCenter } from "../supervisor/AlertNotificationCenter";
 
+// v0.5.6 — ROLE_LABELS 已迁出到 src/lib/roleLabel.ts(SSOT);本文件改用 roleLabelFromUser
+// / roleLabelFromMembership 辅助函数,自动按 scope 区分物业 / 服务商 / 平台。
 const SUPERVISOR_ROLES = new Set(["supervisor", "admin", "superadmin"]);
-
-const ROLE_LABELS: Record<string, string> = {
-  superadmin: "平台超管",
-  ops: "平台运营员",
-  // admin: scope-dependent label resolved at render time
-  admin: "管理员",
-  supervisor: "督导",
-  // agent: internal/external distinction now from work_mode, not role
-  agent: "催收员",
-  legal: "法务对接人",
-  workorder: "协调员",
-  coordinator: "协调员",
-  project_manager: "项目负责人",
-};
 
 interface MembershipItem {
   membership_id: number;
@@ -50,7 +39,7 @@ export function Topbar() {
   const navigate = useNavigate();
   const { mutate: logout } = useLogout();
   const isSupervisor = SUPERVISOR_ROLES.has(user?.role ?? "");
-  const roleLabel = user ? (ROLE_LABELS[user.role] ?? user.role) : null;
+  const roleLabel = user ? roleLabelFromUser(user) : null;
   const roleBadge = user
     ? (ROLE_BADGE_BG[user.role] ?? { bg: "#f3f4f6", color: "#374151" })
     : null;
@@ -280,7 +269,7 @@ export function Topbar() {
                       }}
                     >
                       <span>
-                        {ROLE_LABELS[m.role] ?? m.role}
+                        {roleLabelFromMembership(m)}
                         <span style={{ color: "#9ca3af", marginLeft: 6, fontSize: 11 }}>
                           @ {m.provider_name ?? m.tenant_name ?? "平台"}
                         </span>

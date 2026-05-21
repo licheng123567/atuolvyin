@@ -235,3 +235,141 @@ def delete_provider_script(
         )
     db.delete(script)
     db.commit()
+
+
+# v0.7.0 — 服务商话术效果看板(对齐 admin/scripts/effectiveness)
+@router.get("/scripts/effectiveness")
+def provider_script_effectiveness(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+    intent: str | None = Query(None),
+    period_days: int = Query(30, ge=1, le=365),
+) -> dict:
+    """服务商话术效果看板。
+
+    数据范围:本服务商私有话术(`script_template.provider_id == self`)+
+    平台预置(`tenant_id IS NULL AND provider_id IS NULL`),与列表 API 一致。
+
+    指标公式与物业侧 `/admin/scripts/effectiveness` 同(详 admin_scripts.py 注释):
+      adoption_rate / good_ratio / composite_score / composite_grade /
+      ai_score(若已 recompute)
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import case, func
+
+    from app.models.call import CallRecord, SuggestionFeedback
+
+    user_id = int(payload.get("user_id") or 0)
+    provider_id = _provider_id_for(db, user_id)
+    cutoff = datetime.now(UTC) - timedelta(days=period_days)
+
+    # 本服务商可见话术(provider 私有 + 平台预置)
+    template_stmt = select(ScriptTemplate).where(
+        or_(
+            ScriptTemplate.provider_id == provider_id,
+            (ScriptTemplate.tenant_id.is_(None)) & (ScriptTemplate.provider_id.is_(None)),
+        )
+    )
+    if intent:
+        template_stmt = template_stmt.where(ScriptTemplate.trigger_intent == intent)
+
+    templates = db.execute(template_stmt).scalars().all()
+    if not templates:
+        return {"period_days": period_days, "items": []}
+
+    template_ids = [t.id for t in templates]
+
+    # 聚合反馈(本服务商接的 case 才计入 — 通过 call_record.tenant_id 关联;
+    # 简化版:不限 tenant,展示话术总效果。下版本若需限本服务商接案,
+    # 需 JOIN CollectionCase → Project.provider_id 过滤。
+    feedback_stmt = (
+        select(
+            SuggestionFeedback.script_template_id,
+            func.count().label("total_shown"),
+            func.sum(case((SuggestionFeedback.action == "adopt", 1), else_=0)).label(
+                "total_adopted"
+            ),
+            func.sum(case((SuggestionFeedback.supervisor_label.is_not(None), 1), else_=0)).label(
+                "total_supervised"
+            ),
+            func.sum(case((SuggestionFeedback.supervisor_label == "good", 1), else_=0)).label(
+                "total_good"
+            ),
+        )
+        .join(CallRecord, CallRecord.id == SuggestionFeedback.call_id)
+        .where(SuggestionFeedback.script_template_id.in_(template_ids))
+        .where(SuggestionFeedback.created_at >= cutoff)
+        .group_by(SuggestionFeedback.script_template_id)
+    )
+    agg = {
+        r.script_template_id: (
+            int(r.total_shown or 0),
+            int(r.total_adopted or 0),
+            int(r.total_supervised or 0),
+            int(r.total_good or 0),
+        )
+        for r in db.execute(feedback_stmt).all()
+    }
+
+    items = []
+    for t in templates:
+        shown, adopted, supervised, good = agg.get(t.id, (0, 0, 0, 0))
+        adoption_rate = adopted / shown if shown else None
+        good_ratio = good / supervised if supervised else None
+
+        composite_score: float | None
+        if adoption_rate is None and good_ratio is None:
+            composite_score = None
+        elif good_ratio is None:
+            composite_score = adoption_rate
+        elif adoption_rate is None:
+            composite_score = good_ratio
+        else:
+            composite_score = 0.6 * adoption_rate + 0.4 * good_ratio
+
+        grade: str | None
+        if composite_score is None:
+            grade = None
+        elif composite_score >= 0.8:
+            grade = "A"
+        elif composite_score >= 0.6:
+            grade = "B"
+        elif composite_score >= 0.4:
+            grade = "C"
+        else:
+            grade = "D"
+
+        items.append(
+            {
+                "template_id": t.id,
+                "title": t.title,
+                "trigger_intent": t.trigger_intent,
+                "is_active": t.is_active,
+                "source": (
+                    "platform" if t.tenant_id is None and t.provider_id is None else "provider"
+                ),
+                "total_shown": shown,
+                "total_adopted": adopted,
+                "adoption_rate": adoption_rate,
+                "total_supervised": supervised,
+                "total_good": good,
+                "good_ratio": good_ratio,
+                "composite_score": composite_score,
+                "composite_grade": grade,
+                "ai_score": float(t.ai_score) if t.ai_score is not None else None,
+                "ai_score_sample_count": t.ai_score_sample_count,
+                "ai_score_updated_at": (
+                    t.ai_score_updated_at.isoformat() if t.ai_score_updated_at else None
+                ),
+            }
+        )
+    items.sort(
+        key=lambda x: (
+            x["composite_score"] is None,
+            -(x["composite_score"] or 0),
+            -x["total_shown"],
+        )
+    )
+    return {"period_days": period_days, "items": items}

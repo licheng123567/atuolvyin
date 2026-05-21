@@ -3,6 +3,7 @@ import { useCustom, useCustomMutation, useInvalidate } from "@refinedev/core";
 import { Calendar, Clock, Crown, Lock, UserCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { HelpPanel } from "../../../components/ui/HelpPanel";
+import { SearchableSelect } from "../../../components/ui/SearchableSelect";
 
 interface ShiftRow {
   date: string;
@@ -123,9 +124,9 @@ export function SupervisorShiftsPage() {
         dismissKey="/supervisor/shifts"
         title="排班权责"
         bullets={[
-          <><strong>组长</strong>：唯一可编辑全员排班的督导（admin 标记 user_account.preferences.is_shift_lead = true）</>,
+          <><strong>组长</strong>：唯一可编辑全员排班的督导（物业管理员标记 user_account.preferences.is_shift_lead = true）</>,
           <><strong>普通督导</strong>：不能编辑别人的格子；可对自己已排的班次发起「调班申请」（顶班人在小程序确认后生效）</>,
-          <><strong>物业 admin</strong>：只读 + 审计（仅在出现空班次告警时介入）</>,
+          <><strong>物业管理员</strong>：只读 + 审计（仅在出现空班次告警时介入）</>,
           <><strong>三时段轮值</strong>：上午 9-12 / 下午 13-18 / 晚间 18-21（晚 21 后业主电话不打，无需值班）</>,
           <><strong>自动路由</strong>：风控告警 / 升级案件 / 承诺催付到期 都按当前时段值班人派单；非值班督导 App 不响</>,
         ]}
@@ -171,15 +172,13 @@ export function SupervisorShiftsPage() {
                   if (isLead) {
                     return (
                       <td key={slot}>
-                        <select
-                          className="filter-select"
-                          style={{ width: "100%" }}
+                        <SearchableSelect
                           value={occupant}
-                          onChange={(e) => update(s.date, slot, e.target.value)}
-                        >
-                          <option value="">未排班</option>
-                          {supervisors.map((sv) => <option key={sv} value={sv}>{sv}</option>)}
-                        </select>
+                          onChange={(v) => update(s.date, slot, String(v))}
+                          placeholder="未排班"
+                          options={supervisors.map((sv) => ({ value: sv, label: sv }))}
+                          style={{ width: "100%" }}
+                        />
                       </td>
                     );
                   }
@@ -249,10 +248,12 @@ function SwapModal({ target, supervisors, onClose, onConfirm, isPending }: {
           <p style={{ fontSize: 13, color: "#374151", marginBottom: 12, lineHeight: 1.7 }}>
             申请把这班次顶给：
           </p>
-          <select className="form-control" value={agent} onChange={(e) => setAgent(e.target.value)}>
-            <option value="">请选择顶班人</option>
-            {candidates.map((n) => <option key={n} value={n}>{n}</option>)}
-          </select>
+          <SearchableSelect
+            value={agent}
+            onChange={(v) => setAgent(String(v))}
+            placeholder="请选择顶班人"
+            options={candidates.map((n) => ({ value: n, label: n }))}
+          />
           <div style={{ background: "#fffbeb", padding: 10, borderRadius: 6, fontSize: 12, color: "#78350f", marginTop: 12 }}>
             ⚠ 顶班人需在小程序点「同意」才生效；本周内调班自动通知物业 admin。
           </div>

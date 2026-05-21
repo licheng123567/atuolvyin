@@ -306,3 +306,39 @@ async def test_list_orders_filters_by_status(
     body = listing.json()
     assert body["total"] >= 1
     assert all(item["status"] == "pending" for item in body["items"])
+
+
+@pytest.mark.asyncio
+async def test_get_order_includes_owner_and_package_context(
+    client: AsyncClient, db_session, seeded_case, seeded_user, seeded_tenant,
+    seeded_packages, admin_auth_headers,
+):
+    """v0.5.5 — 详情端点必须返回:
+       1. 业主姓名/房号/项目名(替代冷案件编号,Wave 1.3 起)
+       2. 业主手机号脱敏(详情业主卡需要,v0.5.5 新加)
+       3. 服务包 description / platform_fee_rate(详情拆价需要,v0.5.5 新加)
+    """
+    pkg = seeded_packages[0]  # lawyer_letter, price=199, fee_rate=0.30, description="..."
+    create = await client.post(
+        f"/api/v1/admin/cases/{seeded_case.id}/convert-to-legal",
+        json={"package_id": pkg.id},
+        headers=admin_auth_headers,
+    )
+    order_id = create.json()["id"]
+
+    detail = await client.get(
+        f"/api/v1/admin/legal-conversion-orders/{order_id}",
+        headers=admin_auth_headers,
+    )
+    assert detail.status_code == 200
+    body = detail.json()
+    # Wave 1.3 业主上下文字段(回归)
+    assert "owner_name" in body
+    assert "owner_room" in body
+    assert "project_name" in body
+    # v0.5.5 新字段
+    assert body["package_description"] == "加盖律所公章的催款律师函 + 邮寄送达"
+    assert Decimal(body["package_platform_fee_rate"]) == Decimal("0.30")
+    # 手机号脱敏(seeded_case 的 owner phone_enc 应解密 + mask)
+    if body.get("owner_phone_masked"):
+        assert "*" in body["owner_phone_masked"]

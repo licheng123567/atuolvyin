@@ -271,7 +271,7 @@ export function ProviderDetailPage() {
         {/* Right — contracts */}
         <div className="bg-white border border-[var(--color-neutral-200)] rounded-lg p-5">
           <h2 className="text-sm font-semibold text-[var(--color-neutral-900)] mb-4">
-            合作租户（{detail.contracts.length}）
+            合作物业（{detail.contracts.length}）
           </h2>
           {detail.contracts.length === 0 ? (
             <div className="text-sm text-[var(--color-neutral-400)]">

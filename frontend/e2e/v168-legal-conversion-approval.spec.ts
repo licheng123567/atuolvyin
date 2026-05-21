@@ -36,10 +36,10 @@ test.describe("v1.6.8 法务转化两步审批", () => {
     await page.goto("/supervisor/legal-conversion-approvals");
     // 标题
     await expect(page.locator(".page-title")).toContainText("法务转化审批");
-    // KPI bar 三个统计项
-    await expect(page.getByText("待我审批")).toBeVisible();
-    await expect(page.getByText("已批准")).toBeVisible();
-    await expect(page.getByText("已驳回")).toBeVisible();
+    // KPI bar 三个统计项 — 用 .status-bar-item 收紧避免与同名 tab 按钮撞 strict mode
+    await expect(page.locator(".status-bar-item").getByText("待我审批")).toBeVisible();
+    await expect(page.locator(".status-bar-item").getByText("已批准")).toBeVisible();
+    await expect(page.locator(".status-bar-item").getByText("已驳回")).toBeVisible();
     // 4 个状态切换 tab
     await expect(page.getByRole("button", { name: /待审批/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /已批准/ })).toBeVisible();
@@ -52,7 +52,8 @@ test.describe("v1.6.8 法务转化两步审批", () => {
   });
 
   test("admin 也能进入同一审批页", async ({ page }) => {
-    await loginAs(page, "13000000001"); // admin 演示账号
+    // v0.5.4 修正:原用 13000000001 是 ops 账号,改用真 admin 13000000002
+    await loginAs(page, "13000000002");
     await page.goto("/admin/legal-conversion-approvals");
     await expect(page.locator(".page-title")).toContainText("法务转化审批");
     // admin 视角徽标

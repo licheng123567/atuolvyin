@@ -11,6 +11,8 @@ import {
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import type { AuthUser } from "../../providers/auth-provider";
+// v0.7.0 — PmAlertsSection 抽到独立文件,与服务商 dashboard 共享
+import { PmAlertsSection } from "../../components/dashboard/PmAlertsSection";
 
 interface PmProjectCard {
   project_id: number;
@@ -266,6 +268,7 @@ export function PMDashboardPage() {
 }
 
 function PropertyView() {
+  const navigate = useNavigate();  // v0.7.0 — Top 5 案件点击跳详情
   const { query } = useCustom<PMPropertyStats>({
     url: "pm/dashboard/property",
     method: "get",
@@ -294,6 +297,9 @@ function PropertyView() {
           物业项目经理看板
         </h1>
       </div>
+
+      {/* v0.6.0 — 运营提醒(5 类) */}
+      <PmAlertsSection />
 
       {/* v1.4 — 我管理的项目（多项目卡片） */}
       <MyProjectsSection />
@@ -357,7 +363,9 @@ function PropertyView() {
             {stats.top_overdue.map((item) => (
               <tr
                 key={item.case_id}
-                style={{ borderTop: "1px solid #f3f4f6" }}
+                style={{ borderTop: "1px solid #f3f4f6", cursor: "pointer" }}
+                onClick={() => navigate(`/admin/cases/${item.case_id}`)}
+                title="点击查看案件详情"
               >
                 <td style={{ padding: "8px 10px" }}>{item.owner_name}</td>
                 <td style={{ padding: "8px 10px", fontWeight: 600 }}>
@@ -414,6 +422,9 @@ function ProviderView() {
         </h1>
       </div>
 
+      {/* v0.6.0 — 运营提醒(5 类) */}
+      <PmAlertsSection />
+
       {/* v1.4 — 我管理的项目（多项目卡片） */}
       <MyProjectsSection />
 
@@ -456,11 +467,11 @@ function ProviderView() {
           boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
         }}
       >
-        <h3 className="font-semibold text-sm mb-3">合作租户 Top 5（按通话量）</h3>
+        <h3 className="font-semibold text-sm mb-3">合作物业 Top 5（按通话量）</h3>
         <table style={{ width: "100%", fontSize: 14, borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ color: "#6b7280", textAlign: "left" }}>
-              <th style={{ padding: "8px 10px", fontWeight: 500 }}>租户</th>
+              <th style={{ padding: "8px 10px", fontWeight: 500 }}>物业</th>
               <th style={{ padding: "8px 10px", fontWeight: 500 }}>累计通话</th>
               <th style={{ padding: "8px 10px", fontWeight: 500 }}>合同状态</th>
             </tr>
@@ -486,7 +497,7 @@ function ProviderView() {
                   colSpan={3}
                   style={{ padding: 24, textAlign: "center", color: "#9ca3af" }}
                 >
-                  暂无合作租户
+                  暂无合作物业
                 </td>
               </tr>
             )}
@@ -540,3 +551,6 @@ function KpiCard({ label, value, icon, warn = false }: KpiCardProps) {
     </div>
   );
 }
+
+// v0.7.0 — PmAlertsSection 已抽到 components/dashboard/PmAlertsSection.tsx,
+//          PM dashboard 和服务商 admin dashboard 共享同一份。原 inline 实现已移除。

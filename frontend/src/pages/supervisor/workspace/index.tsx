@@ -91,6 +91,7 @@ export function SupervisorWorkspacePage() {
             className="filter-select"
             value={projectFilter}
             onChange={(e) => setProjectFilter(e.target.value)}
+            aria-label="按项目筛选"
           >
             {ALL_PROJECTS.map((p) => (
               <option key={p} value={p}>{p}</option>

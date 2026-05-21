@@ -49,18 +49,22 @@ test.describe("v1.6.10 — 案件详情统一蓝本", () => {
   test("详情页：业主信息卡含账单期 + 三栏 + 不再有独立「欠费明细」卡", async ({ page }) => {
     await loginAs(page, AGENT_PHONE);
     await page.goto("/agent/cases");
+    // v0.5.4 修正:与 Bug1 测试同样需要等真实后端列表加载,避免 click 时按钮还没绑定
+    await page.waitForTimeout(1500);
+    await dismissModals(page);
     const detailBtn = page.getByRole("button", { name: /^详情/ }).first();
-    await expect(detailBtn).toBeVisible({ timeout: 5_000 });
+    await expect(detailBtn).toBeVisible({ timeout: 8_000 });
     await detailBtn.click();
     // 业主信息卡可见
     await expect(page.getByText("业主信息").first()).toBeVisible({ timeout: 5_000 });
-    // 累计欠费 hero
-    await expect(page.getByText("累计欠费").first()).toBeVisible();
-    // 三栏：物业费 / 违约金 / 欠费总额（在 OwnerInfoCard 内嵌）
+    // v0.5.4 修正:OwnerInfoCard 已移除「累计欠费」独立 hero,改为「欠款月份: ... 共 N 个月」段;
+    //   三栏直接渲染金额(物业费 / 违约金 / 欠费总额)
+    await expect(page.getByText(/欠款月份/).first()).toBeVisible();
+    // 三栏:物业费 / 违约金 / 欠费总额
     await expect(page.getByText("物业费").first()).toBeVisible();
     await expect(page.getByText("违约金").first()).toBeVisible();
     await expect(page.getByText("欠费总额").first()).toBeVisible();
-    // 不再有独立的「欠费明细」card-title 卡（已移除）
+    // 不再有独立的「欠费明细」card-title 卡(已移除)
     const billCardTitle = page.locator(".card-title").filter({ hasText: "欠费明细" });
     await expect(billCardTitle).toHaveCount(0);
   });
@@ -68,12 +72,16 @@ test.describe("v1.6.10 — 案件详情统一蓝本", () => {
   test("详情页：中栏有跟进备注卡 + 阶段下拉", async ({ page }) => {
     await loginAs(page, AGENT_PHONE);
     await page.goto("/agent/cases");
+    // v0.5.4 修正:同样需要等真实后端列表加载
+    await page.waitForTimeout(1500);
+    await dismissModals(page);
     const detailBtn = page.getByRole("button", { name: /^详情/ }).first();
-    await expect(detailBtn).toBeVisible({ timeout: 5_000 });
+    await expect(detailBtn).toBeVisible({ timeout: 8_000 });
     await detailBtn.click();
     await expect(page.getByText("添加跟进备注")).toBeVisible({ timeout: 5_000 });
     await expect(page.getByRole("textbox").first()).toBeVisible();
-    await expect(page.getByText("更新阶段：")).toBeVisible();
+    // v0.5.4 修正:label 去掉了全角冒号,统一用 startsWith 匹配
+    await expect(page.getByText(/^更新阶段/).first()).toBeVisible();
   });
 
   test("详情页：时间线通话节点有「🎧 听录音」按钮", async ({ page }) => {
@@ -92,20 +100,23 @@ test.describe("v1.6.10 — 案件详情统一蓝本", () => {
     }
   });
 
-  test("Bug4：13000000003 督导账号有 agent_internal 角色 + 5 个分配案件", async ({ page }) => {
-    // 登录后顶部 dropdown 应该有「切换角色」选项
+  test("Bug4：13000000003 督导账号有 agent membership + 分配案件", async ({ page }) => {
+    // v0.5.4 修正:v2.2 四维正交角色模型 — `agent_internal` 已废弃,统一 role='agent';
+    //   /me/memberships 的 MembershipItem schema 不暴露 work_mode,只能按 role 过滤;
+    //   supervisor 13000000003 在 seed 里有 1 个 agent membership(internal),刚好够;
+    //   API base 走 e2e 后端端口 18100(原硬编码 :18000 是 dev 后端,e2e 跑不通)
     await loginAs(page, SUPERVISOR_PHONE);
-    // 直接调 API 验证后端返回（走前端 fetch，包含真实 token）
     const cases = await page.evaluate(async () => {
       const token = localStorage.getItem("autoluyin_token");
-      const API = "http://localhost:18000/api/v1";
-      // 临时切到 agent 角色 token：调 select-membership
+      const API = `${window.location.protocol}//${window.location.hostname}:18100/api/v1`;
       const memResp = await fetch(`${API}/me/memberships`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const memberships = await memResp.json();
-      const agentMembership = memberships.find((m: { role: string }) => m.role === "agent_internal");
-      if (!agentMembership) return { error: "no agent_internal membership" };
+      const agentMembership = memberships.find(
+        (m: { role: string }) => m.role === "agent",
+      );
+      if (!agentMembership) return { error: "no agent membership" };
       const switchResp = await fetch(`${API}/auth/select-membership`, {
         method: "POST",
         headers: {
@@ -118,15 +129,14 @@ test.describe("v1.6.10 — 案件详情统一蓝本", () => {
         }),
       });
       const newAuth = await switchResp.json();
-      // 用新 token 拉案件
       const casesResp = await fetch(`${API}/agent/cases?page=1&page_size=10`, {
         headers: { Authorization: `Bearer ${newAuth.access_token}` },
       });
       const data = await casesResp.json();
-      return { total: data.total, role: newAuth.role };
+      return { total: data.total ?? data.items?.length, role: newAuth.role };
     });
     expect(cases).not.toHaveProperty("error");
-    expect((cases as { role: string }).role).toBe("agent_internal");
+    expect((cases as { role: string }).role).toBe("agent");
     expect((cases as { total: number }).total).toBeGreaterThanOrEqual(2);
   });
 

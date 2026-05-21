@@ -83,6 +83,15 @@ class Project(Base, TimestampMixin):
     internal_agent_commission_rate: Mapped[sa.Numeric | None] = mapped_column(sa.Numeric(6, 4))
     provider_agent_commission_rate: Mapped[sa.Numeric | None] = mapped_column(sa.Numeric(6, 4))
 
+    # v2.2 — 项目级收款配置（按项目设置；物业管理员在项目编辑页配）
+    payment_mode: Mapped[str] = mapped_column(
+        sa.String(16), nullable=False, server_default="property_self"
+    )  # property_self（物业自收，MVP）/ notary_escrow（公证提存，v1.1）
+    payee_name: Mapped[str | None] = mapped_column(sa.Text)  # 收款户名
+    payee_account: Mapped[str | None] = mapped_column(sa.Text)  # 收款账户（自由文本）
+    payee_qr_object_key: Mapped[str | None] = mapped_column(sa.Text)  # 收款码图 MinIO key
+    payment_instructions: Mapped[str | None] = mapped_column(sa.Text)  # 线下缴费说明
+
     __table_args__ = (
         sa.CheckConstraint(
             "charge_period IS NULL OR charge_period IN ('monthly','quarterly','semiannual','annual')",
@@ -116,6 +125,10 @@ class Project(Base, TimestampMixin):
             "late_fee_waive_auto_approve_threshold_pct IS NULL OR late_fee_waive_supervisor_max_pct IS NULL OR late_fee_waive_auto_approve_threshold_pct <= late_fee_waive_supervisor_max_pct",
             name="ck_project_late_fee_waive_thresholds_order",
         ),
+        sa.CheckConstraint(
+            "payment_mode IN ('property_self','notary_escrow')",
+            name="ck_project_payment_mode",
+        ),
     )
 
 
@@ -146,11 +159,25 @@ class CollectionCase(Base, TimestampMixin):
     last_contact_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     monthly_contact_count: Mapped[int] = mapped_column(sa.Integer, default=0)
     # v1.6 承诺还款到期时间，到期前 24h scan_and_notify_promise_expiring 会发提醒
+    # v0.5.6 起作为「承诺缴费日期」结构化字段(MarkPromiseModal 写入)
     promise_due_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    # v0.5.6 承诺缴费结构化字段(标记承诺缴费时填,与 promise_due_at 配套)
+    # promise_content:承诺什么(如「全额缴清」「先缴本金」「分期 2 次」+ 可附补充说明)
+    promise_content: Mapped[str | None] = mapped_column(sa.String(500))
+    # promise_amount:承诺缴费金额(可空 — 业主只口头承诺不报金额时不强求)
+    promise_amount: Mapped[sa.Numeric | None] = mapped_column(sa.Numeric(12, 2))
     data_hash: Mapped[str | None] = mapped_column(sa.Text)
     status: Mapped[str] = mapped_column(sa.Text, nullable=False, default="active")
     # v1.4 — 欠费情况说明（导入时录入，让催收员一眼看到原因）
     notes: Mapped[str | None] = mapped_column(sa.Text)
+
+    # v0.6.0 — 升级案件介入处理:督导陪同监听标记
+    # 非 NULL 表示该案件在实时通话墙高亮 + 催收员拨号时督导自动收通知
+    shadow_supervisor_id: Mapped[int | None] = mapped_column(
+        sa.BigInteger, sa.ForeignKey("user_account.id"), nullable=True
+    )
+    # v0.6.0 — 「直接结案 / 标坏账」必填原因(stage='pending_close' 时设置,等物业管理员二审)
+    close_reason: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
 
     __table_args__ = (
         sa.Index("idx_case_tenant_pool", "tenant_id", "pool_type"),

@@ -19,6 +19,9 @@ interface ScriptItem {
   label: "good" | "bad" | "pending";
   source: "platform" | "tenant";  // 来源
   recent_uses: { call_id: number; agent: string; date: string; was_adopted: boolean }[];
+  // v0.6.0 — AI 评分(基于近 30 天案件回款率 70% + 采用率 30%,定时任务每 6h 重算)
+  ai_score?: number | null;
+  ai_score_sample_count?: number | null;
 }
 
 const MOCK_SCRIPTS: ScriptItem[] = [
@@ -131,6 +134,9 @@ export function SupervisorScriptLabelsPage() {
               <th>话术内容</th>
               <th>异议类型</th>
               <th>组内采用率</th>
+              <th title="AI 评分(0-100):基于近 30 天案件回款率 70% + 采用率 30%,定时任务每 6h 重算。">
+                AI 评分
+              </th>
               <th>督导标注</th>
               <th>操作</th>
             </tr>
@@ -155,6 +161,37 @@ export function SupervisorScriptLabelsPage() {
                       {s.adoption}%
                     </span>
                   </div>
+                </td>
+                {/* v0.6.0 — AI 评分(mock 列,后续接 admin/scripts/effectiveness 的 ai_score) */}
+                <td>
+                  {s.ai_score == null ? (
+                    <span style={{ color: "var(--color-neutral-400)", fontSize: 12 }}>
+                      {s.ai_score_sample_count != null && s.ai_score_sample_count > 0
+                        ? `样本不足(${s.ai_score_sample_count})`
+                        : "—"}
+                    </span>
+                  ) : (
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        color:
+                          s.ai_score >= 70
+                            ? "var(--color-success)"
+                            : s.ai_score >= 40
+                              ? "#d97706"
+                              : "var(--color-danger)",
+                      }}
+                      title={`样本数:${s.ai_score_sample_count ?? "—"}`}
+                    >
+                      {s.ai_score.toFixed(1)}
+                      {s.ai_score_sample_count != null
+                        && s.ai_score_sample_count < 10 && (
+                        <span style={{ fontSize: 10, color: "#d97706", marginLeft: 2 }} title="样本不足 10,评分可能不稳">
+                          ⚠
+                        </span>
+                      )}
+                    </span>
+                  )}
                 </td>
                 <td>
                   {s.label === "good" && <span className="ds-badge ds-badge-green">好话术</span>}

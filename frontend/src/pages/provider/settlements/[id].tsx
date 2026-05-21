@@ -96,7 +96,7 @@ export function ProviderSettlementDetailPage() {
               结算明细
             </h2>
             <dl className="space-y-3 text-sm">
-              <Row label="租户" value={detail.tenant_name} />
+              <Row label="物业" value={detail.tenant_name} />
               <Row
                 label="结算期间"
                 value={formatPeriod(detail.period_start, detail.period_end)}

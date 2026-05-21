@@ -1,6 +1,7 @@
 from .active_session import ActiveSession  # noqa: F401
 from .audit import AuditLog, PlanConfig
 from .base import Base
+from .billing_pricing import BillingPricing  # noqa: F401
 from .blockchain_attestation import BlockchainAttestation  # noqa: F401
 from .call import AnalysisResult, CallRecord, RiskEvent, Transcript
 from .case import CollectionCase, OwnerProfile, Project
@@ -25,6 +26,7 @@ from .legal_internal import (  # noqa: F401
 )
 from .legal_platform_invoice import LegalPlatformInvoice  # noqa: F401
 from .notification import Notification, NotificationDeliveryLog  # noqa: F401
+from .payment_link import PaymentLink  # noqa: F401
 from .platform import (  # noqa: F401
     BlockchainConfig,
     CustomerFollowup,
@@ -43,6 +45,7 @@ from .tenant import (
     TenantMinuteUsage,
     UserTenantMembership,
 )
+from .training_case import TrainingCase  # noqa: F401
 from .user import PlatformOpsAssignment, UserAccount
 from .work import LegalCase, WorkOrder
 from .work_order_follow_up import WorkOrderFollowUp  # noqa: F401

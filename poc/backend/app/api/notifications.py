@@ -60,16 +60,21 @@ def list_my_notifications(
     db: Annotated[Session, Depends(get_db)],
     only_unread: bool = Query(False),
     limit: int = Query(50, ge=1, le=200),
+    # v0.6.0 — event_type 多值过滤(如 `&event_type=promise_expiring&event_type=supervisor_action`)
+    event_type: list[str] | None = Query(None),
 ) -> NotificationsListResp:
     user_id = _require_user_id(payload)
     q = select(Notification).where(Notification.user_id == user_id)
     if only_unread:
         q = q.where(Notification.read_at.is_(None))
+    if event_type:
+        q = q.where(Notification.event_type.in_(event_type))
     q = q.order_by(Notification.created_at.desc()).limit(limit)
     rows = db.execute(q).scalars().all()
-    total = db.execute(
-        select(func.count(Notification.id)).where(Notification.user_id == user_id)
-    ).scalar_one()
+    total_q = select(func.count(Notification.id)).where(Notification.user_id == user_id)
+    if event_type:
+        total_q = total_q.where(Notification.event_type.in_(event_type))
+    total = db.execute(total_q).scalar_one()
     return NotificationsListResp(
         items=[
             NotificationItem(

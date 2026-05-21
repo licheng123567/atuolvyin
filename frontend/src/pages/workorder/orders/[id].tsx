@@ -8,6 +8,7 @@ import { ArrowLeft, ClipboardList, MessageSquarePlus, Save } from "lucide-react"
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { ActivityTimeline } from "../../../components/case/ActivityTimeline";
+import { SearchableSelect } from "../../../components/ui/SearchableSelect";
 import { OwnerInfoCard } from "../../../components/case/OwnerInfoCard";
 import { ProjectInfoCard } from "../../../components/case/ProjectInfoCard";
 import type { CaseDetailResponse } from "../../../types/case";
@@ -87,17 +88,9 @@ interface FormState {
   priority: WorkOrderPriority;
 }
 
-const ROLE_LABEL: Record<string, string> = {
-  admin: "管理员",
-  supervisor: "督导",
-  agent: "催收员",
-  legal: "法务对接人",
-  coordinator: "协调员",
-  workorder: "协调员",
-  project_manager: "项目经理",
-  superadmin: "平台超管",
-  ops: "平台运营",
-};
+// v0.5.6 — 工单转交时下拉显示多类用户,roleLabelAny 跨 scope 兜底
+import { roleLabelAny } from "../../../lib/roleLabel";
+const ROLE_LABEL = (r: string) => roleLabelAny(r);
 
 function detailToForm(detail: WorkOrderDetail): FormState {
   return {
@@ -409,19 +402,20 @@ export function WorkOrderDetailPage() {
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">负责人</label>
                 {isAdmin ? (
-                  <select
-                    className="form-control"
+                  <SearchableSelect
                     value={form.assigned_to ?? ""}
-                    onChange={(e) => setForm({ ...form, assigned_to: e.target.value ? Number(e.target.value) : null })}
-                  >
-                    <option value="">未分配</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>{u.name}（{ROLE_LABEL[u.role] ?? u.role}）</option>
-                    ))}
-                    {form.assigned_to !== null && !users.some((u) => u.id === form.assigned_to) && (
-                      <option value={form.assigned_to}>用户 #{form.assigned_to} ({detail.assignee_name ?? "未知"})</option>
-                    )}
-                  </select>
+                    onChange={(v) => setForm({ ...form, assigned_to: v === "" ? null : Number(v) })}
+                    placeholder="未分配"
+                    options={[
+                      ...users.map((u) => ({
+                        value: u.id,
+                        label: `${u.name}（${ROLE_LABEL(u.role)}）`,
+                      })),
+                      ...(form.assigned_to !== null && !users.some((u) => u.id === form.assigned_to)
+                        ? [{ value: form.assigned_to, label: `用户 #${form.assigned_to} (${detail.assignee_name ?? "未知"})` }]
+                        : []),
+                    ]}
+                  />
                 ) : (
                   <div style={{ padding: "8px 12px", background: "#f9fafb", border: "1px solid var(--color-neutral-200)", borderRadius: 6, fontSize: 13, color: "var(--color-neutral-700)" }}>
                     {detail.assignee_name ?? "—"}

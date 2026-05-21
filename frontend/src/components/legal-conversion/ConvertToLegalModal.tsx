@@ -1,7 +1,11 @@
-// Sprint 16.1 — 法务转化下单弹窗（PRD §20.4）
+// Sprint 16.1 — 法务转化下单弹窗(PRD §20.4)
+//
+// v0.5.8 — 从中间 Modal 迁移到 RightDrawer 640px(决策矩阵:create 模式有 6 字段 +
+// 服务包列表;approve 模式需边看催收时间线 + 审批理由);详见 docs/UI_PATTERNS_MODAL.md
 import { useCustom, useCustomMutation } from "@refinedev/core";
-import { Loader2, Scale, X } from "lucide-react";
+import { Loader2, Scale } from "lucide-react";
 import { useState } from "react";
+import { RightDrawer } from "../ui/RightDrawer";
 
 interface PackageItem {
   id: number;
@@ -71,22 +75,31 @@ export function ConvertToLegalModal({
   )?.id;
   const effectiveSel = selectedPkgId ?? recommendedPkgId ?? null;
 
+  const isApprove = mode === "approve" && requestId != null;
+  // v0.5.4 — approve 模式不再要求选服务包(改由法务在 /legal-finalize 选);
+  // create 模式仍需选包(物业 admin 直接建单)
+  const canSubmit = isApprove ? true : effectiveSel != null;
+
   const handleSubmit = () => {
-    if (!effectiveSel) return;
-    const isApprove = mode === "approve" && requestId != null;
+    if (!canSubmit) return;
     const url = isApprove
       ? `legal-conversion-requests/${requestId}/approve`
       : `admin/cases/${caseId}/convert-to-legal`;
+    // approve body 不含 package_id(后端会忽略;新流程服务包由法务在 /legal-finalize 选)
+    const values = isApprove
+      ? { notes: notes.trim() || undefined }
+      : { package_id: effectiveSel, notes: notes.trim() || undefined };
     mutate(
       {
         url,
         method: "post",
-        values: { package_id: effectiveSel, notes: notes.trim() || undefined },
+        values,
       },
       {
         onSuccess: (data) => {
           if (isApprove) {
-            // approve 端点返回 LegalConversionRequestOut（含 related_order_id）
+            // approve 端点返回 LegalConversionRequestOut(状态变为 approved_pending_legal,
+            // related_order_id 此时仍为 null,等法务接单时才创建 Order)
             const req = data?.data as { related_order_id?: number };
             onSuccess(req.related_order_id ?? 0);
           } else {
@@ -96,34 +109,48 @@ export function ConvertToLegalModal({
         },
         onError: (err) => {
           const verb = isApprove ? "审批" : "下单";
-          alert(`${verb}失败：${(err as { message?: string }).message ?? "请重试"}`);
+          alert(`${verb}失败:${(err as { message?: string }).message ?? "请重试"}`);
         },
       },
     );
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-auto">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-neutral-200)] sticky top-0 bg-white">
-          <div className="flex items-center gap-2">
-            <Scale className="w-5 h-5 text-[var(--color-primary)]" />
-            <h2 className="text-base font-semibold">
-              {mode === "approve"
-                ? `批准转法务申请${requestId ? ` #${requestId}` : ""}`
-                : "转法务追诉"}
-            </h2>
-          </div>
+    <RightDrawer
+      open
+      onClose={onClose}
+      drawerKey="convert-to-legal"
+      defaultWidth={640}
+      title={
+        <span className="flex items-center gap-2">
+          <Scale className="w-5 h-5 text-[var(--color-primary)]" />
+          {mode === "approve"
+            ? `批准转法务申请${requestId ? ` #${requestId}` : ""}`
+            : "转法务追诉"}
+        </span>
+      }
+      footer={
+        <>
           <button
             type="button"
             onClick={onClose}
-            className="text-[var(--color-neutral-400)] hover:text-[var(--color-neutral-700)]"
+            className="px-3 py-1.5 text-sm rounded border border-[var(--color-neutral-300)] text-[var(--color-neutral-700)] hover:bg-[var(--color-neutral-50)]"
           >
-            <X className="w-5 h-5" />
+            取消
           </button>
-        </div>
-
-        <div className="p-5 space-y-4">
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!canSubmit || mutation.isPending}
+            className="px-4 py-1.5 text-sm rounded bg-[var(--color-primary)] text-white hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
+          >
+            {mutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {isApprove ? "批准转出" : "提交订单"}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
           {query.isLoading && (
             <div className="flex items-center gap-2 text-sm text-[var(--color-neutral-500)]">
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -180,6 +207,9 @@ export function ConvertToLegalModal({
                 </div>
               </section>
 
+              {/* v0.5.4 — 系统推荐 + 选择服务包仅 create 模式显示;approve 模式由法务在 /legal-finalize 阶段选 */}
+              {!isApprove && (
+              <>
               <section>
                 <h3 className="text-sm font-semibold mb-2">系统推荐</h3>
                 <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs">
@@ -244,6 +274,14 @@ export function ConvertToLegalModal({
                   })}
                 </div>
               </section>
+              </>
+              )}
+
+              {isApprove && (
+                <section className="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-800">
+                  ⚠ 审批仅表示同意转出案件给法务。批准后申请进入「待法务接单」队列,由法务接单时选定服务包并创建订单。
+                </section>
+              )}
 
               <section>
                 <label className="block text-sm font-semibold mb-1">备注</label>
@@ -257,27 +295,7 @@ export function ConvertToLegalModal({
               </section>
             </>
           )}
-        </div>
-
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-[var(--color-neutral-200)] sticky bottom-0 bg-white">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3 py-1.5 text-sm rounded border border-[var(--color-neutral-300)] text-[var(--color-neutral-700)] hover:bg-[var(--color-neutral-50)]"
-          >
-            取消
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={!effectiveSel || mutation.isPending}
-            className="px-4 py-1.5 text-sm rounded bg-[var(--color-primary)] text-white hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
-          >
-            {mutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            {mode === "approve" ? "批准并下单" : "提交订单"}
-          </button>
-        </div>
       </div>
-    </div>
+    </RightDrawer>
   );
 }

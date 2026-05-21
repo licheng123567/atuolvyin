@@ -18,6 +18,11 @@ tests/visual-diffs/
 playwright-report/
 test-results/
 
+# v0.5.6 — AI 视觉巡检产物(每次手动跑生成,不入库)
+vision-audit-output/
+vision-audit-report.md
+a11y-audit-report.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

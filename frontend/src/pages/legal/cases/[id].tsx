@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
+// v0.8.0 — 证据状态面板(替换原「下载存证包」单按钮)
+import { EvidenceStatusPanel } from "../../../components/evidence/EvidenceStatusPanel";
 import { getToken } from "../../../providers/auth-provider";
 import {
   LEGAL_STAGES,
@@ -92,44 +94,7 @@ export function LegalCaseDetailPage() {
   const { mutate: update, mutation: updateMutation } = useUpdate();
   const saving = updateMutation.isPending;
 
-  const [downloading, setDownloading] = useState(false);
-  const [downloadError, setDownloadError] = useState("");
-
-  const handleDownloadBundle = async () => {
-    if (!detail) return;
-    setDownloadError("");
-    setDownloading(true);
-    try {
-      const token = getToken() ?? "";
-      const apiBase = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
-      const resp = await fetch(
-        `${apiBase}/api/v1/legal/cases/${detail.id}/evidence-bundle`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      if (!resp.ok) {
-        setDownloadError(`下载失败：${resp.status}`);
-        return;
-      }
-      const cd = resp.headers.get("content-disposition") ?? "";
-      const filenameMatch = cd.match(/filename="([^"]+)"/);
-      const filename =
-        filenameMatch?.[1] ?? `evidence_case_${detail.case_id}.zip`;
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      const e = err as { message?: string };
-      setDownloadError(e.message ?? "下载失败");
-    } finally {
-      setDownloading(false);
-    }
-  };
+  // v0.8.0 — 「下载存证包 / 打包上链 / 证据清单」逻辑已下沉到 EvidenceStatusPanel 组件
 
   const handleSave = () => {
     if (!detail) return;
@@ -188,28 +153,10 @@ export function LegalCaseDetailPage() {
         >
           {formatStage(detail.stage)}
         </span>
-        <div className="ml-auto flex items-center gap-2">
-          {downloadError && (
-            <span className="text-xs text-[var(--color-danger)]">
-              {downloadError}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={handleDownloadBundle}
-            disabled={downloading}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-            style={{
-              background: "var(--color-primary)",
-              borderRadius: "var(--radius-md)",
-            }}
-            title="一键打包录音 / 转写 / AI 分析 / 链证元数据"
-          >
-            <Download className="w-4 h-4" />
-            {downloading ? "打包中…" : "下载存证包"}
-          </button>
-        </div>
       </div>
+
+      {/* v0.8.0 — 诉讼证据中心面板(替换原「下载存证包」单按钮) */}
+      <EvidenceStatusPanel legalCaseId={detail.id} />
 
       <div className="grid gap-6" style={{ gridTemplateColumns: "340px 1fr" }}>
         {/* Left: source case info */}

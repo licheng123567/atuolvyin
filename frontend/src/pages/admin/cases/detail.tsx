@@ -1,23 +1,23 @@
 // 1:1 还原 ui/admin.html#a-case-detail 案件详情
 // v1.6.6 — 业主信息 / 项目基本情况 / 活动时间线 抽到 components/case/* 共享给 agent
-import { useCustomMutation, useGetIdentity, useGo, useInvalidate, useList, useOne } from "@refinedev/core";
+import { useGetIdentity, useGo, useInvalidate, useOne, useCustomMutation } from "@refinedev/core";
 import type { AuthUser } from "../../../providers/auth-provider";
 import { ArrowLeft, ClipboardList, CreditCard, Download, Scale, Users } from "lucide-react";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import type { UserRole } from "../../../types";
 import type { CaseDetailResponse } from "../../../types/case";
 import { ConvertToLegalModal } from "../../../components/legal-conversion/ConvertToLegalModal";
 import { ActivityTimeline } from "../../../components/case/ActivityTimeline";
 import { FollowUpNoteCard } from "../../../components/case/FollowUpNoteCard";
 import { OwnerInfoCard } from "../../../components/case/OwnerInfoCard";
 import { ProjectInfoCard } from "../../../components/case/ProjectInfoCard";
-
-interface AdminUser {
-  id: number;
-  name: string;
-  role: UserRole;
-}
+// v0.6.0 — 分配/重新分配改用右侧 Drawer(原中间弹窗下拉太挤)
+import { AdminAssignDrawer } from "../../../components/admin/AdminAssignDrawer";
+import { WorkOrderCreateModal } from "../../../components/admin/WorkOrderCreateModal";
+import { PaymentLinkQrModal } from "../../../components/admin/PaymentLinkQrModal";
+import type { PaymentBreakdown } from "../../../components/admin/PaymentLinkQrModal";
+// v0.8.0 Wave C — 案件证据状态小卡片(右栏顶)
+import { EvidenceStatusBadge } from "../../../components/evidence/EvidenceStatusBadge";
 
 export function AdminCaseDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -27,10 +27,16 @@ export function AdminCaseDetailPage() {
   // v1.4 — PM 角色只读：admin/cases 路由放宽给 PM，但隐藏写操作
   const { data: identity } = useGetIdentity<AuthUser>();
   const isPM = identity?.role === "project_manager";
+  const isAdmin = identity?.role === "admin";
 
   const [assignOpen, setAssignOpen] = useState(false);
-  const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
   const [convertOpen, setConvertOpen] = useState(false);
+  const [workOrderOpen, setWorkOrderOpen] = useState(false);
+  const [paymentLink, setPaymentLink] = useState<{
+    token: string;
+    breakdown: PaymentBreakdown;
+    sent_to: string;
+  } | null>(null);
 
   const { query } = useOne<CaseDetailResponse>({
     resource: "admin/cases",
@@ -38,71 +44,35 @@ export function AdminCaseDetailPage() {
     queryOptions: { enabled: !!id },
   });
 
-  const isAdmin = identity?.role === "admin";
-
-  const { query: agentsQuery } = useList<AdminUser>({
-    resource: "admin/users",
-    pagination: { currentPage: 1, pageSize: 100 },
-    queryOptions: { enabled: isAdmin },
-  });
-
-  const agentsRaw = agentsQuery.data?.data;
-  const agentsAll: AdminUser[] = Array.isArray(agentsRaw)
-    ? (agentsRaw as AdminUser[])
-    : ((agentsRaw as unknown as { items?: AdminUser[] })?.items ?? []);
-  const agents = agentsAll.filter((u: AdminUser) => u.role === "agent");
-
-  const { mutate: assignCase, mutation: assignMutation } = useCustomMutation();
-  const assigning = assignMutation.isPending;
-  const { mutate: createWorkOrderMutate } = useCustomMutation();
+  // v0.6.0 — 分配逻辑全部下沉到 AdminAssignDrawer,这里不再拉用户列表 / 调 admin/cases/assign
+  const { mutate: sendPaymentLink, mutation: paymentLinkMutation } =
+    useCustomMutation();
 
   const detail = query.data?.data;
   const isLoading = query.isLoading;
 
-  const handleCreateWorkOrder = () => {
+  const handleSendPaymentLink = () => {
     if (!detail) return;
-    const description = window.prompt("工单内容（必填）：");
-    if (!description?.trim()) return;
-    createWorkOrderMutate(
+    sendPaymentLink(
       {
-        url: "workorders",
+        url: `admin/cases/${detail.id}/send-payment-link`,
         method: "post",
-        values: {
-          case_id: detail.id,
-          order_type: "case_followup",
-          description: description.trim(),
-          priority: "normal",
-        },
+        values: {},
       },
       {
         onSuccess: (resp) => {
-          const wo = resp.data as { id?: number };
-          alert(`工单 #${wo.id ?? "?"} 已创建`);
-        },
-        onError: (err) => alert(`建工单失败：${err.message}`),
-      },
-    );
-  };
-
-  const handleAssign = () => {
-    if (!selectedAgent || !detail) return;
-    assignCase(
-      {
-        url: "admin/cases/assign",
-        method: "post",
-        values: { case_ids: [detail.id], assign_to: selectedAgent },
-      },
-      {
-        onSuccess: () => {
-          setAssignOpen(false);
-          setSelectedAgent(null);
-          void invalidate({
-            resource: "admin/cases",
-            invalidates: ["detail", "list"],
-            id: detail.id,
+          const d = resp.data as {
+            token: string;
+            sent_to: string;
+            breakdown: PaymentBreakdown;
+          };
+          setPaymentLink({
+            token: d.token,
+            breakdown: d.breakdown,
+            sent_to: d.sent_to,
           });
         },
-        onError: () => alert("分配失败，请重试"),
+        onError: () => alert("生成缴费链接失败，请重试"),
       },
     );
   };
@@ -155,7 +125,7 @@ export function AdminCaseDetailPage() {
           />
         </div>
 
-        {/* ── 右：sticky 操作 + 跟进备注 ── */}
+        {/* ── 右：sticky 证据状态 + 操作 + 跟进备注 ── */}
         <div
           style={{
             position: "sticky",
@@ -165,6 +135,9 @@ export function AdminCaseDetailPage() {
             gap: 8,
           }}
         >
+          {/* v0.8.0 Wave C — 证据状态小卡片(admin/PM/supervisor 都看得到) */}
+          <EvidenceStatusBadge caseId={detail.id} />
+
           {!isPM && (
             <div className="ds-card" style={{ padding: 14 }}>
               <div
@@ -180,11 +153,13 @@ export function AdminCaseDetailPage() {
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <button
                   type="button"
+                  onClick={handleSendPaymentLink}
+                  disabled={paymentLinkMutation.isPending}
                   className="ds-btn ds-btn-primary"
                   style={{ width: "100%", justifyContent: "center" }}
                 >
                   <CreditCard className="w-3.5 h-3.5" />
-                  发送缴费链接
+                  {paymentLinkMutation.isPending ? "生成中…" : "发送缴费链接"}
                 </button>
                 {isAdmin && (
                   <button
@@ -199,7 +174,7 @@ export function AdminCaseDetailPage() {
                 )}
                 <button
                   type="button"
-                  onClick={handleCreateWorkOrder}
+                  onClick={() => setWorkOrderOpen(true)}
                   className="ds-btn ds-btn-secondary"
                   style={{ width: "100%", justifyContent: "center" }}
                 >
@@ -249,84 +224,22 @@ export function AdminCaseDetailPage() {
         </div>
       </div>
 
-      {/* Assign Modal */}
+      {/* v0.6.0 — 分配 / 重新分配右弹 Drawer(替换原中间居中 modal) */}
       {assignOpen && (
-        <div className="modal-overlay" onClick={() => setAssignOpen(false)}>
-          <div className="ds-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <span className="modal-title">分配 / 重分配坐席</span>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={() => setAssignOpen(false)}
-              >
-                ×
-              </button>
-            </div>
-            <div className="modal-body">
-              {agents.length === 0 ? (
-                <p className="text-sm text-muted">暂无可用坐席</p>
-              ) : (
-                <ul style={{ display: "flex", flexDirection: "column", gap: 4, listStyle: "none" }}>
-                  {agents.map((agent: AdminUser) => (
-                    <li key={agent.id}>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedAgent(agent.id)}
-                        style={{
-                          width: "100%",
-                          textAlign: "left",
-                          padding: "8px 12px",
-                          fontSize: 13.5,
-                          borderRadius: "var(--radius-md)",
-                          background:
-                            selectedAgent === agent.id
-                              ? "var(--color-primary-light)"
-                              : "transparent",
-                          color:
-                            selectedAgent === agent.id
-                              ? "var(--color-primary)"
-                              : "#374151",
-                          fontWeight: selectedAgent === agent.id ? 600 : 400,
-                          border: "none",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {agent.name}
-                        <span
-                          style={{ fontSize: 11.5, color: "#9ca3af", marginLeft: 8 }}
-                        >
-                          {/* TODO: show work_mode (internal/external) once /admin/users exposes work_mode field */}
-                          (催收员)
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className="modal-footer">
-              <button
-                type="button"
-                className="ds-btn ds-btn-secondary"
-                onClick={() => {
-                  setAssignOpen(false);
-                  setSelectedAgent(null);
-                }}
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                className="ds-btn ds-btn-primary"
-                onClick={handleAssign}
-                disabled={!selectedAgent || assigning}
-              >
-                {assigning ? "分配中…" : "确认分配"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <AdminAssignDrawer
+          caseIds={[detail.id]}
+          ownerName={detail.owner?.name ?? undefined}
+          currentAssignedTo={detail.assigned_to ?? null}
+          onClose={() => setAssignOpen(false)}
+          onAssigned={() => {
+            setAssignOpen(false);
+            void invalidate({
+              resource: "admin/cases",
+              invalidates: ["detail", "list"],
+              id: detail.id,
+            });
+          }}
+        />
       )}
 
       {convertOpen && (
@@ -338,6 +251,26 @@ export function AdminCaseDetailPage() {
             alert(`法务转化订单 #${orderId} 已创建，等待平台运营撮合律所`);
             go({ to: "/admin/legal-conversion" });
           }}
+        />
+      )}
+
+      {workOrderOpen && (
+        <WorkOrderCreateModal
+          caseId={detail.id}
+          onClose={() => setWorkOrderOpen(false)}
+          onSuccess={(orderId) => {
+            setWorkOrderOpen(false);
+            alert(`工单 #${orderId ?? "?"} 已创建，已自动派单给协调员`);
+          }}
+        />
+      )}
+
+      {paymentLink && (
+        <PaymentLinkQrModal
+          token={paymentLink.token}
+          breakdown={paymentLink.breakdown}
+          sentTo={paymentLink.sent_to}
+          onClose={() => setPaymentLink(null)}
         />
       )}
 

@@ -1,6 +1,10 @@
 // 风控事件记录 — 1:1 还原 ui/supervisor.html#sv-risk
 // v1.5.7 — mock 表格 + L1/L2 行 tinting + 处置状态 + 时间/级别/状态/项目筛选 + 搜索
-import { Search, X } from "lucide-react";
+// v0.6.0 — EventDetailModal 从只读改可写:督导可 select 处置类型 + 写处理结果,
+//          提交走 PATCH /supervisor/risk-events/{id}(已有端点,扩 handle_status)。
+//          原「v1.6 将开放完整处置流」占位已删除。
+import { useCustomMutation } from "@refinedev/core";
+import { Loader2, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { HelpPanel } from "../../../components/ui/HelpPanel";
 
@@ -239,24 +243,97 @@ export function SupervisorRiskEventsPage() {
         </table>
       </div>
 
-      {viewing && <EventDetailModal evt={viewing} onClose={() => setViewing(null)} />}
+      {viewing && (
+        <EventDetailModal
+          evt={viewing}
+          onClose={() => setViewing(null)}
+          onHandled={(handleStatus, label, badge) => {
+            // 本地 mock 表更新(后端真实 PATCH 已发出 — 但本页 list 仍是 mock 数据)
+            const idx = MOCK_EVENTS.findIndex((m) => m.id === viewing.id);
+            if (idx >= 0) {
+              MOCK_EVENTS[idx] = {
+                ...MOCK_EVENTS[idx],
+                handle_status: handleStatus,
+                handle_label: label,
+                handle_badge: badge,
+              };
+            }
+            setViewing(null);
+            alert("✓ 已写入处理结果");
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function EventDetailModal({ evt, onClose }: { evt: RiskEvent; onClose: () => void }) {
+// v0.6.0 — 处置类型 → (handle_status mock 映射 + 标签 + 徽章 class)
+const HANDLE_STATUS_OPTIONS: Array<{
+  value: "resolved" | "escalated" | "transferred_training" | "transferred_legal";
+  label: string;
+  mockStatus: RiskEvent["handle_status"];
+  badge: string;
+}> = [
+  { value: "resolved", label: "已处置 / 已关闭", mockStatus: "closed", badge: "ds-badge ds-badge-green" },
+  { value: "escalated", label: "升级到督导队列", mockStatus: "notified", badge: "ds-badge ds-badge-blue" },
+  { value: "transferred_training", label: "转培训案例库", mockStatus: "handled", badge: "ds-badge ds-badge-green" },
+  { value: "transferred_legal", label: "转法务", mockStatus: "handled", badge: "ds-badge ds-badge-orange" },
+];
+
+function EventDetailModal({
+  evt, onClose, onHandled,
+}: {
+  evt: RiskEvent;
+  onClose: () => void;
+  onHandled: (handleStatus: RiskEvent["handle_status"], label: string, badge: string) => void;
+}) {
+  const [status, setStatus] = useState<typeof HANDLE_STATUS_OPTIONS[number]["value"] | "">("");
+  const [note, setNote] = useState("");
+  const { mutate, mutation } = useCustomMutation();
+
+  const handleSubmit = () => {
+    const noteTrim = note.trim();
+    if (!status || !noteTrim) return;
+
+    const opt = HANDLE_STATUS_OPTIONS.find((o) => o.value === status);
+    if (!opt) return;
+
+    // 尝试调真实 PATCH;若是 mock 事件 id 后端会 404,catch 并降级本地更新
+    mutate(
+      {
+        url: `supervisor/risk-events/${evt.id}`,
+        method: "patch",
+        values: { note: noteTrim, handle_status: status },
+      },
+      {
+        onSuccess: () => onHandled(opt.mockStatus, opt.label, opt.badge),
+        onError: (err) => {
+          // 404 → 后端没这条事件(本页表头是 mock),但仍接受本地更新以演示
+          const code = (err as { statusCode?: number }).statusCode;
+          if (code === 404) {
+            onHandled(opt.mockStatus, opt.label, opt.badge);
+          } else {
+            alert(`提交失败:${(err as { message?: string }).message ?? "请重试"}`);
+          }
+        },
+      },
+    );
+  };
+
   return (
     <div
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}
       onClick={onClose}
     >
       <div
-        style={{ background: "white", borderRadius: 8, width: 480, maxWidth: "92%" }}
+        style={{ background: "white", borderRadius: 8, width: 520, maxWidth: "92%", maxHeight: "85vh", overflowY: "auto" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ padding: 16, borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontWeight: 600 }}>风控事件详情 #{evt.id}</span>
-          <button type="button" onClick={onClose} style={{ border: "none", background: "transparent", fontSize: 20, cursor: "pointer" }}>×</button>
+        <div style={{ padding: 16, borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "white" }}>
+          <span style={{ fontWeight: 600 }}>风控事件处置 #{evt.id}</span>
+          <button type="button" onClick={onClose} style={{ border: "none", background: "transparent", cursor: "pointer" }}>
+            <X size={18} />
+          </button>
         </div>
         <div style={{ padding: 16, fontSize: 13 }}>
           <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
@@ -267,11 +344,57 @@ function EventDetailModal({ evt, onClose }: { evt: RiskEvent; onClose: () => voi
           <div style={{ background: "var(--color-neutral-50)", padding: 12, borderRadius: 6, marginBottom: 12 }}>
             {evt.description.replace(/#KEYWORD#/g, evt.highlight ?? "")}
           </div>
-          <div style={{ marginBottom: 8 }}>处置状态：<span className={evt.handle_badge}>{evt.handle_label}</span></div>
-          <div style={{ fontSize: 12, color: "var(--color-neutral-500)" }}>v1.6 将开放完整处置流（介入/升级/关闭/报告）。</div>
+          <div style={{ marginBottom: 12 }}>
+            当前状态：<span className={evt.handle_badge}>{evt.handle_label}</span>
+          </div>
+
+          {/* v0.6.0 — 处置可写区 */}
+          <div className="form-group" style={{ marginBottom: 12 }}>
+            <label className="form-label">
+              处置类型 <span style={{ color: "#dc2626" }}>*</span>
+            </label>
+            <select
+              className="form-control"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as typeof status)}
+            >
+              <option value="">— 选择处置类型 —</option>
+              {HANDLE_STATUS_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <div style={{ fontSize: 11, color: "#6b7280", marginTop: 4 }}>
+              「转培训案例」→ 自动入培训案例库(C.2 Wave 联动);「转法务」→ 案件状态升级
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">
+              处理结果说明 <span style={{ color: "#dc2626" }}>*</span>
+            </label>
+            <textarea
+              className="form-control"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={4}
+              placeholder="必填,说明本次处置的具体动作和结论(如:已 1:1 与催收员沟通,告知用词不当的合规风险,要求下次改用 X 话术)"
+            />
+          </div>
         </div>
         <div style={{ padding: 16, borderTop: "1px solid #e5e7eb", display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button type="button" className="ds-btn ds-btn-secondary" onClick={onClose}>关闭</button>
+          <button type="button" className="ds-btn ds-btn-secondary" onClick={onClose} disabled={mutation.isPending}>
+            取消
+          </button>
+          <button
+            type="button"
+            className="ds-btn ds-btn-primary"
+            onClick={handleSubmit}
+            disabled={!status || !note.trim() || mutation.isPending}
+            style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
+          >
+            {mutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            提交处置
+          </button>
         </div>
       </div>
     </div>

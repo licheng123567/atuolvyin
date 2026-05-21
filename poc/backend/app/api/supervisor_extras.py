@@ -82,6 +82,7 @@ def list_risk_events(
             disposition_at=r.disposition_at,
             agent_user_id=u.id if u else None,
             agent_name=u.name if u else None,
+            handle_status=r.handle_status,  # v0.6.0
         )
         for r, c, u in rows
     ]
@@ -114,6 +115,78 @@ def annotate_risk_event(
     event.disposition_note = body.note
     event.disposition_by = user_id
     event.disposition_at = datetime.now(UTC)
+    # v0.6.0 — 若 body 带 handle_status,同步写入(支持转培训/转法务等处置类型)
+    if body.handle_status is not None:
+        event.handle_status = body.handle_status
+
+    # v0.6.0 — handle_status='transferred_training' 联动自动入库 TrainingCase
+    if body.handle_status == "transferred_training":
+        from app.services.training_curate import from_risk_event
+
+        from_risk_event(
+            db,
+            risk_event_id=event.id,
+            tenant_id=int(call.tenant_id),
+            actor_user_id=user_id,
+        )
+
+    # v0.8.0 — L2 风险事件处置时,标记「待上链」(pending);法务打包诉讼证据时统一升级强证据。
+    # 策略 1c:零成本 + 同等法律效力(打包时一次性上链)。
+    # 幂等:同 case_id + 同 risk_event 的 pending 行只标记一次。
+    if event.level == "L2" and call.tenant_id is not None:
+        from app.models.blockchain_attestation import BlockchainAttestation
+        from app.services.blockchain import mark_pending_attestation
+
+        legal_case_id_for_attest: int | None = None
+        case_id_payload: int | None = None
+        if call.case_id is not None:
+            case_id_payload = int(call.case_id)
+            # 若该案件已转法务,关联 legal_case_id 便于法务打包时一并捞出
+            from app.models.work import LegalCase as LegalCaseModel
+
+            lc = db.execute(
+                select(LegalCaseModel.id).where(LegalCaseModel.case_id == call.case_id).limit(1)
+            ).scalar_one_or_none()
+            if lc is not None:
+                legal_case_id_for_attest = int(lc)
+
+        # 幂等检查:同 call_id + risk_event_id(放 payload_metadata)未标记则建
+        existing = db.execute(
+            select(BlockchainAttestation.id)
+            .where(BlockchainAttestation.call_id == event.call_id)
+            .where(BlockchainAttestation.status == "pending")
+            .where(BlockchainAttestation.data_type == "analysis")
+            # JSONB 包含查询:payload_metadata 含 risk_event_id 等于 event.id
+            .where(BlockchainAttestation.payload_metadata["risk_event_id"].astext == str(event.id))
+            .limit(1)
+        ).scalar_one_or_none()
+        if existing is None:
+            # 用 trigger_text + disposition_note 作为存证数据;不大,utf-8 bytes 即可
+            data_payload = (
+                f"L2 风险事件 #{event.id}\n"
+                f"通话:{event.call_id} 案件:{case_id_payload or '—'}\n"
+                f"触发:{event.trigger_text or event.category}\n"
+                f"处置:{body.note or ''}\n"
+                f"audio_offset_ms:{event.audio_offset_ms or 0}\n"
+                f"标记时间:{datetime.now(UTC).isoformat()}\n"
+            ).encode()
+            mark_pending_attestation(
+                db,
+                tenant_id=int(call.tenant_id),
+                data=data_payload,
+                data_type="analysis",  # 风险事件归 analysis 类别(CHECK 约束限定 4 种)
+                title=f"L2 风险事件 #{event.id}",
+                description=f"催收员 {call.caller_user_id} 通话 {event.call_id}",
+                call_id=event.call_id,
+                legal_case_id=legal_case_id_for_attest,
+                payload_metadata={
+                    "risk_event_id": event.id,
+                    "risk_level": event.level,
+                    "risk_category": event.category,
+                    "marked_by": user_id,
+                },
+            )
+
     db.commit()
     db.refresh(event)
 
@@ -133,6 +206,7 @@ def annotate_risk_event(
         disposition_at=event.disposition_at,
         agent_user_id=agent.id if agent else None,
         agent_name=agent.name if agent else None,
+        handle_status=event.handle_status,
     )
 
 

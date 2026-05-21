@@ -663,18 +663,16 @@ export function CaseListPage() {
                 <label className="form-label">
                   选择催收员<span className="req">*</span>
                 </label>
-                <select
-                  className="form-control"
+                <SearchableSelect
                   value={selectedAgentId ?? ""}
-                  onChange={(e) => setSelectedAgentId(Number(e.target.value) || null)}
-                >
-                  <option value="">请选择内部催收员</option>
-                  {internalAgents.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}（{a.phone_masked}）
-                    </option>
-                  ))}
-                </select>
+                  placeholder="搜索并选择内部催收员"
+                  onChange={(v) => setSelectedAgentId(v === "" ? null : Number(v))}
+                  options={internalAgents.map((a) => ({
+                    value: a.id,
+                    label: a.name,
+                    subtitle: a.phone_masked,
+                  }))}
+                />
                 <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
                   外包项目的案件由服务商内部分配，本入口仅可分给物业内部催收员。
                 </div>

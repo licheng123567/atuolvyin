@@ -78,7 +78,7 @@ describe("ProviderLegalCaseDetailPage", () => {
         opts?.onSuccess?.({ id: 7 });
       }) as unknown as ReturnType<typeof useCreateConversionRequest>["create"],
       isPending: false,
-    });
+    } as unknown as ReturnType<typeof useCreateConversionRequest>);
 
     renderPage();
     await userEvent.click(screen.getByText("发起法务转化请求"));

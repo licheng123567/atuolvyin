@@ -3,6 +3,7 @@ import { useApiUrl, useCreate, useGo, useList } from "@refinedev/core";
 import { ArrowLeft, Info, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { SearchableSelect } from "../../../components/ui/SearchableSelect";
+import { SearchableMultiSelect } from "../../../components/ui/SearchableMultiSelect";
 import type { PaginatedResponse } from "../../../types";
 
 interface UserItem {
@@ -53,8 +54,14 @@ export function AdminProjectNewPage() {
   const [lateFeeAutoThreshold, setLateFeeAutoThreshold] = useState("");
   const [lateFeeSupervisorMax, setLateFeeSupervisorMax] = useState("");
   const [lateFeeDisabled, setLateFeeDisabled] = useState<"" | "true" | "false">("");
-  // §9.2 — 内勤催收员佣金率（百分比录入，提交时除以 100 转为 0-1 小数）
+  // §9.2-D1 — 内勤催收员佣金率（百分比录入，提交时除以 100 转为 0-1 小数）
   const [internalCommRate, setInternalCommRate] = useState("");
+  // §9.2-D2 — 外包项目的服务商佣金率初始值（百分比录入，提交时除以 100）
+  const [providerCommRate, setProviderCommRate] = useState("");
+  // v2.2 — 项目收款信息
+  const [payeeName, setPayeeName] = useState("");
+  const [payeeAccount, setPayeeAccount] = useState("");
+  const [paymentInstructions, setPaymentInstructions] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   async function uploadContract(file: File) {
@@ -168,15 +175,23 @@ export function AdminProjectNewPage() {
       late_fee_waive_auto_approve_threshold_pct: lateFeeAutoThreshold === "" ? null : Number(lateFeeAutoThreshold),
       late_fee_waive_supervisor_max_pct: lateFeeSupervisorMax === "" ? null : Number(lateFeeSupervisorMax),
       late_fee_waive_disabled: lateFeeDisabled === "" ? null : lateFeeDisabled === "true",
-      // §9.2 — 内勤催收员佣金率（÷100 转为 0-1 小数）
-      internal_agent_commission_rate: internalCommRate === "" ? null : Number(internalCommRate) / 100,
+      // v2.2 — 项目收款信息
+      payee_name: payeeName.trim() || null,
+      payee_account: payeeAccount.trim() || null,
+      payment_instructions: paymentInstructions.trim() || null,
     };
     if (mode === "outsourced") {
       values.provider_id = providerId;
+      // §9.2-D2 — 服务商佣金率初始值（÷100 转为 0-1 小数）
+      values.provider_agent_commission_rate =
+        providerCommRate === "" ? null : Number(providerCommRate) / 100;
     } else {
       values.provider_id = null;
       values.supervisor_user_ids = supervisorIds;
       values.agent_user_ids = agentIds;
+      // §9.2-D1 — 内勤催收员佣金率（÷100 转为 0-1 小数）
+      values.internal_agent_commission_rate =
+        internalCommRate === "" ? null : Number(internalCommRate) / 100;
     }
 
     create(
@@ -348,30 +363,32 @@ export function AdminProjectNewPage() {
 
               <div style={{ marginBottom: 10 }}>
                 <label className="form-label">督导组（可多选）</label>
-                <CheckboxList
-                  items={supervisors.map((u) => ({ id: u.id, label: u.name }))}
-                  selected={supervisorIds}
-                  onToggle={(id) =>
-                    setSupervisorIds((prev) =>
-                      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-                    )
-                  }
-                  emptyHint="还没有督导角色用户，请先到「用户管理」创建"
+                <SearchableMultiSelect
+                  value={supervisorIds}
+                  onChange={(v) => setSupervisorIds(v.map(Number))}
+                  options={supervisors.map((u) => ({ value: u.id, label: u.name }))}
+                  placeholder="搜索并选择督导"
                 />
+                {supervisors.length === 0 && (
+                  <div className="form-hint" style={{ color: "#d97706" }}>
+                    ⚠ 还没有督导角色用户，请先到「用户管理」创建
+                  </div>
+                )}
               </div>
 
               <div>
                 <label className="form-label">默认催收团队（可多选）</label>
-                <CheckboxList
-                  items={agents.map((u) => ({ id: u.id, label: u.name }))}
-                  selected={agentIds}
-                  onToggle={(id) =>
-                    setAgentIds((prev) =>
-                      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-                    )
-                  }
-                  emptyHint="还没有内部催收员，请先到「用户管理」创建"
+                <SearchableMultiSelect
+                  value={agentIds}
+                  onChange={(v) => setAgentIds(v.map(Number))}
+                  options={agents.map((u) => ({ value: u.id, label: u.name }))}
+                  placeholder="搜索并选择催收员"
                 />
+                {agents.length === 0 && (
+                  <div className="form-hint" style={{ color: "#d97706" }}>
+                    ⚠ 还没有内部催收员，请先到「用户管理」创建
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -421,7 +438,7 @@ export function AdminProjectNewPage() {
               >
                 <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
                 <span>
-                  服务商项目经理（PM）和外勤团队由服务商管理员在其工作台「我的项目」自行指派，物业 admin 不需在此选择。
+                  服务商项目经理（PM）和外勤团队由服务商管理员在其工作台「我的项目」自行指派，物业管理员不需在此选择。
                 </span>
               </div>
             </div>
@@ -580,21 +597,87 @@ export function AdminProjectNewPage() {
             </div>
           </div>
 
-          {/* §9.2 — 内勤催收员佣金率 */}
-          <div className="form-group">
-            <label className="form-label">内勤催收员佣金率 (%)</label>
-            <input
-              className="form-control"
-              type="number"
-              min="0"
-              max="100"
-              step="0.01"
-              value={internalCommRate}
-              onChange={(e) => setInternalCommRate(e.target.value)}
-              placeholder="例：5"
-            />
-            <div className="form-hint">留空 = 继承系统默认 5%</div>
+          {/* v2.2 — 项目收款信息 */}
+          <div
+            className="form-group"
+            style={{
+              background: "#f9fafb",
+              padding: 12,
+              borderRadius: 6,
+              border: "1px solid #e5e7eb",
+              marginBottom: 16,
+            }}
+          >
+            <div className="setting-label" style={{ marginBottom: 4 }}>
+              🏦 收款信息（业主缴费链接展示）
+            </div>
+            <div className="setting-hint" style={{ marginBottom: 12 }}>
+              业主扫描缴费二维码后看到的收款账户与缴费说明，按项目分别配置。
+            </div>
+            <div className="form-group">
+              <label className="form-label">收款户名</label>
+              <input
+                className="form-control"
+                value={payeeName}
+                onChange={(e) => setPayeeName(e.target.value)}
+                placeholder="例：金桂物业管理有限公司"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">收款账户</label>
+              <input
+                className="form-control"
+                value={payeeAccount}
+                onChange={(e) => setPayeeAccount(e.target.value)}
+                placeholder="例：工行 6222 0000 0000 1234"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">缴费说明</label>
+              <textarea
+                className="form-control"
+                value={paymentInstructions}
+                onChange={(e) => setPaymentInstructions(e.target.value)}
+                placeholder="例：工作日 9:00-17:00 到物业服务中心缴费；银行转账请注明房号"
+                style={{ minHeight: 60 }}
+              />
+            </div>
           </div>
+
+          {/* §9.2 — 催收佣金率（按催收方式区分：自办→内勤率；外包→服务商率）*/}
+          {mode === "self" ? (
+            <div className="form-group">
+              <label className="form-label">内勤催收员佣金率 (%)</label>
+              <input
+                className="form-control"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={internalCommRate}
+                onChange={(e) => setInternalCommRate(e.target.value)}
+                placeholder="例：5"
+              />
+              <div className="form-hint">留空 = 继承系统默认 5%</div>
+            </div>
+          ) : (
+            <div className="form-group">
+              <label className="form-label">服务商佣金率 (%)</label>
+              <input
+                className="form-control"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={providerCommRate}
+                onChange={(e) => setProviderCommRate(e.target.value)}
+                placeholder="例：8"
+              />
+              <div className="form-hint">
+                外包项目按此初始佣金率结算；留空 = 继承系统默认 5%，服务商后续可自行调整
+              </div>
+            </div>
+          )}
 
           {/* v1.6.1 / 1.6.2 — 项目级减免策略覆盖（拆分为两类） */}
           <div
@@ -644,7 +727,7 @@ export function AdminProjectNewPage() {
                     onChange={(e) => setDiscountSupervisorMax(e.target.value)}
                     placeholder="租户默认 30"
                   />
-                  <div className="form-hint">本金打折 ≤ X% 督导批；&gt; X% 转 admin</div>
+                  <div className="form-hint">本金打折 ≤ X% 督导批；&gt; X% 转物业管理员</div>
                 </div>
               </div>
               <div className="form-group">
@@ -694,7 +777,7 @@ export function AdminProjectNewPage() {
                     onChange={(e) => setLateFeeSupervisorMax(e.target.value)}
                     placeholder="租户默认 100"
                   />
-                  <div className="form-hint">滞纳金减免 ≤ X% 督导批；&gt; X% 转 admin</div>
+                  <div className="form-hint">滞纳金减免 ≤ X% 督导批；&gt; X% 转物业管理员</div>
                 </div>
               </div>
               <div className="form-group">
@@ -804,59 +887,5 @@ function ModeRadio({
         </div>
       </div>
     </label>
-  );
-}
-
-function CheckboxList({
-  items,
-  selected,
-  onToggle,
-  emptyHint,
-}: {
-  items: { id: number; label: string }[];
-  selected: number[];
-  onToggle: (id: number) => void;
-  emptyHint: string;
-}) {
-  if (items.length === 0) {
-    return (
-      <div className="form-hint" style={{ color: "#d97706", fontSize: 12 }}>
-        ⚠ {emptyHint}
-      </div>
-    );
-  }
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-      {items.map((it) => {
-        const isSel = selected.includes(it.id);
-        return (
-          <label
-            key={it.id}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: 13,
-              padding: "4px 10px",
-              borderRadius: 999,
-              border: isSel
-                ? "1px solid var(--color-primary)"
-                : "1px solid var(--color-neutral-200, #e5e7eb)",
-              background: isSel ? "var(--color-primary-light, #eff6ff)" : "white",
-              color: isSel ? "var(--color-primary)" : "var(--color-neutral-700)",
-              cursor: "pointer",
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={isSel}
-              onChange={() => onToggle(it.id)}
-              style={{ width: 12, height: 12 }}
-            />
-            {it.label}
-          </label>
-        );
-      })}
-    </div>
   );
 }

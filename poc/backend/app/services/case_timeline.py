@@ -250,7 +250,8 @@ def build_case_timeline(
             )
         )
 
-    # ── 阶段 / 分配审计 ─────────────────────────────────────────
+    # ── 阶段 / 分配 / 督导动作审计 ────────────────────────────────
+    # v0.5.4 — 加 case.reassigned + case.supervisor_*(催回访/催办/介入处理)
     audit_rows = db.execute(
         select(AuditLog, UserAccount.name)
         .join(UserAccount, UserAccount.id == AuditLog.actor_user_id, isouter=True)
@@ -259,22 +260,47 @@ def build_case_timeline(
             AuditLog.target_id == case_id,
             AuditLog.tenant_id == tenant_id,
             AuditLog.action.in_(
-                ("case.assigned", "case.stage_changed", "case.escalated", "case.released")
+                (
+                    "case.assigned",
+                    "case.stage_changed",
+                    "case.escalated",
+                    "case.released",
+                    "case.reassigned",
+                    "case.supervisor_remind_callback",
+                    "case.supervisor_urge",
+                    "case.supervisor_intervene",
+                )
             ),
         )
     ).all()
     for log, actor_name in audit_rows:
         note = log.action
-        if log.payload:
-            payload = log.payload
-            if log.action == "case.assigned" and "assignee_name" in payload:
-                note = f"分配给 {payload['assignee_name']}"
-            elif log.action == "case.stage_changed" and "stage" in payload:
-                note = f"阶段更新 → {payload['stage']}"
-            elif log.action == "case.escalated":
-                note = "升级处理"
-            elif log.action == "case.released":
-                note = "释放至公海"
+        payload = log.payload or {}
+        if log.action == "case.assigned" and "assignee_name" in payload:
+            note = f"分配给 {payload['assignee_name']}"
+        elif log.action == "case.stage_changed" and "stage" in payload:
+            note = f"阶段更新 → {payload['stage']}"
+        elif log.action == "case.escalated":
+            note = "升级处理"
+        elif log.action == "case.released":
+            note = "释放至公海"
+        elif log.action == "case.reassigned":
+            new_name = payload.get("new_assignee_name") or "新催收员"
+            note = f"重新分配给 {new_name}"
+            if payload.get("note"):
+                note += f" · {payload['note']}"
+        elif log.action == "case.supervisor_remind_callback":
+            note = "督导催回访"
+            if payload.get("note"):
+                note += f" · {payload['note']}"
+        elif log.action == "case.supervisor_urge":
+            note = "督导催办"
+            if payload.get("note"):
+                note += f" · {payload['note']}"
+        elif log.action == "case.supervisor_intervene":
+            note = "督导介入处理"
+            if payload.get("note"):
+                note += f" · {payload['note']}"
         events.append(
             TimelineEvent(
                 type=log.action,

@@ -1,7 +1,8 @@
 // 1:1 还原 ui/admin.html#a-import 业主名单导入
+// v0.6.0 — 修复「点击选择文件」无反应:加 ref input + 拖拽 + CSV 解析填表格
 import { useCreate, useGo, useList } from "@refinedev/core";
 import { CheckCircle, Download, Upload as UploadIcon } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { PaginatedResponse } from "../../../types";
 
 interface ImportRow {
@@ -47,12 +48,76 @@ interface ProjectOption {
   case_count: number;
 }
 
+// v0.6.0 — CSV 表头顺序(与「下载导入模板」配套)
+const CSV_HEADER_ORDER: (keyof ImportRow)[] = [
+  "name", "phone", "building", "room",
+  "bill_period_start", "bill_period_end",
+  "principal_amount", "late_fee_amount", "amount_owed",
+  "arrears_reason", "notes",
+];
+
+// 浏览器原生 CSV 解析 — 不引入额外依赖
+function parseCsv(text: string): ImportRow[] {
+  // 去除 UTF-8 BOM(Excel 另存 CSV 常带)
+  const cleaned = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+  const lines = cleaned
+    .split(/\r?\n/)
+    .filter((l) => l.trim());
+  if (lines.length < 2) return [];
+  // 跳过表头行(第一行)
+  return lines.slice(1).map((line) => {
+    const cells = line.match(/(?:[^,"]|"(?:[^"]|"")*")+/g) ?? [];
+    const clean = cells.map((c) => c.replace(/^"|"$/g, "").replace(/""/g, '"').trim());
+    const row: ImportRow = { ...EMPTY_ROW };
+    CSV_HEADER_ORDER.forEach((field, idx) => {
+      row[field] = clean[idx] ?? "";
+    });
+    return row;
+  });
+}
+
 export function CaseImportPage() {
   const go = useGo();
   const [rows, setRows] = useState<ImportRow[]>([{ ...EMPTY_ROW }]);
   const [lastImport, setLastImport] = useState<LastImportSummary | null>(null);
   const [projectId, setProjectId] = useState<number | "">("");
   const [error, setError] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [draggingOver, setDraggingOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFile(f: File | null) {
+    setFileError(null);
+    if (!f) return;
+    const name = f.name.toLowerCase();
+    if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+      setFileError(
+        ".xlsx 暂不支持浏览器直接解析 — 请把表另存为 .csv(UTF-8)后再上传,或用「手工录入」表格逐行录入。",
+      );
+      return;
+    }
+    if (!name.endsWith(".csv")) {
+      setFileError("仅支持 .csv / .xlsx 文件");
+      return;
+    }
+    try {
+      const text = await f.text();
+      const parsed = parseCsv(text);
+      if (parsed.length === 0) {
+        setFileError("CSV 内容为空或仅含表头");
+        return;
+      }
+      // 至少一行有姓名 + 手机才填到表格
+      const filtered = parsed.filter((r) => r.name && r.phone);
+      if (filtered.length === 0) {
+        setFileError("未找到有效数据行(姓名 + 手机号必填)");
+        return;
+      }
+      setRows(filtered);
+    } catch (e) {
+      setFileError(`解析失败:${(e as Error).message}`);
+    }
+  }
 
   const { query: projectQuery } = useList<ProjectOption>({
     resource: "admin/projects",
@@ -206,32 +271,70 @@ export function CaseImportPage() {
         </div>
       </div>
 
-      {/* Upload zone (visual; v1.x 接 Excel 解析) */}
+      {/* v0.6.0 — Upload zone:支持点击 + 拖拽,CSV 浏览器解析 → 填表格 */}
       <div className="ds-card section-gap">
         <div className="card-body">
-          <div className="upload-zone">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files?.[0] ?? null;
+              void handleFile(f);
+              if (e.target) e.target.value = "";  // 允许重复选同一文件
+            }}
+          />
+          <div
+            className="upload-zone"
+            style={{
+              cursor: "pointer",
+              border: `2px dashed ${draggingOver ? "#1A56DB" : "#cbd5e1"}`,
+              background: draggingOver ? "#eff6ff" : "transparent",
+              transition: "all 120ms ease",
+            }}
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDraggingOver(true);
+            }}
+            onDragLeave={() => setDraggingOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDraggingOver(false);
+              const f = e.dataTransfer.files?.[0] ?? null;
+              void handleFile(f);
+            }}
+          >
             <UploadIcon
               size={48}
               strokeWidth={1.5}
               color="#9ca3af"
               style={{ margin: "0 auto 12px", display: "block" }}
             />
-            <div
-              style={{
-                fontSize: 15,
-                fontWeight: 600,
-                color: "#374151",
-                marginBottom: 6,
-              }}
-            >
+            <div style={{ fontSize: 15, fontWeight: 600, color: "#374151", marginBottom: 6 }}>
               拖拽 Excel / CSV 文件到此区域
             </div>
             <div style={{ fontSize: 13, color: "#9ca3af" }}>
-              或 <span style={{ color: "#1A56DB", cursor: "pointer" }}>点击选择文件</span>
+              或 <span style={{ color: "#1A56DB" }}>点击选择文件</span>
             </div>
             <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 8 }}>
-              支持 .xlsx / .csv · 最大 100MB · 必须包含：姓名、手机号、楼栋、欠费开始日期、欠费截止日期、物业费、违约金、欠费总额（= 物业费 + 违约金）
+              支持 .csv (UTF-8) · 最大 100MB · 必须包含:姓名、手机号、楼栋、欠费开始日期、欠费截止日期、物业费、违约金、欠费总额(= 物业费 + 违约金)
             </div>
+            {fileError && (
+              <div
+                style={{
+                  marginTop: 10,
+                  padding: "6px 10px",
+                  background: "#fef2f2",
+                  color: "#dc2626",
+                  borderRadius: 6,
+                  fontSize: 12,
+                }}
+              >
+                {fileError}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -253,7 +356,7 @@ export function CaseImportPage() {
                     <th>姓名*</th>
                     <th>手机号*</th>
                     <th>楼栋*</th>
-                    <th>房间</th>
+                    <th>房号（坐落）</th>
                     <th>欠费开始日期</th>
                     <th>欠费截止日期</th>
                     <th>物业费 ¥</th>

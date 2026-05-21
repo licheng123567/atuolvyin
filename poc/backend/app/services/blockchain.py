@@ -13,12 +13,14 @@ import hashlib
 import logging
 import secrets
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.core.crypto import decrypt_phone
+from app.models.billing_pricing import BillingPricing
 from app.models.blockchain_attestation import BlockchainAttestation
 from app.models.platform import BlockchainConfig
 from app.services import ebaoquan
@@ -35,6 +37,19 @@ _EBAOQUAN_TYPE = {
     "analysis": "2",
     "evidence_bundle": "99",
 }
+
+
+def _resolve_cost(db: Session, data_type: str) -> Decimal | None:
+    """v0.5.9 — 查 active BillingPricing 拿单价(evidence_bundle 走 per_case 价,
+    其他走 per_attestation 价)。NULL 兼容 — 没配置 active 价时不冻结金额。"""
+    pricing = db.execute(
+        select(BillingPricing).where(BillingPricing.is_active.is_(True)).limit(1)
+    ).scalar_one_or_none()
+    if pricing is None:
+        return None
+    if data_type == "evidence_bundle":
+        return pricing.blockchain_price_per_case_bundle
+    return pricing.blockchain_price_per_attestation
 
 
 def _resolve_config(db: Session) -> BlockchainConfig | None:
@@ -72,6 +87,61 @@ def _record_config_failure(config: BlockchainConfig, reason: str) -> None:
     config.last_failure_reason = reason[:500]
 
 
+def mark_pending_attestation(
+    db: Session,
+    *,
+    tenant_id: int,
+    data: bytes,
+    data_type: str,
+    title: str,
+    description: str | None = None,
+    payload_metadata: dict[str, Any] | None = None,
+    call_id: int | None = None,
+    legal_case_id: int | None = None,
+) -> BlockchainAttestation:
+    """v0.8.0 — 标记待上链(不调易保全 API,零成本)。
+
+    用于:L2 风险事件等"未来可能要上链"的数据,先记录哈希 + 元数据,
+    等法务真正打包诉讼证据时,attest_pending() 批量提交易保全。
+
+    与 submit_attestation 区别:
+      - tx_hash=NULL / block_height=NULL / cost_amount=NULL
+      - status='pending'(CHECK 约束已枚举)
+      - chain_provider='pending'(避免混淆已实际入链记录)
+      - 不调外部 API
+    """
+    if not data:
+        raise ValueError("data 不能为空")
+    data_sha256 = hashlib.sha256(data).hexdigest()
+    data_sha512 = hashlib.sha512(data).hexdigest()
+    now = datetime.now(UTC)
+    record = BlockchainAttestation(
+        tenant_id=tenant_id,
+        call_id=call_id,
+        legal_case_id=legal_case_id,
+        data_sha256=data_sha256,
+        data_sha512=data_sha512,
+        data_type=data_type,
+        chain_provider="pending",
+        chain_endpoint=None,
+        tx_hash=None,
+        block_height=None,
+        status="pending",
+        submitted_at=now,
+        confirmed_at=None,
+        cost_amount=None,  # 未实际上链,不计费
+        payload_metadata={
+            **(payload_metadata or {}),
+            "title": title[:50],
+            "description": (description or "")[:50],
+            "marked_pending_at": now.isoformat(),
+        },
+    )
+    db.add(record)
+    db.flush()
+    return record
+
+
 def submit_attestation(
     db: Session,
     *,
@@ -102,6 +172,9 @@ def submit_attestation(
 
     use_ebaoquan = config is not None and config.provider == "ebaoquan" and config.is_active
 
+    # v0.5.9 — 查单价(active BillingPricing);data_type 决定 per_case vs per_attestation
+    cost_amount = _resolve_cost(db, data_type)
+
     if not use_ebaoquan:
         # ── mock 分支（行为与历史一致）──
         provider = config.provider if config is not None else DEFAULT_PROVIDER
@@ -121,6 +194,7 @@ def submit_attestation(
             status="confirmed",
             submitted_at=now,
             confirmed_at=now,
+            cost_amount=cost_amount,
             payload_metadata=payload_metadata,
         )
         db.add(record)
@@ -143,6 +217,7 @@ def submit_attestation(
         status="failed",
         submitted_at=now,
         confirmed_at=None,
+        cost_amount=cost_amount,
         payload_metadata=dict(payload_metadata or {}),
     )
 

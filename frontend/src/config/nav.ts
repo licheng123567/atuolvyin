@@ -27,16 +27,11 @@ const NAV_CONFIG: Partial<Record<UserRole | "workorder", NavSection[]>> = {
       ],
     },
     {
-      title: "CRM",
+      title: "案件管理",
       items: [
         { label: "案件列表", path: "/admin/cases", icon: "List" },
         { label: "案件看板", path: "/admin/cases/kanban", icon: "Kanban" },
         { label: "公海管理", path: "/admin/pool", icon: "Inbox" },
-      ],
-    },
-    {
-      title: "数据管理",
-      items: [
         { label: "业主名单导入", path: "/admin/cases/import", icon: "Upload" },
       ],
     },
@@ -49,33 +44,41 @@ const NAV_CONFIG: Partial<Record<UserRole | "workorder", NavSection[]>> = {
       ],
     },
     {
-      title: "结算与配置",
+      title: "结算与报表",
       items: [
-        // 结算 → 报表 紧邻（财务月结视角）
         { label: "结算管理", path: "/admin/settlements", icon: "Receipt" },
-        {
-          label: "数据报表",
-          path: "/admin/reports",
-          icon: "BarChart2",
-        },
-        {
-          label: "合规月报",
-          path: "/admin/compliance",
-          icon: "Shield",
-        },
-        // 话术 → 风控 紧邻（话术 + 风险词同属对话质量管理）
+        // v0.5.4 — 减免大额审批从「法务管理」移入此处（减免是金额谈判，非法务事项）
+        { label: "减免大额审批", path: "/admin/discount-approvals", icon: "BadgePercent" },
+        // v0.5.9 — 通话计费 + 存证消费(物业方 SaaS 消费视图)
+        // v0.8.0 — 存证消费升级为「存证管理」(计费 + 风险敞口双 tab)
+        { label: "通话计费", path: "/admin/billing/minute-usage", icon: "Phone" },
+        { label: "存证管理", path: "/admin/billing/blockchain", icon: "Shield" },
+        { label: "数据报表", path: "/admin/reports", icon: "BarChart2" },
+        { label: "合规月报", path: "/admin/compliance", icon: "Shield" },
+      ],
+    },
+    {
+      title: "话术与风控",
+      items: [
         { label: "话术库管理", path: "/admin/scripts", icon: "MessageSquare" },
         { label: "话术效果", path: "/admin/scripts/effectiveness", icon: "BarChart3" },
         { label: "风控关键词", path: "/admin/risk-keywords", icon: "ShieldAlert" },
-        // 法务 + 审计 + 设置 殿后
+      ],
+    },
+    {
+      title: "法务管理",
+      items: [
         { label: "法务转化", path: "/admin/legal-conversion", icon: "Scale" },
         // v1.6.8 — 法务转化两步审批 inbox（催收员申请 → admin 也可代督导审批）
         { label: "法务转化审批", path: "/admin/legal-conversion-approvals", icon: "ClipboardList" },
         // v1.9.0 — 法务内部处理配套：合作律所 + 律师函模板（物业法务起草律师函时选用）
         { label: "合作律所", path: "/admin/partner-law-firms", icon: "Building2" },
         { label: "律师函模板", path: "/admin/internal-letter-templates", icon: "FileText" },
-        { label: "减免大额审批", path: "/admin/discount-approvals", icon: "BadgePercent" },
-        { label: "内勤提成", path: "/admin/agent-commissions", icon: "Wallet" },
+      ],
+    },
+    {
+      title: "系统",
+      items: [
         { label: "审计日志", path: "/admin/audit-logs", icon: "ScrollText" },
         { label: "系统配置", path: "/admin/settings", icon: "Settings" },
       ],
@@ -134,6 +137,10 @@ const NAV_CONFIG: Partial<Record<UserRole | "workorder", NavSection[]>> = {
         { label: "工作台", path: "/agent/workstation", icon: "Headphones" },
         { label: "我的案件", path: "/agent/cases", icon: "ClipboardList" },
         { label: "通话记录", path: "/agent/call-history", icon: "PhoneCall" },
+        // v0.6.0 — 提醒中心:即将到期承诺 / 法务申请进度 / 案件 SLA 告警
+        { label: "提醒中心", path: "/agent/reminders", icon: "Bell" },
+        // v0.7.0 — 培训案例库(只读浏览;App WebView 也可访问)
+        { label: "培训案例库", path: "/agent/training", icon: "BookMarked" },
         { label: "个人信息", path: "/agent/profile", icon: "User" },
       ],
     },
@@ -145,7 +152,9 @@ const NAV_CONFIG: Partial<Record<UserRole | "workorder", NavSection[]>> = {
     {
       title: "我的工作",
       items: [
-        // v1.9.0 — 物业法务内部处理新工作台（主入口）
+        // v0.5.4 — 督导/admin 批准的转法务申请,法务接单选服务包后建 Order
+        { label: "待法务接单", path: "/legal/pending-finalize", icon: "Briefcase" },
+        // v1.9.0 — 物业法务内部处理新工作台（建单后的 LegalConversionOrder）
         { label: "待内部处理", path: "/legal/internal-orders", icon: "Gavel" },
         // v1.9.1 — 升级律所追踪：status=escalated_to_lawfirm 的订单，可加跟进记录（方案 C 之前先只读派单状态）
         { label: "升级律所追踪", path: "/legal/internal-orders?tab=escalated", icon: "ExternalLink" },
@@ -204,6 +213,7 @@ const NAV_CONFIG: Partial<Record<UserRole | "workorder", NavSection[]>> = {
       title: "法务",
       items: [
         { label: "律所池", path: "/ops/law-firms", icon: "Building2" },
+        { label: "服务包目录", path: "/ops/legal-packages", icon: "Package" },
         { label: "法务工作台", path: "/ops/legal-workstation", icon: "Scale" },
       ],
     },
@@ -225,6 +235,7 @@ const NAV_CONFIG: Partial<Record<UserRole | "workorder", NavSection[]>> = {
         { label: "服务商管理", path: "/ops/providers", icon: "Briefcase" },
         { label: "结算总览", path: "/ops/settlements", icon: "Receipt" },
         { label: "律所池", path: "/ops/law-firms", icon: "Building2" },
+        { label: "服务包目录", path: "/ops/legal-packages", icon: "Package" },
         { label: "法务工作台", path: "/ops/legal-workstation", icon: "Scale" },
         { label: "系统公告", path: "/ops/announcements", icon: "Megaphone" },
       ],
@@ -246,16 +257,40 @@ const NAV_CONFIG: Partial<Record<UserRole | "workorder", NavSection[]>> = {
 
 // Provider-side admin nav (scope = provider:{id}):
 // admin role with provider scope gets the provider dashboard menu
+// v0.5.6 — 加「案件管理」段(本服务商接手项目下的案件 + 公海 + 看板)
 const PROVIDER_ADMIN_NAV: NavSection[] = [
   {
+    title: "工作台",
     items: [
       { label: "总览", path: "/provider/dashboard", icon: "LayoutDashboard" },
       { label: "我的项目", path: "/provider/projects", icon: "FolderKanban" },
-      { label: "合作租户", path: "/provider/tenants", icon: "Building2" },
+      { label: "合作物业", path: "/provider/tenants", icon: "Building2" },
+    ],
+  },
+  {
+    title: "案件管理",
+    items: [
+      { label: "案件列表", path: "/provider/cases", icon: "List" },
+      { label: "案件看板", path: "/provider/cases/kanban", icon: "KanbanSquare" },
+      { label: "服务商公海", path: "/provider/pool", icon: "Inbox" },
+    ],
+  },
+  {
+    title: "人员与话术",
+    items: [
       { label: "团队管理", path: "/provider/team", icon: "Users" },
       { label: "团队绩效", path: "/provider/team-performance", icon: "TrendingUp" },
       { label: "话术库", path: "/provider/scripts", icon: "MessageSquare" },
+      // v0.7.0 — 对齐物业 admin/scripts/effectiveness
+      { label: "话术效果", path: "/provider/scripts/effectiveness", icon: "BarChart3" },
+    ],
+  },
+  {
+    title: "结算与报表",
+    items: [
       { label: "收入结算", path: "/provider/settlements", icon: "Receipt" },
+      // v0.5.9 — 跨租户分钟消费(我接的每个租户贡献多少分钟 / 金额)
+      { label: "分钟消费", path: "/provider/billing/minute-usage", icon: "Phone" },
       { label: "历史报表", path: "/provider/historical-reports", icon: "Archive" },
     ],
   },
@@ -281,7 +316,10 @@ const LEGAL_PROVIDER_NAV: NavSection[] = [
   },
 ];
 
-// 服务商督导 nav（scope=provider:{id}）— Phase 1 九项
+// 服务商督导 nav（scope=provider:{id}）
+// v0.7.0 — 全面对齐物业督导:案件管理段补 5 项(升级/承诺/超期/减免/法务转化审批)+
+//          质检培训段补「培训案例库」;后端 supervisor_escalated.py 已加
+//          supervisor_case_filter scope 守卫,确保服务商督导只能看自己接的项目案件。
 const SUPERVISOR_PROVIDER_NAV: NavSection[] = [
   {
     title: "实时监控",
@@ -295,6 +333,12 @@ const SUPERVISOR_PROVIDER_NAV: NavSection[] = [
     title: "案件管理",
     items: [
       { label: "案件分配", path: "/supervisor/cases", icon: "ClipboardList" },
+      // v0.7.0 — 服务商督导也需处理升级案件/承诺/超期(本服务商接的项目)
+      { label: "升级案件处理", path: "/supervisor/escalated", icon: "AlertCircle" },
+      { label: "承诺催付", path: "/supervisor/promises", icon: "CalendarClock" },
+      { label: "案件超期报警", path: "/supervisor/case-alerts", icon: "BellRing" },
+      { label: "减免审批", path: "/supervisor/discount-approvals", icon: "BadgePercent" },
+      { label: "法务转化审批", path: "/supervisor/legal-conversion-approvals", icon: "Scale" },
     ],
   },
   {
@@ -303,6 +347,8 @@ const SUPERVISOR_PROVIDER_NAV: NavSection[] = [
       { label: "质检复核", path: "/supervisor/reviews", icon: "ShieldCheck" },
       { label: "话术反馈", path: "/supervisor/script-labels", icon: "MessageCircle" },
       { label: "风控事件", path: "/supervisor/risk-events", icon: "AlertTriangle" },
+      // v0.7.0 — 培训案例库本租户内可见(切 tenant scope 看不同物业训练案)
+      { label: "培训案例库", path: "/supervisor/training", icon: "BookMarked" },
     ],
   },
   {

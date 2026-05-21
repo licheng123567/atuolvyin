@@ -24,19 +24,9 @@ const ACTION_OPTIONS = [
   { value: "settlement.pay", label: "支付结算" },
 ];
 
-// 角色英文 → 中文（与 admin/users 保持一致）
-const ROLE_LABEL: Record<string, string> = {
-  superadmin: "平台超管",
-  ops: "平台运营",
-  admin: "管理员",
-  supervisor: "督导",
-  agent: "催收员",
-  legal: "法务对接人",
-  coordinator: "协调员",
-  workorder: "协调员",
-  project_manager: "项目经理",
-  owner: "业主",
-};
+// v0.5.6 — 平台审计日志,actor 可能跨 scope,用 roleLabelAny 兜底
+import { roleLabelAny } from "../../../lib/roleLabel";
+const ROLE_LABEL = (r: string) => (r === "owner" ? "业主" : roleLabelAny(r));
 
 const PAGE_SIZE = 20;
 
@@ -205,7 +195,7 @@ export function SuperAuditPage() {
                     {new Date(row.created_at).toLocaleString()}
                   </td>
                   <td className="px-4 py-2">{row.actor_user_id ?? "—"}</td>
-                  <td className="px-4 py-2">{row.actor_role ? (ROLE_LABEL[row.actor_role] ?? row.actor_role) : "—"}</td>
+                  <td className="px-4 py-2">{row.actor_role ? ROLE_LABEL(row.actor_role) : "—"}</td>
                   <td className="px-4 py-2 font-medium">{row.action}</td>
                   <td className="px-4 py-2">
                     {row.target_type ? `${row.target_type}/${row.target_id ?? "—"}` : "—"}

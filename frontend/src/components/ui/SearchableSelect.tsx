@@ -20,6 +20,8 @@ interface Props {
   allowClear?: boolean;
   className?: string;
   style?: React.CSSProperties;
+  /** v0.5.8 — 下拉列表最大高度 px。默认 400(原 280 太矮,用户反馈只能看 2 个名字) */
+  maxHeight?: number;
 }
 
 export function SearchableSelect({
@@ -32,6 +34,7 @@ export function SearchableSelect({
   allowClear = true,
   className = "form-control",
   style,
+  maxHeight = 400,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -152,7 +155,7 @@ export function SearchableSelect({
             borderRadius: 6,
             boxShadow: "0 4px 12px rgba(0,0,0,.1)",
             zIndex: 50,
-            maxHeight: 280,
+            maxHeight,
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",

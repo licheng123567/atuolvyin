@@ -1,7 +1,6 @@
 // 1:1 还原 ui/admin.html#a-pool 公海管理
 // v1.6.5 — 服务端分页 + debounce 关键字搜索
 import {
-  useCustomMutation,
   useGo,
   useInvalidate,
   useList,
@@ -10,6 +9,10 @@ import { useState } from "react";
 import { PaginationBar } from "../../../components/ui/PaginationBar";
 import { SearchInput } from "../../../components/ui/SearchInput";
 import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
+// v0.6.0 — 公海分配也改用右侧 Drawer
+import { AdminAssignDrawer } from "../../../components/admin/AdminAssignDrawer";
+// v0.7.0 — 优先级 badge 抽到共享组件
+import { PriorityBadge } from "../../../components/ui/PriorityBadge";
 import type { PaginatedResponse } from "../../../types";
 
 const PAGE_SIZE = 20;
@@ -51,13 +54,7 @@ function formatJoinedAgo(iso: string): string {
   return d.toISOString().slice(0, 10);
 }
 
-function priorityBadge(score: number): { className: string; label: string } {
-  if (score >= 80) return { className: "ds-badge ds-badge-red", label: `${score}分` };
-  if (score >= 60)
-    return { className: "ds-badge ds-badge-orange", label: `${score}分` };
-  if (score >= 40) return { className: "ds-badge ds-badge-blue", label: `${score}分` };
-  return { className: "ds-badge ds-badge-gray", label: `${score}分` };
-}
+// v0.7.0 — priorityBadge helper 已抽到 components/ui/PriorityBadge.tsx
 
 interface ProjectOption {
   id: number;
@@ -67,7 +64,6 @@ interface ProjectOption {
 export function AdminPoolPage() {
   const [page, setPage] = useState(1);
   const [assignFor, setAssignFor] = useState<number | null>(null);
-  const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
   const [keyword, setKeyword] = useState("");
   const [overdueFilter, setOverdueFilter] = useState("");
   const [projectFilter, setProjectFilter] = useState<number | "">("");
@@ -150,28 +146,13 @@ export function AdminPoolPage() {
   // TODO: once /admin/users exposes work_mode, filter to work_mode=internal for property-side assignment
   const agents = allUsers.filter((u) => u.role === "agent");
 
-  const { mutate: assign } = useCustomMutation();
-
-  const handleAssign = () => {
-    if (assignFor === null || selectedAgent === null) return;
-    assign(
-      {
-        url: "admin/cases/assign",
-        method: "post",
-        values: { case_ids: [assignFor], assign_to: selectedAgent },
-      },
-      {
-        onSuccess: () => {
-          setAssignFor(null);
-          setSelectedAgent(null);
-          void invalidate({
-            resource: "admin/cases",
-            invalidates: ["list"],
-          });
-        },
-        onError: () => alert("分配失败，请重试"),
-      },
-    );
+  // v0.6.0 — 分配逻辑下沉到 AdminAssignDrawer
+  const handleAssigned = () => {
+    setAssignFor(null);
+    void invalidate({
+      resource: "admin/cases",
+      invalidates: ["list"],
+    });
   };
 
   return (
@@ -282,7 +263,6 @@ export function AdminPoolPage() {
                 </tr>
               )}
               {cases.map((c) => {
-                const priority = priorityBadge(c.priority_score);
                 const room =
                   c.owner.building && c.owner.room
                     ? `${c.owner.building}${c.owner.room}`
@@ -313,7 +293,7 @@ export function AdminPoolPage() {
                     </td>
                     <td className="text-muted">{c.release_reason ?? "超时未跟进"}</td>
                     <td>
-                      <span className={priority.className}>{priority.label}</span>
+                      <PriorityBadge score={c.priority_score} />
                     </td>
                     <td>{formatJoinedAgo(c.created_at)}</td>
                     <td>
@@ -384,77 +364,13 @@ export function AdminPoolPage() {
         </div>
       </div>
 
-      {/* Assign modal */}
+      {/* v0.6.0 — 分配右弹 Drawer(替换原中间居中 modal) */}
       {assignFor !== null && (
-        <div
-          className="modal-overlay"
-          onClick={() => {
-            setAssignFor(null);
-            setSelectedAgent(null);
-          }}
-        >
-          <div className="ds-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <span className="modal-title">分配案件</span>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={() => {
-                  setAssignFor(null);
-                  setSelectedAgent(null);
-                }}
-              >
-                ×
-              </button>
-            </div>
-            <div className="modal-body">
-              <div className="form-group">
-                <label className="form-label">
-                  选择催收员<span className="req">*</span>
-                </label>
-                {agents.length === 0 ? (
-                  <p style={{ fontSize: 13, color: "#9ca3af" }}>暂无可用催收员</p>
-                ) : (
-                  <select
-                    className="form-control"
-                    value={selectedAgent ?? ""}
-                    onChange={(e) =>
-                      setSelectedAgent(Number(e.target.value) || null)
-                    }
-                  >
-                    <option value="">— 选择员工 —</option>
-                    {agents.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                        {/* TODO: show work_mode (internal/external) once /admin/users exposes work_mode */}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button
-                type="button"
-                className="ds-btn ds-btn-secondary"
-                onClick={() => {
-                  setAssignFor(null);
-                  setSelectedAgent(null);
-                }}
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                className="ds-btn ds-btn-primary"
-                onClick={handleAssign}
-                disabled={selectedAgent === null}
-              >
-                确认分配
-              </button>
-            </div>
-          </div>
-        </div>
+        <AdminAssignDrawer
+          caseIds={[assignFor]}
+          onClose={() => setAssignFor(null)}
+          onAssigned={handleAssigned}
+        />
       )}
     </div>
   );

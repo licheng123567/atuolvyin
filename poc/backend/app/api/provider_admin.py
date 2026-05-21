@@ -60,6 +60,16 @@ from app.schemas.provider_admin import (
 )
 from app.schemas.settlement import DisputeOut
 
+
+def _gen_random_password() -> str:
+    """v0.7.0 — 生成一次性随机密码(16 位 alphanumeric)。员工首次 OTP 登录后改。"""
+    import secrets
+    import string
+
+    chars = string.ascii_letters + string.digits
+    return "".join(secrets.choice(chars) for _ in range(16))
+
+
 DEFAULT_COMMISSION_RATE = 0.05  # MVP fallback; future: pull from membership.commission_rate
 PERFORMANCE_DEFAULT_DAYS = 30
 
@@ -335,10 +345,12 @@ async def create_team_member(
             },
         )
 
+    # v0.7.0 — password 可选,缺省时生成随机一次性密码;员工首次走 OTP 登录
+    raw_password = body.password or _gen_random_password()
     new_user = UserAccount(
         phone_enc=encrypt_phone(body.phone),
         name=body.name,
-        password_hash=get_password_hash(body.password),
+        password_hash=get_password_hash(raw_password),
         is_active=True,
     )
     db.add(new_user)
@@ -1073,3 +1085,191 @@ async def set_project_commission_rate(
         "project_id": project.id,
         "provider_agent_commission_rate": str(body.provider_agent_commission_rate),
     }
+
+
+# v0.7.0 — 服务商「我的项目」独立详情页 + 团队绩效
+@router.get("/projects/{project_id}")
+async def get_provider_project_detail(
+    project_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    """服务商「我的项目」详情(只读)— 项目卡 + 收费/合同 + KPI 3 卡。
+
+    校验:project.provider_id == self_provider_id(确保服务商只能看自己接的项目)。
+    返回字段全只读;服务商**不能**改项目本身的字段(创建/编辑由物业 admin 负责)。
+    """
+    from app.models.case import CollectionCase, Project
+    from app.models.tenant import Tenant
+
+    user_id = _user_id_from_payload(payload)
+    provider_id = _resolve_provider_id(user_id, db)
+
+    row = db.execute(
+        select(Project, Tenant.name)
+        .join(Tenant, Tenant.id == Project.tenant_id)
+        .where(Project.id == project_id)
+        .where(Project.provider_id == provider_id)
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "ERR_NOT_FOUND",
+                "message": "项目不存在或不在本服务商范围",
+            },
+        )
+    project, tenant_name = row
+
+    # KPI 聚合
+    case_count = (
+        db.execute(
+            select(func.count(CollectionCase.id)).where(CollectionCase.project_id == project_id)
+        ).scalar_one()
+        or 0
+    )
+
+    paid_count = (
+        db.execute(
+            select(func.count(CollectionCase.id))
+            .where(CollectionCase.project_id == project_id)
+            .where(CollectionCase.stage == "paid")
+        ).scalar_one()
+        or 0
+    )
+
+    recovered_amount = (
+        db.execute(
+            select(func.coalesce(func.sum(CollectionCase.amount_owed), 0))
+            .where(CollectionCase.project_id == project_id)
+            .where(CollectionCase.stage == "paid")
+        ).scalar()
+        or 0
+    )
+
+    receivable_amount = (
+        db.execute(
+            select(func.coalesce(func.sum(CollectionCase.amount_owed), 0)).where(
+                CollectionCase.project_id == project_id
+            )
+        ).scalar()
+        or 0
+    )
+
+    # 预估佣金 = recovered × provider_agent_commission_rate
+    rate = project.provider_agent_commission_rate
+    estimated_commission = float(recovered_amount) * float(rate) if rate is not None else None
+
+    # PM 名字
+    pm_name = None
+    if project.provider_pm_user_id is not None:
+        pm_name = db.execute(
+            select(UserAccount.name).where(UserAccount.id == project.provider_pm_user_id)
+        ).scalar_one_or_none()
+
+    return {
+        "project_id": project.id,
+        "project_name": project.name,
+        "status": project.status,
+        "description": project.description,
+        "tenant_name": tenant_name,
+        "plan_start": project.plan_start.isoformat() if project.plan_start else None,
+        "plan_end": project.plan_end.isoformat() if project.plan_end else None,
+        # 收费
+        "charge_rate_text": project.charge_rate_text,
+        "charge_period": project.charge_period,
+        "charge_notes": project.charge_notes,
+        # 合同
+        "contract_type": project.contract_type,
+        "contract_start_date": (
+            project.contract_start_date.isoformat() if project.contract_start_date else None
+        ),
+        "contract_end_date": (
+            project.contract_end_date.isoformat() if project.contract_end_date else None
+        ),
+        "contract_attachment_filename": project.contract_attachment_filename,
+        # 团队
+        "provider_pm_user_id": project.provider_pm_user_id,
+        "provider_pm_name": pm_name,
+        "provider_agent_commission_rate": (
+            str(project.provider_agent_commission_rate)
+            if project.provider_agent_commission_rate is not None
+            else None
+        ),
+        # KPI
+        "case_count": int(case_count),
+        "paid_count": int(paid_count),
+        "recovered_amount": str(recovered_amount),
+        "receivable_amount": str(receivable_amount),
+        "estimated_commission": (
+            f"{estimated_commission:.2f}" if estimated_commission is not None else None
+        ),
+    }
+
+
+@router.get("/projects/{project_id}/team-stats")
+async def get_provider_project_team_stats(
+    project_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_provider_roles(*PROVIDER_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    """v0.7.0 — 项目详情页「团队绩效」section。
+    返回本服务商在该项目接案的员工列表 + 各自 case/paid 计数。
+    """
+    from app.models.case import CollectionCase, Project
+
+    user_id = _user_id_from_payload(payload)
+    provider_id = _resolve_provider_id(user_id, db)
+
+    # 项目归属校验
+    proj = db.execute(
+        select(Project.id).where(Project.id == project_id).where(Project.provider_id == provider_id)
+    ).scalar_one_or_none()
+    if proj is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "项目不存在或不在本服务商范围"},
+        )
+
+    # 按 assigned_to 分组,仅本服务商 membership
+    rows = db.execute(
+        select(
+            CollectionCase.assigned_to,
+            UserAccount.name,
+            func.count(CollectionCase.id).label("case_count"),
+            func.sum(case((CollectionCase.stage == "paid", 1), else_=0)).label("paid_count"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (CollectionCase.stage == "paid", CollectionCase.amount_owed),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("recovered_amount"),
+        )
+        .join(UserAccount, UserAccount.id == CollectionCase.assigned_to, isouter=True)
+        .join(
+            UserTenantMembership,
+            UserTenantMembership.user_id == CollectionCase.assigned_to,
+        )
+        .where(CollectionCase.project_id == project_id)
+        .where(CollectionCase.assigned_to.isnot(None))
+        .where(UserTenantMembership.provider_id == provider_id)
+        .group_by(CollectionCase.assigned_to, UserAccount.name)
+        .order_by(func.count(CollectionCase.id).desc())
+    ).all()
+
+    items = [
+        {
+            "user_id": r.assigned_to,
+            "name": r.name or "—",
+            "case_count": int(r.case_count or 0),
+            "paid_count": int(r.paid_count or 0),
+            "recovered_amount": str(r.recovered_amount or 0),
+        }
+        for r in rows
+    ]
+    return {"items": items}

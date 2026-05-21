@@ -21,18 +21,9 @@ interface LoginHistoryItem {
   updated_at: string;
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  admin: "管理员",
-  supervisor: "督导",
-  // agent covers both internal and external work_mode
-  agent: "催收员",
-  legal: "法务对接人",
-  workorder: "协调员",
-  coordinator: "协调员",
-  project_manager: "项目负责人",
-  superadmin: "平台超管",
-  ops: "平台运营员",
-};
+// v0.5.6 — ROLE_LABELS 已迁出到 src/lib/roleLabel.ts;/me 当前用户视角,scope 不定 → any
+import { roleLabelAny } from "../../lib/roleLabel";
+const ROLE_LABELS = (r: string) => roleLabelAny(r);
 
 export function MePage() {
   const { query: meQuery } = useCustom<MeOut>({ url: "me", method: "get" });
@@ -106,7 +97,7 @@ function BasicInfoSection({
         </div>
 
         <span className="text-muted" style={{ fontSize: 13 }}>角色</span>
-        <span>{ROLE_LABELS[me.role] ?? me.role}</span>
+        <span>{ROLE_LABELS(me.role)}</span>
 
         <span className="text-muted" style={{ fontSize: 13 }}>所属</span>
         <span>{me.tenant_name ?? <span className="text-muted">—（平台账号）</span>}</span>

@@ -620,6 +620,8 @@ def _upsert_internal_order(
             case_id=case.id,
             requester_user_id=requester.id,
             requester_role="agent",
+            # v0.5.6 起 reason NOT NULL;seed 演示用占位
+            reason="业主长期失联(>1 个月)",
             status="approved",
             related_order_id=order.id,
             reviewer_user_id=creator.id,
@@ -647,23 +649,35 @@ def _upsert_internal_order(
     return order
 
 
-def _upsert_legal_package(db, slug: str, package_type: str, name: str, price: Decimal) -> LegalServicePackage:
+def _upsert_legal_package(
+    db,
+    slug: str,
+    package_type: str,
+    name: str,
+    price: Decimal,
+    description: str = "",
+    sort_order: int = 0,
+) -> LegalServicePackage:
     existing = db.execute(
         select(LegalServicePackage)
         .where(LegalServicePackage.tenant_id.is_(None))
         .where(LegalServicePackage.slug == slug)
     ).scalar_one_or_none()
     if existing:
+        # v0.5.5 — 旧 seed 没有 description,这里补回填(只在为空时,避免覆盖 OPS 后台改过的)
+        if description and not existing.description:
+            existing.description = description
         return existing
     pkg = LegalServicePackage(
         tenant_id=None,
         slug=slug,
         package_type=package_type,
         name=name,
+        description=description or None,
         price=price,
         platform_fee_rate=Decimal("0.25"),
         enabled=True,
-        sort_order=0,
+        sort_order=sort_order,
     )
     db.add(pkg)
     db.flush()
@@ -1094,10 +1108,51 @@ def main() -> None:
         )
 
         # 10. v1.6 — Legal service packages
-        pkg_letter = _upsert_legal_package(db, "lawyer-letter-std", "lawyer_letter", "律师函（标准）", Decimal("800.00"))
-        pkg_mediate = _upsert_legal_package(db, "mediation-std", "mediation", "诉前调解", Decimal("1800.00"))
-        pkg_small = _upsert_legal_package(db, "small-claims-std", "small_claims", "小额诉讼", Decimal("3200.00"))
-        pkg_full = _upsert_legal_package(db, "full-agency-std", "full_agency", "完整代理", Decimal("4800.00"))
+        # v0.5.5 — 4 档服务包默认报价 + 服务内容(由平台 OPS 统一维护,详见 PRD §20.4)
+        pkg_letter = _upsert_legal_package(
+            db, "lawyer-letter-std", "lawyer_letter", "律师函（标准）", Decimal("800.00"),
+            description=(
+                "服务内容：\n"
+                "1. 由律所执业律师起草并出具《催告函》/《律师函》\n"
+                "2. 通过 EMS 邮政专递寄达业主，可查询签收凭证（含一次重寄）\n"
+                "3. 律师函含欠费金额、违约金条款、限期缴纳及法律后果告知\n"
+                "时效：受理后 3 个工作日内寄出"
+            ),
+            sort_order=10,
+        )
+        pkg_mediate = _upsert_legal_package(
+            db, "mediation-std", "mediation", "诉前调解", Decimal("1800.00"),
+            description=(
+                "服务内容：\n"
+                "1. 律师函 + 接收人民调解委员会/法院诉前调解委派\n"
+                "2. 律师代为出席 1 次现场调解（线上或线下）\n"
+                "3. 调解成功出具《调解协议书》，调解不成出具《不予调解证明》供后续起诉\n"
+                "时效：受理后 15 个工作日内推进至首次调解"
+            ),
+            sort_order=20,
+        )
+        pkg_small = _upsert_legal_package(
+            db, "small-claims-std", "small_claims", "小额诉讼", Decimal("3200.00"),
+            description=(
+                "服务内容（适用单笔欠费 ≤ 5 万元）：\n"
+                "1. 律师代为起草起诉状、整理证据链、立案\n"
+                "2. 一审小额诉讼程序代理（不出庭则采用书面审理）\n"
+                "3. 判决生效后协助申请强制执行立案\n"
+                "时效：受理至立案约 7 个工作日；判决周期由法院决定（参考 1-3 个月）"
+            ),
+            sort_order=30,
+        )
+        pkg_full = _upsert_legal_package(
+            db, "full-agency-std", "full_agency", "完整代理", Decimal("4800.00"),
+            description=(
+                "服务内容（适用复杂/大额/群体性案件）：\n"
+                "1. 全流程代理：律师函 → 调解 → 起诉 → 执行 → 财产保全/查封\n"
+                "2. 律师出庭代理（一审 + 二审，含上诉应对）\n"
+                "3. 案件结果保密、专属律师对接、月度进度报告\n"
+                "时效：依案件复杂度，参考周期 3-12 个月"
+            ),
+            sort_order=40,
+        )
 
         # 11. v1.6 — Demo legal orders 跨 4 个状态
         all_cases = db.execute(

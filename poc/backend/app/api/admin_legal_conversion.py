@@ -21,9 +21,11 @@ from fastapi import status as http_status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.core.crypto import mask_phone
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles, require_tenant_roles
-from app.models.case import CollectionCase
+from app.models.blockchain_attestation import BlockchainAttestation
+from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.law_firm import LawFirm, LawFirmLawyer
 from app.models.legal_conversion import LegalConversionOrder, LegalServicePackage
 from app.models.legal_document_template import (
@@ -31,6 +33,8 @@ from app.models.legal_document_template import (
     LegalDocumentTemplate,
 )
 from app.models.user import UserAccount
+from app.models.work import LegalCase
+from app.schemas.billing import BlockchainAttestationItem
 from app.schemas.common import PaginatedResponse
 from app.schemas.legal_conversion import (
     CompleteOrderRequest,
@@ -88,7 +92,15 @@ def _enabled_packages(db: Session, tenant_id: int) -> list[LegalServicePackage]:
 
 
 def _order_to_out(
-    order: LegalConversionOrder, package_name: str | None = None
+    order: LegalConversionOrder,
+    package_name: str | None = None,
+    *,
+    owner_name: str | None = None,
+    owner_room: str | None = None,
+    project_name: str | None = None,
+    owner_phone_masked: str | None = None,
+    package_description: str | None = None,
+    package_platform_fee_rate: Decimal | None = None,
 ) -> LegalConversionOrderOut:
     return LegalConversionOrderOut(
         id=order.id,
@@ -110,6 +122,12 @@ def _order_to_out(
         completed_at=order.completed_at,
         created_at=order.created_at,
         updated_at=order.updated_at,
+        owner_name=owner_name,
+        owner_room=owner_room,
+        project_name=project_name,
+        owner_phone_masked=owner_phone_masked,
+        package_description=package_description,
+        package_platform_fee_rate=package_platform_fee_rate,
     )
 
 
@@ -119,7 +137,8 @@ def _order_to_out(
 @router.get("/legal-packages", response_model=list[LegalServicePackageOut])
 async def list_legal_packages(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
+    # v0.5.4 — legal 角色也可读包目录(法务接单时选包,/legal-finalize 流程)
+    _user: Annotated[UserAccount, Depends(require_tenant_roles("admin", "legal"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[LegalServicePackageOut]:
     tenant_id = _require_tenant(payload)
@@ -289,9 +308,24 @@ async def list_orders(
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedResponse[LegalConversionOrderOut]:
     tenant_id = _require_tenant(payload)
+    # v0.5.4 — LEFT JOIN 业主/项目,展示「业主姓名 · 房号 · 项目名」替代冷案件编号
+    # v0.5.5 — 多 select 服务包 description/platform_fee_rate + 业主 phone_enc(脱敏后透出),
+    #         给详情页拆价 + 业主信息卡使用
     stmt = (
-        select(LegalConversionOrder, LegalServicePackage.name)
+        select(
+            LegalConversionOrder,
+            LegalServicePackage.name,
+            LegalServicePackage.description.label("pkg_desc"),
+            LegalServicePackage.platform_fee_rate.label("pkg_fee_rate"),
+            OwnerProfile.name.label("o_name"),
+            OwnerProfile.room.label("o_room"),
+            OwnerProfile.phone_enc.label("o_phone_enc"),
+            Project.name.label("p_name"),
+        )
         .join(LegalServicePackage, LegalServicePackage.id == LegalConversionOrder.package_id)
+        .outerjoin(CollectionCase, CollectionCase.id == LegalConversionOrder.case_id)
+        .outerjoin(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
+        .outerjoin(Project, Project.id == CollectionCase.project_id)
         .where(LegalConversionOrder.tenant_id == tenant_id)
     )
     if status:
@@ -308,7 +342,19 @@ async def list_orders(
         total_stmt = total_stmt.where(LegalConversionOrder.status == status)
     total = int(db.execute(total_stmt).scalar_one())
 
-    items = [_order_to_out(o, name) for o, name in rows]
+    items = [
+        _order_to_out(
+            o,
+            pkg_name,
+            owner_name=o_name,
+            owner_room=o_room,
+            project_name=p_name,
+            owner_phone_masked=mask_phone(o_phone_enc) if o_phone_enc else None,
+            package_description=pkg_desc,
+            package_platform_fee_rate=pkg_fee_rate,
+        )
+        for o, pkg_name, pkg_desc, pkg_fee_rate, o_name, o_room, o_phone_enc, p_name in rows
+    ]
     return PaginatedResponse[LegalConversionOrderOut](
         items=items,
         total=total,
@@ -328,9 +374,23 @@ async def get_order(
     db: Annotated[Session, Depends(get_db)],
 ) -> LegalConversionOrderOut:
     tenant_id = _require_tenant(payload)
+    # v0.5.4 — 同 list 端点:LEFT JOIN 业主/项目;v0.5.5 — 加 package description /
+    #         platform_fee_rate + 业主 phone_enc(脱敏)
     row = db.execute(
-        select(LegalConversionOrder, LegalServicePackage.name)
+        select(
+            LegalConversionOrder,
+            LegalServicePackage.name,
+            LegalServicePackage.description.label("pkg_desc"),
+            LegalServicePackage.platform_fee_rate.label("pkg_fee_rate"),
+            OwnerProfile.name.label("o_name"),
+            OwnerProfile.room.label("o_room"),
+            OwnerProfile.phone_enc.label("o_phone_enc"),
+            Project.name.label("p_name"),
+        )
         .join(LegalServicePackage, LegalServicePackage.id == LegalConversionOrder.package_id)
+        .outerjoin(CollectionCase, CollectionCase.id == LegalConversionOrder.case_id)
+        .outerjoin(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
+        .outerjoin(Project, Project.id == CollectionCase.project_id)
         .where(
             LegalConversionOrder.id == order_id,
             LegalConversionOrder.tenant_id == tenant_id,
@@ -341,7 +401,17 @@ async def get_order(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail={"code": "ERR_NOT_FOUND", "message": "订单不存在"},
         )
-    return _order_to_out(row[0], row[1])
+    order_obj, pkg_name, pkg_desc, pkg_fee_rate, o_name, o_room, o_phone_enc, p_name = row
+    return _order_to_out(
+        order_obj,
+        pkg_name,
+        owner_name=o_name,
+        owner_room=o_room,
+        project_name=p_name,
+        owner_phone_masked=mask_phone(o_phone_enc) if o_phone_enc else None,
+        package_description=pkg_desc,
+        package_platform_fee_rate=pkg_fee_rate,
+    )
 
 
 # ── 状态流转 ─────────────────────────────────────────────────────
@@ -612,3 +682,63 @@ async def list_doc_versions(
         .all()
     )
     return [LegalDocumentRenderOut.model_validate(r) for r in rows]
+
+
+# v0.6.0 — 法务转化订单详情页加「区块链存证」section
+@router.get(
+    "/legal-conversion-orders/{order_id}/attestations",
+    response_model=list[BlockchainAttestationItem],
+)
+async def list_order_attestations(
+    order_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[BlockchainAttestationItem]:
+    """返回该法务转化订单关联案件下所有 confirmed 区块链存证。
+
+    关联路径:LegalConversionOrder.case_id (CollectionCase.id) →
+    LegalCase WHERE legal_case.case_id = order.case_id →
+    BlockchainAttestation WHERE legal_case_id IN (LegalCase.id 集合)。
+    """
+    tenant_id = _require_tenant(payload)
+    order = _get_order_for_tenant(db, order_id=order_id, tenant_id=tenant_id)
+
+    legal_case_ids = (
+        db.execute(
+            select(LegalCase.id)
+            .where(LegalCase.tenant_id == tenant_id)
+            .where(LegalCase.case_id == order.case_id)
+        )
+        .scalars()
+        .all()
+    )
+
+    if not legal_case_ids:
+        return []
+
+    rows = (
+        db.execute(
+            select(BlockchainAttestation)
+            .where(BlockchainAttestation.tenant_id == tenant_id)
+            .where(BlockchainAttestation.legal_case_id.in_(legal_case_ids))
+            .where(BlockchainAttestation.status == "confirmed")
+            .order_by(BlockchainAttestation.submitted_at.desc())
+        )
+        .scalars()
+        .all()
+    )
+
+    return [
+        BlockchainAttestationItem(
+            id=r.id,
+            submitted_at=r.submitted_at,
+            case_id=r.legal_case_id,
+            data_type=r.data_type,
+            cost_amount=r.cost_amount,
+            tx_hash=r.tx_hash,
+            chain_provider=r.chain_provider,
+            status=r.status,
+        )
+        for r in rows
+    ]

@@ -11,6 +11,7 @@ from app.models.legal_conversion import LegalConversionOrder, LegalServicePackag
 from app.models.legal_document import LegalDocument
 from app.models.tenant import Tenant
 from app.models.user import UserAccount
+from app.models.work import LegalCase
 
 PACKAGE_LABELS: dict[str, str] = {
     "lawyer_letter": "律师函",
@@ -20,10 +21,11 @@ PACKAGE_LABELS: dict[str, str] = {
 }
 
 DOC_TYPE_LABELS: dict[str, str] = {
-    "lawyer_letter": "律师函",
-    "mediation_record": "调解记录",
-    "court_filing": "立案材料",
-    "judgment": "判决书",
+    # v0.5.7 — 对齐 LegalDocument.category 实际 enum:contract/judgment/notice/evidence/other
+    "contract": "合同 / 委托书",
+    "judgment": "判决书 / 裁定书",
+    "notice": "律师函 / 通知",
+    "evidence": "证据材料",
     "other": "其他文书",
 }
 
@@ -39,10 +41,15 @@ def enrich_order(db: Session, order: LegalConversionOrder) -> dict:
     lawyer = db.get(LawFirmLawyer, order.lawyer_id) if order.lawyer_id else None
     creator = db.get(UserAccount, order.created_by) if order.created_by else None
 
+    # v0.5.7 fix:LegalDocument 关联 legal_case_id(LegalCase)而非 case_id(CollectionCase)。
+    # 两步 join:LegalConversionOrder.case_id == LegalCase.case_id → LegalCase.id == LegalDocument.legal_case_id。
+    # 同时把字段名从 doc_type/filename 改为 category/name(对齐模型实际字段)。
     docs_rows = (
         db.execute(
             select(LegalDocument)
-            .where(LegalDocument.case_id == order.case_id)
+            .join(LegalCase, LegalCase.id == LegalDocument.legal_case_id)
+            .where(LegalCase.case_id == order.case_id)
+            .where(LegalDocument.deleted_at.is_(None))
             .order_by(LegalDocument.id)
         )
         .scalars()
@@ -54,9 +61,9 @@ def enrich_order(db: Session, order: LegalConversionOrder) -> dict:
         docs.append(
             {
                 "id": d.id,
-                "doc_type": d.doc_type,
-                "doc_label": DOC_TYPE_LABELS.get(d.doc_type, d.doc_type),
-                "filename": d.filename,
+                "doc_type": d.category,
+                "doc_label": DOC_TYPE_LABELS.get(d.category, d.category),
+                "filename": d.name,
                 "uploaded_by": uploader.name if uploader else None,
                 "uploaded_at": d.created_at.isoformat() if d.created_at else None,
                 "url": f"/api/v1/legal-documents/{d.id}/download",

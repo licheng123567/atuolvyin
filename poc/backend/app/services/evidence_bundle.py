@@ -412,3 +412,143 @@ def build_evidence_bundle_zip(
     buffer.seek(0)
     filename = f"evidence_case_{case.id}_{generated_at.strftime('%Y%m%d')}.zip"
     return buffer, filename
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# v0.8.0 — 只上链不打包(法务「打包上链」按钮);幂等
+# ─────────────────────────────────────────────────────────────────────────────
+def attest_case_only(
+    db: Session,
+    *,
+    case: CollectionCase,
+    tenant_id: int,
+    legal_case_id: int | None = None,
+) -> dict[str, Any]:
+    """对该案件所有通话(录音/转写/分析)+ L2 风险事件,统一上链;幂等。
+
+    返回:
+      {
+        attested: int,         # 本次新上链数
+        already_attested: int, # 已 confirmed 跳过
+        failed: int,
+        total_cost: str,       # ¥ 累计费用(本次新上链)
+        attestation_ids: [int] # 本次新建 attestation 行 id 列表(便于追溯)
+      }
+
+    与 build_evidence_bundle_zip 的差异:
+      - 不打包 ZIP,纯上链
+      - 加幂等检查:同 call_id + data_type 已 confirmed 则跳过
+      - L2 pending 行(supervisor_extras.py:annotate_risk_event 标记的)
+        本期暂不在此函数升级 — 留 v0.8.1 (避免数据丢失风险:pending 行未保存原 data)
+    """
+    from decimal import Decimal
+
+    from sqlalchemy import select as _select
+
+    from app.models.blockchain_attestation import BlockchainAttestation
+
+    tenant = db.get(Tenant, tenant_id)
+    stats: dict[str, Any] = {
+        "attested": 0,
+        "already_attested": 0,
+        "failed": 0,
+        "total_cost": Decimal("0"),
+        "attestation_ids": [],
+    }
+
+    calls = (
+        db.execute(
+            select(CallRecord)
+            .where(CallRecord.tenant_id == tenant_id)
+            .where(CallRecord.case_id == case.id)
+            .order_by(CallRecord.id.asc())
+        )
+        .scalars()
+        .all()
+    )
+
+    for call in calls:
+        # 拿录音 bytes
+        recording_bytes: bytes | None = None
+        if call.object_key:
+            try:
+                recording_bytes = storage.get_bytes(call.object_key)
+            except Exception:
+                recording_bytes = None  # 跳过,不阻断其他类型
+
+        # 拿转写 bytes
+        transcript = db.execute(
+            select(Transcript).where(Transcript.call_id == call.id)
+        ).scalar_one_or_none()
+        transcript_bytes = (
+            transcript.full_text.encode("utf-8") if transcript and transcript.full_text else None
+        )
+
+        # 拿分析 bytes
+        analysis = db.execute(
+            select(AnalysisResult).where(AnalysisResult.call_id == call.id)
+        ).scalar_one_or_none()
+        analysis_bytes: bytes | None = None
+        if analysis:
+            analysis_bytes = json.dumps(
+                {
+                    "summary": analysis.summary,
+                    "key_segments": analysis.key_segments,
+                    "needs_review": analysis.needs_review,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ).encode("utf-8")
+
+        targets: list[tuple[str, bytes | None, str]] = [
+            ("call_recording", recording_bytes, f"案件{case.id}通话{call.id}录音"),
+            ("transcript", transcript_bytes, f"案件{case.id}通话{call.id}转写"),
+            ("analysis", analysis_bytes, f"案件{case.id}通话{call.id}AI分析"),
+        ]
+        for dtype, payload, title in targets:
+            if payload is None:
+                continue
+            # 幂等:同 call_id + data_type 已 confirmed → 跳过
+            existing = db.execute(
+                _select(BlockchainAttestation.id)
+                .where(BlockchainAttestation.call_id == call.id)
+                .where(BlockchainAttestation.data_type == dtype)
+                .where(BlockchainAttestation.status == "confirmed")
+                .limit(1)
+            ).scalar_one_or_none()
+            if existing is not None:
+                stats["already_attested"] += 1
+                continue
+            try:
+                att = blockchain_svc.submit_attestation(
+                    db,
+                    tenant_id=tenant_id,
+                    data=payload,
+                    data_type=dtype,
+                    title=title,
+                    description=tenant.name if tenant else None,
+                    call_id=call.id,
+                    legal_case_id=legal_case_id,
+                    payload_metadata={
+                        "tenant_name": tenant.name if tenant else None,
+                        "call_id": call.id,
+                        "case_id": case.id,
+                        "data_type": dtype,
+                        "started_at": call.started_at.isoformat() if call.started_at else None,
+                        "duration_sec": call.duration_sec,
+                        "attested_via": "attest_case_only_v080",
+                    },
+                )
+                if att.status == "confirmed":
+                    stats["attested"] += 1
+                    if att.cost_amount is not None:
+                        stats["total_cost"] += att.cost_amount
+                    stats["attestation_ids"].append(int(att.id))
+                else:
+                    stats["failed"] += 1
+            except Exception:
+                stats["failed"] += 1
+
+    db.commit()
+    stats["total_cost"] = str(stats["total_cost"])
+    return stats

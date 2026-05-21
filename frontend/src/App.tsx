@@ -14,6 +14,7 @@ import { AppIntroModal } from "./components/onboarding/AppIntroModal";
 import { LoginPage } from "./pages/login";
 import { VerifyPage } from "./pages/verify";
 import { HelpAppPage } from "./pages/help/app";
+import { PaymentBillPage } from "./pages/public/PaymentBillPage";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE ?? "http://localhost:18000";
 import { TenantListPage } from "./pages/ops/tenants/index";
@@ -40,6 +41,10 @@ import { AgentLiveWorkstationPage } from "./pages/agent/workstation/live";
 import { AgentWorkstationIndexPage } from "./pages/agent/workstation/index";
 import { AgentCallHistoryPage } from "./pages/agent/call-history/index";
 import { AgentProfilePage } from "./pages/agent/profile/index";
+// v0.6.0 — 催收员提醒中心
+import { AgentRemindersPage } from "./pages/agent/reminders";
+// v0.7.0 — 催收员培训案例库(App WebView 也可访问)
+import { AgentTrainingPage } from "./pages/agent/training";
 import { AdminLiveWorkstationPage } from "./pages/admin/workstation/live";
 import { ScriptListPage } from "./pages/admin/scripts/list";
 import { ScriptVersionsPage } from "./pages/admin/scripts/versions";
@@ -61,6 +66,9 @@ import { AdminDashboardPage } from "./pages/admin/dashboard";
 import { AdminPoolPage } from "./pages/admin/pool";
 import { AdminSettlementListPage } from "./pages/admin/settlements";
 import { AdminSettlementDetailPage } from "./pages/admin/settlements/detail";
+// v0.5.9 — 物业计费页(通话分钟 + 区块链存证消费)
+import { AdminBillingMinuteUsagePage } from "./pages/admin/billing/minute-usage";
+import { AdminBillingBlockchainPage } from "./pages/admin/billing/blockchain";
 import { AdminAuditLogPage } from "./pages/admin/audit-logs";
 import { AdminAgentDevicesPage } from "./pages/admin/agent-devices";
 import { AdminProvidersPage } from "./pages/admin/providers/index";
@@ -72,6 +80,7 @@ import { SupervisorRiskEventsPage } from "./pages/supervisor/risk-events";
 import { SupervisorTeamPerformancePage } from "./pages/supervisor/team-performance";
 import { OpsSettlementsOverviewPage } from "./pages/ops/settlements";
 import { OpsLawFirmsPage } from "./pages/ops/law-firms/index";
+import { OpsLegalPackagesPage } from "./pages/ops/legal-packages/index";
 import { OpsLegalWorkstationPage } from "./pages/ops/legal-workstation/index";
 import { OpsAnnouncementsPage } from "./pages/ops/announcements";
 import { OpsMyAuditLogsPage } from "./pages/ops/audit-logs";
@@ -94,10 +103,9 @@ import { LegalCaseListPage } from "./pages/legal/cases/index";
 import { LegalCaseDetailPage } from "./pages/legal/cases/[id]";
 import { LegalInternalOrdersPage } from "./pages/legal/internal-orders/index";
 import { LegalInternalOrderDetailPage } from "./pages/legal/internal-orders/[id]";
+import { LegalPendingFinalizePage } from "./pages/legal/pending-finalize/index";
 import { AdminPartnerLawFirmsPage } from "./pages/admin/partner-law-firms/index";
 import { AdminInternalLetterTemplatesPage } from "./pages/admin/internal-letter-templates/index";
-import { AgentCommissionsListPage } from "./pages/admin/agent-commissions";
-import { AgentCommissionDetailPage } from "./pages/admin/agent-commissions/[id]";
 import { WorkOrderListPage } from "./pages/workorder/orders/index";
 import { WorkOrderNewPage } from "./pages/workorder/orders/new";
 import { WorkOrderDetailPage } from "./pages/workorder/orders/[id]";
@@ -120,11 +128,20 @@ import { ProviderLegalCaseDetailPage } from "./pages/provider/legal/cases/[id]";
 import { ProviderLegalRequestsPage } from "./pages/provider/legal/requests";
 import { ProviderLegalRequestDetailPage } from "./pages/provider/legal/requests/[id]";
 import { ProviderProjectsPage } from "./pages/provider/projects";
+// v0.7.0 — 服务商「我的项目」独立详情页(只读)
+import { ProviderProjectDetailPage } from "./pages/provider/projects/[id]";
 import { ProviderScriptListPage } from "./pages/provider/scripts";
+// v0.7.0 — 服务商话术效果看板
+import { ProviderScriptsEffectivenessPage } from "./pages/provider/scripts/effectiveness";
 import { ProviderTenantsPage } from "./pages/provider/tenants";
 import { ProviderTeamPage } from "./pages/provider/team";
+import { ProviderCasesPage, ProviderPoolPage } from "./pages/provider/cases";
+import { ProviderCaseDetailPage } from "./pages/provider/cases/detail";
+import { ProviderCasesKanbanPage } from "./pages/provider/cases/kanban";
 import { ProviderSettlementListPage } from "./pages/provider/settlements";
 import { ProviderSettlementDetailPage } from "./pages/provider/settlements/[id]";
+// v0.5.9 — 服务商跨租户分钟消费
+import { ProviderBillingMinuteUsagePage } from "./pages/provider/billing/minute-usage";
 import { SuperHealthPage } from "./pages/super/health";
 import { SuperAuditPage } from "./pages/super/audit";
 import { SuperCostPage } from "./pages/super/cost";
@@ -189,9 +206,12 @@ function AuthenticatedShell() {
   );
 }
 
-// Sprint 14.3 — 首登 App 引导（v1.5.6 — 仅对催收员显示）
-const APP_INTRO_ROLES = new Set([
-  "agent",
+// Sprint 14.3 — 首登 App 引导(v1.5.6 — 仅对催收员显示)
+// v0.5.6:用户反馈「催收员登录还是不提醒 app 的安装吧。每次提醒也很怪」→ 关闭对催收员的弹出。
+// 留空集合表示所有角色都不弹;preferences API 与 dismiss 逻辑都保留,后续如要恢复
+// 只需把对应 role 加回到 set 即可。
+const APP_INTRO_ROLES = new Set<string>([
+  // (v0.5.6 起空) — 之前是 "agent",催收员侧每次登录都弹太烦,关闭。
 ]);
 
 function AppIntroModalGate() {
@@ -361,7 +381,7 @@ function App() {
           {
             name: "provider/tenants",
             list: "/provider/tenants",
-            meta: { label: "合作租户" },
+            meta: { label: "合作物业" },
           },
           {
             name: "provider/team",
@@ -383,6 +403,7 @@ function App() {
           <Route path="/verify" element={<VerifyPage />} />
           <Route path="/verify/:tx_hash" element={<VerifyPage />} />
           <Route path="/help/app" element={<HelpAppPage />} />
+          <Route path="/pay/:token" element={<PaymentBillPage />} />
 
           {/* v2.0 — Android WebView 移动路由（独立布局，无 PC 侧边栏） */}
           <Route path="/app/*" element={<AppMobileRoutes />} />
@@ -440,6 +461,10 @@ function App() {
             <Route path="/agent/call-history" element={<AgentCallHistoryPage />} />
             {/* Agent — 个人信息 */}
             <Route path="/agent/profile" element={<AgentProfilePage />} />
+            {/* v0.6.0 — 催收员提醒中心 */}
+            <Route path="/agent/reminders" element={<AgentRemindersPage />} />
+            {/* v0.7.0 — 催收员培训案例库 */}
+            <Route path="/agent/training" element={<AgentTrainingPage />} />
             {/* Admin Observer Workstation */}
             <Route path="/admin/workstation/:call_id" element={<AdminLiveWorkstationPage />} />
             {/* Supervisor Alerts */}
@@ -457,6 +482,9 @@ function App() {
             {/* Admin - Settlement Management */}
             <Route path="/admin/settlements" element={<AdminSettlementListPage />} />
             <Route path="/admin/settlements/:id" element={<AdminSettlementDetailPage />} />
+            {/* v0.5.9 — 物业计费页 */}
+            <Route path="/admin/billing/minute-usage" element={<AdminBillingMinuteUsagePage />} />
+            <Route path="/admin/billing/blockchain" element={<AdminBillingBlockchainPage />} />
             <Route path="/admin/audit-logs" element={<AdminAuditLogPage />} />
             {/* v2.1 — Admin/Supervisor: 坐席设备能力（哪些机器系统级录音不支持→实时 AI 不可用） */}
             <Route path="/admin/agent-devices" element={<AdminAgentDevicesPage />} />
@@ -501,6 +529,7 @@ function App() {
             <Route path="/ops/settlements" element={<OpsSettlementsOverviewPage />} />
             {/* Sprint 16.2 — Law firm pool + legal workstation (PRD §20.4) */}
             <Route path="/ops/law-firms" element={<OpsLawFirmsPage />} />
+            <Route path="/ops/legal-packages" element={<OpsLegalPackagesPage />} />
             <Route path="/ops/legal-workstation" element={<OpsLegalWorkstationPage />} />
             <Route path="/ops/announcements" element={<OpsAnnouncementsPage />} />
             <Route path="/ops/audit-logs" element={<OpsMyAuditLogsPage />} />
@@ -510,11 +539,17 @@ function App() {
             <Route path="/ops/customer-followups" element={<OpsCustomerFollowupsPage />} />
             <Route path="/provider/team-performance" element={<ProviderTeamPerformancePage />} />
             <Route path="/provider/team/:user_id/commission" element={<ProviderMemberCommissionPage />} />
+            {/* v0.5.6 — 服务商管理员案件管理(列表 + 看板 + 详情 + 公海) */}
+            <Route path="/provider/cases" element={<ProviderCasesPage />} />
+            <Route path="/provider/cases/kanban" element={<ProviderCasesKanbanPage />} />
+            <Route path="/provider/cases/:id" element={<ProviderCaseDetailPage />} />
+            <Route path="/provider/pool" element={<ProviderPoolPage />} />
             {/* Legal - Cases */}
             <Route path="/legal/cases" element={<LegalCaseListPage />} />
             <Route path="/legal/cases/:id" element={<LegalCaseDetailPage />} />
             <Route path="/legal/internal-orders" element={<LegalInternalOrdersPage />} />
             <Route path="/legal/internal-orders/:id" element={<LegalInternalOrderDetailPage />} />
+            <Route path="/legal/pending-finalize" element={<LegalPendingFinalizePage />} />
             <Route path="/admin/partner-law-firms" element={<AdminPartnerLawFirmsPage />} />
             <Route path="/admin/internal-letter-templates" element={<AdminInternalLetterTemplatesPage />} />
             {/* v1.5.7 — 法务转化订单三视图 */}
@@ -529,9 +564,6 @@ function App() {
             <Route path="/supervisor/discount-approvals/:id" element={<SupervisorDiscountApprovalDetailPage />} />
             <Route path="/admin/discount-approvals" element={<AdminDiscountApprovalsPage />} />
             <Route path="/admin/discount-approvals/:id" element={<AdminDiscountApprovalDetailPage />} />
-            {/* §9.2 — 内勤提成 */}
-            <Route path="/admin/agent-commissions" element={<AgentCommissionsListPage />} />
-            <Route path="/admin/agent-commissions/:id" element={<AgentCommissionDetailPage />} />
             {/* Workorder - Orders */}
             <Route path="/workorder/orders" element={<WorkOrderListPage />} />
             <Route path="/workorder/orders/new" element={<WorkOrderNewPage />} />
@@ -543,10 +575,16 @@ function App() {
             <Route path="/provider/tenants" element={<ProviderTenantsPage />} />
             <Route path="/provider/team" element={<ProviderTeamPage />} />
             <Route path="/provider/scripts" element={<ProviderScriptListPage />} />
+            {/* v0.7.0 — 服务商话术效果看板 */}
+            <Route path="/provider/scripts/effectiveness" element={<ProviderScriptsEffectivenessPage />} />
             <Route path="/provider/settlements" element={<ProviderSettlementListPage />} />
             <Route path="/provider/settlements/:id" element={<ProviderSettlementDetailPage />} />
+            {/* v0.5.9 — 服务商跨租户分钟消费 */}
+            <Route path="/provider/billing/minute-usage" element={<ProviderBillingMinuteUsagePage />} />
             <Route path="/provider/historical-reports" element={<ProviderHistoricalReportsPage />} />
             <Route path="/provider/projects" element={<ProviderProjectsPage />} />
+            {/* v0.7.0 — 服务商项目详情(只读) */}
+            <Route path="/provider/projects/:id" element={<ProviderProjectDetailPage />} />
             {/* §9 — 服务商法务 (provider legal) */}
             <Route path="/provider/legal/cases" element={<ProviderLegalCasesPage />} />
             <Route path="/provider/legal/cases/:id" element={<ProviderLegalCaseDetailPage />} />

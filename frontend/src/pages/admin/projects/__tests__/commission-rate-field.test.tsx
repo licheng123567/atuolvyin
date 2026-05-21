@@ -119,3 +119,82 @@ describe("项目创建表单 — D1 内勤佣金率", () => {
     expect(callArg.values.internal_agent_commission_rate).toBeNull();
   });
 });
+
+describe("项目创建表单 — D2 服务商佣金率（外包模式）", () => {
+  it("切到外包模式 → 显示服务商佣金率、隐藏内勤佣金率", () => {
+    render(
+      <MemoryRouter>
+        <AdminProjectNewPage />
+      </MemoryRouter>,
+    );
+    // 默认自办：内勤字段在、服务商字段不在
+    expect(screen.queryByText(/内勤催收员佣金率/)).not.toBeNull();
+    expect(screen.queryByText(/服务商佣金率/)).toBeNull();
+    // 切外包：内勤字段消失、服务商字段出现
+    fireEvent.click(screen.getByText("外包给服务商"));
+    expect(screen.queryByText(/内勤催收员佣金率/)).toBeNull();
+    expect(screen.queryByText(/服务商佣金率/)).not.toBeNull();
+  });
+
+  it("外包模式填 8 提交 → provider_agent_commission_rate 换算为 0.08", () => {
+    createMutate.mockClear();
+    render(
+      <MemoryRouter>
+        <AdminProjectNewPage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByText("外包给服务商"));
+    fillRequiredFields();
+    // 外包模式多一个「合作服务商」SearchableSelect（DOM 顺序第 4 个）
+    const selects = screen.getAllByRole("combobox", { name: "— 请选择 —" });
+    fireEvent.change(selects[3], { target: { value: "1" } }); // providerId
+
+    fireEvent.change(screen.getByPlaceholderText("例：8"), {
+      target: { value: "8" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "创建项目" }));
+
+    expect(createMutate).toHaveBeenCalled();
+    const callArg = createMutate.mock.calls[0][0] as {
+      values: { provider_agent_commission_rate: number };
+    };
+    expect(callArg.values.provider_agent_commission_rate).toBeCloseTo(0.08, 10);
+  });
+});
+
+describe("项目创建表单 — 收款信息", () => {
+  it("渲染收款户名 / 收款账户 / 缴费说明字段", () => {
+    render(
+      <MemoryRouter>
+        <AdminProjectNewPage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByPlaceholderText("例：金桂物业管理有限公司")).toBeDefined();
+    expect(screen.getByPlaceholderText(/例：工行/)).toBeDefined();
+    expect(screen.getByPlaceholderText(/到物业服务中心/)).toBeDefined();
+  });
+
+  it("填收款信息提交 → payload 含 payee_name / payee_account", () => {
+    createMutate.mockClear();
+    render(
+      <MemoryRouter>
+        <AdminProjectNewPage />
+      </MemoryRouter>,
+    );
+    fillRequiredFields();
+    fireEvent.change(screen.getByPlaceholderText("例：金桂物业管理有限公司"), {
+      target: { value: "金桂物业" },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/例：工行/), {
+      target: { value: "工行 6222 1234" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "创建项目" }));
+
+    const callArg = createMutate.mock.calls[0][0] as {
+      values: { payee_name: string; payee_account: string };
+    };
+    expect(callArg.values.payee_name).toBe("金桂物业");
+    expect(callArg.values.payee_account).toBe("工行 6222 1234");
+  });
+});

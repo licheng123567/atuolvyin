@@ -95,6 +95,12 @@ def _to_out(
         # §9.2 D1/D2 — 项目级佣金率
         internal_agent_commission_rate=p.internal_agent_commission_rate,
         provider_agent_commission_rate=p.provider_agent_commission_rate,
+        # v2.2 — 项目级收款配置
+        payment_mode=p.payment_mode,
+        payee_name=p.payee_name,
+        payee_account=p.payee_account,
+        payee_qr_object_key=p.payee_qr_object_key,
+        payment_instructions=p.payment_instructions,
     )
 
 
@@ -280,6 +286,13 @@ def create_project(
         late_fee_waive_disabled=body.late_fee_waive_disabled,
         # §9.2-D1 — 项目级内勤佣金率
         internal_agent_commission_rate=body.internal_agent_commission_rate,
+        # §9.2-D2 — 外包项目的服务商坐席佣金率初始值
+        provider_agent_commission_rate=body.provider_agent_commission_rate,
+        # v2.2 — 项目级收款配置
+        payee_name=body.payee_name,
+        payee_account=body.payee_account,
+        payee_qr_object_key=body.payee_qr_object_key,
+        payment_instructions=body.payment_instructions,
     )
     db.add(p)
     db.flush()

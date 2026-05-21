@@ -63,11 +63,11 @@ export function ApprovalListPage({ approverRole, approverName: _approverName, de
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <ClipboardList size={20} style={{ color: "var(--color-primary)" }} />
-            <div className="page-title">减免审批 — {approverRole === "supervisor" ? "督导视角" : "物业 admin 视角"}</div>
+            <div className="page-title">减免审批 — {approverRole === "supervisor" ? "督导视角" : "物业管理员视角"}</div>
           </div>
           <div className="page-subtitle">
             {approverRole === "supervisor"
-              ? `审批 ${policy.autoThreshold}–${policy.supervisorMax}% 减免 / 分期 / 违约金减免（> ${policy.supervisorMax}% 转 admin）`
+              ? `审批 ${policy.autoThreshold}–${policy.supervisorMax}% 减免 / 分期 / 违约金减免（> ${policy.supervisorMax}% 转物业管理员）`
               : `审批 > ${policy.supervisorMax}% 大额减免 / 跨项目特批（督导无权操作）`}
           </div>
         </div>
@@ -76,20 +76,20 @@ export function ApprovalListPage({ approverRole, approverName: _approverName, de
       <HelpPanel
         tone="info"
         dismissKey={`/discount-approvals/${approverRole}`}
-        title="减免权限矩阵（admin 已配置）"
+        title="减免权限矩阵（物业管理员已配置）"
         bullets={[
           policy.disabled ? (
             <><strong style={{ color: "var(--color-danger)" }}>本租户已停用减免功能</strong> — 仅可处理已存量未执行的 offer</>
           ) : policy.autoThreshold === 0 ? (
-            <><strong>所有减免均需人工审批</strong>（admin 已关闭自动通过）</>
+            <><strong>所有减免均需人工审批</strong>（物业管理员已关闭自动通过）</>
           ) : (
             <><strong>催收员（自动）</strong>：减免 &lt; {policy.autoThreshold}% 直接生效（仅记审计）</>
           ),
           <><strong>督导审批</strong>：减免 {policy.autoThreshold}–{policy.supervisorMax}% / 分期 ≤ 12 期 / 违约金减免</>,
-          <><strong>admin 审批</strong>：减免 &gt; {policy.supervisorMax}% / 分期 &gt; 12 期 / 跨项目批量减免</>,
+          <><strong>物业管理员审批</strong>：减免 &gt; {policy.supervisorMax}% / 分期 &gt; 12 期 / 跨项目批量减免</>,
           <><strong>有效期</strong>：批准后 7 天内业主必须按方案缴清，超期 offer 自动失效</>,
         ]}
-        footer="阈值由 admin 在「系统配置 → 减免审批策略」调整；所有决策记入审计日志"
+        footer="阈值由物业管理员在「系统配置 → 减免审批策略」调整；所有决策记入审计日志"
       />
 
       <div className="status-bar">
@@ -180,7 +180,7 @@ export function ApprovalListPage({ approverRole, approverName: _approverName, de
                           <button type="button" className="ds-btn ds-btn-primary ds-btn-sm" onClick={() => setActingOn({ offer: o, mode: "approve" })}>批准</button>
                           <button type="button" className="ds-btn ds-btn-secondary ds-btn-sm" style={{ color: "var(--color-danger)" }} onClick={() => setActingOn({ offer: o, mode: "reject" })}>拒绝</button>
                           {approverRole === "supervisor" && (
-                            <button type="button" className="ds-btn ds-btn-ghost ds-btn-sm" onClick={() => setActingOn({ offer: o, mode: "escalate" })}>转 admin</button>
+                            <button type="button" className="ds-btn ds-btn-ghost ds-btn-sm" onClick={() => setActingOn({ offer: o, mode: "escalate" })}>转物业管理员</button>
                           )}
                         </>
                       )}
@@ -217,7 +217,7 @@ function ActionModal({ offer, mode, onClose }: { offer: DiscountOfferDTO; mode: 
   const { escalate, isPending: escalating } = useEscalateOffer();
   const isPending = approving || rejecting || escalating;
 
-  const titleMap = { approve: "批准减免申请", reject: "拒绝减免申请", escalate: "转 admin 审批" };
+  const titleMap = { approve: "批准减免申请", reject: "拒绝减免申请", escalate: "转物业管理员审批" };
   const placeholderMap = {
     approve: "（可选）批准备注，如「业主家庭确实困难，可一次性结清」",
     reject: "（必填）拒绝原因，如「减免比例过高，建议再谈判」",

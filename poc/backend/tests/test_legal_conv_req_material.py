@@ -16,6 +16,7 @@ def test_legal_conversion_request_material_round_trip(
         requester_user_id=seeded_member_user.id,
         requester_role="legal",
         status="pending",
+        reason="测试转化请求材料",
     )
     db_session.add(req)
     db_session.flush()

@@ -67,7 +67,7 @@ export function ProviderTenantsPage() {
         <div className="flex items-center gap-2">
           <Building2 className="w-5 h-5 text-[var(--color-primary)]" />
           <h1 className="text-xl font-semibold text-[var(--color-neutral-900)]">
-            合作租户
+            合作物业
           </h1>
           <span className="text-sm text-[var(--color-neutral-400)] ml-1">
             共 {total} 家
@@ -150,7 +150,7 @@ export function ProviderTenantsPage() {
                   colSpan={6}
                   className="px-4 py-8 text-center text-[var(--color-neutral-400)]"
                 >
-                  暂无合作租户
+                  暂无合作物业
                 </td>
               </tr>
             )}

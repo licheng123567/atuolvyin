@@ -8,8 +8,16 @@ import { Mic, MicOff, PauseCircle, Phone, PhoneOff, Search } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react";
 import { OwnerInfoCard } from "../../../components/case/OwnerInfoCard";
 import { ProjectInfoCard } from "../../../components/case/ProjectInfoCard";
+import { EscalateSupervisorModal } from "../../../components/agent/EscalateSupervisorModal";
+import {
+  PaymentLinkQrModal,
+  type PaymentBreakdown,
+} from "../../../components/admin/PaymentLinkQrModal";
 import { DiscountRequestModal } from "../../../components/discount/DiscountRequestModal";
 import { QrDialDialog } from "../../../components/dial/QrDialDialog";
+import { RequestLegalConversionModal } from "../../../components/legal-conversion/RequestLegalConversionModal";
+import { MarkPromiseModal } from "../../../components/case/MarkPromiseModal";
+import { WorkOrderCreateModal } from "../../../components/admin/WorkOrderCreateModal";
 import { useCallSocket } from "../../../hooks/useCallSocket";
 import type { PaginatedResponse } from "../../../types";
 import type { CaseDetailResponse } from "../../../types/case";
@@ -147,6 +155,29 @@ export function AgentWorkstationIndexPage() {
   }>({ url: "agent/me/today-kpi", method: "get", queryOptions: { refetchInterval: 30000 } });
   const kpi = kpiQuery.data?.data;
 
+  // v0.6.0 — 本月按项目维度统计(案件数 / 已回款 / 预估佣金),工作台 KPI 下方展示
+  interface ProjectStatItem {
+    project_id: number;
+    project_name: string;
+    case_count: number;
+    paid_case_count: number;
+    recovered_amount: string;
+    estimated_commission: string;
+    commission_rate_pct: number | null;
+  }
+  const { query: byProjectQuery } = useCustom<{
+    year_month: string;
+    work_mode: string | null;
+    items: ProjectStatItem[];
+    total_recovered_amount: string;
+    total_estimated_commission: string;
+  }>({
+    url: "agent/me/by-project",
+    method: "get",
+    queryOptions: { staleTime: 5 * 60 * 1000 },  // 5 分钟缓存,不需要实时刷
+  });
+  const byProject = byProjectQuery.data?.data;
+
   // v1.6.7 — E1 「下一个」按钮：选下一条未结案、不是当前选中的
   function selectNextCase() {
     if (filteredCases.length === 0) return;
@@ -233,92 +264,57 @@ export function AgentWorkstationIndexPage() {
   });
   const caseDetail = caseDetailQuery.data?.data ?? null;
 
-  // ── E4 发送缴费链接 ─────────────────────────────────
+  // ── E4 发送缴费链接 — v0.5.4 Wave 7:统一到 PaymentLinkQrModal(明细 + 二维码 + 短链)─
   const { mutate: sendPaymentMutate } = useCustomMutation();
+  const [paymentLink, setPaymentLink] = useState<{
+    token: string;
+    breakdown: PaymentBreakdown;
+    sent_to: string;
+  } | null>(null);
   function sendPaymentLink(caseId: number) {
     sendPaymentMutate(
       { url: `agent/cases/${caseId}/send-payment-link`, method: "post", values: {} },
       {
         onSuccess: (resp) => {
-          const data = resp.data as { short_link?: string; sent_to?: string };
-          alert(`✓ 已发送缴费链接到 ${data.sent_to ?? "业主"}\n短链：${data.short_link ?? "—"}`);
+          const d = resp.data as {
+            token: string;
+            sent_to: string;
+            breakdown: PaymentBreakdown;
+          };
+          setPaymentLink({
+            token: d.token,
+            breakdown: d.breakdown,
+            sent_to: d.sent_to,
+          });
         },
-        onError: (err) => alert(`发送失败：${err.message}`),
+        onError: (err) => alert(`发送失败:${err.message}`),
       },
     );
   }
 
-  // ── 工作台 quick-actions（创建工单 / 标记承诺 / 升级督导）──────
-  const { mutate: workOrderMutate } = useCustomMutation();
-  const { mutate: stageMutate } = useCustomMutation();
-  const { mutate: intentMutate } = useCustomMutation();
+  // ── 工作台 quick-actions（创建工单 / 标记承诺;升级督导 / 申请转法务走专用 modal）──
+  // v0.5.6 — 旧 window.prompt 创建工单 / window.prompt 标记承诺缴费 / 直接 stageMutate 全部废弃,
+  //          统一改成专用 Modal 组件(WorkOrderCreateModal + MarkPromiseModal),
+  //          与案件详情 + admin/supervisor 同源。
 
+  // 创建工单弹窗 state(用同一 WorkOrderCreateModal,与 admin/supervisor 一致)
+  const [workOrderCaseId, setWorkOrderCaseId] = useState<number | null>(null);
   function handleCreateWorkOrder(caseId: number) {
-    const description = window.prompt("工单内容（必填）：");
-    if (!description?.trim()) return;
-    workOrderMutate(
-      {
-        url: "workorders",
-        method: "post",
-        values: {
-          case_id: caseId,
-          order_type: "case_followup",
-          description: description.trim(),
-          priority: "normal",
-        },
-      },
-      {
-        onSuccess: (resp) => alert(`✓ 工单 #${(resp.data as { id?: number }).id ?? "?"} 已创建`),
-        onError: (err) => alert(`创建失败：${err.message}`),
-      },
-    );
+    setWorkOrderCaseId(caseId);
   }
 
+  // v0.5.6 — 标记承诺缴费走 MarkPromiseModal(结构化字段:承诺内容/日期/金额);
+  // 旧 window.prompt 实现已废弃。
+  const [markPromiseCaseId, setMarkPromiseCaseId] = useState<number | null>(null);
   function handleMarkPromised(caseId: number) {
-    const note = window.prompt("业主承诺备注（可选，例如：业主承诺月底前缴清）：") ?? "";
-    stageMutate(
-      {
-        url: `agent/cases/${caseId}/stage`,
-        method: "patch",
-        values: { stage: "promised", note: note.trim() || undefined },
-      },
-      {
-        onSuccess: () => alert("✓ 已标记为承诺缴费"),
-        onError: (err) => alert(`标记失败：${err.message}`),
-      },
-    );
+    setMarkPromiseCaseId(caseId);
   }
 
-  function handleEscalateSupervisor(caseId: number) {
-    const note = window.prompt("升级原因（可选）：") ?? "";
-    intentMutate(
-      {
-        url: `agent/cases/${caseId}/intent`,
-        method: "post",
-        values: { action: "transfer_supervisor", note: note.trim() || undefined },
-      },
-      {
-        onSuccess: () => alert("✓ 已升级到督导队列"),
-        onError: (err) => alert(`升级失败：${err.message}`),
-      },
-    );
-  }
+  // v0.5.4 — 升级督导弹窗 state(替代 window.prompt,加「什么情况下升级督导」指引)
+  const [escalateSupervisorCaseId, setEscalateSupervisorCaseId] = useState<number | null>(null);
 
-  // v1.6.9 — 申请转法务（写入 LegalConversionRequest，督导/admin 审批）
-  function handleRequestTransferLegal(caseId: number) {
-    const note = window.prompt("转法务理由（建议简述为何不可能自愿缴）：") ?? "";
-    intentMutate(
-      {
-        url: `agent/cases/${caseId}/intent`,
-        method: "post",
-        values: { action: "transfer_legal", note: note.trim() || undefined },
-      },
-      {
-        onSuccess: () => alert("✓ 申请转法务已提交，等待督导/admin 审批"),
-        onError: (err) => alert(`申请失败：${err.message}`),
-      },
-    );
-  }
+  // v0.5.4 — 申请转法务弹窗 state(替代 window.prompt;reason 必填 + 预设原因)
+  const [transferLegalCaseId, setTransferLegalCaseId] = useState<number | null>(null);
 
   // ── 拨号 ─────────────────────────────────
   const { mutate: dialMutate } = useCreate();
@@ -440,6 +436,84 @@ export function AgentWorkstationIndexPage() {
         </div>
       )}
 
+      {/* v0.6.0 — 本月按项目维度统计(案件数 / 已回款 / 预估佣金) */}
+      {byProject && byProject.items.length > 0 && (
+        <div
+          data-testid="agent-by-project"
+          style={{
+            display: "flex", alignItems: "center", gap: 12,
+            padding: "10px 16px", marginBottom: 8,
+            background: "white", border: "1px solid #e2e8f0", borderRadius: 8,
+            fontSize: 13, overflowX: "auto",
+          }}
+        >
+          <div style={{ fontWeight: 600, color: "#374151", flexShrink: 0 }}>
+            我的项目({byProject.year_month})
+            {/* v0.7.0 — work_mode 身份徽章(便于催收员看清自己佣金率走哪种 rate) */}
+            {byProject.work_mode === "external" && (
+              <span
+                className="ds-badge ds-badge-blue"
+                style={{ marginLeft: 6, fontSize: 10 }}
+                title="服务商催收员:佣金按 project.provider_agent_commission_rate"
+              >
+                服务商
+              </span>
+            )}
+            {byProject.work_mode === "internal" && (
+              <span
+                className="ds-badge ds-badge-green"
+                style={{ marginLeft: 6, fontSize: 10 }}
+                title="物业内部催收员:佣金按 project.internal_agent_commission_rate"
+              >
+                物业内部
+              </span>
+            )}
+            <span style={{ marginLeft: 6, fontSize: 11, color: "#6b7280" }}>
+              本月共回款 ¥{byProject.total_recovered_amount} · 预估佣金 ¥{byProject.total_estimated_commission}
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+            {byProject.items.map((p) => (
+              <div
+                key={p.project_id}
+                style={{
+                  flexShrink: 0,
+                  minWidth: 200,
+                  padding: "8px 12px",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 6,
+                  background: "#f9fafb",
+                }}
+              >
+                <div
+                  style={{ fontSize: 12, fontWeight: 600, color: "#1d4ed8", marginBottom: 4 }}
+                  title={p.project_name}
+                >
+                  📁 {p.project_name}
+                </div>
+                <div style={{ display: "flex", gap: 12, fontSize: 11, color: "#374151" }}>
+                  <span title="本项目我接的案件总数(私海)">案件 <strong>{p.case_count}</strong></span>
+                  <span title="本月在此项目已 stage=paid 的案件">缴清 <strong style={{ color: "#15803d" }}>{p.paid_case_count}</strong></span>
+                </div>
+                <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>
+                  本月回款 <strong style={{ color: "#15803d" }}>¥{p.recovered_amount}</strong>
+                  {p.commission_rate_pct != null ? (
+                    <span style={{ marginLeft: 6 }}>
+                      ·预估佣金 <strong style={{ color: "#c2410c" }}>¥{p.estimated_commission}</strong>
+                      <span style={{ fontSize: 10, color: "#9ca3af", marginLeft: 2 }}>
+                        ({(p.commission_rate_pct * 100).toFixed(1)}%)
+                      </span>
+                    </span>
+                  ) : (
+                    <span style={{ marginLeft: 6, color: "#9ca3af" }}>·佣金未设</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div
         style={{
           display: "grid",
@@ -509,6 +583,7 @@ export function AgentWorkstationIndexPage() {
             <select
               value={stageFilter}
               onChange={(e) => setStageFilter(e.target.value)}
+              aria-label="按阶段筛选案件"
               style={{ background: "#f8fafc", border: "1px solid #e2e8f0", color: "#475569",
                 fontSize: 12, padding: "3px 6px", borderRadius: 4 }}
             >
@@ -977,7 +1052,7 @@ export function AgentWorkstationIndexPage() {
                 disabled={!selectedCaseId}
                 data-testid="ws-discount-request"
                 onClick={() => selectedCaseId && setDiscountForCaseId(selectedCaseId)}
-                title="发起减免/分期/违约金减免，督导或 admin 审批"
+                title="发起减免/分期/违约金减免，督导或物业管理员审批"
               >
                 💸 申请减免
               </button>
@@ -986,8 +1061,8 @@ export function AgentWorkstationIndexPage() {
                 className="ws-quick-btn"
                 disabled={!selectedCaseId}
                 data-testid="ws-transfer-legal"
-                onClick={() => selectedCaseId && handleRequestTransferLegal(selectedCaseId)}
-                title="申请转法务，督导/admin 审批后真正建单"
+                onClick={() => selectedCaseId && setTransferLegalCaseId(selectedCaseId)}
+                title="申请转法务,督导/物业管理员审批后由法务接单选服务包建单"
               >
                 ⚖️ 申请转法务
               </button>
@@ -995,7 +1070,7 @@ export function AgentWorkstationIndexPage() {
                 type="button"
                 className="ws-quick-btn danger"
                 disabled={!selectedCaseId}
-                onClick={() => selectedCaseId && handleEscalateSupervisor(selectedCaseId)}
+                onClick={() => selectedCaseId && setEscalateSupervisorCaseId(selectedCaseId)}
               >
                 🔺 升级督导
               </button>
@@ -1025,6 +1100,62 @@ export function AgentWorkstationIndexPage() {
           onSuccess={(offerId) => {
             setDiscountForCaseId(null);
             alert(`✓ 减免申请 #${offerId} 已提交，等待审批`);
+          }}
+        />
+      )}
+
+      {transferLegalCaseId !== null && (
+        <RequestLegalConversionModal
+          caseId={transferLegalCaseId}
+          onClose={() => setTransferLegalCaseId(null)}
+          onSubmitted={() => {
+            setTransferLegalCaseId(null);
+            alert("✓ 申请转法务已提交,等待督导/物业管理员审批");
+          }}
+        />
+      )}
+
+      {escalateSupervisorCaseId !== null && (
+        <EscalateSupervisorModal
+          caseId={escalateSupervisorCaseId}
+          onClose={() => setEscalateSupervisorCaseId(null)}
+          onSubmitted={() => {
+            setEscalateSupervisorCaseId(null);
+            alert("✓ 已升级到督导队列");
+          }}
+        />
+      )}
+
+      {paymentLink && (
+        <PaymentLinkQrModal
+          token={paymentLink.token}
+          breakdown={paymentLink.breakdown}
+          sentTo={paymentLink.sent_to}
+          onClose={() => setPaymentLink(null)}
+        />
+      )}
+
+      {markPromiseCaseId !== null && (
+        <MarkPromiseModal
+          caseId={markPromiseCaseId}
+          endpoint={`agent/cases/${markPromiseCaseId}/stage`}
+          open
+          onClose={() => setMarkPromiseCaseId(null)}
+          onSuccess={() => {
+            caseListQuery.refetch();
+            kpiQuery.refetch();
+          }}
+        />
+      )}
+
+      {workOrderCaseId !== null && (
+        <WorkOrderCreateModal
+          caseId={workOrderCaseId}
+          onClose={() => setWorkOrderCaseId(null)}
+          onSuccess={(orderId) => {
+            setWorkOrderCaseId(null);
+            alert(`✓ 工单 #${orderId ?? "?"} 已创建`);
+            caseListQuery.refetch();
           }}
         />
       )}

@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from app.api import (
     admin,
     admin_agent_devices,
+    admin_billing,
     admin_cases,
     admin_compliance,
     admin_dashboard,
@@ -42,13 +43,17 @@ from app.api import (
     ops,
     ops_extras,
     ops_law_firms,
+    ops_legal_packages,
     ops_providers,
     pm_dashboard,
     provider_admin,
+    provider_billing,
+    provider_cases,
     provider_legal,
     provider_scripts,
     provider_termination,
     public_app_info,
+    public_payment,
     public_verify,
     recordings,
     super_audit,
@@ -57,6 +62,7 @@ from app.api import (
     super_health,
     super_plans,
     supervisor,
+    supervisor_actions,
     supervisor_case_detail,
     supervisor_escalated,
     supervisor_extras,
@@ -65,6 +71,7 @@ from app.api import (
     supervisor_review,
     supervisor_shifts,
     supervisor_team_stats,
+    supervisor_training,
     tasks,
     tenant_legal_orders,
     user_preferences,
@@ -88,6 +95,8 @@ async def lifespan(app: FastAPI):
     from app.core.crypto import _get_key
     from app.services.call_lifecycle import heartbeat_cleanup_loop
     from app.services.discount_expiry import discount_expiry_loop
+    from app.services.script_ai_score import recompute_ai_scores_loop
+    from app.services.training_curate import scan_auto_ingest_loop
 
     try:
         _get_key()
@@ -100,10 +109,19 @@ async def lifespan(app: FastAPI):
     cleanup_task = asyncio.create_task(heartbeat_cleanup_loop())
     # v1.6 — 减免 offer 7 天有效期自动失效（每小时扫一次）
     discount_expiry_task = asyncio.create_task(discount_expiry_loop())
+    # v0.6.0 — 话术 AI 评分每 6h 扫一次「最旧 update >24h」触发全量重算
+    ai_score_task = asyncio.create_task(recompute_ai_scores_loop())
+    # v0.6.0 — 培训案例兜底:每 24h 扫近 7 天 transferred_training 但未建训练案的事件,自动补建
+    training_ingest_task = asyncio.create_task(scan_auto_ingest_loop())
     try:
         yield
     finally:
-        for task in (cleanup_task, discount_expiry_task):
+        for task in (
+            cleanup_task,
+            discount_expiry_task,
+            ai_score_task,
+            training_ingest_task,
+        ):
             task.cancel()
             with suppress(asyncio.CancelledError, Exception):
                 await task
@@ -232,6 +250,7 @@ app.include_router(ops.router, prefix="/api/v1/ops", tags=["ops"])
 app.include_router(ops_providers.router, prefix="/api/v1/ops", tags=["ops-providers"])
 app.include_router(ops_extras.router, prefix="/api/v1/ops", tags=["ops-extras"])
 app.include_router(ops_law_firms.router, prefix="/api/v1/ops", tags=["ops-law-firms"])
+app.include_router(ops_legal_packages.router, prefix="/api/v1/ops", tags=["ops-legal-packages"])
 app.include_router(
     legal_workstation.router, prefix="/api/v1/legal-workstation", tags=["legal-workstation"]
 )
@@ -263,6 +282,7 @@ app.include_router(devices_v1.router, prefix="/api/v1/devices", tags=["devices-v
 app.include_router(calls_v1.router, prefix="/api/v1/calls", tags=["calls-v1"])
 app.include_router(public_verify.router, prefix="/api/v1/public", tags=["public-verify"])
 app.include_router(public_app_info.router, prefix="/api/v1/public", tags=["public-app-info"])
+app.include_router(public_payment.router, prefix="/api/v1/public", tags=["public-payment"])
 app.include_router(user_preferences.router, prefix="/api/v1/users", tags=["user-preferences"])
 app.include_router(notifications_api.router, prefix="/api/v1/users", tags=["notifications"])
 # Legacy PoC routers (Sprint 1 migrates these to ORM + /api/v1/ prefix)
@@ -293,6 +313,9 @@ app.include_router(
     supervisor_case_detail.router, prefix="/api/v1/supervisor", tags=["supervisor-case-detail"]
 )
 app.include_router(
+    supervisor_actions.router, prefix="/api/v1/supervisor", tags=["supervisor-actions"]
+)
+app.include_router(
     supervisor_shifts.router, prefix="/api/v1/supervisor", tags=["supervisor-shifts"]
 )
 app.include_router(
@@ -300,6 +323,10 @@ app.include_router(
 )
 app.include_router(
     supervisor_escalated.router, prefix="/api/v1/supervisor", tags=["supervisor-escalated"]
+)
+# v0.6.0 — 培训案例库 CRUD
+app.include_router(
+    supervisor_training.router, prefix="/api/v1/supervisor", tags=["supervisor-training"]
 )
 app.include_router(lawfirm_orders.router, prefix="/api/v1/lawfirm", tags=["lawfirm-orders"])
 app.include_router(lawyer_orders.router, prefix="/api/v1/lawyer", tags=["lawyer-orders"])
@@ -325,6 +352,9 @@ app.include_router(provider_legal.router, prefix="/api/v1/provider/legal", tags=
 app.include_router(work_orders.router, prefix="/api/v1/workorders", tags=["workorders"])
 app.include_router(pm_dashboard.router, prefix="/api/v1/pm", tags=["pm"])
 app.include_router(provider_admin.router, prefix="/api/v1/provider", tags=["provider"])
+app.include_router(provider_cases.router, prefix="/api/v1/provider", tags=["provider-cases"])
+app.include_router(admin_billing.router, prefix="/api/v1/admin", tags=["admin-billing"])
+app.include_router(provider_billing.router, prefix="/api/v1/provider", tags=["provider-billing"])
 app.include_router(provider_scripts.router, prefix="/api/v1/provider", tags=["provider-scripts"])
 app.include_router(
     provider_termination.admin_router,

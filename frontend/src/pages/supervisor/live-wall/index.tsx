@@ -48,10 +48,11 @@ export function SupervisorLiveWallPage() {
   });
 
   // v2.1 — 拉一次全部坐席的最近能力，本地 cache
+  // v0.5.7 fix:page_size=200 超后端 100 上限触发 422;改 100 + 单页内一次拿完(坐席通常 ≤100)
   const { query: capQ } = useCustom<AgentDevicesCapResp>({
     url: "admin/agent-devices",
     method: "get",
-    config: { query: { page_size: 200 } },
+    config: { query: { page_size: 100 } },
   });
   const capMap = useMemo(() => {
     const m = new Map<number, string>();

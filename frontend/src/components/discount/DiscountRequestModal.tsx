@@ -1,9 +1,13 @@
-// v1.6.9 — 发起减免申请 Modal（催收员 / 督导 共用）
-// 提交后端 POST /cases/{case_id}/discount-offers，后端按租户阈值自动判定走督导还是 admin 审批
-import { Loader2, BadgePercent, X } from "lucide-react";
+// v1.6.9 — 发起减免申请 Modal(催收员 / 督导 共用)
+// 提交后端 POST /cases/{case_id}/discount-offers,后端按租户阈值自动判定走督导还是 admin 审批
+//
+// v0.5.8 — 从中间 Modal 迁移到 RightDrawer 520px(决策矩阵:4 字段 + 需边看案件金额);
+// 详见 docs/UI_PATTERNS_MODAL.md
+import { Loader2, BadgePercent } from "lucide-react";
 import { useMemo, useState } from "react";
 import { OFFER_TYPE_LABELS, type OfferType } from "../../pages/discount/_mock";
 import { useCreateDiscountOffer } from "../../pages/discount/api";
+import { RightDrawer } from "../ui/RightDrawer";
 
 interface Props {
   caseId: number;
@@ -72,30 +76,44 @@ export function DiscountRequestModal({
 
   // 大致预测审批走向（仅用于 UX 提示，最终以后端为准）
   let approvalHint = "";
-  if (discountPct >= 30) approvalHint = "比例较大，将转 admin 审批";
+  if (discountPct >= 30) approvalHint = "比例较大，将转物业管理员审批";
   else if (discountPct >= 10) approvalHint = "需督导审批";
   else if (discountPct > 0) approvalHint = "比例较小，可能自动通过";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] overflow-auto">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-neutral-200)] sticky top-0 bg-white">
-          <div className="flex items-center gap-2">
-            <BadgePercent className="w-5 h-5 text-[var(--color-warning)]" />
-            <h2 className="text-base font-semibold">
-              发起减免申请{ownerName ? ` — ${ownerName}` : ""}
-            </h2>
-          </div>
+    <RightDrawer
+      open
+      onClose={onClose}
+      drawerKey="discount-request"
+      defaultWidth={520}
+      title={
+        <span className="flex items-center gap-2">
+          <BadgePercent className="w-5 h-5 text-[var(--color-warning)]" />
+          发起减免申请{ownerName ? ` — ${ownerName}` : ""}
+        </span>
+      }
+      footer={
+        <>
           <button
             type="button"
             onClick={onClose}
-            className="text-[var(--color-neutral-400)] hover:text-[var(--color-neutral-700)]"
+            className="px-3 py-1.5 text-sm rounded border border-[var(--color-neutral-300)] text-[var(--color-neutral-700)] hover:bg-[var(--color-neutral-50)]"
           >
-            <X className="w-5 h-5" />
+            取消
           </button>
-        </div>
-
-        <div className="p-5 space-y-4">
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+            className="px-4 py-1.5 text-sm rounded bg-[var(--color-primary)] text-white hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
+          >
+            {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            提交申请
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
           {/* 减免类型 */}
           <section>
             <label className="block text-sm font-semibold mb-2">减免类型</label>
@@ -196,27 +214,7 @@ export function DiscountRequestModal({
               className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-300)] rounded resize-none"
             />
           </section>
-        </div>
-
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-[var(--color-neutral-200)] sticky bottom-0 bg-white">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3 py-1.5 text-sm rounded border border-[var(--color-neutral-300)] text-[var(--color-neutral-700)] hover:bg-[var(--color-neutral-50)]"
-          >
-            取消
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-            className="px-4 py-1.5 text-sm rounded bg-[var(--color-primary)] text-white hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
-          >
-            {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            提交申请
-          </button>
-        </div>
       </div>
-    </div>
+    </RightDrawer>
   );
 }

@@ -12,6 +12,7 @@ mock 分支：data_sha256 + 本地确定性 tx_hash + 自增 block_height。
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 import sqlalchemy as sa
@@ -69,6 +70,10 @@ class BlockchainAttestation(Base):
         sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
     )
     confirmed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
+
+    # v0.5.9 — 每次存证的快照费用(从 BillingPricing 读单价时冻结)。NULL 兼容
+    # 老数据 / mock 调用未走计费的场景;月度 stats 时按 cost_amount IS NOT NULL 过滤。
+    cost_amount: Mapped[Decimal | None] = mapped_column(sa.Numeric(10, 2), nullable=True)
 
     payload_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 

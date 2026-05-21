@@ -28,6 +28,7 @@ from app.schemas.case import (
 )
 from app.schemas.common import PaginatedResponse
 from app.services.audit import log_audit
+from app.services.payment_link import PaymentLinkOut, build_and_record_payment_link
 
 from .admin_cases import _case_row_to_response, _require_tenant, build_case_detail_response
 
@@ -317,8 +318,25 @@ async def agent_update_case_stage(
         )
     prev_stage = case.stage
     case.stage = body.stage
+    # v0.5.6 — 标记承诺缴费时,把 3 个结构化字段写到 case
+    # (其他阶段切换不动 promise_* 字段,避免误清空历史承诺)
+    audit_extra: dict[str, object] = {}
+    if body.stage == "promised":
+        if body.promise_content is not None:
+            case.promise_content = body.promise_content
+            audit_extra["promise_content"] = body.promise_content
+        if body.promise_amount is not None:
+            case.promise_amount = body.promise_amount
+            audit_extra["promise_amount"] = str(body.promise_amount)
+        if body.promise_due_at is not None:
+            case.promise_due_at = body.promise_due_at
+            audit_extra["promise_due_at"] = body.promise_due_at.isoformat()
     db.commit()
     db.refresh(case)
+    audit_payload: dict[str, object] = {"from": prev_stage, "to": body.stage}
+    if body.note:
+        audit_payload["note"] = body.note
+    audit_payload.update(audit_extra)
     log_audit(
         db,
         actor_user_id=user.id,
@@ -327,9 +345,7 @@ async def agent_update_case_stage(
         action="case.stage_changed",
         target_type="collection_case",
         target_id=case_id,
-        payload={"from": prev_stage, "to": body.stage, "note": body.note}
-        if body.note
-        else {"from": prev_stage, "to": body.stage},
+        payload=audit_payload,
     )
     db.commit()
     return case
@@ -415,7 +431,8 @@ def post_case_intent(
             case_id=case_id,
             requester_user_id=user_id,
             requester_role=role,
-            reason=body.note,
+            # v0.5.4 — reason 改 NOT NULL，body.note 可能为 None 时给占位（Wave 3 API 改为必填）
+            reason=body.note or "(待补充)",
             status="pending",
         )
         db.add(request_row)
@@ -448,36 +465,18 @@ def post_case_intent(
     return _CaseIntentOut(case_id=case_id, action=body.action, recorded_at=now, status="queued")
 
 
-class _PaymentLinkOut(BaseModel):
-    case_id: int
-    link: str
-    short_link: str
-    sent_to: str  # masked phone
-    sent_at: datetime
-    expires_at: datetime
-    sms_status: str  # "queued" / "sent" / "skipped"
-
-
-@router.post("/cases/{case_id}/send-payment-link", response_model=_PaymentLinkOut, status_code=201)
+@router.post(
+    "/cases/{case_id}/send-payment-link",
+    response_model=PaymentLinkOut,
+    status_code=201,
+)
 def send_payment_link(
     case_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
     user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
-) -> _PaymentLinkOut:
-    """v1.6.7 — E4 一键发送缴费链接给业主（PoC：生成短链 + 写 audit log，不真实下发短信）。
-
-    业务流程：
-    - 校验 case 属于当前 agent + tenant
-    - 生成短链 token + H5 缴费链接
-    - 写 audit log（actor / case_id / sent_to_phone_masked）
-    - 短信通道接入留 TODO（sms_status='queued'）
-    """
-    from datetime import timedelta
-    from secrets import token_urlsafe
-
-    from app.core.crypto import mask_phone
-
+) -> PaymentLinkOut:
+    """v1.6.7 — E4 一键发送缴费链接给业主（坐席端：仅限分配给自己的案件）。"""
     tenant_id = _require_tenant(payload)
     case = db.get(CollectionCase, case_id)
     if not case or case.tenant_id != tenant_id:
@@ -498,38 +497,13 @@ def send_payment_link(
             detail={"code": "ERR_OWNER_MISSING", "message": "案件未关联业主"},
         )
 
-    token = token_urlsafe(12)
-    now = datetime.now(UTC)
-    expires_at = now + timedelta(days=7)
-    full_link = f"https://pay.autoluyin.example.com/h5/{token}"
-    short_link = f"https://yzhc.cn/p/{token[:6]}"
-    sent_to_masked = mask_phone(owner.phone_enc)
-
-    log_audit(
+    return build_and_record_payment_link(
         db,
+        case=case,
+        owner=owner,
         actor_user_id=user.id,
         actor_role=str(payload.get("role") or ""),
         tenant_id=tenant_id,
-        action="case.payment_link_sent",
-        target_type="collection_case",
-        target_id=case_id,
-        payload={
-            "owner_phone_masked": sent_to_masked,
-            "amount": str(case.amount_owed) if case.amount_owed else None,
-            "short_link": short_link,
-            "expires_at": expires_at.isoformat(),
-        },
-    )
-    db.commit()
-
-    return _PaymentLinkOut(
-        case_id=case_id,
-        link=full_link,
-        short_link=short_link,
-        sent_to=sent_to_masked,
-        sent_at=now,
-        expires_at=expires_at,
-        sms_status="queued",  # 真实短信通道接入后改为 'sent'
     )
 
 

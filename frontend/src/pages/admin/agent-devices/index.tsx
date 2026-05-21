@@ -48,17 +48,9 @@ const CAPABILITY_BADGE: Record<string, { label: string; cls: string }> = {
   incompatible: { label: "录音不可用", cls: "ds-badge ds-badge-red" },
 };
 
-const ROLE_LABEL: Record<string, string> = {
-  admin: "管理员",
-  supervisor: "督导",
-  agent: "催收员",
-  legal: "法务对接人",
-  workorder: "协调员",
-  coordinator: "协调员",
-  project_manager: "项目经理",
-  superadmin: "平台超管",
-  ops: "平台运营",
-};
+// v0.5.6 — ROLE_LABEL 已迁出到 src/lib/roleLabel.ts(SSOT);agent-devices 是物业 admin 视角
+import { roleLabel as roleLabelFn } from "../../../lib/roleLabel";
+const ROLE_LABEL = (r: string) => roleLabelFn(r, "tenant");
 
 export function AdminAgentDevicesPage() {
   const [page, setPage] = useState(1);
@@ -179,7 +171,7 @@ export function AdminAgentDevicesPage() {
                     <td>
                       <strong>{it.user_name}</strong>
                     </td>
-                    <td>{ROLE_LABEL[it.role] ?? it.role}</td>
+                    <td>{ROLE_LABEL(it.role)}</td>
                     <td>
                       <div>
                         {it.manufacturer ?? "—"} {it.model ?? ""}
