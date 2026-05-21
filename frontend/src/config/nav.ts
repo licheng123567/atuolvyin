@@ -49,6 +49,9 @@ const NAV_CONFIG: Partial<Record<UserRole | "workorder", NavSection[]>> = {
         { label: "结算管理", path: "/admin/settlements", icon: "Receipt" },
         // v0.5.4 — 减免大额审批从「法务管理」移入此处（减免是金额谈判，非法务事项）
         { label: "减免大额审批", path: "/admin/discount-approvals", icon: "BadgePercent" },
+        // v0.5.9 — 通话计费 + 存证消费(物业方的两项 SaaS 消费视图)
+        { label: "通话计费", path: "/admin/billing/minute-usage", icon: "Phone" },
+        { label: "存证消费", path: "/admin/billing/blockchain", icon: "Shield" },
         { label: "数据报表", path: "/admin/reports", icon: "BarChart2" },
         { label: "合规月报", path: "/admin/compliance", icon: "Shield" },
       ],
@@ -279,6 +282,8 @@ const PROVIDER_ADMIN_NAV: NavSection[] = [
     title: "结算与报表",
     items: [
       { label: "收入结算", path: "/provider/settlements", icon: "Receipt" },
+      // v0.5.9 — 跨租户分钟消费(我接的每个租户贡献多少分钟 / 金额)
+      { label: "分钟消费", path: "/provider/billing/minute-usage", icon: "Phone" },
       { label: "历史报表", path: "/provider/historical-reports", icon: "Archive" },
     ],
   },

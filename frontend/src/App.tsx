@@ -62,6 +62,9 @@ import { AdminDashboardPage } from "./pages/admin/dashboard";
 import { AdminPoolPage } from "./pages/admin/pool";
 import { AdminSettlementListPage } from "./pages/admin/settlements";
 import { AdminSettlementDetailPage } from "./pages/admin/settlements/detail";
+// v0.5.9 — 物业计费页(通话分钟 + 区块链存证消费)
+import { AdminBillingMinuteUsagePage } from "./pages/admin/billing/minute-usage";
+import { AdminBillingBlockchainPage } from "./pages/admin/billing/blockchain";
 import { AdminAuditLogPage } from "./pages/admin/audit-logs";
 import { AdminAgentDevicesPage } from "./pages/admin/agent-devices";
 import { AdminProvidersPage } from "./pages/admin/providers/index";
@@ -129,6 +132,8 @@ import { ProviderCaseDetailPage } from "./pages/provider/cases/detail";
 import { ProviderCasesKanbanPage } from "./pages/provider/cases/kanban";
 import { ProviderSettlementListPage } from "./pages/provider/settlements";
 import { ProviderSettlementDetailPage } from "./pages/provider/settlements/[id]";
+// v0.5.9 — 服务商跨租户分钟消费
+import { ProviderBillingMinuteUsagePage } from "./pages/provider/billing/minute-usage";
 import { SuperHealthPage } from "./pages/super/health";
 import { SuperAuditPage } from "./pages/super/audit";
 import { SuperCostPage } from "./pages/super/cost";
@@ -465,6 +470,9 @@ function App() {
             {/* Admin - Settlement Management */}
             <Route path="/admin/settlements" element={<AdminSettlementListPage />} />
             <Route path="/admin/settlements/:id" element={<AdminSettlementDetailPage />} />
+            {/* v0.5.9 — 物业计费页 */}
+            <Route path="/admin/billing/minute-usage" element={<AdminBillingMinuteUsagePage />} />
+            <Route path="/admin/billing/blockchain" element={<AdminBillingBlockchainPage />} />
             <Route path="/admin/audit-logs" element={<AdminAuditLogPage />} />
             {/* v2.1 — Admin/Supervisor: 坐席设备能力（哪些机器系统级录音不支持→实时 AI 不可用） */}
             <Route path="/admin/agent-devices" element={<AdminAgentDevicesPage />} />
@@ -557,6 +565,8 @@ function App() {
             <Route path="/provider/scripts" element={<ProviderScriptListPage />} />
             <Route path="/provider/settlements" element={<ProviderSettlementListPage />} />
             <Route path="/provider/settlements/:id" element={<ProviderSettlementDetailPage />} />
+            {/* v0.5.9 — 服务商跨租户分钟消费 */}
+            <Route path="/provider/billing/minute-usage" element={<ProviderBillingMinuteUsagePage />} />
             <Route path="/provider/historical-reports" element={<ProviderHistoricalReportsPage />} />
             <Route path="/provider/projects" element={<ProviderProjectsPage />} />
             {/* §9 — 服务商法务 (provider legal) */}
