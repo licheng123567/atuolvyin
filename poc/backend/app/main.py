@@ -71,6 +71,7 @@ from app.api import (
     supervisor_review,
     supervisor_shifts,
     supervisor_team_stats,
+    supervisor_training,
     tasks,
     tenant_legal_orders,
     user_preferences,
@@ -94,6 +95,8 @@ async def lifespan(app: FastAPI):
     from app.core.crypto import _get_key
     from app.services.call_lifecycle import heartbeat_cleanup_loop
     from app.services.discount_expiry import discount_expiry_loop
+    from app.services.script_ai_score import recompute_ai_scores_loop
+    from app.services.training_curate import scan_auto_ingest_loop
 
     try:
         _get_key()
@@ -106,10 +109,19 @@ async def lifespan(app: FastAPI):
     cleanup_task = asyncio.create_task(heartbeat_cleanup_loop())
     # v1.6 — 减免 offer 7 天有效期自动失效（每小时扫一次）
     discount_expiry_task = asyncio.create_task(discount_expiry_loop())
+    # v0.6.0 — 话术 AI 评分每 6h 扫一次「最旧 update >24h」触发全量重算
+    ai_score_task = asyncio.create_task(recompute_ai_scores_loop())
+    # v0.6.0 — 培训案例兜底:每 24h 扫近 7 天 transferred_training 但未建训练案的事件,自动补建
+    training_ingest_task = asyncio.create_task(scan_auto_ingest_loop())
     try:
         yield
     finally:
-        for task in (cleanup_task, discount_expiry_task):
+        for task in (
+            cleanup_task,
+            discount_expiry_task,
+            ai_score_task,
+            training_ingest_task,
+        ):
             task.cancel()
             with suppress(asyncio.CancelledError, Exception):
                 await task
@@ -306,6 +318,10 @@ app.include_router(
 )
 app.include_router(
     supervisor_escalated.router, prefix="/api/v1/supervisor", tags=["supervisor-escalated"]
+)
+# v0.6.0 — 培训案例库 CRUD
+app.include_router(
+    supervisor_training.router, prefix="/api/v1/supervisor", tags=["supervisor-training"]
 )
 app.include_router(lawfirm_orders.router, prefix="/api/v1/lawfirm", tags=["lawfirm-orders"])
 app.include_router(lawyer_orders.router, prefix="/api/v1/lawyer", tags=["lawyer-orders"])

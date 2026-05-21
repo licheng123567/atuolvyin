@@ -559,6 +559,10 @@ def script_effectiveness(
                 good_ratio=good_ratio,
                 composite_score=composite_score,
                 composite_grade=grade,  # type: ignore[arg-type]
+                # v0.6.0 — AI 评分(从 ScriptTemplate 表读快照,定时任务每 6h 重算)
+                ai_score=float(t.ai_score) if t.ai_score is not None else None,
+                ai_score_sample_count=t.ai_score_sample_count,
+                ai_score_updated_at=t.ai_score_updated_at,
             )
         )
 
@@ -601,3 +605,50 @@ def rollback_script(
     db.commit()
     db.refresh(script)
     return _to_out(script)
+
+
+# v0.6.0 — 话术 AI 评分手动重算端点(便于演示 + 调试,定时任务每 6h 自动跑)
+from pydantic import BaseModel as _BaseModel  # noqa: E402
+
+from app.models.user import UserAccount  # noqa: E402
+
+
+class RecomputeAiScoresOut(_BaseModel):
+    """POST /admin/scripts/recompute-ai-scores 响应。"""
+
+    recomputed: int
+    lookback_days: int
+
+
+def _require_tenant_for_ai(payload: dict) -> int:
+    tid = payload.get("tenant_id")
+    if not tid:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_NO_TENANT", "message": "需要租户上下文"},
+        )
+    return int(tid)
+
+
+@router.post(
+    "/scripts/recompute-ai-scores", response_model=RecomputeAiScoresOut
+)
+def recompute_ai_scores_now(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+    lookback_days: int = 30,
+) -> RecomputeAiScoresOut:
+    """手动触发本租户所有 active 话术的 AI 评分重算。
+
+    后台 asyncio loop 每 6h 自动跑;本端点用于演示 + 调试 + admin
+    新建话术后立刻刷新评分。
+    """
+    from app.services.script_ai_score import scan_and_recompute_ai_scores
+
+    tenant_id = _require_tenant_for_ai(payload)
+    count = scan_and_recompute_ai_scores(
+        db, lookback_days=lookback_days, tenant_id=tenant_id
+    )
+    db.commit()
+    return RecomputeAiScoresOut(recomputed=count, lookback_days=lookback_days)

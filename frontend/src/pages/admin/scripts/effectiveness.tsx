@@ -19,6 +19,10 @@ interface EffectivenessItem {
   good_ratio: number | null;
   composite_score: number | null;
   composite_grade: "A" | "B" | "C" | "D" | null;
+  // v0.6.0 — AI 评分(基于近 30 天回款率 70% + 采用率 30%)
+  ai_score: number | null;
+  ai_score_sample_count: number | null;
+  ai_score_updated_at: string | null;
 }
 
 interface EffectivenessOut {
@@ -143,6 +147,12 @@ export function ScriptEffectivenessPage() {
               <th style={{ textAlign: "right" }}>采用率</th>
               <th style={{ textAlign: "right" }}>督导好评率</th>
               <th style={{ textAlign: "center" }}>综合评分</th>
+              <th
+                style={{ textAlign: "center" }}
+                title="AI 评分(0-100):基于近 30 天案件回款率 70% + 采用率 30%,定时任务每 6h 重算。&lt;5 样本不参与评分,5-9 样本提示「样本不足」。"
+              >
+                AI 评分
+              </th>
               <th style={{ textAlign: "center" }}>评级</th>
               <th style={{ textAlign: "center" }}>状态</th>
             </tr>
@@ -150,14 +160,14 @@ export function ScriptEffectivenessPage() {
           <tbody>
             {query.isLoading && (
               <tr>
-                <td colSpan={8} style={{ textAlign: "center", padding: 32, color: "var(--color-neutral-400)" }}>
+                <td colSpan={9} style={{ textAlign: "center", padding: 32, color: "var(--color-neutral-400)" }}>
                   加载中…
                 </td>
               </tr>
             )}
             {!query.isLoading && items.length === 0 && (
               <tr>
-                <td colSpan={8} style={{ textAlign: "center", padding: 32, color: "var(--color-neutral-400)" }}>
+                <td colSpan={9} style={{ textAlign: "center", padding: 32, color: "var(--color-neutral-400)" }}>
                   暂无话术数据
                 </td>
               </tr>
@@ -185,6 +195,41 @@ export function ScriptEffectivenessPage() {
                 </td>
                 <td style={{ textAlign: "center" }}>
                   {item.composite_score === null ? "—" : item.composite_score.toFixed(2)}
+                </td>
+                {/* v0.6.0 — AI 评分(0-100,基于回款率) */}
+                <td style={{ textAlign: "center" }}>
+                  {item.ai_score === null ? (
+                    <span style={{ color: "var(--color-neutral-400)", fontSize: 12 }}>
+                      {item.ai_score_sample_count != null && item.ai_score_sample_count > 0
+                        ? `样本不足(${item.ai_score_sample_count})`
+                        : "—"}
+                    </span>
+                  ) : (
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        color:
+                          item.ai_score >= 70
+                            ? "#059669"
+                            : item.ai_score >= 40
+                              ? "#d97706"
+                              : "#dc2626",
+                      }}
+                      title={
+                        item.ai_score_sample_count != null
+                          ? `样本数:${item.ai_score_sample_count}`
+                          : undefined
+                      }
+                    >
+                      {item.ai_score.toFixed(1)}
+                      {item.ai_score_sample_count != null
+                        && item.ai_score_sample_count < 10 && (
+                        <span style={{ fontSize: 10, color: "#d97706", marginLeft: 2 }}>
+                          ⚠
+                        </span>
+                      )}
+                    </span>
+                  )}
                 </td>
                 <td style={{ textAlign: "center" }}>
                   {item.composite_grade ? (

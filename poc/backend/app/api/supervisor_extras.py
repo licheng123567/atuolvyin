@@ -118,6 +118,18 @@ def annotate_risk_event(
     # v0.6.0 — 若 body 带 handle_status,同步写入(支持转培训/转法务等处置类型)
     if body.handle_status is not None:
         event.handle_status = body.handle_status
+
+    # v0.6.0 — handle_status='transferred_training' 联动自动入库 TrainingCase
+    if body.handle_status == "transferred_training":
+        from app.services.training_curate import from_risk_event
+
+        from_risk_event(
+            db,
+            risk_event_id=event.id,
+            tenant_id=int(call.tenant_id),
+            actor_user_id=user_id,
+        )
+
     db.commit()
     db.refresh(event)
 

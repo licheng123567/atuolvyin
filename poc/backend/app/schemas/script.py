@@ -120,6 +120,10 @@ class ScriptEffectivenessItem(BaseModel):
     good_ratio: float | None = None
     composite_score: float | None = None
     composite_grade: Literal["A", "B", "C", "D"] | None = None
+    # v0.6.0 — AI 评分(0-100,基于回款率 70% + 采用率 30%)+ 样本数 + 最近更新
+    ai_score: float | None = None
+    ai_score_sample_count: int | None = None
+    ai_score_updated_at: datetime | None = None
 
 
 class ScriptEffectivenessOut(BaseModel):

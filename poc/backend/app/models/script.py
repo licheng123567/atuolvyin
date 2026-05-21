@@ -44,6 +44,13 @@ class ScriptTemplate(Base):
     adoption_rate: Mapped[float | None] = mapped_column(sa.Float)
     conversion_rate: Mapped[float | None] = mapped_column(sa.Float)
     score_grade: Mapped[str | None] = mapped_column(sa.String(1))
+    # v0.6.0 — AI 评分(0-100,基于回款率 + 采用率综合);定时任务每日重算
+    ai_score: Mapped[float | None] = mapped_column(sa.Numeric(5, 2), nullable=True)
+    ai_score_updated_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
+    )
+    # 样本数 — UI 用:<10 时显示「样本不足」,避免小样本误导
+    ai_score_sample_count: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
     created_by: Mapped[int | None] = mapped_column(
         sa.BigInteger, sa.ForeignKey("user_account.id"), nullable=True
     )
