@@ -30,6 +30,11 @@ class AuditLog(Base):
     tenant_id: Mapped[int | None] = mapped_column(
         sa.BigInteger, sa.ForeignKey("tenant.id"), nullable=True
     )
+    # v1.0.0 — 服务商 scope(对齐 tenant_id):非 NULL = 服务商相关动作
+    # log_audit() 调用方在服务商路由里主动传 provider_id
+    provider_id: Mapped[int | None] = mapped_column(
+        sa.BigInteger, sa.ForeignKey("service_provider.id"), nullable=True
+    )
     action: Mapped[str] = mapped_column(sa.Text, nullable=False)
     target_type: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     target_id: Mapped[int | None] = mapped_column(sa.BigInteger, nullable=True)

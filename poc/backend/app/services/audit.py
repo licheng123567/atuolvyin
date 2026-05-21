@@ -26,17 +26,21 @@ def log_audit(
     target_type: str | None = None,
     target_id: int | None = None,
     payload: dict[str, Any] | None = None,
+    provider_id: int | None = None,  # v1.0.0 — 服务商 scope(可选,兼容旧调用)
 ) -> None:
     """Insert an AuditLog row inside the current transaction.
 
     The caller owns the commit. If the insert raises (e.g. unexpected schema),
     we catch and log — auditing must never break the actual business write.
+
+    v1.0.0 — `provider_id` 让服务商相关动作能按服务商过滤查询。
     """
     try:
         entry = AuditLog(
             actor_user_id=actor_user_id,
             actor_role=actor_role,
             tenant_id=tenant_id,
+            provider_id=provider_id,
             action=action,
             target_type=target_type,
             target_id=target_id,

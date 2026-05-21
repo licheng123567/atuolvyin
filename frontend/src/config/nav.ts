@@ -285,6 +285,10 @@ const PROVIDER_ADMIN_NAV: NavSection[] = [
       { label: "话术效果", path: "/provider/scripts/effectiveness", icon: "BarChart3" },
       // v1.0.0 — 服务商风控关键词(对齐物业 admin)
       { label: "风控关键词", path: "/provider/risk-keywords", icon: "ShieldAlert" },
+      // v1.0.0 — 服务商合规月报(对齐物业 admin)
+      { label: "合规月报", path: "/provider/compliance", icon: "FileText" },
+      // v1.0.0 — 服务商审计日志(对齐物业 admin)
+      { label: "审计日志", path: "/provider/audit-logs", icon: "ScrollText" },
     ],
   },
   {
@@ -292,7 +296,8 @@ const PROVIDER_ADMIN_NAV: NavSection[] = [
     items: [
       { label: "收入结算", path: "/provider/settlements", icon: "Receipt" },
       // v0.5.9 — 跨租户分钟消费(我接的每个租户贡献多少分钟 / 金额)
-      { label: "分钟消费", path: "/provider/billing/minute-usage", icon: "Phone" },
+      // v1.0.0 — 文案强化:这是本服务商的成本(不混淆物业 SaaS 计费)
+      { label: "分钟成本", path: "/provider/billing/minute-usage", icon: "Phone" },
       { label: "历史报表", path: "/provider/historical-reports", icon: "Archive" },
       // v0.9.0 — 服务商系统配置(目前仅含自动释放阈值)
       { label: "系统配置", path: "/provider/settings", icon: "Settings" },

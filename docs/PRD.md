@@ -3514,6 +3514,52 @@ app.youcuihuicui.com       ← 租户侧所有角色（物业公司管理员/主
 
 ---
 
+### 22.13 v1.0.0 服务商侧全面对齐物业 admin + 案件可追溯性(2026-05-21)
+
+**背景**:用户人工验收 v0.9.0 后,反馈 9 个缺口,核心是「服务商侧缺与物业 admin 对齐的功能」。本期一次性收口,发 v1.0.0 release。
+
+**3 个关键决策**(已锁定):
+1. **服务商不需要 legal 角色** — 服务商专注催收,法务转化交回物业 / 第三方律所(不打开后端 role pattern,显式拒绝 422)
+2. **服务商 settings 补 3 类** — 录音模式 / 联系频次上限 / 通知规则(对齐 TenantSettings;不补打折审批 / 数据保留 — 物业控制)
+3. **一次性 release** — 8 个 Wave 一次完成,不分 P0/P1 期
+
+**8 个 Wave 拆分**:
+
+| Wave | 内容 | 关键改动 |
+|---|---|---|
+| A 案件可追溯性 | #1+#2 | `CaseDetailResponse.assigned_to_name` 新字段 + 两端详情页加催收员小卡 + 服务商列表加催收员过滤 + `ProviderAssignDrawer` 仅 agent |
+| B 团队角色对齐 | #3 | role pattern 仅 supervisor/agent/project_manager(显式排 legal)+ tenant_id 改 Optional(后端自动选 first active 合作物业)+ 前端 modal 显 3 角色 + 删「关联物业」字段 |
+| C settings 扩展 | #4 | `ProviderSettings` 加 7 列(recording_mode + contact_freq_max + 5 notify_*)+ Alembic 24100v100a + 前端 4 section UI |
+| D 话术风控 | #5 | `RiskKeyword.provider_id` 列 + Alembic 24101v100b(unique key 改 scope 4 列 + XOR CHECK)+ `provider_risk_keywords.py` 4 端点 + 前端 list/create + nav |
+| E 合规月报 | #6 | `provider_compliance.py`(2 端点,Project.provider_id JOIN 过滤)+ 前端 index+detail + nav「合规月报」|
+| F 审计日志 | #7 | `AuditLog.provider_id` 列 + Alembic 24102v100c + `log_audit()` 加 provider_id 可选参 + `provider_audit_logs.py` + 前端简化版页面 + nav「审计日志」|
+| G 成本/提成可见性 | #8+#9 | nav 文案「分钟消费」→「分钟成本」(已隔离,只是文案不显眼);#9 已在 v0.7.0 实现,无需新代码 |
+| H PRD 同步 | (本节) | §22.13 决策日志 |
+
+**5 个关键设计**:
+
+1. **服务商内部公海复用 pool_type=public + provider_id 隔离** — 不新建表,前端按 provider_id 筛即可(v0.5.6 已实现 ProviderPoolPage)
+2. **RiskKeyword scope XOR** — CHECK `NOT (tenant_id IS NOT NULL AND provider_id IS NOT NULL)`:平台预置 = 两者 NULL;物业私有 = tenant_id 非 NULL;服务商私有 = provider_id 非 NULL。三态明确,无歧义
+3. **log_audit 新增 provider_id 可选参** — 不破坏既有 ~30 处调用;新代码主动传值;查询时主条件 provider_id == self 或兜底 target_type='case' AND target_id IN (本服务商接案件)
+4. **服务商成员 tenant_id 自动挑** — DB CHECK 仍要求 NOT NULL,但 user-facing 不暴露。后端按 first active 合作物业自动挑
+5. **work_mode='external' 自动设** — 服务商创建 agent 时 CHECK 约束要求 work_mode 非 NULL(对齐四维角色模型 v2.2)
+
+**P0 缺口修复**(本期):
+- 物业 admin 风控关键词 list 漏过滤服务商 scope — 加 `provider_id IS NULL` 防泄漏
+- 物业 admin _assert_can_modify 漏判服务商 scope — 加 `provider_id is not None` → 403
+
+**人工验收点**(全 push 完):
+- 服务商 admin(13000000010):
+  - **A**:案件详情看到「张三」催收员姓名 + 列表按催收员过滤
+  - **B**:团队新增 modal 3 角色 + 无「关联物业」字段
+  - **C**:settings 页 4 section(自动释放 / 录音 / 联系频次 / 通知)
+  - **D**:nav 看到「风控关键词」+ 可新建本服务商私有
+  - **E**:nav 看到「合规月报」+ 跨多物业聚合数据
+  - **F**:nav 看到「审计日志」+ 看到自家成员动作
+  - **G**:nav「分钟成本」(原「分钟消费」) — 文案明确这是本服务商成本
+
+---
+
 ## 23. UI 模式与术语约定(v0.5.6 起)
 
 ### 23.1 弹窗交互模式
