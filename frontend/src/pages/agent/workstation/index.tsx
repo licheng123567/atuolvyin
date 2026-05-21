@@ -155,6 +155,29 @@ export function AgentWorkstationIndexPage() {
   }>({ url: "agent/me/today-kpi", method: "get", queryOptions: { refetchInterval: 30000 } });
   const kpi = kpiQuery.data?.data;
 
+  // v0.6.0 — 本月按项目维度统计(案件数 / 已回款 / 预估佣金),工作台 KPI 下方展示
+  interface ProjectStatItem {
+    project_id: number;
+    project_name: string;
+    case_count: number;
+    paid_case_count: number;
+    recovered_amount: string;
+    estimated_commission: string;
+    commission_rate_pct: number | null;
+  }
+  const { query: byProjectQuery } = useCustom<{
+    year_month: string;
+    work_mode: string | null;
+    items: ProjectStatItem[];
+    total_recovered_amount: string;
+    total_estimated_commission: string;
+  }>({
+    url: "agent/me/by-project",
+    method: "get",
+    queryOptions: { staleTime: 5 * 60 * 1000 },  // 5 分钟缓存,不需要实时刷
+  });
+  const byProject = byProjectQuery.data?.data;
+
   // v1.6.7 — E1 「下一个」按钮：选下一条未结案、不是当前选中的
   function selectNextCase() {
     if (filteredCases.length === 0) return;
@@ -410,6 +433,65 @@ export function AgentWorkstationIndexPage() {
           <KpiPill label="承诺" value={kpi.promised_today} color="#c2410c" />
           <KpiPill label="缴清" value={kpi.paid_today} color="#15803d" />
           <KpiPill label="通话分钟" value={kpi.minutes_used_today} color="#6b7280" />
+        </div>
+      )}
+
+      {/* v0.6.0 — 本月按项目维度统计(案件数 / 已回款 / 预估佣金) */}
+      {byProject && byProject.items.length > 0 && (
+        <div
+          data-testid="agent-by-project"
+          style={{
+            display: "flex", alignItems: "center", gap: 12,
+            padding: "10px 16px", marginBottom: 8,
+            background: "white", border: "1px solid #e2e8f0", borderRadius: 8,
+            fontSize: 13, overflowX: "auto",
+          }}
+        >
+          <div style={{ fontWeight: 600, color: "#374151", flexShrink: 0 }}>
+            我的项目({byProject.year_month})
+            <span style={{ marginLeft: 6, fontSize: 11, color: "#6b7280" }}>
+              本月共回款 ¥{byProject.total_recovered_amount} · 预估佣金 ¥{byProject.total_estimated_commission}
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+            {byProject.items.map((p) => (
+              <div
+                key={p.project_id}
+                style={{
+                  flexShrink: 0,
+                  minWidth: 200,
+                  padding: "8px 12px",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 6,
+                  background: "#f9fafb",
+                }}
+              >
+                <div
+                  style={{ fontSize: 12, fontWeight: 600, color: "#1d4ed8", marginBottom: 4 }}
+                  title={p.project_name}
+                >
+                  📁 {p.project_name}
+                </div>
+                <div style={{ display: "flex", gap: 12, fontSize: 11, color: "#374151" }}>
+                  <span title="本项目我接的案件总数(私海)">案件 <strong>{p.case_count}</strong></span>
+                  <span title="本月在此项目已 stage=paid 的案件">缴清 <strong style={{ color: "#15803d" }}>{p.paid_case_count}</strong></span>
+                </div>
+                <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>
+                  本月回款 <strong style={{ color: "#15803d" }}>¥{p.recovered_amount}</strong>
+                  {p.commission_rate_pct != null ? (
+                    <span style={{ marginLeft: 6 }}>
+                      ·预估佣金 <strong style={{ color: "#c2410c" }}>¥{p.estimated_commission}</strong>
+                      <span style={{ fontSize: 10, color: "#9ca3af", marginLeft: 2 }}>
+                        ({(p.commission_rate_pct * 100).toFixed(1)}%)
+                      </span>
+                    </span>
+                  ) : (
+                    <span style={{ marginLeft: 6, color: "#9ca3af" }}>·佣金未设</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

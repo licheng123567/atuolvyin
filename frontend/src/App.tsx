@@ -41,6 +41,8 @@ import { AgentLiveWorkstationPage } from "./pages/agent/workstation/live";
 import { AgentWorkstationIndexPage } from "./pages/agent/workstation/index";
 import { AgentCallHistoryPage } from "./pages/agent/call-history/index";
 import { AgentProfilePage } from "./pages/agent/profile/index";
+// v0.6.0 — 催收员提醒中心
+import { AgentRemindersPage } from "./pages/agent/reminders";
 import { AdminLiveWorkstationPage } from "./pages/admin/workstation/live";
 import { ScriptListPage } from "./pages/admin/scripts/list";
 import { ScriptVersionsPage } from "./pages/admin/scripts/versions";
@@ -453,6 +455,8 @@ function App() {
             <Route path="/agent/call-history" element={<AgentCallHistoryPage />} />
             {/* Agent — 个人信息 */}
             <Route path="/agent/profile" element={<AgentProfilePage />} />
+            {/* v0.6.0 — 催收员提醒中心 */}
+            <Route path="/agent/reminders" element={<AgentRemindersPage />} />
             {/* Admin Observer Workstation */}
             <Route path="/admin/workstation/:call_id" element={<AdminLiveWorkstationPage />} />
             {/* Supervisor Alerts */}

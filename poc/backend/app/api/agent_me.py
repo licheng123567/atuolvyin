@@ -349,6 +349,330 @@ def get_my_today_kpi(
     )
 
 
+# ── v0.6.0 — 催收员按项目维度的本月统计 ────────────────────────
+class AgentProjectStatsItem(BaseModel):
+    project_id: int
+    project_name: str
+    case_count: int  # 我接的本项目案件数(私海)
+    paid_case_count: int  # 本月已回款案件数
+    recovered_amount: Decimal  # 本月已回款金额(amount_owed 之和,stage='paid')
+    estimated_commission: Decimal  # 预估佣金 = recovered_amount * project rate(按 work_mode)
+    commission_rate_pct: float | None  # 用了哪个 rate(0.0-1.0),便于排查
+
+
+class AgentProjectStatsResp(BaseModel):
+    year_month: str
+    work_mode: str | None  # 当前 agent 的 work_mode(internal / external)
+    items: list[AgentProjectStatsItem]
+    total_recovered_amount: Decimal
+    total_estimated_commission: Decimal
+
+
+@router.get("/me/by-project", response_model=AgentProjectStatsResp)
+def get_my_by_project(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+    month: str | None = Query(
+        None, pattern=r"^\d{4}-\d{2}$", description="YYYY-MM,默认本月"
+    ),
+) -> AgentProjectStatsResp:
+    """工作台底部「我的项目」卡片网格 — 按项目维度统计案件/回款/预估佣金。
+
+    估算佣金:
+      - 本月 stage='paid' 且 assigned_to=me 的案件 amount_owed 汇总
+      - 乘以 project.internal_agent_commission_rate(work_mode=internal)
+        或 project.provider_agent_commission_rate(work_mode=external)
+      - 该项目没设对应费率时显示 NULL 不计入合计
+    """
+    from app.models.tenant import UserTenantMembership
+
+    user_id = int(payload.get("user_id") or 0)
+    tenant_id = int(payload.get("tenant_id") or 0)
+    if not user_id or not tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "ERR_INVALID_TOKEN", "message": "Token 缺少必要字段"},
+        )
+
+    # 本月窗口
+    now = datetime.now(UTC)
+    if month:
+        year, mon = month.split("-")
+        ym = f"{year}-{mon}"
+        month_start = datetime(int(year), int(mon), 1, tzinfo=UTC)
+        next_mon = month_start.replace(
+            year=month_start.year + (1 if month_start.month == 12 else 0),
+            month=1 if month_start.month == 12 else month_start.month + 1,
+        )
+    else:
+        ym = now.strftime("%Y-%m")
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        next_mon = month_start.replace(
+            year=month_start.year + (1 if month_start.month == 12 else 0),
+            month=1 if month_start.month == 12 else month_start.month + 1,
+        )
+
+    # 当前催收员的 work_mode(决定走 internal/external commission rate)
+    membership = db.execute(
+        select(UserTenantMembership)
+        .where(UserTenantMembership.user_id == user_id)
+        .where(UserTenantMembership.tenant_id == tenant_id)
+        .where(UserTenantMembership.role == "agent")
+        .limit(1)
+    ).scalar_one_or_none()
+    work_mode = membership.work_mode if membership else None
+
+    # 1. 我接的所有有项目归属的案件分组:case_count + paid_case_count + recovered_amount
+    rows = db.execute(
+        select(
+            CollectionCase.project_id,
+            Project.name.label("project_name"),
+            func.count(CollectionCase.id).label("case_count"),
+            func.sum(
+                case((CollectionCase.stage == "paid"), else_=None)
+            ).label("paid_marker"),  # 仅用于辅助
+            func.count(
+                case(
+                    (
+                        (CollectionCase.stage == "paid")
+                        & (CollectionCase.updated_at >= month_start)
+                        & (CollectionCase.updated_at < next_mon),
+                        CollectionCase.id,
+                    )
+                )
+            ).label("paid_case_count"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            (CollectionCase.stage == "paid")
+                            & (CollectionCase.updated_at >= month_start)
+                            & (CollectionCase.updated_at < next_mon),
+                            CollectionCase.amount_owed,
+                        ),
+                        else_=Decimal("0"),
+                    )
+                ),
+                Decimal("0"),
+            ).label("recovered_amount"),
+            Project.internal_agent_commission_rate,
+            Project.provider_agent_commission_rate,
+        )
+        .join(Project, Project.id == CollectionCase.project_id)
+        .where(CollectionCase.tenant_id == tenant_id)
+        .where(CollectionCase.assigned_to == user_id)
+        .where(CollectionCase.project_id.isnot(None))
+        .group_by(
+            CollectionCase.project_id,
+            Project.name,
+            Project.internal_agent_commission_rate,
+            Project.provider_agent_commission_rate,
+        )
+        .order_by(func.count(CollectionCase.id).desc())
+    ).all()
+
+    items: list[AgentProjectStatsItem] = []
+    total_recovered = Decimal("0")
+    total_commission = Decimal("0")
+    for r in rows:
+        if work_mode == "internal":
+            rate = r.internal_agent_commission_rate
+        elif work_mode == "external":
+            rate = r.provider_agent_commission_rate
+        else:
+            rate = None
+
+        recovered = Decimal(r.recovered_amount or 0)
+        commission = (recovered * rate).quantize(Decimal("0.01")) if rate is not None else Decimal("0")
+
+        items.append(
+            AgentProjectStatsItem(
+                project_id=int(r.project_id),
+                project_name=str(r.project_name or "—"),
+                case_count=int(r.case_count or 0),
+                paid_case_count=int(r.paid_case_count or 0),
+                recovered_amount=recovered,
+                estimated_commission=commission,
+                commission_rate_pct=float(rate) if rate is not None else None,
+            )
+        )
+        total_recovered += recovered
+        if rate is not None:
+            total_commission += commission
+
+    return AgentProjectStatsResp(
+        year_month=ym,
+        work_mode=work_mode,
+        items=items,
+        total_recovered_amount=total_recovered.quantize(Decimal("0.01")),
+        total_estimated_commission=total_commission.quantize(Decimal("0.01")),
+    )
+
+
+# ── v0.6.0 — 催收员提醒中心:整合 promise 到期 / 法务状态 / 案件 SLA 三类 ────
+class ReminderPromiseDueItem(BaseModel):
+    case_id: int
+    owner_name: str
+    building_room: str
+    promise_due_at: datetime
+    promise_amount: Decimal | None
+    promise_content: str | None
+    hours_to_due: float
+
+
+class ReminderLegalStatusItem(BaseModel):
+    request_id: int
+    case_id: int
+    owner_name: str
+    status: str
+    reviewer_note: str | None
+    updated_at: datetime
+
+
+class ReminderCaseSlaItem(BaseModel):
+    case_id: int
+    owner_name: str
+    building_room: str
+    last_contact_at: datetime | None
+    days_stuck: int  # 案件 stage 停留天数(updated_at 计算)
+    amount_owed: Decimal | None
+
+
+class ReminderSyntheticOut(BaseModel):
+    """GET /agent/me/reminders/synthetic 响应 — 3 类「软提醒」整合。
+
+    与 Notification 表正交:此处的数据是「实时计算的状态提醒」,
+    没有读 / 未读语义(不靠用户 click 消失);Notification 是事件类的硬通知。
+    """
+
+    promise_due_soon: list[ReminderPromiseDueItem]
+    legal_status_changes: list[ReminderLegalStatusItem]
+    case_sla_warn: list[ReminderCaseSlaItem]
+
+
+@router.get("/me/reminders/synthetic", response_model=ReminderSyntheticOut)
+def get_my_reminders_synthetic(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+    promise_window_hours: int = Query(72, ge=1, le=168),
+    sla_stuck_days: int = Query(30, ge=7, le=365),
+) -> ReminderSyntheticOut:
+    """催收员提醒中心数据源 — 3 类软提醒。
+
+    1. promise_due_soon:promise_due_at 在未来 N 小时内的案件
+       (默认 72h,与 PROMISE_EXPIRING 任务的 24h 窗口互补 — 这里更宽,展示「即将」)
+    2. legal_status_changes:近 7 天该催收员发起的 LegalConversionRequest 状态变化
+       (approved / rejected / approved_pending_legal)
+    3. case_sla_warn:catch_all,assigned_to=me 且 updated_at < now - 30d 且 stage 非终止态
+    """
+    from app.models.legal_conversion import LegalConversionRequest
+    from datetime import timedelta
+
+    user_id = int(payload.get("user_id") or 0)
+    tenant_id = int(payload.get("tenant_id") or 0)
+    if not user_id or not tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "ERR_INVALID_TOKEN", "message": "Token 缺少必要字段"},
+        )
+
+    now = datetime.now(UTC)
+    promise_until = now + timedelta(hours=promise_window_hours)
+    sla_cutoff = now - timedelta(days=sla_stuck_days)
+    legal_cutoff = now - timedelta(days=7)
+
+    # ① promise 即将到期
+    promise_rows = db.execute(
+        select(CollectionCase, OwnerProfile)
+        .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
+        .where(CollectionCase.tenant_id == tenant_id)
+        .where(CollectionCase.assigned_to == user_id)
+        .where(CollectionCase.promise_due_at.isnot(None))
+        .where(CollectionCase.promise_due_at <= promise_until)
+        .where(CollectionCase.promise_due_at > now)
+        .where(CollectionCase.stage != "paid")
+        .order_by(CollectionCase.promise_due_at.asc())
+        .limit(50)
+    ).all()
+    promise_items = [
+        ReminderPromiseDueItem(
+            case_id=case.id,
+            owner_name=owner.name,
+            building_room=(owner.building or "") + (owner.room or ""),
+            promise_due_at=case.promise_due_at,
+            promise_amount=case.promise_amount,
+            promise_content=case.promise_content,
+            hours_to_due=round(
+                (case.promise_due_at - now).total_seconds() / 3600.0, 1
+            ),
+        )
+        for case, owner in promise_rows
+    ]
+
+    # ② 法务申请状态变化(本催收员提交的,近 7 天有更新)
+    legal_rows = db.execute(
+        select(LegalConversionRequest, OwnerProfile)
+        .join(CollectionCase, CollectionCase.id == LegalConversionRequest.case_id)
+        .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
+        .where(LegalConversionRequest.tenant_id == tenant_id)
+        .where(LegalConversionRequest.requester_user_id == user_id)
+        .where(LegalConversionRequest.updated_at >= legal_cutoff)
+        .where(
+            LegalConversionRequest.status.in_(
+                ("approved", "rejected", "approved_pending_legal")
+            )
+        )
+        .order_by(LegalConversionRequest.updated_at.desc())
+        .limit(20)
+    ).all()
+    legal_items = [
+        ReminderLegalStatusItem(
+            request_id=req.id,
+            case_id=req.case_id,
+            owner_name=owner.name,
+            status=req.status,
+            reviewer_note=req.reviewer_note,
+            updated_at=req.updated_at,
+        )
+        for req, owner in legal_rows
+    ]
+
+    # ③ 案件 SLA 告警 — 停滞 > N 天的非终止案件
+    sla_rows = db.execute(
+        select(CollectionCase, OwnerProfile)
+        .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
+        .where(CollectionCase.tenant_id == tenant_id)
+        .where(CollectionCase.assigned_to == user_id)
+        .where(CollectionCase.updated_at < sla_cutoff)
+        .where(
+            CollectionCase.stage.notin_(
+                ("paid", "closed", "uncollectible", "pending_close", "legal")
+            )
+        )
+        .order_by(CollectionCase.updated_at.asc())
+        .limit(30)
+    ).all()
+    sla_items = [
+        ReminderCaseSlaItem(
+            case_id=case.id,
+            owner_name=owner.name,
+            building_room=(owner.building or "") + (owner.room or ""),
+            last_contact_at=case.last_contact_at,
+            days_stuck=int((now - case.updated_at).days),
+            amount_owed=case.amount_owed,
+        )
+        for case, owner in sla_rows
+    ]
+
+    return ReminderSyntheticOut(
+        promise_due_soon=promise_items,
+        legal_status_changes=legal_items,
+        case_sla_warn=sla_items,
+    )
+
+
 # ── v1.6.7 — E6 通话评分趋势（mock，PoC 阶段不连真 LLM） ────────
 class CallScoreItem(BaseModel):
     call_id: int

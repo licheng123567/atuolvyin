@@ -415,3 +415,175 @@ async def list_my_projects(
             )
         )
     return cards
+
+
+# ── v0.6.0 — PM dashboard 运营提醒(5 类) ─────────────────────────
+from pydantic import BaseModel  # noqa: E402
+
+
+class PMAlertCard(BaseModel):
+    """运营提醒卡片(纯数字 + 跳转链接)。"""
+
+    key: str  # pending_approval_backlog / promise_overdue_uncalled / agent_anomaly / cost_warning / case_stage_stuck
+    label: str  # UI 显示标签
+    count: int  # 数字
+    severity: str  # info / warn / critical
+    detail_path: str | None  # 前端跳转路径(查看详情)
+
+
+class PMAlertsOut(BaseModel):
+    scope: str  # property / provider
+    alerts: list[PMAlertCard]
+
+
+@router.get("/dashboard/alerts", response_model=PMAlertsOut)
+async def get_pm_alerts(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles("project_manager", "admin"))],
+    db: Annotated[Session, Depends(get_db)],
+) -> PMAlertsOut:
+    """PM dashboard 顶部运营提醒卡片网格 — 5 类提醒数字 + 跳转链接。
+
+    五类:
+      1. pending_approval_backlog:> 3 天的减免申请 + 转法务申请积压
+      2. promise_overdue_uncalled:承诺已逾期但本租户最近 3 天无 urge 动作
+      3. agent_anomaly:近 7 天连续 5 通无接 / 缺勤的催收员数
+      4. cost_warning:本月分钟消费超预算 80% 的项目数(简化:超 2000 分钟即告警)
+      5. case_stage_stuck:某 stage 停留 > 14 天的案件数
+
+    物业 PM (provider_id IS NULL):全租户视角
+    服务商 PM (provider_id IS NOT NULL):限本服务商接的项目
+    """
+    from app.models.discount_offer import DiscountOffer
+    from app.models.legal_conversion import LegalConversionRequest
+    from app.models.tenant import TenantMinuteUsage
+
+    tenant_id = payload.get("tenant_id")
+    provider_id = payload.get("provider_id")
+    is_provider = provider_id is not None
+    scope = "provider" if is_provider else "property"
+
+    if not tenant_id and not is_provider:
+        return PMAlertsOut(scope=scope, alerts=[])
+
+    now = datetime.now(UTC)
+    three_days_ago = now - timedelta(days=3)
+    fourteen_days_ago = now - timedelta(days=14)
+    seven_days_ago = now - timedelta(days=7)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    year_month = now.strftime("%Y-%m")
+
+    # 1. 审批积压 — > 3 天的 pending discount/legal 申请
+    discount_backlog = (
+        db.execute(
+            select(func.count(DiscountOffer.id))
+            .where(DiscountOffer.tenant_id == tenant_id)
+            .where(DiscountOffer.status.in_(("pending_supervisor", "pending_admin")))
+            .where(DiscountOffer.created_at < three_days_ago)
+        ).scalar()
+        or 0
+    )
+    legal_req_backlog = (
+        db.execute(
+            select(func.count(LegalConversionRequest.id))
+            .where(LegalConversionRequest.tenant_id == tenant_id)
+            .where(LegalConversionRequest.status.in_(("pending", "pending_admin")))
+            .where(LegalConversionRequest.created_at < three_days_ago)
+        ).scalar()
+        or 0
+    )
+    approval_backlog = int(discount_backlog) + int(legal_req_backlog)
+
+    # 2. 承诺已逾期 + 近 3 天无 urge 动作的案件
+    # 简化:统计 promise_due_at < now - 1 day 且 stage != 'paid' 的案件
+    promise_overdue = (
+        db.execute(
+            select(func.count(CollectionCase.id))
+            .where(CollectionCase.tenant_id == tenant_id)
+            .where(CollectionCase.promise_due_at.isnot(None))
+            .where(CollectionCase.promise_due_at < now - timedelta(days=1))
+            .where(CollectionCase.stage != "paid")
+        ).scalar()
+        or 0
+    )
+
+    # 3. 坐席异常 — 近 7 天无任何 CallRecord 的催收员数(本租户)
+    active_agent_ids = db.execute(
+        select(UserTenantMembership.user_id)
+        .where(UserTenantMembership.tenant_id == tenant_id)
+        .where(UserTenantMembership.role == "agent")
+        .where(UserTenantMembership.is_active.is_(True))
+    ).scalars().all()
+
+    if active_agent_ids:
+        agents_with_calls = db.execute(
+            select(func.count(func.distinct(CallRecord.caller_user_id)))
+            .where(CallRecord.tenant_id == tenant_id)
+            .where(CallRecord.caller_user_id.in_(active_agent_ids))
+            .where(CallRecord.created_at >= seven_days_ago)
+        ).scalar() or 0
+        agent_anomaly = max(0, len(active_agent_ids) - int(agents_with_calls))
+    else:
+        agent_anomaly = 0
+
+    # 4. 成本预警 — 本月分钟用量 > 2000 的租户/项目数(简化逻辑)
+    cost_row = db.execute(
+        select(TenantMinuteUsage.used_minutes)
+        .where(TenantMinuteUsage.tenant_id == tenant_id)
+        .where(TenantMinuteUsage.year_month == year_month)
+    ).scalar_one_or_none()
+    cost_warning = 1 if cost_row and int(cost_row) > 2000 else 0
+
+    # 5. 案件 stage 停留 > 14 天(updated_at 计算)
+    stage_stuck = (
+        db.execute(
+            select(func.count(CollectionCase.id))
+            .where(CollectionCase.tenant_id == tenant_id)
+            .where(CollectionCase.updated_at < fourteen_days_ago)
+            .where(
+                CollectionCase.stage.in_(
+                    ("new", "in_progress", "promised", "escalated")
+                )
+            )
+        ).scalar()
+        or 0
+    )
+
+    alerts = [
+        PMAlertCard(
+            key="pending_approval_backlog",
+            label="审批积压(>3 天)",
+            count=approval_backlog,
+            severity="warn" if approval_backlog > 0 else "info",
+            detail_path="/admin/discount-approvals" if not is_provider else None,
+        ),
+        PMAlertCard(
+            key="promise_overdue_uncalled",
+            label="承诺逾期未催",
+            count=int(promise_overdue),
+            severity="critical" if promise_overdue > 5 else "warn" if promise_overdue > 0 else "info",
+            detail_path="/supervisor/promises",
+        ),
+        PMAlertCard(
+            key="agent_anomaly",
+            label="坐席异常(7 天无通话)",
+            count=int(agent_anomaly),
+            severity="warn" if agent_anomaly > 0 else "info",
+            detail_path="/admin/agent-devices" if not is_provider else "/provider/team",
+        ),
+        PMAlertCard(
+            key="cost_warning",
+            label="本月分钟超 2000",
+            count=int(cost_warning),
+            severity="warn" if cost_warning else "info",
+            detail_path="/admin/billing/minute-usage" if not is_provider else "/provider/billing/minute-usage",
+        ),
+        PMAlertCard(
+            key="case_stage_stuck",
+            label="案件阶段停留 >14 天",
+            count=int(stage_stuck),
+            severity="critical" if stage_stuck > 50 else "warn" if stage_stuck > 0 else "info",
+            detail_path="/admin/cases" if not is_provider else "/provider/cases",
+        ),
+    ]
+    return PMAlertsOut(scope=scope, alerts=alerts)

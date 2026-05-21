@@ -136,6 +136,8 @@ const NAV_CONFIG: Partial<Record<UserRole | "workorder", NavSection[]>> = {
         { label: "工作台", path: "/agent/workstation", icon: "Headphones" },
         { label: "我的案件", path: "/agent/cases", icon: "ClipboardList" },
         { label: "通话记录", path: "/agent/call-history", icon: "PhoneCall" },
+        // v0.6.0 — 提醒中心:即将到期承诺 / 法务申请进度 / 案件 SLA 告警
+        { label: "提醒中心", path: "/agent/reminders", icon: "Bell" },
         { label: "个人信息", path: "/agent/profile", icon: "User" },
       ],
     },
