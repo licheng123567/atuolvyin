@@ -47,9 +47,9 @@ from app.api import (
     ops_providers,
     pm_dashboard,
     provider_admin,
+    provider_audit_logs,
     provider_billing,
     provider_cases,
-    provider_audit_logs,
     provider_compliance,
     provider_legal,
     provider_risk_keywords,
@@ -363,9 +363,13 @@ app.include_router(provider_scripts.router, prefix="/api/v1/provider", tags=["pr
 # v0.9.0 — 服务商 admin 设置(N 天自动释放阈值)
 app.include_router(provider_settings.router, prefix="/api/v1/provider", tags=["provider-settings"])
 # v1.0.0 — 服务商风控关键词管理
-app.include_router(provider_risk_keywords.router, prefix="/api/v1/provider", tags=["provider-risk-keywords"])
+app.include_router(
+    provider_risk_keywords.router, prefix="/api/v1/provider", tags=["provider-risk-keywords"]
+)
 # v1.0.0 — 服务商合规月报(对齐物业 admin/compliance)
-app.include_router(provider_compliance.router, prefix="/api/v1/provider", tags=["provider-compliance"])
+app.include_router(
+    provider_compliance.router, prefix="/api/v1/provider", tags=["provider-compliance"]
+)
 # v1.0.0 — 服务商审计日志
 app.include_router(provider_audit_logs.router, prefix="/api/v1/provider", tags=["provider-audit"])
 app.include_router(

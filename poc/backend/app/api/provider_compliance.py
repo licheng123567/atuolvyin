@@ -192,9 +192,7 @@ def list_provider_monthly_reports(
     return items
 
 
-@router.get(
-    "/compliance/monthly/{year_month}", response_model=ComplianceMonthlyReport
-)
+@router.get("/compliance/monthly/{year_month}", response_model=ComplianceMonthlyReport)
 def get_provider_monthly_report(
     year_month: Annotated[str, Path(pattern=r"^\d{4}-\d{2}$")],
     payload: Annotated[dict, Depends(get_token_payload)],

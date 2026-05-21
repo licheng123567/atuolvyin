@@ -91,8 +91,7 @@ async def list_provider_audit_logs(
     # 主 + 兜底:provider_id == self_provider 或 (target_type='case' AND target_id IN cases)
     scope_filter = or_(
         AuditLog.provider_id == provider_id,
-        (AuditLog.target_type == "case")
-        & (AuditLog.target_id.in_(select(case_ids_subq.c.id))),
+        (AuditLog.target_type == "case") & (AuditLog.target_id.in_(select(case_ids_subq.c.id))),
     )
 
     stmt = select(AuditLog).where(scope_filter)
