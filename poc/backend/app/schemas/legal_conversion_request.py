@@ -52,7 +52,9 @@ class ApproveLegalConversionRequestBody(BaseModel):
     package_id 字段保留(向后兼容旧客户端),但已不再使用 —— 服务端会忽略。
     """
 
-    package_id: int | None = Field(None, gt=0, description="DEPRECATED v0.5.4 — 服务端忽略;由法务接单时选包")
+    package_id: int | None = Field(
+        None, gt=0, description="DEPRECATED v0.5.4 — 服务端忽略;由法务接单时选包"
+    )
     notes: str | None = Field(None, max_length=2000)
 
 

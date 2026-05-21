@@ -524,7 +524,9 @@ async def list_cases(
     ).all()
 
     # v1.7.0 — admin/PM/supervisor 都属物业内部，永远明文；列表层一次决策复用
-    owner_phone_reveal = should_reveal_owner_phone(role=role, provider_id=payload.get("provider_id"))
+    owner_phone_reveal = should_reveal_owner_phone(
+        role=role, provider_id=payload.get("provider_id")
+    )
 
     return PaginatedResponse(
         items=[
@@ -734,9 +736,7 @@ async def update_case_stage(
 def admin_send_payment_link(
     case_id: int,
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[
-        UserAccount, Depends(require_tenant_roles("admin", "supervisor"))
-    ],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles("admin", "supervisor"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> PaymentLinkOut:
     """v2.2 — 物业管理端发送缴费链接。
@@ -827,8 +827,7 @@ async def get_admin_case_evidence_status(
         )
         analysis_count = int(
             db.execute(
-                select(sa_func.count(AnalysisResult.id))
-                .where(AnalysisResult.call_id.in_(call_ids))
+                select(sa_func.count(AnalysisResult.id)).where(AnalysisResult.call_id.in_(call_ids))
             ).scalar_one()
             or 0
         )

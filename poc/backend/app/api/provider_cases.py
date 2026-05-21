@@ -29,6 +29,8 @@ from fastapi import status as http_status
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
+# build_case_detail_response 与 admin/agent 同源,在 admin_cases.py 是 module-public 函数
+from app.api.admin_cases import build_case_detail_response
 from app.core.db import get_db
 from app.core.phone_visibility import display_owner_phone, should_reveal_owner_phone
 from app.core.security import get_token_payload, require_provider_roles
@@ -43,8 +45,6 @@ from app.schemas.case import (
     OwnerInfo,
 )
 from app.schemas.common import PaginatedResponse
-# build_case_detail_response 与 admin/agent 同源,在 admin_cases.py 是 module-public 函数
-from app.api.admin_cases import build_case_detail_response
 
 router = APIRouter()
 
@@ -53,11 +53,15 @@ PROVIDER_ADMIN_ROLES = ("admin",)
 
 def _resolve_provider_id(user_id: int, db: Session) -> int:
     """从当前 user 找到所属 provider_id(服务商角色必有 provider_id)。"""
-    membership = db.execute(
-        select(UserTenantMembership)
-        .where(UserTenantMembership.user_id == user_id)
-        .where(UserTenantMembership.provider_id.isnot(None))
-    ).scalars().first()
+    membership = (
+        db.execute(
+            select(UserTenantMembership)
+            .where(UserTenantMembership.user_id == user_id)
+            .where(UserTenantMembership.provider_id.isnot(None))
+        )
+        .scalars()
+        .first()
+    )
     if membership is None or membership.provider_id is None:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
@@ -147,7 +151,10 @@ async def list_provider_cases(
     return PaginatedResponse(
         items=[
             _to_case_response(
-                case_obj, owner, proj_provider_id, sp_name,
+                case_obj,
+                owner,
+                proj_provider_id,
+                sp_name,
                 owner_phone_reveal=owner_phone_reveal,
                 assigned_to_name=assigned_to_name,
                 project_name=project_name,
@@ -280,14 +287,18 @@ async def assign_provider_cases(
         )
 
     # 2. 验所有 case_id 都在本服务商接手项目下;过滤非法的
-    valid_case_ids = db.execute(
-        select(CollectionCase.id)
-        .join(Project, Project.id == CollectionCase.project_id)
-        .where(
-            CollectionCase.id.in_(body.case_ids),
-            Project.provider_id == provider_id,
+    valid_case_ids = (
+        db.execute(
+            select(CollectionCase.id)
+            .join(Project, Project.id == CollectionCase.project_id)
+            .where(
+                CollectionCase.id.in_(body.case_ids),
+                Project.provider_id == provider_id,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     valid_set = set(valid_case_ids)
     if len(valid_set) != len(set(body.case_ids)):
         invalid = [c for c in body.case_ids if c not in valid_set]

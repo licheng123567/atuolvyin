@@ -49,7 +49,7 @@ class SelfCheckRequest(BaseModel):
     model: str | None = None
     android_version: str | None = None
     recording_toggle_self_reported: bool | None = None  # onboarding step 3 用户自报
-    last_recording_scan_failed: bool | None = None       # 上次通话挂断 RecordingScanner 找不到文件
+    last_recording_scan_failed: bool | None = None  # 上次通话挂断 RecordingScanner 找不到文件
 
 
 class SelfCheckResponse(BaseModel):

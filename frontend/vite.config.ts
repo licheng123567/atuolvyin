@@ -1,6 +1,6 @@
 import path from "path"
 import { readFileSync, writeFileSync, readdirSync } from "node:fs"
-import { defineConfig, type Plugin } from "vite"
+import { defineConfig, type Plugin, type UserConfig } from "vite"
 import react from "@vitejs/plugin-react"
 import { transformSync } from "@babel/core"
 
@@ -119,7 +119,7 @@ const lowerToChrome53 = (): Plugin => ({
   },
 })
 
-export default defineConfig(({ command }) => {
+export default defineConfig(({ command }): UserConfig => {
   // v2.4 fix — 这些 alias 仅供 mobile build（Android WebView Chromium 53 兼容）；
   // PC dev (vite :5173) 必须走真 react-router-dom v7 + 真 @refinedev/core v5，
   // 否则 @refinedev/react-router 拉不到 v6 缺失的 Link export，dep optimize 失败 → /login 红屏。

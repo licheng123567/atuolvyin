@@ -73,14 +73,13 @@ def recompute_one(
     row = db.execute(
         select(
             func.count(SuggestionFeedback.id).label("total_shown"),
-            func.sum(
-                case((SuggestionFeedback.action == "adopt", 1), else_=0)
-            ).label("total_adopted"),
+            func.sum(case((SuggestionFeedback.action == "adopt", 1), else_=0)).label(
+                "total_adopted"
+            ),
             func.sum(
                 case(
                     (
-                        (SuggestionFeedback.action == "adopt")
-                        & (CollectionCase.stage == "paid"),
+                        (SuggestionFeedback.action == "adopt") & (CollectionCase.stage == "paid"),
                         1,
                     ),
                     else_=0,
@@ -104,12 +103,8 @@ def recompute_one(
 
     if total_shown >= MIN_SAMPLE_FOR_SCORE:
         adoption_rate = (total_adopted / total_shown) if total_shown > 0 else 0.0
-        recovery_rate = (
-            (total_adopted_paid / total_adopted) if total_adopted > 0 else 0.0
-        )
-        raw = (
-            recovery_rate * WEIGHT_RECOVERY + adoption_rate * WEIGHT_ADOPTION
-        )
+        recovery_rate = (total_adopted_paid / total_adopted) if total_adopted > 0 else 0.0
+        raw = recovery_rate * WEIGHT_RECOVERY + adoption_rate * WEIGHT_ADOPTION
         ai_score = Decimal(f"{max(0.0, min(100.0, raw)):.2f}")
 
     template = db.get(ScriptTemplate, script_template_id)
@@ -147,9 +142,7 @@ def scan_and_recompute_ai_scores(
             recompute_one(db, int(sid), lookback_days=lookback_days)
             count += 1
         except Exception:
-            logger.exception(
-                "recompute_one failed for script_template %s, skipped", sid
-            )
+            logger.exception("recompute_one failed for script_template %s, skipped", sid)
     logger.info("script_ai_score: recomputed %d / %d templates", count, len(ids))
     return count
 
@@ -176,8 +169,9 @@ async def recompute_ai_scores_loop() -> None:
                 # 检查最旧的 ai_score_updated_at
                 stale_cutoff = datetime.now(UTC) - timedelta(hours=STALE_THRESHOLD_HOURS)
                 row = db.execute(
-                    select(func.min(ScriptTemplate.ai_score_updated_at))
-                    .where(ScriptTemplate.is_active.is_(True))
+                    select(func.min(ScriptTemplate.ai_score_updated_at)).where(
+                        ScriptTemplate.is_active.is_(True)
+                    )
                 ).scalar_one_or_none()
 
                 if row is None or row < stale_cutoff:
@@ -193,7 +187,5 @@ async def recompute_ai_scores_loop() -> None:
                         row,
                     )
         except Exception as exc:
-            logger.exception(
-                "recompute_ai_scores_loop iteration failed: %s", exc
-            )
+            logger.exception("recompute_ai_scores_loop iteration failed: %s", exc)
         await asyncio.sleep(RECOMPUTE_INTERVAL_SEC)

@@ -12,6 +12,7 @@
 守卫:require_provider_roles("admin")。物业 admin 调本端点会被 require_provider_roles
 直接拒绝(403),不会泄露数据。
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -27,7 +28,10 @@ from app.core.db import get_db
 from app.core.security import get_token_payload, require_provider_roles
 from app.models.billing_pricing import BillingPricing
 from app.models.tenant import (
-    ProviderTenantContract, Tenant, TenantMinuteUsage, UserTenantMembership,
+    ProviderTenantContract,
+    Tenant,
+    TenantMinuteUsage,
+    UserTenantMembership,
 )
 from app.schemas.billing import ProviderMinuteSummaryOut, ProviderMinuteTenantItem
 
@@ -36,11 +40,15 @@ router = APIRouter()
 
 def _resolve_provider_id(user_id: int, db: Session) -> int:
     """与 provider_admin._resolve_provider_id / provider_cases._resolve_provider_id 同源。"""
-    membership = db.execute(
-        select(UserTenantMembership)
-        .where(UserTenantMembership.user_id == user_id)
-        .where(UserTenantMembership.provider_id.isnot(None))
-    ).scalars().first()
+    membership = (
+        db.execute(
+            select(UserTenantMembership)
+            .where(UserTenantMembership.user_id == user_id)
+            .where(UserTenantMembership.provider_id.isnot(None))
+        )
+        .scalars()
+        .first()
+    )
     if membership is None or membership.provider_id is None:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
@@ -103,19 +111,27 @@ async def provider_minute_summary(
     ).all()
     if not rows:
         return ProviderMinuteSummaryOut(
-            year_month=ym, tenants=[], minute_total=0, amount_total=Decimal("0.00"),
-            price_live=pricing.minute_price_live, price_post=pricing.minute_price_post,
+            year_month=ym,
+            tenants=[],
+            minute_total=0,
+            amount_total=Decimal("0.00"),
+            price_live=pricing.minute_price_live,
+            price_post=pricing.minute_price_post,
         )
 
     tenant_id_to_name = {tid: tname for tid, tname in rows}
     tenant_ids = list(tenant_id_to_name.keys())
 
     # 2. 该月各租户用量
-    usage_rows = db.execute(
-        select(TenantMinuteUsage)
-        .where(TenantMinuteUsage.tenant_id.in_(tenant_ids))
-        .where(TenantMinuteUsage.year_month == ym)
-    ).scalars().all()
+    usage_rows = (
+        db.execute(
+            select(TenantMinuteUsage)
+            .where(TenantMinuteUsage.tenant_id.in_(tenant_ids))
+            .where(TenantMinuteUsage.year_month == ym)
+        )
+        .scalars()
+        .all()
+    )
     usage_by_tenant = {u.tenant_id: u for u in usage_rows}
 
     # 3. 按租户聚合 + 金额
@@ -130,13 +146,15 @@ async def provider_minute_summary(
             (Decimal(realtime) * pricing.minute_price_live)
             + (Decimal(post) * pricing.minute_price_post)
         ).quantize(Decimal("0.01"))
-        items.append(ProviderMinuteTenantItem(
-            tenant_id=tid,
-            tenant_name=tenant_id_to_name[tid],
-            realtime_minutes=realtime,
-            post_minutes=post,
-            amount=amount,
-        ))
+        items.append(
+            ProviderMinuteTenantItem(
+                tenant_id=tid,
+                tenant_name=tenant_id_to_name[tid],
+                realtime_minutes=realtime,
+                post_minutes=post,
+                amount=amount,
+            )
+        )
         minute_total += realtime + post
         amount_total += amount
 

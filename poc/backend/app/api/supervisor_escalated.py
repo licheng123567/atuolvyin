@@ -29,6 +29,7 @@ from app.core.phone_visibility import (
     is_provider_contract_active,
     should_reveal_owner_phone,
 )
+
 # v0.7.0 — 改用 require_roles + supervisor_scope(对齐服务商督导 scope=provider:*)
 from app.core.security import get_token_payload, require_roles
 from app.models.case import CollectionCase, OwnerProfile, Project
@@ -57,9 +58,7 @@ def _require_tenant(payload: dict) -> int:
     return int(tenant_id)
 
 
-def _load_escalated_case(
-    db: Session, case_id: int, scope: SupervisorScope
-) -> CollectionCase:
+def _load_escalated_case(db: Session, case_id: int, scope: SupervisorScope) -> CollectionCase:
     """v0.7.0 — 改用 supervisor_case_filter 校验,服务商督导只看自己接的项目案件。"""
     case = db.execute(
         select(CollectionCase)
@@ -116,7 +115,9 @@ async def list_escalated_cases(
     # v1.7.0 — supervisor / admin / superadmin 是物业内部 / 平台角色，统一决策
     role = payload.get("role", "")
     contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
-    owner_phone_reveal = should_reveal_owner_phone(role=role, provider_id=payload.get("provider_id"), contract_active=contract_active)
+    owner_phone_reveal = should_reveal_owner_phone(
+        role=role, provider_id=payload.get("provider_id"), contract_active=contract_active
+    )
 
     items = []
     for case, owner, project_name, agent_name in rows:

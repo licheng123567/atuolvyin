@@ -7,6 +7,7 @@ PATCH  /supervisor/training-cases/{id}             更新(rating / lesson 编辑
 POST   /supervisor/training-cases/{id}/view        +1 学习计数
 DELETE /supervisor/training-cases/{id}             删除(限创建者或 admin)
 """
+
 from __future__ import annotations
 
 from typing import Annotated, Literal

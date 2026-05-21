@@ -9,6 +9,7 @@
   - static_matrix: 来自客户端上报的 ROM/Android 走静态矩阵推断
   - runtime_verified: RecordingScanner 实测（找到 / 找不到文件）覆盖矩阵
 """
+
 from __future__ import annotations
 
 from datetime import datetime

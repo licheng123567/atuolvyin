@@ -34,6 +34,7 @@ from app.models.legal_document_template import (
 )
 from app.models.user import UserAccount
 from app.models.work import LegalCase
+from app.schemas.billing import BlockchainAttestationItem
 from app.schemas.common import PaginatedResponse
 from app.schemas.legal_conversion import (
     CompleteOrderRequest,
@@ -43,7 +44,6 @@ from app.schemas.legal_conversion import (
     LegalConversionOrderOut,
     LegalServicePackageOut,
 )
-from app.schemas.billing import BlockchainAttestationItem
 from app.schemas.legal_doc_render import (
     LegalDocumentRenderOut,
     LegalDocumentTemplateOut,

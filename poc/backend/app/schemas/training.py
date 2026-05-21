@@ -1,4 +1,5 @@
 """v0.6.0 — 培训案例库 schemas。"""
+
 from __future__ import annotations
 
 from datetime import datetime

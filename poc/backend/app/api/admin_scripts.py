@@ -630,9 +630,7 @@ def _require_tenant_for_ai(payload: dict) -> int:
     return int(tid)
 
 
-@router.post(
-    "/scripts/recompute-ai-scores", response_model=RecomputeAiScoresOut
-)
+@router.post("/scripts/recompute-ai-scores", response_model=RecomputeAiScoresOut)
 def recompute_ai_scores_now(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
@@ -647,8 +645,6 @@ def recompute_ai_scores_now(
     from app.services.script_ai_score import scan_and_recompute_ai_scores
 
     tenant_id = _require_tenant_for_ai(payload)
-    count = scan_and_recompute_ai_scores(
-        db, lookback_days=lookback_days, tenant_id=tenant_id
-    )
+    count = scan_and_recompute_ai_scores(db, lookback_days=lookback_days, tenant_id=tenant_id)
     db.commit()
     return RecomputeAiScoresOut(recomputed=count, lookback_days=lookback_days)

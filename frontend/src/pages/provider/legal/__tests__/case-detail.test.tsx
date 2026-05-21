@@ -74,9 +74,9 @@ describe("ProviderLegalCaseDetailPage", () => {
       detail: defaultDetail, isLoading: false, isError: false,
     });
     vi.mocked(useCreateConversionRequest).mockReturnValue({
-      create: (_caseId: number, _reason: string, opts?: { onSuccess?: (r: { id: number }) => void; onError?: (e: unknown) => void }) => {
+      create: ((_caseId: number, _reason: string, opts?: { onSuccess?: (r: { id: number }) => void; onError?: (e: unknown) => void }) => {
         opts?.onSuccess?.({ id: 7 });
-      },
+      }) as unknown as ReturnType<typeof useCreateConversionRequest>["create"],
       isPending: false,
     } as unknown as ReturnType<typeof useCreateConversionRequest>);
 

@@ -30,7 +30,9 @@ from .admin_scripts import _to_out, _write_snapshot
 
 router = APIRouter()
 
-PROVIDER_ROLES = ("admin",)  # provider-side admin; access guarded by _provider_id_for checking provider_id
+PROVIDER_ROLES = (
+    "admin",
+)  # provider-side admin; access guarded by _provider_id_for checking provider_id
 VALID_INTENTS = frozenset({"房屋质量", "经济困难", "服务不满", "联系困难", "其他"})
 
 
@@ -267,8 +269,7 @@ def provider_script_effectiveness(
     template_stmt = select(ScriptTemplate).where(
         or_(
             ScriptTemplate.provider_id == provider_id,
-            (ScriptTemplate.tenant_id.is_(None))
-            & (ScriptTemplate.provider_id.is_(None)),
+            (ScriptTemplate.tenant_id.is_(None)) & (ScriptTemplate.provider_id.is_(None)),
         )
     )
     if intent:
@@ -287,15 +288,15 @@ def provider_script_effectiveness(
         select(
             SuggestionFeedback.script_template_id,
             func.count().label("total_shown"),
-            func.sum(
-                case((SuggestionFeedback.action == "adopt", 1), else_=0)
-            ).label("total_adopted"),
-            func.sum(
-                case((SuggestionFeedback.supervisor_label.is_not(None), 1), else_=0)
-            ).label("total_supervised"),
-            func.sum(
-                case((SuggestionFeedback.supervisor_label == "good", 1), else_=0)
-            ).label("total_good"),
+            func.sum(case((SuggestionFeedback.action == "adopt", 1), else_=0)).label(
+                "total_adopted"
+            ),
+            func.sum(case((SuggestionFeedback.supervisor_label.is_not(None), 1), else_=0)).label(
+                "total_supervised"
+            ),
+            func.sum(case((SuggestionFeedback.supervisor_label == "good", 1), else_=0)).label(
+                "total_good"
+            ),
         )
         .join(CallRecord, CallRecord.id == SuggestionFeedback.call_id)
         .where(SuggestionFeedback.script_template_id.in_(template_ids))
@@ -340,30 +341,35 @@ def provider_script_effectiveness(
         else:
             grade = "D"
 
-        items.append({
-            "template_id": t.id,
-            "title": t.title,
-            "trigger_intent": t.trigger_intent,
-            "is_active": t.is_active,
-            "source": (
-                "platform" if t.tenant_id is None and t.provider_id is None
-                else "provider"
-            ),
-            "total_shown": shown,
-            "total_adopted": adopted,
-            "adoption_rate": adoption_rate,
-            "total_supervised": supervised,
-            "total_good": good,
-            "good_ratio": good_ratio,
-            "composite_score": composite_score,
-            "composite_grade": grade,
-            "ai_score": float(t.ai_score) if t.ai_score is not None else None,
-            "ai_score_sample_count": t.ai_score_sample_count,
-            "ai_score_updated_at": (
-                t.ai_score_updated_at.isoformat() if t.ai_score_updated_at else None
-            ),
-        })
+        items.append(
+            {
+                "template_id": t.id,
+                "title": t.title,
+                "trigger_intent": t.trigger_intent,
+                "is_active": t.is_active,
+                "source": (
+                    "platform" if t.tenant_id is None and t.provider_id is None else "provider"
+                ),
+                "total_shown": shown,
+                "total_adopted": adopted,
+                "adoption_rate": adoption_rate,
+                "total_supervised": supervised,
+                "total_good": good,
+                "good_ratio": good_ratio,
+                "composite_score": composite_score,
+                "composite_grade": grade,
+                "ai_score": float(t.ai_score) if t.ai_score is not None else None,
+                "ai_score_sample_count": t.ai_score_sample_count,
+                "ai_score_updated_at": (
+                    t.ai_score_updated_at.isoformat() if t.ai_score_updated_at else None
+                ),
+            }
+        )
     items.sort(
-        key=lambda x: (x["composite_score"] is None, -(x["composite_score"] or 0), -x["total_shown"])
+        key=lambda x: (
+            x["composite_score"] is None,
+            -(x["composite_score"] or 0),
+            -x["total_shown"],
+        )
     )
     return {"period_days": period_days, "items": items}

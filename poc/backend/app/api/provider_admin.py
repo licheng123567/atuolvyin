@@ -30,15 +30,6 @@ from sqlalchemy.orm import Session
 from app.core.crypto import encrypt_phone, mask_phone
 from app.core.db import get_db
 from app.core.security import get_password_hash, get_token_payload, require_provider_roles
-
-
-def _gen_random_password() -> str:
-    """v0.7.0 — 生成一次性随机密码(16 位 alphanumeric)。员工首次 OTP 登录后改。"""
-    import secrets
-    import string
-
-    chars = string.ascii_letters + string.digits
-    return "".join(secrets.choice(chars) for _ in range(16))
 from app.models.call import CallRecord
 from app.models.case import CollectionCase, OwnerProfile
 from app.models.settlement import DisputeRecord, SettlementStatement
@@ -68,6 +59,16 @@ from app.schemas.provider_admin import (
     TeamMemberCreateIn,
 )
 from app.schemas.settlement import DisputeOut
+
+
+def _gen_random_password() -> str:
+    """v0.7.0 — 生成一次性随机密码(16 位 alphanumeric)。员工首次 OTP 登录后改。"""
+    import secrets
+    import string
+
+    chars = string.ascii_letters + string.digits
+    return "".join(secrets.choice(chars) for _ in range(16))
+
 
 DEFAULT_COMMISSION_RATE = 0.05  # MVP fallback; future: pull from membership.commission_rate
 PERFORMANCE_DEFAULT_DAYS = 30
@@ -1099,7 +1100,6 @@ async def get_provider_project_detail(
     校验:project.provider_id == self_provider_id(确保服务商只能看自己接的项目)。
     返回字段全只读;服务商**不能**改项目本身的字段(创建/编辑由物业 admin 负责)。
     """
-    from app.core.provider_scope import active_project_filter
     from app.models.case import CollectionCase, Project
     from app.models.tenant import Tenant
 
@@ -1123,33 +1123,43 @@ async def get_provider_project_detail(
     project, tenant_name = row
 
     # KPI 聚合
-    case_count = db.execute(
-        select(func.count(CollectionCase.id))
-        .where(CollectionCase.project_id == project_id)
-    ).scalar_one() or 0
+    case_count = (
+        db.execute(
+            select(func.count(CollectionCase.id)).where(CollectionCase.project_id == project_id)
+        ).scalar_one()
+        or 0
+    )
 
-    paid_count = db.execute(
-        select(func.count(CollectionCase.id))
-        .where(CollectionCase.project_id == project_id)
-        .where(CollectionCase.stage == "paid")
-    ).scalar_one() or 0
+    paid_count = (
+        db.execute(
+            select(func.count(CollectionCase.id))
+            .where(CollectionCase.project_id == project_id)
+            .where(CollectionCase.stage == "paid")
+        ).scalar_one()
+        or 0
+    )
 
-    recovered_amount = db.execute(
-        select(func.coalesce(func.sum(CollectionCase.amount_owed), 0))
-        .where(CollectionCase.project_id == project_id)
-        .where(CollectionCase.stage == "paid")
-    ).scalar() or 0
+    recovered_amount = (
+        db.execute(
+            select(func.coalesce(func.sum(CollectionCase.amount_owed), 0))
+            .where(CollectionCase.project_id == project_id)
+            .where(CollectionCase.stage == "paid")
+        ).scalar()
+        or 0
+    )
 
-    receivable_amount = db.execute(
-        select(func.coalesce(func.sum(CollectionCase.amount_owed), 0))
-        .where(CollectionCase.project_id == project_id)
-    ).scalar() or 0
+    receivable_amount = (
+        db.execute(
+            select(func.coalesce(func.sum(CollectionCase.amount_owed), 0)).where(
+                CollectionCase.project_id == project_id
+            )
+        ).scalar()
+        or 0
+    )
 
     # 预估佣金 = recovered × provider_agent_commission_rate
     rate = project.provider_agent_commission_rate
-    estimated_commission = (
-        float(recovered_amount) * float(rate) if rate is not None else None
-    )
+    estimated_commission = float(recovered_amount) * float(rate) if rate is not None else None
 
     # PM 名字
     pm_name = None
@@ -1173,14 +1183,10 @@ async def get_provider_project_detail(
         # 合同
         "contract_type": project.contract_type,
         "contract_start_date": (
-            project.contract_start_date.isoformat()
-            if project.contract_start_date
-            else None
+            project.contract_start_date.isoformat() if project.contract_start_date else None
         ),
         "contract_end_date": (
-            project.contract_end_date.isoformat()
-            if project.contract_end_date
-            else None
+            project.contract_end_date.isoformat() if project.contract_end_date else None
         ),
         "contract_attachment_filename": project.contract_attachment_filename,
         # 团队
@@ -1219,9 +1225,7 @@ async def get_provider_project_team_stats(
 
     # 项目归属校验
     proj = db.execute(
-        select(Project.id)
-        .where(Project.id == project_id)
-        .where(Project.provider_id == provider_id)
+        select(Project.id).where(Project.id == project_id).where(Project.provider_id == provider_id)
     ).scalar_one_or_none()
     if proj is None:
         raise HTTPException(
@@ -1235,9 +1239,7 @@ async def get_provider_project_team_stats(
             CollectionCase.assigned_to,
             UserAccount.name,
             func.count(CollectionCase.id).label("case_count"),
-            func.sum(
-                case((CollectionCase.stage == "paid", 1), else_=0)
-            ).label("paid_count"),
+            func.sum(case((CollectionCase.stage == "paid", 1), else_=0)).label("paid_count"),
             func.coalesce(
                 func.sum(
                     case(

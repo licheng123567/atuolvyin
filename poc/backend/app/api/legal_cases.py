@@ -27,6 +27,7 @@ from app.core.security import (
     get_token_payload,
     require_tenant_roles,
 )
+from app.models.call import AnalysisResult, Transcript
 from app.models.case import CollectionCase, OwnerProfile
 from app.models.user import UserAccount
 from app.models.work import LegalCase
@@ -121,7 +122,14 @@ async def list_legal_cases(
     role = payload.get("role", "")
     contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
     items = [
-        _legal_to_out(lc, name, phone_enc, viewer_role=role, viewer_provider_id=payload.get("provider_id"), contract_active=contract_active)
+        _legal_to_out(
+            lc,
+            name,
+            phone_enc,
+            viewer_role=role,
+            viewer_provider_id=payload.get("provider_id"),
+            contract_active=contract_active,
+        )
         for lc, name, phone_enc in rows
     ]
     return PaginatedResponse(
@@ -429,8 +437,7 @@ async def get_case_evidence_status(
         )
         analysis_count = int(
             db.execute(
-                select(sa_func.count(AnalysisResult.id))
-                .where(AnalysisResult.call_id.in_(call_ids))
+                select(sa_func.count(AnalysisResult.id)).where(AnalysisResult.call_id.in_(call_ids))
             ).scalar_one()
             or 0
         )
@@ -448,40 +455,52 @@ async def get_case_evidence_status(
         )
 
     # 各 data_type 已 confirmed 数
-    confirmed_rows = db.execute(
-        select(
-            BlockchainAttestation.data_type,
-            sa_func.count(BlockchainAttestation.id),
-        )
-        .where(BlockchainAttestation.tenant_id == tenant_id)
-        .where(BlockchainAttestation.call_id.in_(call_ids) if call_ids else False)
-        .where(BlockchainAttestation.status == "confirmed")
-        .group_by(BlockchainAttestation.data_type)
-    ).all() if call_ids else []
+    confirmed_rows = (
+        db.execute(
+            select(
+                BlockchainAttestation.data_type,
+                sa_func.count(BlockchainAttestation.id),
+            )
+            .where(BlockchainAttestation.tenant_id == tenant_id)
+            .where(BlockchainAttestation.call_id.in_(call_ids) if call_ids else False)
+            .where(BlockchainAttestation.status == "confirmed")
+            .group_by(BlockchainAttestation.data_type)
+        ).all()
+        if call_ids
+        else []
+    )
     confirmed_map = {r[0]: int(r[1]) for r in confirmed_rows}
 
     # 各 data_type 待上链(pending)数
-    pending_rows = db.execute(
-        select(
-            BlockchainAttestation.data_type,
-            sa_func.count(BlockchainAttestation.id),
-        )
-        .where(BlockchainAttestation.tenant_id == tenant_id)
-        .where(BlockchainAttestation.call_id.in_(call_ids) if call_ids else False)
-        .where(BlockchainAttestation.status == "pending")
-        .group_by(BlockchainAttestation.data_type)
-    ).all() if call_ids else []
+    pending_rows = (
+        db.execute(
+            select(
+                BlockchainAttestation.data_type,
+                sa_func.count(BlockchainAttestation.id),
+            )
+            .where(BlockchainAttestation.tenant_id == tenant_id)
+            .where(BlockchainAttestation.call_id.in_(call_ids) if call_ids else False)
+            .where(BlockchainAttestation.status == "pending")
+            .group_by(BlockchainAttestation.data_type)
+        ).all()
+        if call_ids
+        else []
+    )
     pending_map = {r[0]: int(r[1]) for r in pending_rows}
 
     # 最近一次 confirmed 上链时间 + provider
-    latest = db.execute(
-        select(BlockchainAttestation)
-        .where(BlockchainAttestation.tenant_id == tenant_id)
-        .where(BlockchainAttestation.call_id.in_(call_ids) if call_ids else False)
-        .where(BlockchainAttestation.status == "confirmed")
-        .order_by(BlockchainAttestation.submitted_at.desc())
-        .limit(1)
-    ).scalar_one_or_none() if call_ids else None
+    latest = (
+        db.execute(
+            select(BlockchainAttestation)
+            .where(BlockchainAttestation.tenant_id == tenant_id)
+            .where(BlockchainAttestation.call_id.in_(call_ids) if call_ids else False)
+            .where(BlockchainAttestation.status == "confirmed")
+            .order_by(BlockchainAttestation.submitted_at.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+        if call_ids
+        else None
+    )
 
     def _build(category: str, total: int, dtype: str) -> dict:
         confirmed = confirmed_map.get(dtype, 0)
@@ -504,7 +523,13 @@ async def get_case_evidence_status(
             _build("AI 分析", analysis_count, "analysis"),
             # L2 风险事件挂在 analysis 类别下(payload_metadata.risk_event_id 区分)
             # 这里单独算一行,但 confirmed/pending 字段从 analysis 复用 — 实际是从 pending 行里筛 risk_event_id 非空的;简化:不细分
-            {"category": "L2 风险事件", "total": l2_count, "confirmed": 0, "pending": 0, "local_only": l2_count},
+            {
+                "category": "L2 风险事件",
+                "total": l2_count,
+                "confirmed": 0,
+                "pending": 0,
+                "local_only": l2_count,
+            },
         ],
         "latest_attestation_at": (
             latest.submitted_at.isoformat() if latest and latest.submitted_at else None
@@ -549,11 +574,11 @@ async def evidence_receipt(
     if token:
         try:
             payload = decode_access_token(token)
-        except Exception:
+        except Exception as exc:
             raise HTTPException(
                 status_code=http_status.HTTP_401_UNAUTHORIZED,
                 detail={"code": "ERR_INVALID_TOKEN", "message": "Token 无效"},
-            )
+            ) from exc
     else:
         # 不支持 header — 这里只接 URL token,简化(实际产品里应通过更安全的方式)
         raise HTTPException(
@@ -668,14 +693,14 @@ async def evidence_receipt(
                     f'🔗 <a href="{_esc(url)}" target="_blank" '
                     f'style="color:#1A56DB">在易保全核验</a><br>'
                     f'<code style="font-size:10px;color:#6b7280">'
-                    f'tx={_esc(tx)}</code>'
+                    f"tx={_esc(tx)}</code>"
                 )
             return f'<code style="font-size:10px">tx={_esc(tx)}</code>'
 
         rows_calls.append(f"""
             <tr>
               <td style="text-align:center">{idx}</td>
-              <td>{_esc(call.started_at.strftime('%Y-%m-%d %H:%M') if call.started_at else '—')}</td>
+              <td>{_esc(call.started_at.strftime("%Y-%m-%d %H:%M") if call.started_at else "—")}</td>
               <td style="text-align:right">{call.duration_sec or 0} 秒</td>
               <td><code style="font-size:10px">{_esc(_short(recording_att.data_sha256 if recording_att else None, 16))}</code></td>
               <td>{_att_cell(recording_att)}</td>
@@ -689,11 +714,11 @@ async def evidence_receipt(
         rows_risk.append(f"""
             <tr>
               <td style="text-align:center">{re_idx}</td>
-              <td>{_esc(ev.created_at.strftime('%Y-%m-%d %H:%M') if ev.created_at else '—')}</td>
-              <td><strong style="color:{'#dc2626' if ev.level == 'L2' else '#d97706'}">{_esc(ev.level)}</strong></td>
+              <td>{_esc(ev.created_at.strftime("%Y-%m-%d %H:%M") if ev.created_at else "—")}</td>
+              <td><strong style="color:{"#dc2626" if ev.level == "L2" else "#d97706"}">{_esc(ev.level)}</strong></td>
               <td>{_esc(ev.category)}</td>
-              <td>{_esc(ev.trigger_text or '—')}</td>
-              <td>{_esc(ev.disposition_note or '—')}</td>
+              <td>{_esc(ev.trigger_text or "—")}</td>
+              <td>{_esc(ev.disposition_note or "—")}</td>
             </tr>
         """)
 
@@ -725,20 +750,26 @@ async def evidence_receipt(
 
   <h2>封面</h2>
   <table class="cover-table">
-    <tr><td>租户</td><td>{_esc(tenant.name if tenant else '—')}</td></tr>
+    <tr><td>租户</td><td>{_esc(tenant.name if tenant else "—")}</td></tr>
     <tr><td>法务案件号</td><td>LC-{lc.id:06d}</td></tr>
     <tr><td>催收案件号</td><td>CC-{cc.id:06d}</td></tr>
-    <tr><td>业主</td><td>{_esc(owner.name if owner else '—')}</td></tr>
-    <tr><td>地址</td><td>{_esc(((owner.building or '') + (owner.room or '')) if owner else '—')}</td></tr>
+    <tr><td>业主</td><td>{_esc(owner.name if owner else "—")}</td></tr>
+    <tr><td>地址</td><td>{
+        _esc(((owner.building or "") + (owner.room or "")) if owner else "—")
+    }</td></tr>
     <tr><td>欠费金额</td><td>¥ {_esc(cc.amount_owed)}</td></tr>
     <tr><td>逾期</td><td>{_esc(cc.months_overdue or 0)} 个月</td></tr>
     <tr><td>法务阶段</td><td>{_esc(lc.stage)}</td></tr>
-    <tr><td>律师</td><td>{_esc(lc.lawyer_name or '—')} / {_esc(lc.law_firm or '—')}</td></tr>
-    <tr><td>清单生成日期</td><td>{now.strftime('%Y-%m-%d %H:%M UTC')}</td></tr>
+    <tr><td>律师</td><td>{_esc(lc.lawyer_name or "—")} / {_esc(lc.law_firm or "—")}</td></tr>
+    <tr><td>清单生成日期</td><td>{now.strftime("%Y-%m-%d %H:%M UTC")}</td></tr>
   </table>
 
   <h2>通话证据清单(共 {len(calls)} 次)</h2>
-  {('<p style="color:#9ca3af">本案件无通话记录。</p>' if not calls else f'''
+  {
+        (
+            '<p style="color:#9ca3af">本案件无通话记录。</p>'
+            if not calls
+            else f'''
   <table>
     <thead>
       <tr>
@@ -747,12 +778,18 @@ async def evidence_receipt(
         <th>录音存证</th><th>转写存证</th><th>分析存证</th>
       </tr>
     </thead>
-    <tbody>{''.join(rows_calls)}</tbody>
+    <tbody>{"".join(rows_calls)}</tbody>
   </table>
-  ''')}
+  '''
+        )
+    }
 
   <h2>风险事件清单(共 {len(risk_events)} 件)</h2>
-  {('<p style="color:#9ca3af">本案件无风险事件。</p>' if not risk_events else f'''
+  {
+        (
+            '<p style="color:#9ca3af">本案件无风险事件。</p>'
+            if not risk_events
+            else f'''
   <table>
     <thead>
       <tr>
@@ -760,9 +797,11 @@ async def evidence_receipt(
         <th>触发内容</th><th>督导处置</th>
       </tr>
     </thead>
-    <tbody>{''.join(rows_risk)}</tbody>
+    <tbody>{"".join(rows_risk)}</tbody>
   </table>
-  ''')}
+  '''
+        )
+    }
 
   <h2>核验说明</h2>
   <p style="font-size:12px;color:#374151">
@@ -773,13 +812,13 @@ async def evidence_receipt(
   </p>
   <p style="font-size:12px;color:#374151">
     标记 <strong style="color:#dc2626">仅本地哈希</strong> 的证据,SHA-256 哈希值由
-    {_esc(tenant.name if tenant else '本系统')} 在数据写入时即时计算并落入数据库,
+    {_esc(tenant.name if tenant else "本系统")} 在数据写入时即时计算并落入数据库,
     可在诉讼准备阶段一键升级为司法链强证据。
   </p>
 
   <div class="footer">
-    本清单由 有证慧催 SaaS 系统生成 · {now.strftime('%Y-%m-%d %H:%M:%S UTC')}<br>
-    数据来源:租户 {_esc(tenant.name if tenant else '—')} · 法务案件 LC-{lc.id:06d}<br>
+    本清单由 有证慧催 SaaS 系统生成 · {now.strftime("%Y-%m-%d %H:%M:%S UTC")}<br>
+    数据来源:租户 {_esc(tenant.name if tenant else "—")} · 法务案件 LC-{lc.id:06d}<br>
     清单完整性:本 HTML 可保存为 PDF 作书面证据材料附件;核验请通过文中链接到易保全官网。
   </div>
 </body>

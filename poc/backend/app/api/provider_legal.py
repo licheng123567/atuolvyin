@@ -4,6 +4,7 @@
 require_provider_roles("legal") 守卫；案件归属经 CollectionCase.project_id →
 Project.provider_id 推导。物业侧 legal 端点不受影响。
 """
+
 from __future__ import annotations
 
 import uuid
@@ -118,9 +119,7 @@ def list_cases(
     total = int(db.execute(count_stmt).scalar_one())
 
     rows = db.execute(
-        stmt.order_by(desc(CollectionCase.id))
-        .offset((page - 1) * page_size)
-        .limit(page_size)
+        stmt.order_by(desc(CollectionCase.id)).offset((page - 1) * page_size).limit(page_size)
     ).all()
     reveal = _owner_phone_reveal(provider_id)
     items = [
@@ -442,15 +441,11 @@ def list_conversion_requests(
     req_filter = sa.and_(
         LegalConversionRequest.tenant_id == tenant_id,
         LegalConversionRequest.case_id.in_(
-            select(CollectionCase.id).where(
-                _provider_legal_case_filter(tenant_id, provider_id)
-            )
+            select(CollectionCase.id).where(_provider_legal_case_filter(tenant_id, provider_id))
         ),
     )
     total = int(
-        db.execute(
-            select(func.count(LegalConversionRequest.id)).where(req_filter)
-        ).scalar_one()
+        db.execute(select(func.count(LegalConversionRequest.id)).where(req_filter)).scalar_one()
     )
     reqs = (
         db.execute(
@@ -496,7 +491,5 @@ def get_conversion_request(
     base = _request_to_out(db, req)
     return ProviderLegalRequestDetail(
         **base.model_dump(),
-        materials=[
-            LegalConversionRequestMaterialOut.model_validate(m) for m in materials
-        ],
+        materials=[LegalConversionRequestMaterialOut.model_validate(m) for m in materials],
     )

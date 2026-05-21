@@ -8,6 +8,7 @@
 - 组织归属  UserTenantMembership.provider_id  None=物业侧 / int=服务商侧
 - 工作方式  UserTenantMembership.work_mode  ∈ WORK_MODES | None(仅 agent)
 """
+
 from __future__ import annotations
 
 # ─── 组织职能角色 ──────────────────────────────────────────────

@@ -145,9 +145,7 @@ def annotate_risk_event(
             from app.models.work import LegalCase as LegalCaseModel
 
             lc = db.execute(
-                select(LegalCaseModel.id)
-                .where(LegalCaseModel.case_id == call.case_id)
-                .limit(1)
+                select(LegalCaseModel.id).where(LegalCaseModel.case_id == call.case_id).limit(1)
             ).scalar_one_or_none()
             if lc is not None:
                 legal_case_id_for_attest = int(lc)
@@ -159,10 +157,7 @@ def annotate_risk_event(
             .where(BlockchainAttestation.status == "pending")
             .where(BlockchainAttestation.data_type == "analysis")
             # JSONB 包含查询:payload_metadata 含 risk_event_id 等于 event.id
-            .where(
-                BlockchainAttestation.payload_metadata["risk_event_id"].astext
-                == str(event.id)
-            )
+            .where(BlockchainAttestation.payload_metadata["risk_event_id"].astext == str(event.id))
             .limit(1)
         ).scalar_one_or_none()
         if existing is None:
@@ -174,7 +169,7 @@ def annotate_risk_event(
                 f"处置:{body.note or ''}\n"
                 f"audio_offset_ms:{event.audio_offset_ms or 0}\n"
                 f"标记时间:{datetime.now(UTC).isoformat()}\n"
-            ).encode("utf-8")
+            ).encode()
             mark_pending_attestation(
                 db,
                 tenant_id=int(call.tenant_id),

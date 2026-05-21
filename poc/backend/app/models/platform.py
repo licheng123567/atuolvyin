@@ -73,7 +73,9 @@ class BlockchainConfig(Base):
         sa.String(64), nullable=False
     )  # ebaoquan / antchain / fisco-bcos / mock
     api_endpoint: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    api_key_enc: Mapped[str | None] = mapped_column(sa.Text, nullable=True)  # AES-256 (appKeySecret)
+    api_key_enc: Mapped[str | None] = mapped_column(
+        sa.Text, nullable=True
+    )  # AES-256 (appKeySecret)
     app_key: Mapped[str | None] = mapped_column(
         sa.String(128), nullable=True
     )  # 易保全公钥标识 appKey，非密钥，明文存

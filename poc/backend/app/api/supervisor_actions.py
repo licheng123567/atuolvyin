@@ -19,17 +19,18 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles, require_tenant_roles  # noqa: F401
+from app.models.case import CollectionCase
+from app.models.notification import Notification
+from app.models.tenant import UserTenantMembership
+from app.models.user import UserAccount
+from app.services.audit import log_audit
+
 # v0.7.0 — 引入 supervisor_scope,允许服务商督导对自己接的项目案件执行动作
 from ._supervisor_scope import (
     SupervisorScope,
     supervisor_case_filter,
     supervisor_scope,
 )
-from app.models.case import CollectionCase
-from app.models.notification import Notification
-from app.models.tenant import UserTenantMembership
-from app.models.user import UserAccount
-from app.services.audit import log_audit
 
 router = APIRouter()
 
@@ -57,11 +58,9 @@ def _load_case(db: Session, case_id: int, tenant_id: int) -> CollectionCase:
     return case
 
 
-def _load_case_scoped(
-    db: Session, case_id: int, scope: SupervisorScope
-) -> CollectionCase:
+def _load_case_scoped(db: Session, case_id: int, scope: SupervisorScope) -> CollectionCase:
     """v0.7.0 — 用 supervisor_case_filter 校验:
-       物业督导看本租户内 + 非服务商接案;服务商督导看本服务商接的项目案件。
+    物业督导看本租户内 + 非服务商接案;服务商督导看本服务商接的项目案件。
     """
     from sqlalchemy import select
 
@@ -386,8 +385,9 @@ def transfer_legal_direct(
     v0.7.0 — scope 守卫:服务商督导可直接移交本服务商接的项目案件;
               不能操作非本服务商接案。
     """
-    from app.models.legal_conversion import LegalConversionRequest
     from sqlalchemy import select
+
+    from app.models.legal_conversion import LegalConversionRequest
 
     tenant_id = scope.tenant_id
     case = _load_case_scoped(db, case_id, scope)

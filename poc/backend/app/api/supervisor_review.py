@@ -100,7 +100,11 @@ def list_reviews(
     return PaginatedResponse(
         items=[
             _to_review_item(
-                call, analysis, reveal_phone=should_reveal_owner_phone(role=payload.get("role", ""), provider_id=scope.provider_id)
+                call,
+                analysis,
+                reveal_phone=should_reveal_owner_phone(
+                    role=payload.get("role", ""), provider_id=scope.provider_id
+                ),
             )
             for call, analysis in rows
         ],
@@ -166,7 +170,9 @@ def label_review(
     return _to_review_item(
         call,
         analysis,
-        reveal_phone=should_reveal_owner_phone(role=payload.get("role", ""), provider_id=scope.provider_id),
+        reveal_phone=should_reveal_owner_phone(
+            role=payload.get("role", ""), provider_id=scope.provider_id
+        ),
     )
 
 
@@ -212,7 +218,9 @@ def get_review_detail(
     base = _to_review_item(
         call,
         analysis,
-        reveal_phone=should_reveal_owner_phone(role=payload.get("role", ""), provider_id=scope.provider_id),
+        reveal_phone=should_reveal_owner_phone(
+            role=payload.get("role", ""), provider_id=scope.provider_id
+        ),
     )
 
     segments_out: list[TranscriptSegmentOut] = []

@@ -165,9 +165,7 @@ class LegalConversionRequest(Base, TimestampMixin):
         sa.ForeignKey("legal_conversion_order.id", ondelete="SET NULL"),
     )
     # v0.5.4 — 督导手动「上报 admin」时间戳
-    escalated_to_admin_at: Mapped[datetime | None] = mapped_column(
-        sa.DateTime(timezone=True)
-    )
+    escalated_to_admin_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
 
     __table_args__ = (
         # v0.5.4 — status 加 pending_admin（督导上报后）+ approved_pending_legal（已批待法务接单选包，Stream 3）

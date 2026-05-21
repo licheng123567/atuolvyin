@@ -22,6 +22,7 @@ membership 拿姓名/角色。
 当某租户活跃坐席 < 200、device_id 总量 < 1000 时，单次查询 < 50ms。
 更大数据量需引入物化视图或 window function。
 """
+
 from __future__ import annotations
 
 from datetime import datetime

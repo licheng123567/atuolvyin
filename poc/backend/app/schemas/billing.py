@@ -1,4 +1,5 @@
 """v0.5.9 — 计费 API 响应 schema(物业 admin + 服务商 admin 视角)。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -9,6 +10,7 @@ from pydantic import BaseModel
 
 class MinuteSummaryOut(BaseModel):
     """GET /admin/billing/minute-summary 响应。"""
+
     year_month: str
     used_minutes: int
     realtime_minutes: int
@@ -36,6 +38,7 @@ class BlockchainSummaryByType(BaseModel):
 
 class BlockchainSummaryOut(BaseModel):
     """GET /admin/billing/blockchain-summary 响应。"""
+
     year_month: str
     attestation_count: int
     amount_total: Decimal
@@ -64,6 +67,7 @@ class ProviderMinuteTenantItem(BaseModel):
 
 class ProviderMinuteSummaryOut(BaseModel):
     """GET /provider/billing/minute-summary 响应。"""
+
     year_month: str
     tenants: list[ProviderMinuteTenantItem]
     minute_total: int

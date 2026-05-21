@@ -193,7 +193,7 @@ export function UserListPage() {
                       <span
                         className="ds-badge ds-badge-purple"
                         style={{ marginLeft: 6, fontSize: 10 }}
-                        title={u.all_roles.map((r) => ROLE_LABEL[r] ?? r).join(" / ")}
+                        title={u.all_roles.map((r) => ROLE_LABEL(r)).join(" / ")}
                       >
                         兼 {u.all_roles.length} 职
                       </span>

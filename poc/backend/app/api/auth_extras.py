@@ -326,7 +326,9 @@ def _send_otp_and_respond(db: Session, phone: str, code: str) -> OtpSendOut:
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"code": "ERR_SMS_SEND_FAILED", "message": "验证码短信发送失败，请稍后重试"},
         )
-    return OtpSendOut(sent=True, expires_in=OTP_TTL_SECONDS, dev_code=code if OTP_DEV_RETURN else None)
+    return OtpSendOut(
+        sent=True, expires_in=OTP_TTL_SECONDS, dev_code=code if OTP_DEV_RETURN else None
+    )
 
 
 # ─── Endpoints ────────────────────────────────────────────────

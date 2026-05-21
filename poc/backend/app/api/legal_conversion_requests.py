@@ -202,9 +202,7 @@ def list_requests(
     # v0.5.4 — 物业法务只看「待法务接单」(approved_pending_legal) 的请求
     if role in LEGAL_ROLES and role not in REVIEWER_ROLES:
         base = base.where(LegalConversionRequest.status == "approved_pending_legal")
-        count_stmt = count_stmt.where(
-            LegalConversionRequest.status == "approved_pending_legal"
-        )
+        count_stmt = count_stmt.where(LegalConversionRequest.status == "approved_pending_legal")
 
     if status:
         base = base.where(LegalConversionRequest.status == status)
@@ -232,7 +230,9 @@ def list_requests(
     # v1.7.0 — 列表层一次决策：申请审批流由 supervisor/admin 审，物业内部默认明文
     role = payload.get("role", "")
     contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
-    owner_phone_reveal = should_reveal_owner_phone(role=role, provider_id=payload.get("provider_id"), contract_active=contract_active)
+    owner_phone_reveal = should_reveal_owner_phone(
+        role=role, provider_id=payload.get("provider_id"), contract_active=contract_active
+    )
     items = [
         _row_to_out(
             request_row=r,
@@ -474,7 +474,9 @@ def escalate_request_to_admin(
     db.commit()
     db.refresh(request_row)
     reviewer_name = (
-        db.execute(select(UserAccount.name).where(UserAccount.id == request_row.reviewer_user_id)).scalar_one_or_none()
+        db.execute(
+            select(UserAccount.name).where(UserAccount.id == request_row.reviewer_user_id)
+        ).scalar_one_or_none()
         if request_row.reviewer_user_id
         else None
     )
@@ -568,7 +570,9 @@ def legal_finalize_request(
     db.commit()
     db.refresh(request_row)
     reviewer_name = (
-        db.execute(select(UserAccount.name).where(UserAccount.id == request_row.reviewer_user_id)).scalar_one_or_none()
+        db.execute(
+            select(UserAccount.name).where(UserAccount.id == request_row.reviewer_user_id)
+        ).scalar_one_or_none()
         if request_row.reviewer_user_id
         else None
     )
@@ -607,9 +611,7 @@ def get_request_detail(
         requester_name,
         reviewer_name,
     ) = _load_request_with_context(db, request_id, tenant_id)
-    contract_active = is_provider_contract_active(
-        db, tenant_id, payload.get("provider_id")
-    )
+    contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
     owner_phone_reveal = should_reveal_owner_phone(
         role=payload.get("role", ""),
         provider_id=payload.get("provider_id"),
@@ -640,9 +642,7 @@ def get_request_detail(
     return LegalConversionRequestDetailOut(
         **base.model_dump(),
         order_status=order_status,
-        materials=[
-            LegalConversionRequestMaterialOut.model_validate(m) for m in materials
-        ],
+        materials=[LegalConversionRequestMaterialOut.model_validate(m) for m in materials],
     )
 
 
@@ -660,11 +660,7 @@ def download_request_material(
     """§9.1 — 物业审批人下载服务商法务上传的补充材料。"""
     tenant_id = _require_tenant(payload)
     material = db.get(LegalConversionRequestMaterial, material_id)
-    if (
-        material is None
-        or material.request_id != request_id
-        or material.tenant_id != tenant_id
-    ):
+    if material is None or material.request_id != request_id or material.tenant_id != tenant_id:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail={"code": "ERR_NOT_FOUND", "message": "材料不存在"},

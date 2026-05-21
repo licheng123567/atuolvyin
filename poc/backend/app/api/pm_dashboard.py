@@ -470,7 +470,6 @@ async def get_pm_alerts(
     three_days_ago = now - timedelta(days=3)
     fourteen_days_ago = now - timedelta(days=14)
     seven_days_ago = now - timedelta(days=7)
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     year_month = now.strftime("%Y-%m")
 
     # 1. 审批积压 — > 3 天的 pending discount/legal 申请
@@ -508,20 +507,27 @@ async def get_pm_alerts(
     )
 
     # 3. 坐席异常 — 近 7 天无任何 CallRecord 的催收员数(本租户)
-    active_agent_ids = db.execute(
-        select(UserTenantMembership.user_id)
-        .where(UserTenantMembership.tenant_id == tenant_id)
-        .where(UserTenantMembership.role == "agent")
-        .where(UserTenantMembership.is_active.is_(True))
-    ).scalars().all()
+    active_agent_ids = (
+        db.execute(
+            select(UserTenantMembership.user_id)
+            .where(UserTenantMembership.tenant_id == tenant_id)
+            .where(UserTenantMembership.role == "agent")
+            .where(UserTenantMembership.is_active.is_(True))
+        )
+        .scalars()
+        .all()
+    )
 
     if active_agent_ids:
-        agents_with_calls = db.execute(
-            select(func.count(func.distinct(CallRecord.caller_user_id)))
-            .where(CallRecord.tenant_id == tenant_id)
-            .where(CallRecord.caller_user_id.in_(active_agent_ids))
-            .where(CallRecord.created_at >= seven_days_ago)
-        ).scalar() or 0
+        agents_with_calls = (
+            db.execute(
+                select(func.count(func.distinct(CallRecord.caller_user_id)))
+                .where(CallRecord.tenant_id == tenant_id)
+                .where(CallRecord.caller_user_id.in_(active_agent_ids))
+                .where(CallRecord.created_at >= seven_days_ago)
+            ).scalar()
+            or 0
+        )
         agent_anomaly = max(0, len(active_agent_ids) - int(agents_with_calls))
     else:
         agent_anomaly = 0
@@ -540,11 +546,7 @@ async def get_pm_alerts(
             select(func.count(CollectionCase.id))
             .where(CollectionCase.tenant_id == tenant_id)
             .where(CollectionCase.updated_at < fourteen_days_ago)
-            .where(
-                CollectionCase.stage.in_(
-                    ("new", "in_progress", "promised", "escalated")
-                )
-            )
+            .where(CollectionCase.stage.in_(("new", "in_progress", "promised", "escalated")))
         ).scalar()
         or 0
     )
@@ -561,7 +563,11 @@ async def get_pm_alerts(
             key="promise_overdue_uncalled",
             label="承诺逾期未催",
             count=int(promise_overdue),
-            severity="critical" if promise_overdue > 5 else "warn" if promise_overdue > 0 else "info",
+            severity="critical"
+            if promise_overdue > 5
+            else "warn"
+            if promise_overdue > 0
+            else "info",
             detail_path="/supervisor/promises",
         ),
         PMAlertCard(
@@ -576,7 +582,9 @@ async def get_pm_alerts(
             label="本月分钟超 2000",
             count=int(cost_warning),
             severity="warn" if cost_warning else "info",
-            detail_path="/admin/billing/minute-usage" if not is_provider else "/provider/billing/minute-usage",
+            detail_path="/admin/billing/minute-usage"
+            if not is_provider
+            else "/provider/billing/minute-usage",
         ),
         PMAlertCard(
             key="case_stage_stuck",

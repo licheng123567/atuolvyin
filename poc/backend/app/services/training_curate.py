@@ -11,6 +11,7 @@
 扫近 7 天「已设 handle_status='transferred_training' 但 raw_risk_event_id
 还没建训练案例」的事件,自动补建(防止督导处置时联动失败的兜底)。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -40,10 +41,12 @@ def from_risk_event(
     """
     # 已存在?
     existing = db.execute(
-        select(TrainingCase).where(
+        select(TrainingCase)
+        .where(
             TrainingCase.raw_risk_event_id == risk_event_id,
             TrainingCase.tenant_id == tenant_id,
-        ).limit(1)
+        )
+        .limit(1)
     ).scalar_one_or_none()
     if existing is not None:
         return existing
@@ -101,9 +104,7 @@ def scan_and_ingest_missed(db: Session) -> int:
         .join(CallRecord, CallRecord.id == RiskEvent.call_id)
         .where(RiskEvent.handle_status == "transferred_training")
         .where(RiskEvent.disposition_at >= cutoff)
-        .outerjoin(
-            TrainingCase, TrainingCase.raw_risk_event_id == RiskEvent.id
-        )
+        .outerjoin(TrainingCase, TrainingCase.raw_risk_event_id == RiskEvent.id)
         .where(TrainingCase.id.is_(None))
     ).all()
 
@@ -136,9 +137,7 @@ async def scan_auto_ingest_loop() -> None:
             with SessionLocal() as db:
                 created = scan_and_ingest_missed(db)
                 if created:
-                    logger.info(
-                        "training_curate: auto-ingested %d new training cases", created
-                    )
+                    logger.info("training_curate: auto-ingested %d new training cases", created)
         except Exception as exc:
             logger.exception("scan_auto_ingest_loop iteration failed: %s", exc)
         await asyncio.sleep(SCAN_INTERVAL_SEC)

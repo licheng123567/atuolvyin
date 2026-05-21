@@ -40,9 +40,7 @@ def get_public_payment(
     db: Annotated[Session, Depends(get_db)],
 ) -> PublicPaymentOut:
     """业主扫码 / 点链接打开账单页（无需登录）。"""
-    link = db.execute(
-        select(PaymentLink).where(PaymentLink.token == token)
-    ).scalar_one_or_none()
+    link = db.execute(select(PaymentLink).where(PaymentLink.token == token)).scalar_one_or_none()
     if link is None:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,

@@ -12,6 +12,7 @@ UI 字段:
 - rating 1-5 ★(督导主观评分,自动入库默认 4 — 来源是优质事件)
 - views(学习人数,前端记 +1)
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -37,7 +38,7 @@ class TrainingCase(Base, TimestampMixin):
     # 分类:negotiate(协商成功) / escalate(升级处置) / objection(异议处理) / investigate(调查定位)
     category: Mapped[str] = mapped_column(sa.String(32), nullable=False)
     scenario: Mapped[str] = mapped_column(sa.Text, nullable=False)  # 场景描述
-    lesson: Mapped[str] = mapped_column(sa.Text, nullable=False)    # 复盘要点
+    lesson: Mapped[str] = mapped_column(sa.Text, nullable=False)  # 复盘要点
 
     # 关联(可空)
     raw_call_id: Mapped[int | None] = mapped_column(
@@ -59,9 +60,7 @@ class TrainingCase(Base, TimestampMixin):
     rating: Mapped[int] = mapped_column(
         sa.SmallInteger, nullable=False, server_default="0", default=0
     )  # 0-5 ★
-    views: Mapped[int] = mapped_column(
-        sa.Integer, nullable=False, server_default="0", default=0
-    )
+    views: Mapped[int] = mapped_column(sa.Integer, nullable=False, server_default="0", default=0)
 
     created_at: Mapped[datetime]  # 由 TimestampMixin 提供
     updated_at: Mapped[datetime]
@@ -71,9 +70,7 @@ class TrainingCase(Base, TimestampMixin):
             "category IN ('negotiate','escalate','objection','investigate')",
             name="ck_training_case_category",
         ),
-        sa.CheckConstraint(
-            "source IN ('auto','manual')", name="ck_training_case_source"
-        ),
+        sa.CheckConstraint("source IN ('auto','manual')", name="ck_training_case_source"),
         sa.CheckConstraint("rating BETWEEN 0 AND 5", name="ck_training_case_rating"),
         sa.Index("idx_training_case_tenant_created", "tenant_id", "created_at"),
     )

@@ -14,9 +14,7 @@ class PaymentLink(Base, TimestampMixin):
     __tablename__ = "payment_link"
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-    token: Mapped[str] = mapped_column(
-        sa.String(32), nullable=False, unique=True, index=True
-    )
+    token: Mapped[str] = mapped_column(sa.String(32), nullable=False, unique=True, index=True)
     tenant_id: Mapped[int] = mapped_column(
         sa.BigInteger,
         sa.ForeignKey("tenant.id", ondelete="CASCADE"),
@@ -38,9 +36,7 @@ class PaymentLink(Base, TimestampMixin):
     payment_mode: Mapped[str] = mapped_column(
         sa.String(16), nullable=False, server_default="property_self"
     )
-    expires_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True), nullable=False
-    )
+    expires_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
 
     __table_args__ = (
         sa.CheckConstraint(

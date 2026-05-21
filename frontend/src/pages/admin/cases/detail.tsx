@@ -27,6 +27,7 @@ export function AdminCaseDetailPage() {
   // v1.4 — PM 角色只读：admin/cases 路由放宽给 PM，但隐藏写操作
   const { data: identity } = useGetIdentity<AuthUser>();
   const isPM = identity?.role === "project_manager";
+  const isAdmin = identity?.role === "admin";
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [convertOpen, setConvertOpen] = useState(false);

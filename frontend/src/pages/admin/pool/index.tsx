@@ -13,6 +13,7 @@ import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 import { AdminAssignDrawer } from "../../../components/admin/AdminAssignDrawer";
 // v0.7.0 — 优先级 badge 抽到共享组件
 import { PriorityBadge } from "../../../components/ui/PriorityBadge";
+import type { PaginatedResponse } from "../../../types";
 
 const PAGE_SIZE = 20;
 

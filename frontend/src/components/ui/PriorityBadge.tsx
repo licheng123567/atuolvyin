@@ -10,7 +10,7 @@
 //   <40    灰色 低优先级
 //
 // 跨用法:物业 admin 案件列表 + 公海;服务商 admin 案件列表 + 看板
-import type { CSSProperties } from "react";
+import type { CSSProperties, JSX } from "react";
 
 export interface PriorityBadgeProps {
   score: number | null | undefined;

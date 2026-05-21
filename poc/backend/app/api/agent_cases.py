@@ -188,7 +188,9 @@ async def list_my_cases(
     # v1.7.0 — agent(internal) 永远明文；agent(external) 看合同有效性（项目级 plan_end 暂不入列表，
     # 单条详情页再细查；列表层只看合同总开关）
     contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
-    owner_phone_reveal = should_reveal_owner_phone(role=role, provider_id=payload.get("provider_id"), contract_active=contract_active)
+    owner_phone_reveal = should_reveal_owner_phone(
+        role=role, provider_id=payload.get("provider_id"), contract_active=contract_active
+    )
 
     return PaginatedResponse(
         items=[

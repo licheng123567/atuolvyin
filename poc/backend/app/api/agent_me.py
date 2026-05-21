@@ -373,9 +373,7 @@ def get_my_by_project(
     payload: Annotated[dict, Depends(get_token_payload)],
     _user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
-    month: str | None = Query(
-        None, pattern=r"^\d{4}-\d{2}$", description="YYYY-MM,默认本月"
-    ),
+    month: str | None = Query(None, pattern=r"^\d{4}-\d{2}$", description="YYYY-MM,默认本月"),
 ) -> AgentProjectStatsResp:
     """工作台底部「我的项目」卡片网格 — 按项目维度统计案件/回款/预估佣金。
 
@@ -429,9 +427,9 @@ def get_my_by_project(
             CollectionCase.project_id,
             Project.name.label("project_name"),
             func.count(CollectionCase.id).label("case_count"),
-            func.sum(
-                case((CollectionCase.stage == "paid"), else_=None)
-            ).label("paid_marker"),  # 仅用于辅助
+            func.sum(case((CollectionCase.stage == "paid"), else_=None)).label(
+                "paid_marker"
+            ),  # 仅用于辅助
             func.count(
                 case(
                     (
@@ -484,7 +482,9 @@ def get_my_by_project(
             rate = None
 
         recovered = Decimal(r.recovered_amount or 0)
-        commission = (recovered * rate).quantize(Decimal("0.01")) if rate is not None else Decimal("0")
+        commission = (
+            (recovered * rate).quantize(Decimal("0.01")) if rate is not None else Decimal("0")
+        )
 
         items.append(
             AgentProjectStatsItem(
@@ -567,8 +567,9 @@ def get_my_reminders_synthetic(
        (approved / rejected / approved_pending_legal)
     3. case_sla_warn:catch_all,assigned_to=me 且 updated_at < now - 30d 且 stage 非终止态
     """
-    from app.models.legal_conversion import LegalConversionRequest
     from datetime import timedelta
+
+    from app.models.legal_conversion import LegalConversionRequest
 
     user_id = int(payload.get("user_id") or 0)
     tenant_id = int(payload.get("tenant_id") or 0)
@@ -604,9 +605,7 @@ def get_my_reminders_synthetic(
             promise_due_at=case.promise_due_at,
             promise_amount=case.promise_amount,
             promise_content=case.promise_content,
-            hours_to_due=round(
-                (case.promise_due_at - now).total_seconds() / 3600.0, 1
-            ),
+            hours_to_due=round((case.promise_due_at - now).total_seconds() / 3600.0, 1),
         )
         for case, owner in promise_rows
     ]
@@ -620,9 +619,7 @@ def get_my_reminders_synthetic(
         .where(LegalConversionRequest.requester_user_id == user_id)
         .where(LegalConversionRequest.updated_at >= legal_cutoff)
         .where(
-            LegalConversionRequest.status.in_(
-                ("approved", "rejected", "approved_pending_legal")
-            )
+            LegalConversionRequest.status.in_(("approved", "rejected", "approved_pending_legal"))
         )
         .order_by(LegalConversionRequest.updated_at.desc())
         .limit(20)
@@ -781,7 +778,9 @@ def get_my_active_call(
     tenant_id = int(payload.get("tenant_id") or 0)
     role = payload.get("role", "")
     contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
-    owner_phone_reveal = should_reveal_owner_phone(role=role, provider_id=payload.get("provider_id"), contract_active=contract_active)
+    owner_phone_reveal = should_reveal_owner_phone(
+        role=role, provider_id=payload.get("provider_id"), contract_active=contract_active
+    )
     if not user_id or not tenant_id:
         raise HTTPException(
             status_code=http_status.HTTP_401_UNAUTHORIZED,

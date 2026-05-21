@@ -13,12 +13,11 @@ import hashlib
 import logging
 import secrets
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
-
-from decimal import Decimal
 
 from app.core.crypto import decrypt_phone
 from app.models.billing_pricing import BillingPricing
@@ -171,9 +170,7 @@ def submit_attestation(
     now = datetime.now(UTC)
     config = _resolve_config(db)
 
-    use_ebaoquan = (
-        config is not None and config.provider == "ebaoquan" and config.is_active
-    )
+    use_ebaoquan = config is not None and config.provider == "ebaoquan" and config.is_active
 
     # v0.5.9 — 查单价(active BillingPricing);data_type 决定 per_case vs per_attestation
     cost_amount = _resolve_cost(db, data_type)

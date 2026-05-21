@@ -38,7 +38,6 @@ from .script import ScriptTemplate, ScriptTemplateVersion, TenantSuggestionConfi
 from .settings import TenantSettings
 from .settlement import DisputeRecord, SettlementStatement
 from .supervisor_shift import SupervisorShift, SupervisorShiftSwapRequest  # noqa: F401
-from .training_case import TrainingCase  # noqa: F401
 from .tenant import (
     ProviderTenantContract,
     ServiceProvider,
@@ -46,6 +45,7 @@ from .tenant import (
     TenantMinuteUsage,
     UserTenantMembership,
 )
+from .training_case import TrainingCase  # noqa: F401
 from .user import PlatformOpsAssignment, UserAccount
 from .work import LegalCase, WorkOrder
 from .work_order_follow_up import WorkOrderFollowUp  # noqa: F401

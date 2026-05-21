@@ -4,6 +4,7 @@
 平台身份(UserAccount.platform_role)优先;否则取组织 membership。
 无平台身份且无 membership → 拒绝(不再默认超管)。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

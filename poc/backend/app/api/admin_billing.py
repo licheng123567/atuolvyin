@@ -13,9 +13,10 @@
 
 守卫:require_tenant_roles("admin")(物业 admin 专属;服务商 admin 走 /provider/billing)。
 """
+
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated
 
@@ -29,8 +30,7 @@ from app.core.security import get_token_payload, require_tenant_roles
 from app.models.billing_pricing import BillingPricing
 from app.models.blockchain_attestation import BlockchainAttestation
 from app.models.platform import BlockchainConfig
-from app.models.tenant import TenantMinuteUsage
-from app.models.tenant import Tenant
+from app.models.tenant import Tenant, TenantMinuteUsage
 from app.schemas.billing import (
     BlockchainAttestationItem,
     BlockchainSummaryByType,
@@ -100,9 +100,7 @@ async def minute_summary(
     if quota is None:
         tenant = db.get(Tenant, tenant_id)
         quota = tenant.monthly_minute_quota if tenant else None
-    quota_remaining = (
-        max(quota - used, 0) if quota is not None else None
-    )
+    quota_remaining = max(quota - used, 0) if quota is not None else None
 
     amount_realtime = (Decimal(realtime) * pricing.minute_price_live).quantize(Decimal("0.01"))
     amount_post = (Decimal(post) * pricing.minute_price_post).quantize(Decimal("0.01"))
@@ -143,11 +141,15 @@ async def minute_trend(
             y -= 1
     months_keys.reverse()  # 升序
 
-    rows = db.execute(
-        select(TenantMinuteUsage)
-        .where(TenantMinuteUsage.tenant_id == tenant_id)
-        .where(TenantMinuteUsage.year_month.in_(months_keys))
-    ).scalars().all()
+    rows = (
+        db.execute(
+            select(TenantMinuteUsage)
+            .where(TenantMinuteUsage.tenant_id == tenant_id)
+            .where(TenantMinuteUsage.year_month.in_(months_keys))
+        )
+        .scalars()
+        .all()
+    )
     by_month = {r.year_month: r for r in rows}
     result: list[MinuteTrendItem] = []
     for ym in months_keys:
@@ -158,10 +160,14 @@ async def minute_trend(
             (Decimal(realtime) * pricing.minute_price_live)
             + (Decimal(post) * pricing.minute_price_post)
         ).quantize(Decimal("0.01"))
-        result.append(MinuteTrendItem(
-            year_month=ym, realtime_minutes=realtime,
-            post_minutes=post, amount=amount,
-        ))
+        result.append(
+            MinuteTrendItem(
+                year_month=ym,
+                realtime_minutes=realtime,
+                post_minutes=post,
+                amount=amount,
+            )
+        )
     return result
 
 
@@ -200,7 +206,8 @@ async def blockchain_summary(
     total_amount = Decimal("0.00")
     for data_type, c, s in rows:
         by_type[data_type] = BlockchainSummaryByType(
-            count=int(c), amount=Decimal(str(s)).quantize(Decimal("0.01")),
+            count=int(c),
+            amount=Decimal(str(s)).quantize(Decimal("0.01")),
         )
         total_count += int(c)
         total_amount += Decimal(str(s))
@@ -248,9 +255,7 @@ async def blockchain_attestations(
 
     total_stmt = select(func.count()).select_from(stmt.subquery())
     total = int(db.execute(total_stmt).scalar_one() or 0)
-    rows = db.execute(
-        stmt.offset((page - 1) * page_size).limit(page_size)
-    ).scalars().all()
+    rows = db.execute(stmt.offset((page - 1) * page_size).limit(page_size)).scalars().all()
 
     items = [
         BlockchainAttestationItem(
@@ -266,7 +271,10 @@ async def blockchain_attestations(
         for r in rows
     ]
     return PaginatedResponse[BlockchainAttestationItem](
-        items=items, total=total, page=page, page_size=page_size,
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -389,7 +397,9 @@ async def blockchain_risk_overview(
             "case_id": r.CollectionCase.id,
             "owner_name": r.owner_name,
             "building_room": (r.building or "") + (r.room or ""),
-            "amount_owed": str(r.CollectionCase.amount_owed) if r.CollectionCase.amount_owed is not None else "0",
+            "amount_owed": str(r.CollectionCase.amount_owed)
+            if r.CollectionCase.amount_owed is not None
+            else "0",
             "months_overdue": r.CollectionCase.months_overdue or 0,
             "stage": r.CollectionCase.stage,
             "supervisor_action_count": int(r.supervisor_action_count or 0),
@@ -407,8 +417,6 @@ async def blockchain_risk_overview(
         "case_total": case_total,
         "case_with_strong": case_with_strong,
         "case_local_only": case_local_only,
-        "strong_pct": (
-            round(case_with_strong / case_total * 100, 1) if case_total > 0 else 0.0
-        ),
+        "strong_pct": (round(case_with_strong / case_total * 100, 1) if case_total > 0 else 0.0),
         "high_value_local_only": high_value_local_only,
     }

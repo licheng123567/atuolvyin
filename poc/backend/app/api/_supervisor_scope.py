@@ -5,6 +5,7 @@
 
 范例参照 app/api/provider_legal.py 的 _ctx / _provider_legal_case_filter。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

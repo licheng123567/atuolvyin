@@ -12,6 +12,7 @@
 - 存证单次(call/transcript/analysis) ¥5
 - 存证案件级 bundle(evidence_bundle) ¥99
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -28,26 +29,38 @@ class BillingPricing(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
     minute_price_live: Mapped[Decimal] = mapped_column(
-        sa.Numeric(6, 4), nullable=False, default=Decimal("0.5"),
+        sa.Numeric(6, 4),
+        nullable=False,
+        default=Decimal("0.5"),
     )
     minute_price_post: Mapped[Decimal] = mapped_column(
-        sa.Numeric(6, 4), nullable=False, default=Decimal("0.3"),
+        sa.Numeric(6, 4),
+        nullable=False,
+        default=Decimal("0.3"),
     )
     blockchain_price_per_attestation: Mapped[Decimal] = mapped_column(
-        sa.Numeric(10, 2), nullable=False, default=Decimal("5"),
+        sa.Numeric(10, 2),
+        nullable=False,
+        default=Decimal("5"),
     )
     blockchain_price_per_case_bundle: Mapped[Decimal] = mapped_column(
-        sa.Numeric(10, 2), nullable=False, default=Decimal("99"),
+        sa.Numeric(10, 2),
+        nullable=False,
+        default=Decimal("99"),
     )
     effective_from: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now(),
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
     )
     is_active: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=True)
 
     __table_args__ = (
         # 至多一行 active(应用层保证;DB 加 partial unique index)
         sa.Index(
-            "uq_billing_pricing_active", "is_active",
-            unique=True, postgresql_where=sa.text("is_active = true"),
+            "uq_billing_pricing_active",
+            "is_active",
+            unique=True,
+            postgresql_where=sa.text("is_active = true"),
         ),
     )
