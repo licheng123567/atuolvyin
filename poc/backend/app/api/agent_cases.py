@@ -6,7 +6,7 @@ from typing import Annotated
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -608,14 +608,27 @@ async def claim_case(
     return case
 
 
+class ReleaseToPoolBody(BaseModel):
+    """v0.9.0 — 催收员放回公海必填理由(对齐督导侧 release-to-pool 设计)。
+
+    必填理由便于后续复盘:为何被释放(5 次拨打未接 / 业主拒缴 / 产权转移 等)。
+    """
+
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
 @router.post("/cases/{case_id}/release", response_model=CaseResponse)
 async def release_case(
     case_id: int,
+    body: ReleaseToPoolBody,
     payload: Annotated[dict, Depends(get_token_payload)],
     user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseResponse:
-    """v1.6.9 — 催收员把私海案件主动放回公海（仅自己持有的未结案案件可放回）。"""
+    """v1.6.9 — 催收员把私海案件主动放回公海(仅自己持有的未结案案件可放回)。
+
+    v0.9.0 — 必填 reason 写入 audit_log payload 用于复盘。
+    """
     tenant_id = _require_tenant(payload)
     role = str(payload.get("role") or "")
     case = db.execute(
@@ -647,7 +660,7 @@ async def release_case(
         action="case.released",
         target_type="case",
         target_id=case_id,
-        payload={"to": "public_pool"},
+        payload={"to": "public_pool", "reason": body.reason},
     )
     db.commit()
     db.refresh(case)

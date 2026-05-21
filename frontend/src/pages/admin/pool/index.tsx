@@ -64,6 +64,9 @@ interface ProjectOption {
 export function AdminPoolPage() {
   const [page, setPage] = useState(1);
   const [assignFor, setAssignFor] = useState<number | null>(null);
+  // v0.9.0 — 批量勾选状态(当前页选中 case_id 集合)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [batchOpen, setBatchOpen] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [overdueFilter, setOverdueFilter] = useState("");
   const [projectFilter, setProjectFilter] = useState<number | "">("");
@@ -170,8 +173,13 @@ export function AdminPoolPage() {
             )}
           </div>
         </div>
-        <button type="button" className="ds-btn ds-btn-primary" disabled>
-          批量分配
+        <button
+          type="button"
+          className="ds-btn ds-btn-primary"
+          disabled={selectedIds.size === 0}
+          onClick={() => setBatchOpen(true)}
+        >
+          批量分配 {selectedIds.size > 0 ? `(${selectedIds.size})` : ""}
         </button>
       </div>
 
@@ -235,7 +243,18 @@ export function AdminPoolPage() {
             <thead>
               <tr>
                 <th style={{ width: 36 }}>
-                  <input type="checkbox" disabled />
+                  <input
+                    type="checkbox"
+                    checked={cases.length > 0 && selectedIds.size === cases.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedIds(new Set(cases.map((c) => c.id)));
+                      } else {
+                        setSelectedIds(new Set());
+                      }
+                    }}
+                    aria-label="全选当前页"
+                  />
                 </th>
                 <th>业主</th>
                 <th>房号</th>
@@ -270,7 +289,19 @@ export function AdminPoolPage() {
                 return (
                   <tr key={c.id}>
                     <td>
-                      <input type="checkbox" />
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(c.id)}
+                        onChange={(e) => {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(c.id);
+                            else next.delete(c.id);
+                            return next;
+                          });
+                        }}
+                        aria-label={`选中 ${c.owner.name}`}
+                      />
                     </td>
                     <td>
                       <button
@@ -364,12 +395,25 @@ export function AdminPoolPage() {
         </div>
       </div>
 
-      {/* v0.6.0 — 分配右弹 Drawer(替换原中间居中 modal) */}
+      {/* v0.6.0 — 单条分配右弹 Drawer(替换原中间居中 modal) */}
       {assignFor !== null && (
         <AdminAssignDrawer
           caseIds={[assignFor]}
           onClose={() => setAssignFor(null)}
           onAssigned={handleAssigned}
+        />
+      )}
+
+      {/* v0.9.0 — 批量分配右弹 Drawer(同组件,caseIds 数组) */}
+      {batchOpen && selectedIds.size > 0 && (
+        <AdminAssignDrawer
+          caseIds={Array.from(selectedIds)}
+          onClose={() => setBatchOpen(false)}
+          onAssigned={() => {
+            setBatchOpen(false);
+            setSelectedIds(new Set());
+            handleAssigned();
+          }}
         />
       )}
     </div>

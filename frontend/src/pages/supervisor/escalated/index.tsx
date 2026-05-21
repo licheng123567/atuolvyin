@@ -13,7 +13,7 @@
 import { useCustom, useCustomMutation } from "@refinedev/core";
 import {
   AlertCircle, ArrowUpRight, BadgePercent,
-  ExternalLink, Headphones, Loader2, Phone, Scale, Search, X,
+  ExternalLink, Headphones, Loader2, Phone, Scale, Search, Users, X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -21,6 +21,8 @@ import { DiscountRequestModal } from "../../../components/discount/DiscountReque
 import { TransferLegalDirectModal } from "../../../components/supervisor/TransferLegalDirectModal";
 import { HelpPanel } from "../../../components/ui/HelpPanel";
 import { SUPERVISOR_PROJECT_FILTERS } from "../_shared/projectFilters";
+// v0.9.0 — 升级案件页加重派入口
+import { SupervisorReassignModal } from "../../../components/supervisor/SupervisorReassignModal";
 
 interface EscalatedCase {
   id: number;
@@ -77,6 +79,8 @@ export function SupervisorEscalatedPage() {
   const [closeTarget, setCloseTarget] = useState<EscalatedCase | null>(null);
   const [discountTarget, setDiscountTarget] = useState<EscalatedCase | null>(null);
   const [transferLegalTarget, setTransferLegalTarget] = useState<EscalatedCase | null>(null);
+  // v0.9.0 — 重派目标
+  const [reassignTarget, setReassignTarget] = useState<EscalatedCase | null>(null);
   const [projectFilter, setProjectFilter] = useState<string>("全部项目");
   const [keyword, setKeyword] = useState("");
 
@@ -216,7 +220,7 @@ export function SupervisorEscalatedPage() {
                     催收员 <strong>{c.raised_by}</strong> 于 {c.raised_at} 升级
                   </div>
                 </div>
-                {/* v0.6.0 — 外层精简为 2 按钮 */}
+                {/* v0.6.0 — 外层精简为 2 按钮;v0.9.0 加「重派」 */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   <button
                     type="button"
@@ -225,6 +229,16 @@ export function SupervisorEscalatedPage() {
                   >
                     <Headphones className="w-3.5 h-3.5" />
                     介入处理
+                  </button>
+                  {/* v0.9.0 — 升级案件常见需要换人,加快捷重派入口 */}
+                  <button
+                    type="button"
+                    className="ds-btn ds-btn-secondary ds-btn-sm"
+                    onClick={() => setReassignTarget(c)}
+                    title="重新分配给另一催收员"
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    重派
                   </button>
                   <button
                     type="button"
@@ -327,6 +341,20 @@ export function SupervisorEscalatedPage() {
             setActiveCase(null);
             void query.refetch();
             alert("✓ 案件已直接移交法务");
+          }}
+        />
+      )}
+
+      {/* v0.9.0 — 重派 Drawer(SearchableSelect 选目标催收员) */}
+      {reassignTarget && (
+        <SupervisorReassignModal
+          caseId={reassignTarget.id}
+          currentAssignedTo={null}  /* 升级案件 mock 不含 assigned_to,真实后端列表已 v0.9.x 扩展 */
+          onClose={() => setReassignTarget(null)}
+          onDone={() => {
+            setReassignTarget(null);
+            void query.refetch();
+            alert("✓ 案件已重新分配");
           }}
         />
       )}

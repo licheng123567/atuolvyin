@@ -49,6 +49,8 @@ class AdminDeviceItem(BaseModel):
 router = APIRouter()
 
 ADMIN_ROLES = ("admin",)
+# v0.9.0 — 督导可读用户列表(为重派 Drawer 选目标催收员用)
+USER_LIST_ROLES = ("admin", "supervisor")
 
 
 def _user_to_response(user: UserAccount, role: str) -> UserListResponse:
@@ -65,7 +67,7 @@ def _user_to_response(user: UserAccount, role: str) -> UserListResponse:
 @router.get("/users", response_model=PaginatedResponse[UserListResponse])
 async def list_users(
     payload: Annotated[dict, Depends(get_token_payload)],
-    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*USER_LIST_ROLES))],
     db: Annotated[Session, Depends(get_db)],
     q: str | None = Query(None, max_length=100),
     page: int = Query(1, ge=1),

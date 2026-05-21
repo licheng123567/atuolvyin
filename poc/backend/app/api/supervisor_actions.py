@@ -516,3 +516,150 @@ def release_to_pool(
         note=body.note,
         notified_user_id=old_agent,
     )
+
+
+# v0.9.0 — 批量分配 / 重派
+class CaseBatchAssignBody(BaseModel):
+    case_ids: list[int] = Field(..., min_length=1, max_length=200)
+    target_user_id: int = Field(..., gt=0, description="目标催收员 user_id")
+    note: str | None = Field(None, max_length=2000)
+
+
+class BatchAssignFailureItem(BaseModel):
+    case_id: int
+    code: str
+    message: str
+
+
+class BatchAssignResult(BaseModel):
+    success_count: int
+    failed: list[BatchAssignFailureItem]
+
+
+@router.post("/cases/batch-assign", response_model=BatchAssignResult)
+def batch_assign(
+    body: CaseBatchAssignBody,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*SUPERVISOR_ROLES))],
+    scope: Annotated[SupervisorScope, Depends(supervisor_scope)],
+    db: Annotated[Session, Depends(get_db)],
+) -> BatchAssignResult:
+    """督导批量分配 / 重派多个案件给同一催收员。
+
+    复用单条 reassign 的核心逻辑(targets 校验 + assigned_to 切换 + 审计 + 通知),
+    但每条 case 单独 try/catch — 一条失败不影响其他。返回成功数 + 失败明细。
+    """
+    tenant_id = scope.tenant_id
+    user_id = int(payload.get("user_id") or 0)
+    user = db.get(UserAccount, user_id)
+    actor_name = user.name if user else "督导"
+    actor_role = str(payload.get("role") or "")
+
+    # 1) 一次性校验目标催收员是本租户的有效 agent
+    target_membership = (
+        db.query(UserTenantMembership)
+        .filter(
+            UserTenantMembership.user_id == body.target_user_id,
+            UserTenantMembership.tenant_id == tenant_id,
+            UserTenantMembership.role == "agent",
+            UserTenantMembership.is_active.is_(True),
+        )
+        .one_or_none()
+    )
+    if target_membership is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "ERR_INVALID_TARGET",
+                "message": "目标用户不存在或不是本租户有效催收员",
+            },
+        )
+    target_user = db.get(UserAccount, body.target_user_id)
+    target_name = target_user.name if target_user else "新催收员"
+
+    # 2) 逐 case_id 处理,记录成功 / 失败
+    success_count = 0
+    failed: list[BatchAssignFailureItem] = []
+    notified_old_agents: set[int] = set()
+
+    for cid in body.case_ids:
+        try:
+            case = _load_case_scoped(db, cid, scope)
+        except HTTPException as exc:
+            failed.append(
+                BatchAssignFailureItem(
+                    case_id=cid,
+                    code=str(
+                        exc.detail.get("code") if isinstance(exc.detail, dict) else "ERR_NOT_FOUND"
+                    ),
+                    message=str(
+                        exc.detail.get("message")
+                        if isinstance(exc.detail, dict)
+                        else "案件不可访问"
+                    ),
+                )
+            )
+            continue
+
+        # 跳过已分配给目标的(幂等)
+        if case.assigned_to == body.target_user_id:
+            failed.append(
+                BatchAssignFailureItem(
+                    case_id=cid,
+                    code="ERR_ALREADY_ASSIGNED",
+                    message="已分配给该催收员,跳过",
+                )
+            )
+            continue
+
+        old_assigned_to = case.assigned_to
+        case.assigned_to = body.target_user_id
+        case.pool_type = "private"
+
+        log_audit(
+            db,
+            actor_user_id=user_id,
+            actor_role=actor_role,
+            tenant_id=tenant_id,
+            action="case.reassigned",
+            target_type="case",
+            target_id=case.id,
+            payload={
+                "old_assigned_to": old_assigned_to,
+                "new_assigned_to": body.target_user_id,
+                "new_assignee_name": target_name,
+                "note": body.note,
+                "batch": True,
+            },
+        )
+        # 给新催收员每条通知(让其看到具体案件 id)
+        _notify_agent(
+            db,
+            tenant_id=tenant_id,
+            agent_user_id=body.target_user_id,
+            case_id=case.id,
+            supervisor_name=actor_name,
+            action_label="重新分配给你",
+            note=body.note,
+        )
+        # 原催收员只通知一次(批量时避免 spam) — 这里简化为每条都通知一次,
+        # 但若同一 old_assigned_to 多个案件,只发首条
+        if (
+            old_assigned_to
+            and old_assigned_to != body.target_user_id
+            and old_assigned_to not in notified_old_agents
+        ):
+            notified_old_agents.add(old_assigned_to)
+            _notify_agent(
+                db,
+                tenant_id=tenant_id,
+                agent_user_id=old_assigned_to,
+                case_id=case.id,
+                supervisor_name=actor_name,
+                action_label=f"批量分配 — 你的部分案件已转给 {target_name}",
+                note=body.note,
+            )
+        success_count += 1
+
+    db.commit()
+    return BatchAssignResult(success_count=success_count, failed=failed)

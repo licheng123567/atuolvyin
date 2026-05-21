@@ -3,12 +3,16 @@
 // 原由 pages/pm/dashboard.tsx 内部定义,现在 PM dashboard 和服务商 admin
 // dashboard 都用同一份(后端 GET /pm/dashboard/alerts 守卫 admin / project_manager)。
 //
+// v0.9.0 — 卡片点击行为升级:不再 Link 直接跳管理页,而是右侧 Drawer
+//   展开该类别明细列表(每行带「处理 →」一键跳详情)。
+//
 // 5 类提醒:
 //   pending_approval_backlog / promise_overdue_uncalled / agent_anomaly
 //   / cost_warning / case_stage_stuck
 import { useCustom } from "@refinedev/core";
 import { AlertTriangle, BellRing } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { PmAlertDetailDrawer } from "./PmAlertDetailDrawer";
 
 interface PMAlertCard {
   key: string;
@@ -41,6 +45,11 @@ export function PmAlertsSection() {
     queryOptions: { refetchInterval: 5 * 60 * 1000 },
   });
   const data = query.data?.data;
+  // v0.9.0 — 点击卡片打开右侧明细 Drawer(代替原 Link 跳管理页)
+  const [activeAlert, setActiveAlert] = useState<{
+    key: string;
+    label: string;
+  } | null>(null);
 
   if (query.isLoading) {
     return (
@@ -62,7 +71,7 @@ export function PmAlertsSection() {
         <BellRing className="w-4 h-4" style={{ color: "#c2410c" }} />
         <strong style={{ fontSize: 14, color: "#111827" }}>运营提醒</strong>
         <span style={{ fontSize: 11, color: "#6b7280" }}>
-          5 分钟自动刷新 · 点击卡片跳详情页处理
+          5 分钟自动刷新 · 点击卡片展开明细
         </span>
       </div>
       <div
@@ -73,16 +82,34 @@ export function PmAlertsSection() {
         }}
       >
         {data.alerts.map((a) => {
-          const inner = (
-            <div
+          const clickable = a.count > 0;
+          return (
+            <button
               key={a.key}
+              type="button"
+              onClick={() =>
+                clickable && setActiveAlert({ key: a.key, label: a.label })
+              }
+              disabled={!clickable}
               style={{
                 background: a.count > 0 ? SEVERITY_BG[a.severity] : "white",
                 border: `1px solid ${a.count > 0 ? SEVERITY_COLOR[a.severity] + "40" : "#e5e7eb"}`,
                 borderRadius: 8,
                 padding: 12,
-                cursor: a.detail_path ? "pointer" : "default",
-                transition: "transform 0.1s",
+                cursor: clickable ? "pointer" : "default",
+                transition: "transform 0.1s, box-shadow 0.1s",
+                textAlign: "left",
+                width: "100%",
+                font: "inherit",
+                color: "inherit",
+              }}
+              onMouseEnter={(e) => {
+                if (clickable) {
+                  e.currentTarget.style.boxShadow = "0 2px 6px rgba(0,0,0,.08)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = "none";
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
@@ -106,7 +133,7 @@ export function PmAlertsSection() {
               >
                 {a.count}
               </div>
-              {a.detail_path && a.count > 0 && (
+              {clickable && (
                 <div
                   style={{
                     fontSize: 11,
@@ -114,20 +141,22 @@ export function PmAlertsSection() {
                     marginTop: 6,
                   }}
                 >
-                  点击查看 →
+                  点击查看明细 →
                 </div>
               )}
-            </div>
-          );
-          return a.detail_path && a.count > 0 ? (
-            <Link key={a.key} to={a.detail_path} style={{ textDecoration: "none" }}>
-              {inner}
-            </Link>
-          ) : (
-            <div key={a.key}>{inner}</div>
+            </button>
           );
         })}
       </div>
+
+      {/* v0.9.0 — 明细 Drawer */}
+      {activeAlert && (
+        <PmAlertDetailDrawer
+          alertKey={activeAlert.key}
+          alertLabel={activeAlert.label}
+          onClose={() => setActiveAlert(null)}
+        />
+      )}
     </div>
   );
 }

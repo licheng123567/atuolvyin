@@ -146,16 +146,35 @@ async def test_release_own_case_back_to_pool(
     client: AsyncClient, db_session, agent_auth_headers, seeded_case,
     seeded_member_user,
 ):
+    """v0.9.0 — release 必填 reason(写入 audit_log payload)."""
     seeded_case.assigned_to = seeded_member_user.id
     seeded_case.pool_type = "private"
     db_session.commit()
     resp = await client.post(
-        f"/api/v1/agent/cases/{seeded_case.id}/release", headers=agent_auth_headers,
+        f"/api/v1/agent/cases/{seeded_case.id}/release",
+        headers=agent_auth_headers,
+        json={"reason": "5 次拨打未接"},
     )
-    assert resp.status_code == 200
+    assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["pool_type"] == "public"
     assert body["assigned_to"] is None
+
+
+@pytest.mark.asyncio
+async def test_release_missing_reason_returns_422(
+    client: AsyncClient, db_session, agent_auth_headers, seeded_case,
+    seeded_member_user,
+):
+    """v0.9.0 — 不传 reason 时 422(必填校验)。"""
+    seeded_case.assigned_to = seeded_member_user.id
+    seeded_case.pool_type = "private"
+    db_session.commit()
+    resp = await client.post(
+        f"/api/v1/agent/cases/{seeded_case.id}/release",
+        headers=agent_auth_headers,
+    )
+    assert resp.status_code == 422
 
 
 @pytest.mark.asyncio
@@ -163,12 +182,14 @@ async def test_release_others_case_returns_403(
     client: AsyncClient, db_session, agent_auth_headers, seeded_case,
     seeded_user,
 ):
-    """seeded_case 分给另一个用户（admin），agent 试图 release → 403."""
+    """seeded_case 分给另一个用户(admin),agent 试图 release → 403."""
     seeded_case.assigned_to = seeded_user.id  # admin user, not agent
     seeded_case.pool_type = "private"
     db_session.commit()
     resp = await client.post(
-        f"/api/v1/agent/cases/{seeded_case.id}/release", headers=agent_auth_headers,
+        f"/api/v1/agent/cases/{seeded_case.id}/release",
+        headers=agent_auth_headers,
+        json={"reason": "尝试越权释放"},
     )
     assert resp.status_code == 403
     assert resp.json()["code"] == "ERR_NOT_YOURS"

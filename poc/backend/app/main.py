@@ -51,6 +51,7 @@ from app.api import (
     provider_cases,
     provider_legal,
     provider_scripts,
+    provider_settings,
     provider_termination,
     public_app_info,
     public_payment,
@@ -356,6 +357,8 @@ app.include_router(provider_cases.router, prefix="/api/v1/provider", tags=["prov
 app.include_router(admin_billing.router, prefix="/api/v1/admin", tags=["admin-billing"])
 app.include_router(provider_billing.router, prefix="/api/v1/provider", tags=["provider-billing"])
 app.include_router(provider_scripts.router, prefix="/api/v1/provider", tags=["provider-scripts"])
+# v0.9.0 — 服务商 admin 设置(N 天自动释放阈值)
+app.include_router(provider_settings.router, prefix="/api/v1/provider", tags=["provider-settings"])
 app.include_router(
     provider_termination.admin_router,
     prefix="/api/v1/admin",
