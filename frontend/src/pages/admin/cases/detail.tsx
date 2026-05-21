@@ -16,6 +16,8 @@ import { AdminAssignDrawer } from "../../../components/admin/AdminAssignDrawer";
 import { WorkOrderCreateModal } from "../../../components/admin/WorkOrderCreateModal";
 import { PaymentLinkQrModal } from "../../../components/admin/PaymentLinkQrModal";
 import type { PaymentBreakdown } from "../../../components/admin/PaymentLinkQrModal";
+// v0.8.0 Wave C — 案件证据状态小卡片(右栏顶)
+import { EvidenceStatusBadge } from "../../../components/evidence/EvidenceStatusBadge";
 
 export function AdminCaseDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -122,7 +124,7 @@ export function AdminCaseDetailPage() {
           />
         </div>
 
-        {/* ── 右：sticky 操作 + 跟进备注 ── */}
+        {/* ── 右：sticky 证据状态 + 操作 + 跟进备注 ── */}
         <div
           style={{
             position: "sticky",
@@ -132,6 +134,9 @@ export function AdminCaseDetailPage() {
             gap: 8,
           }}
         >
+          {/* v0.8.0 Wave C — 证据状态小卡片(admin/PM/supervisor 都看得到) */}
+          <EvidenceStatusBadge caseId={detail.id} />
+
           {!isPM && (
             <div className="ds-card" style={{ padding: 14 }}>
               <div

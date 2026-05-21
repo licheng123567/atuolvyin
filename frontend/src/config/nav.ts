@@ -49,9 +49,10 @@ const NAV_CONFIG: Partial<Record<UserRole | "workorder", NavSection[]>> = {
         { label: "结算管理", path: "/admin/settlements", icon: "Receipt" },
         // v0.5.4 — 减免大额审批从「法务管理」移入此处（减免是金额谈判，非法务事项）
         { label: "减免大额审批", path: "/admin/discount-approvals", icon: "BadgePercent" },
-        // v0.5.9 — 通话计费 + 存证消费(物业方的两项 SaaS 消费视图)
+        // v0.5.9 — 通话计费 + 存证消费(物业方 SaaS 消费视图)
+        // v0.8.0 — 存证消费升级为「存证管理」(计费 + 风险敞口双 tab)
         { label: "通话计费", path: "/admin/billing/minute-usage", icon: "Phone" },
-        { label: "存证消费", path: "/admin/billing/blockchain", icon: "Shield" },
+        { label: "存证管理", path: "/admin/billing/blockchain", icon: "Shield" },
         { label: "数据报表", path: "/admin/reports", icon: "BarChart2" },
         { label: "合规月报", path: "/admin/compliance", icon: "Shield" },
       ],

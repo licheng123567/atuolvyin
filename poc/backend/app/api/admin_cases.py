@@ -766,3 +766,115 @@ def admin_send_payment_link(
         actor_role=str(payload.get("role") or ""),
         tenant_id=tenant_id,
     )
+
+
+# v0.8.0 — 物业 admin 案件详情右栏「证据状态」小卡片专用端点
+# 与法务 /legal/cases/{lc_id}/evidence-status 互补:法务侧入参是 LegalCase id,
+# admin 侧入参直接是 CollectionCase id;返回字段更精简(badge 不需要 4 类细分)。
+@router.get("/cases/{case_id}/evidence-status")
+async def get_admin_case_evidence_status(
+    case_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*READ_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    """返回案件证据状态摘要 (admin/PM/supervisor 共用):
+    - local_count: 本地哈希证据总件数(通话录音 + 转写 + 分析 + L2 风险事件)
+    - chain_count: 已上司法链(confirmed)件数
+    - pending_count: 待上链(pending, 多为 L2 风险事件)件数
+    - is_in_legal: 是否已转法务
+    - legal_case_id: 若已转法务,LegalCase id(供前端跳转「查看证据中心」)
+    - has_strong: chain_count > 0 — 是否已有强证据
+    """
+    from sqlalchemy import func as sa_func
+
+    from app.models.blockchain_attestation import BlockchainAttestation
+    from app.models.call import RiskEvent
+    from app.models.legal_case import LegalCase
+
+    tenant_id = _require_tenant(payload)
+    cc = db.get(CollectionCase, case_id)
+    if not cc or cc.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
+        )
+
+    call_ids = (
+        db.execute(
+            select(CallRecord.id)
+            .where(CallRecord.tenant_id == tenant_id)
+            .where(CallRecord.case_id == cc.id)
+        )
+        .scalars()
+        .all()
+    )
+    call_count = len(call_ids)
+
+    transcript_count = 0
+    analysis_count = 0
+    l2_count = 0
+    chain_count = 0
+    pending_count = 0
+    if call_ids:
+        transcript_count = int(
+            db.execute(
+                select(sa_func.count(Transcript.id))
+                .where(Transcript.call_id.in_(call_ids))
+                .where(Transcript.full_text.isnot(None))
+            ).scalar_one()
+            or 0
+        )
+        analysis_count = int(
+            db.execute(
+                select(sa_func.count(AnalysisResult.id))
+                .where(AnalysisResult.call_id.in_(call_ids))
+            ).scalar_one()
+            or 0
+        )
+        l2_count = int(
+            db.execute(
+                select(sa_func.count(RiskEvent.id))
+                .where(RiskEvent.call_id.in_(call_ids))
+                .where(RiskEvent.level == "L2")
+            ).scalar_one()
+            or 0
+        )
+        chain_count = int(
+            db.execute(
+                select(sa_func.count(BlockchainAttestation.id))
+                .where(BlockchainAttestation.tenant_id == tenant_id)
+                .where(BlockchainAttestation.call_id.in_(call_ids))
+                .where(BlockchainAttestation.status == "confirmed")
+            ).scalar_one()
+            or 0
+        )
+        pending_count = int(
+            db.execute(
+                select(sa_func.count(BlockchainAttestation.id))
+                .where(BlockchainAttestation.tenant_id == tenant_id)
+                .where(BlockchainAttestation.call_id.in_(call_ids))
+                .where(BlockchainAttestation.status == "pending")
+            ).scalar_one()
+            or 0
+        )
+
+    local_count = call_count + transcript_count + analysis_count + l2_count
+
+    legal_case_id = db.execute(
+        select(LegalCase.id)
+        .where(LegalCase.tenant_id == tenant_id)
+        .where(LegalCase.case_id == cc.id)
+        .order_by(LegalCase.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+    return {
+        "case_id": cc.id,
+        "local_count": local_count,
+        "chain_count": chain_count,
+        "pending_count": pending_count,
+        "is_in_legal": legal_case_id is not None,
+        "legal_case_id": legal_case_id,
+        "has_strong": chain_count > 0,
+    }
