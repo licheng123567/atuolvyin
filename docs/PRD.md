@@ -2261,6 +2261,26 @@ MVP 阶段采用**平台统一池化**模型：平台维护全局通话分钟池
 | `plan_config` | `monthly_realtime_minutes` INT (v1.3) | 套餐细分配额，NULL 表示不分别拦截 |
 | `plan_config` | `monthly_post_minutes` INT (v1.3) | 套餐细分配额 |
 
+**单价 + 金额计费（v0.5.9 落地）**
+
+通话分钟单价由 `BillingPricing` 表单例维护，由平台 OPS 调整。MVP 初始值：
+
+| 字段 | 初始单价 | 含义 |
+|------|---------|------|
+| `minute_price_live` | ¥0.5 / 分钟 | 实时模式(走 ASR live 通道) |
+| `minute_price_post` | ¥0.3 / 分钟 | 事后模式(批处理 ASR) |
+
+`tenant_minute_usage` 表的 `realtime_minutes` / `post_minutes` 已有分模式拆分,直接按上述单价计算月度金额,不需新增 `cost_amount` 字段。
+
+**前端入口（v0.5.9）**：
+- 物业 admin：`/admin/billing/minute-usage` — 月份选 + 4 KPI 卡(实时/事后/总额/剩余配额) + 6 月堆叠条趋势
+- 服务商 admin：`/provider/billing/minute-usage` — 跨租户明细(基于 `ProviderTenantContract` 找本服务商接的所有 active 合作租户,按金额降序)
+
+后端：
+- `GET /api/v1/admin/billing/minute-summary?year_month=YYYY-MM`
+- `GET /api/v1/admin/billing/minute-trend?months=N`
+- `GET /api/v1/provider/billing/minute-summary?year_month=YYYY-MM`
+
 ---
 
 ### 20.2 服务商撮合与抽佣
@@ -2389,6 +2409,27 @@ AI 风控干预：L1 提醒 23 次，L2 警告 2 次，L3 自动终止 0 次
 | 单案存证包导出 | 录音 + 转写 + AI 记录 + 链上证明打包下载 | v1.1 |
 | 区块链核验入口页 | 公开可访问的核验页面，输入 tx_hash 显示原始数据摘要 | v1.1 |
 | 年度审计报告 | 定制化，企业版 + 运营人工参与 | v2.0 |
+
+#### 单次存证计费（v0.5.9 落地）
+
+存证服务商优先选用「易保全」(ebaoquan.org),由 `BlockchainConfig` 单例 active 配置控制(超管页面 `/super/blockchain-config` 维护)。
+单次存证费用由 `BillingPricing` 表维护:
+
+| 字段 | 初始单价 | 适用 data_type |
+|------|---------|---------------|
+| `blockchain_price_per_attestation` | ¥5 / 次 | call_recording / transcript / analysis |
+| `blockchain_price_per_case_bundle` | ¥99 / 次 | evidence_bundle(案件级整包) |
+
+存证写入 `BlockchainAttestation` 时,从 active `BillingPricing` 读单价并冻结写入 `cost_amount` 字段(NULL 表示未配置单价的兼容场景)。
+失败的上链调用(`status=failed`)不收费 — 仅 confirmed 计入。
+
+**前端入口（v0.5.9）**：
+- 物业 admin：`/admin/billing/blockchain` — 月份选 + KPI(次数/总额/provider 状态) + 类型分布 + 列表(可点 tx_hash 跳验证页)
+- 法务专员：法务案件详情页 → 「下载存证包」按钮(已实现)
+
+后端:
+- `GET /api/v1/admin/billing/blockchain-summary?year_month=YYYY-MM`
+- `GET /api/v1/admin/billing/blockchain-attestations?page=1&page_size=30`
 
 ---
 
