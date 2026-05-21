@@ -321,3 +321,195 @@ async def download_evidence_bundle(
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# v0.8.0 — 法务「打包上链」按钮(只上链不下载;幂等)
+@router.post("/cases/{legal_case_id}/attest")
+async def attest_case_evidence(
+    legal_case_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    """法务对案件证据「批量上链」— 不打包 ZIP,仅升级强证据。
+
+    用途:案件进入诉讼/律师函阶段时,把所有通话录音/转写/分析升为司法链强证据,
+         律师函/起诉状可直接附 tx_hash。
+
+    幂等:已 confirmed 的数据(同 call_id + data_type)跳过,不重复计费。
+
+    返回:
+      attested: 本次新上链数
+      already_attested: 已上链跳过数
+      failed: 失败数
+      total_cost: 本次费用(¥,字符串避免浮点)
+    """
+    from app.services.evidence_bundle import attest_case_only
+
+    tenant_id = _require_tenant(payload)
+    lc = db.get(LegalCase, legal_case_id)
+    if lc is None or lc.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "法务案件不存在"},
+        )
+    cc = db.get(CollectionCase, lc.case_id)
+    if not cc:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
+        )
+
+    stats = attest_case_only(
+        db,
+        case=cc,
+        tenant_id=tenant_id,
+        legal_case_id=lc.id,
+    )
+    return stats
+
+
+# v0.8.0 — 法务案件证据状态摘要(给前端面板展示用)
+@router.get("/cases/{legal_case_id}/evidence-status")
+async def get_case_evidence_status(
+    legal_case_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*LEGAL_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    """返回案件证据状态摘要:
+       - 4 类证据各自数量
+       - 已上链(confirmed) / 待上链(pending) / 仅本地(无 attestation 行)
+       - 最近一次上链时间 + chain_provider
+
+    法务前端面板调此接口决定显示「弱证据」vs「强证据」。
+    """
+    from sqlalchemy import func as sa_func
+
+    from app.models.blockchain_attestation import BlockchainAttestation
+    from app.models.call import CallRecord, RiskEvent
+
+    tenant_id = _require_tenant(payload)
+    lc = db.get(LegalCase, legal_case_id)
+    if lc is None or lc.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "法务案件不存在"},
+        )
+    cc = db.get(CollectionCase, lc.case_id)
+    if not cc:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "案件不存在"},
+        )
+
+    # 案件下所有通话 id
+    call_ids = (
+        db.execute(
+            select(CallRecord.id)
+            .where(CallRecord.tenant_id == tenant_id)
+            .where(CallRecord.case_id == cc.id)
+        )
+        .scalars()
+        .all()
+    )
+    call_count = len(call_ids)
+
+    # 转写 / 分析 count(以通话存在为前提)
+    transcript_count = 0
+    analysis_count = 0
+    if call_ids:
+        transcript_count = int(
+            db.execute(
+                select(sa_func.count(Transcript.id))
+                .where(Transcript.call_id.in_(call_ids))
+                .where(Transcript.full_text.isnot(None))
+            ).scalar_one()
+            or 0
+        )
+        analysis_count = int(
+            db.execute(
+                select(sa_func.count(AnalysisResult.id))
+                .where(AnalysisResult.call_id.in_(call_ids))
+            ).scalar_one()
+            or 0
+        )
+
+    # L2 风险事件 count
+    l2_count = 0
+    if call_ids:
+        l2_count = int(
+            db.execute(
+                select(sa_func.count(RiskEvent.id))
+                .where(RiskEvent.call_id.in_(call_ids))
+                .where(RiskEvent.level == "L2")
+            ).scalar_one()
+            or 0
+        )
+
+    # 各 data_type 已 confirmed 数
+    confirmed_rows = db.execute(
+        select(
+            BlockchainAttestation.data_type,
+            sa_func.count(BlockchainAttestation.id),
+        )
+        .where(BlockchainAttestation.tenant_id == tenant_id)
+        .where(BlockchainAttestation.call_id.in_(call_ids) if call_ids else False)
+        .where(BlockchainAttestation.status == "confirmed")
+        .group_by(BlockchainAttestation.data_type)
+    ).all() if call_ids else []
+    confirmed_map = {r[0]: int(r[1]) for r in confirmed_rows}
+
+    # 各 data_type 待上链(pending)数
+    pending_rows = db.execute(
+        select(
+            BlockchainAttestation.data_type,
+            sa_func.count(BlockchainAttestation.id),
+        )
+        .where(BlockchainAttestation.tenant_id == tenant_id)
+        .where(BlockchainAttestation.call_id.in_(call_ids) if call_ids else False)
+        .where(BlockchainAttestation.status == "pending")
+        .group_by(BlockchainAttestation.data_type)
+    ).all() if call_ids else []
+    pending_map = {r[0]: int(r[1]) for r in pending_rows}
+
+    # 最近一次 confirmed 上链时间 + provider
+    latest = db.execute(
+        select(BlockchainAttestation)
+        .where(BlockchainAttestation.tenant_id == tenant_id)
+        .where(BlockchainAttestation.call_id.in_(call_ids) if call_ids else False)
+        .where(BlockchainAttestation.status == "confirmed")
+        .order_by(BlockchainAttestation.submitted_at.desc())
+        .limit(1)
+    ).scalar_one_or_none() if call_ids else None
+
+    def _build(category: str, total: int, dtype: str) -> dict:
+        confirmed = confirmed_map.get(dtype, 0)
+        pending = pending_map.get(dtype, 0)
+        local_only = max(0, total - confirmed - pending)
+        return {
+            "category": category,
+            "total": total,
+            "confirmed": confirmed,
+            "pending": pending,
+            "local_only": local_only,
+        }
+
+    return {
+        "legal_case_id": legal_case_id,
+        "case_id": cc.id,
+        "categories": [
+            _build("通话录音", call_count, "call_recording"),
+            _build("转写文本", transcript_count, "transcript"),
+            _build("AI 分析", analysis_count, "analysis"),
+            # L2 风险事件挂在 analysis 类别下(payload_metadata.risk_event_id 区分)
+            # 这里单独算一行,但 confirmed/pending 字段从 analysis 复用 — 实际是从 pending 行里筛 risk_event_id 非空的;简化:不细分
+            {"category": "L2 风险事件", "total": l2_count, "confirmed": 0, "pending": 0, "local_only": l2_count},
+        ],
+        "latest_attestation_at": (
+            latest.submitted_at.isoformat() if latest and latest.submitted_at else None
+        ),
+        "latest_chain_provider": latest.chain_provider if latest else None,
+        "has_any_confirmed": sum(confirmed_map.values()) > 0,
+        "has_any_pending": sum(pending_map.values()) > 0,
+    }

@@ -268,3 +268,147 @@ async def blockchain_attestations(
     return PaginatedResponse[BlockchainAttestationItem](
         items=items, total=total, page=page, page_size=page_size,
     )
+
+
+# v0.8.0 — 物业 admin 存证风险敞口视图
+@router.get("/blockchain/risk-overview")
+async def blockchain_risk_overview(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[object, Depends(require_tenant_roles("admin"))],
+    db: Annotated[Session, Depends(get_db)],
+    year_month: str | None = Query(None, pattern=r"^\d{4}-\d{2}$"),
+    top_n: int = Query(10, ge=1, le=50),
+) -> dict:
+    """物业 admin 存证管理「风险敞口」tab 数据源。
+
+    视角:**不是「我花了多少」而是「我有多少案件证据不够强」**。
+
+    返回:
+      - 本月新增案件总数 case_total
+      - 已有≥1 件 confirmed 存证(强证据)的案件数 case_with_strong
+      - 仅本地哈希(无 confirmed)的案件数 case_local_only
+      - 大额且仅本地的高风险案件 Top N(一键上链建议)
+
+    高风险排序:amount_owed × 0.0001 + months_overdue × 0.3 + supervisor_action_count × 2.0
+    """
+    from sqlalchemy import exists
+
+    from app.models.audit import AuditLog
+    from app.models.call import CallRecord as CR
+    from app.models.case import CollectionCase, OwnerProfile
+
+    tenant_id = int(payload.get("tenant_id") or 0)
+    if not tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_NO_TENANT", "message": "需要租户上下文"},
+        )
+
+    # 本月窗口
+    now = datetime.now(UTC)
+    if year_month:
+        y, m = year_month.split("-")
+        month_start = datetime(int(y), int(m), 1, tzinfo=UTC)
+    else:
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    next_mon_year = month_start.year + (1 if month_start.month == 12 else 0)
+    next_mon = month_start.replace(
+        year=next_mon_year,
+        month=1 if month_start.month == 12 else month_start.month + 1,
+    )
+
+    # 本月新增案件总数
+    case_total = int(
+        db.execute(
+            select(func.count(CollectionCase.id))
+            .where(CollectionCase.tenant_id == tenant_id)
+            .where(CollectionCase.created_at >= month_start)
+            .where(CollectionCase.created_at < next_mon)
+        ).scalar_one()
+        or 0
+    )
+
+    # 已有强证据(任意 confirmed attestation 通过 call_id 关联本案件)的案件数
+    strong_subq = (
+        select(BlockchainAttestation.id)
+        .join(CR, CR.id == BlockchainAttestation.call_id)
+        .where(BlockchainAttestation.tenant_id == tenant_id)
+        .where(BlockchainAttestation.status == "confirmed")
+        .where(CR.case_id == CollectionCase.id)
+        .correlate(CollectionCase)
+    )
+    case_with_strong = int(
+        db.execute(
+            select(func.count(CollectionCase.id))
+            .where(CollectionCase.tenant_id == tenant_id)
+            .where(CollectionCase.created_at >= month_start)
+            .where(CollectionCase.created_at < next_mon)
+            .where(exists(strong_subq))
+        ).scalar_one()
+        or 0
+    )
+    case_local_only = max(0, case_total - case_with_strong)
+
+    # Top N 高风险案件(本月新增 + 仅本地哈希 + 非 paid,按风险评分排)
+    supervisor_action_subq = (
+        select(func.count(AuditLog.id))
+        .where(AuditLog.tenant_id == tenant_id)
+        .where(AuditLog.target_type == "case")
+        .where(AuditLog.target_id == CollectionCase.id)
+        .where(AuditLog.action.like("case.supervisor_%"))
+        .correlate(CollectionCase)
+        .scalar_subquery()
+    )
+    risk_score_expr = (
+        func.coalesce(CollectionCase.amount_owed, 0) * 0.0001
+        + func.coalesce(CollectionCase.months_overdue, 0) * 0.3
+        + supervisor_action_subq * 2.0
+    )
+
+    rows = db.execute(
+        select(
+            CollectionCase,
+            OwnerProfile.name.label("owner_name"),
+            OwnerProfile.building,
+            OwnerProfile.room,
+            supervisor_action_subq.label("supervisor_action_count"),
+            risk_score_expr.label("risk_score"),
+        )
+        .join(OwnerProfile, OwnerProfile.id == CollectionCase.owner_id)
+        .where(CollectionCase.tenant_id == tenant_id)
+        .where(CollectionCase.created_at >= month_start)
+        .where(CollectionCase.created_at < next_mon)
+        .where(~exists(strong_subq))
+        .where(CollectionCase.stage != "paid")
+        .order_by(risk_score_expr.desc())
+        .limit(top_n)
+    ).all()
+
+    high_value_local_only = [
+        {
+            "case_id": r.CollectionCase.id,
+            "owner_name": r.owner_name,
+            "building_room": (r.building or "") + (r.room or ""),
+            "amount_owed": str(r.CollectionCase.amount_owed) if r.CollectionCase.amount_owed is not None else "0",
+            "months_overdue": r.CollectionCase.months_overdue or 0,
+            "stage": r.CollectionCase.stage,
+            "supervisor_action_count": int(r.supervisor_action_count or 0),
+            "last_contact_at": (
+                r.CollectionCase.last_contact_at.isoformat()
+                if r.CollectionCase.last_contact_at
+                else None
+            ),
+        }
+        for r in rows
+    ]
+
+    return {
+        "year_month": month_start.strftime("%Y-%m"),
+        "case_total": case_total,
+        "case_with_strong": case_with_strong,
+        "case_local_only": case_local_only,
+        "strong_pct": (
+            round(case_with_strong / case_total * 100, 1) if case_total > 0 else 0.0
+        ),
+        "high_value_local_only": high_value_local_only,
+    }
