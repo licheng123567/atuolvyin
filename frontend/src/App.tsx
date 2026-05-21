@@ -43,6 +43,8 @@ import { AgentCallHistoryPage } from "./pages/agent/call-history/index";
 import { AgentProfilePage } from "./pages/agent/profile/index";
 // v0.6.0 — 催收员提醒中心
 import { AgentRemindersPage } from "./pages/agent/reminders";
+// v0.7.0 — 催收员培训案例库(App WebView 也可访问)
+import { AgentTrainingPage } from "./pages/agent/training";
 import { AdminLiveWorkstationPage } from "./pages/admin/workstation/live";
 import { ScriptListPage } from "./pages/admin/scripts/list";
 import { ScriptVersionsPage } from "./pages/admin/scripts/versions";
@@ -461,6 +463,8 @@ function App() {
             <Route path="/agent/profile" element={<AgentProfilePage />} />
             {/* v0.6.0 — 催收员提醒中心 */}
             <Route path="/agent/reminders" element={<AgentRemindersPage />} />
+            {/* v0.7.0 — 催收员培训案例库 */}
+            <Route path="/agent/training" element={<AgentTrainingPage />} />
             {/* Admin Observer Workstation */}
             <Route path="/admin/workstation/:call_id" element={<AdminLiveWorkstationPage />} />
             {/* Supervisor Alerts */}

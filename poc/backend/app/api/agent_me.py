@@ -834,3 +834,123 @@ def get_my_active_call(
         project_id=project.id if project else None,
         project_name=project.name if project else None,
     )
+
+
+# ── v0.7.0 — 催收员侧培训案例库浏览(只读;PC + App WebView 共用) ────────
+class AgentTrainingCaseItem(BaseModel):
+    """与 supervisor_training.TrainingCaseOut 字段对齐;只读 — 不返回 created_by 等内部字段。"""
+
+    id: int
+    title: str
+    category: str
+    scenario: str
+    lesson: str
+    raw_call_id: int | None
+    rating: int
+    views: int
+    source: str
+    created_at: datetime
+
+
+class AgentTrainingListResp(BaseModel):
+    items: list[AgentTrainingCaseItem]
+    total: int
+
+
+@router.get("/me/training-cases", response_model=AgentTrainingListResp)
+def list_my_training_cases(
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+    category: str | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(30, ge=1, le=100),
+) -> AgentTrainingListResp:
+    """催收员浏览本租户培训案例库(只读)。
+
+    范围:本租户 training_case(由本租户督导沉淀);跨租户不开放。
+    `view_count` 由配套 POST `/me/training-cases/{id}/view` 累加。
+    """
+    from app.models.training_case import TrainingCase
+
+    tenant_id = int(payload.get("tenant_id") or 0)
+    if not tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "ERR_NO_TENANT", "message": "需要租户上下文"},
+        )
+
+    stmt = sa.select(TrainingCase).where(TrainingCase.tenant_id == tenant_id)
+    if category:
+        stmt = stmt.where(TrainingCase.category == category)
+
+    total = db.execute(
+        sa.select(sa.func.count(TrainingCase.id))
+        .where(TrainingCase.tenant_id == tenant_id)
+        .where(TrainingCase.category == category if category else sa.true())
+    ).scalar_one()
+
+    rows = (
+        db.execute(
+            stmt.order_by(TrainingCase.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        .scalars()
+        .all()
+    )
+
+    return AgentTrainingListResp(
+        items=[
+            AgentTrainingCaseItem(
+                id=r.id,
+                title=r.title,
+                category=r.category,
+                scenario=r.scenario,
+                lesson=r.lesson,
+                raw_call_id=r.raw_call_id,
+                rating=r.rating,
+                views=r.views,
+                source=r.source,
+                created_at=r.created_at,
+            )
+            for r in rows
+        ],
+        total=int(total or 0),
+    )
+
+
+@router.post("/me/training-cases/{tc_id}/view", response_model=AgentTrainingCaseItem)
+def view_training_case(
+    tc_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_roles(*AGENT_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> AgentTrainingCaseItem:
+    """催收员点开案例时调一次,+1 view 计数。返回案例详情。"""
+    from app.models.training_case import TrainingCase
+
+    tenant_id = int(payload.get("tenant_id") or 0)
+    tc = db.get(TrainingCase, tc_id)
+    if tc is None or tc.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"code": "ERR_NOT_FOUND", "message": "培训案例不存在"},
+        )
+
+    tc.views = (tc.views or 0) + 1
+    db.commit()
+    db.refresh(tc)
+
+    return AgentTrainingCaseItem(
+        id=tc.id,
+        title=tc.title,
+        category=tc.category,
+        scenario=tc.scenario,
+        lesson=tc.lesson,
+        raw_call_id=tc.raw_call_id,
+        rating=tc.rating,
+        views=tc.views,
+        source=tc.source,
+        created_at=tc.created_at,
+    )
