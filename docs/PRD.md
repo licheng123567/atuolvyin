@@ -2602,6 +2602,64 @@ AI 风控干预：L1 提醒 23 次，L2 警告 2 次，L3 自动终止 0 次
 - `GET /api/v1/admin/billing/blockchain-summary?year_month=YYYY-MM`
 - `GET /api/v1/admin/billing/blockchain-attestations?page=1&page_size=30`
 
+#### 20.3.5 法律效力分级 + 触发策略(v0.8.0 锁定)
+
+v0.8.0 将存证从「一刀切的成本项」重塑为「分级的诉讼证据」。核心问题不是"该不该上链",而是"什么时候、对什么数据上链"。
+
+**法律效力三级模型**
+
+| 等级 | 数据存在形式 | 证据强度 | 法律依据 | 法庭采信度 |
+|------|----------|--------|--------|----------|
+| 🔴 **本地哈希(弱证据)** | `data_sha256` 字段(原始数据进库瞬间计算)| 仅平台单方面计算 | 无第三方背书 | 对方律师可主张「平台自证」、要求出示原始服务器日志 |
+| 🟡 **第三方区块链存证(强证据)** | `BlockchainAttestation` row + tx_hash + 易保全保全备案号 | 第三方司法链 + 时间戳 + 哈希不可变 | **最高法 2018 第 11 号文**(《最高人民法院关于互联网法院审理案件若干问题的规定》第 11 条):「电子数据通过电子签名、可信时间戳、哈希值校验、区块链等证据收集、固定和防篡改的技术手段或者通过电子取证存证平台认证,能够证明其真实性的,互联网法院应当确认」 | **互联网法院直接核验**,无需对方反复质疑 |
+| 🟢 **公证处提存(最强证据)** | 不在本系统范围 | 公证书 | 《公证法》| 不实现 — 仅大额案件法务自行送公证 |
+
+> v0.8.0 平台只做 🔴 + 🟡 两级,🟢 由法务在律师函/诉状里附公证书路径(系统不强耦合)。
+
+**触发策略 — 何时升级 🔴 → 🟡**
+
+| 数据类型 | 默认状态 | 升级触发点 | 成本 | 经济模型 |
+|---------|--------|----------|-----|--------|
+| 通话录音(call_recording)| 🔴 本地哈希 | 法务案件「打包上链」单一入口 | ¥5/单 × 数量 或 ¥99/案件包 | 99% 案件不进诉讼 → 不上链 = 零成本;1% 进诉讼 → 该案件单次 ¥99 全量上链 |
+| 转写文本(transcript)| 🔴 本地哈希 | 同上(随案件包) | 同上 | 同上 |
+| AI 分析(analysis)| 🔴 本地哈希 | 同上(随案件包) | 同上 | 同上 |
+| L2 风险事件(`RiskEvent.level='L2'`)| 🟡 **pending 标记** | 督导处置时(`mark_pending_attestation`)自动写 `BlockchainAttestation` 但 tx_hash=NULL / cost=NULL — 即「待上链」预占位 | ¥0(标记成本零) | 法务后续打包时一并上链(已预占位,免重复扫描)|
+
+**为什么 L2 风险事件特殊?** L2 = 督导主动介入处置的合规风险(冲突升级、不当承诺、催收话术违规),这类事件本身就是「诉讼准备阶段最可能被对方反向引用的证据」 — 不能丢、不能改。v0.8.0 选择「**先标记、不立即调链**」策略(决策 1c):
+
+- 优势:**零成本**(无 API 调用)+ **同等法律效力**(法务打包时一并上链,时间戳追溯仍有效 — 司法链关心的是 hash 上链时刻而非数据生成时刻)
+- 风险:法务忘记打包 → pending 行永远不升级 → 与「仅本地哈希」无异
+- 缓解:法务案件详情页 `EvidenceStatusPanel` 显示「待上链 N 件」黄色徽章,打包上链时 `attest_case_only()` 自动捞 pending 行
+
+**受众边界(只给法务 + 物业管理员看)**
+
+| 角色 | 看证据状态 | 看法律效力提示 | 看费用 / 触发上链 |
+|------|---------|------------|--------------|
+| 法务(`role='legal'`)| ✅ 完整 4 类细分 | ✅ 弱/混合/强三档 | ✅ 主入口「打包上链 ¥99」 |
+| 物业管理员(`role='admin'`)| ✅ 案件徽章 + 月度风险敞口 | ✅ 三态外观(strong/pending/weak)| ⚠️ 不直接触发 — 通过「转法务时一并上链」勾选 |
+| 项目经理 / 督导 | ✅ 案件徽章只读 | ✅ 同 admin | ❌ 不可触发 |
+| 催收员 / 业主 | ❌ 不暴露 | ❌ 不暴露 | ❌ 不暴露 — 避免恐慌 / 心理压力 |
+
+**前端入口(v0.8.0 新增)**
+
+- 法务专员:`/legal/cases/{lc_id}` 顶部「证据状态」面板 — 4 行 4 类对比表 + 弱/强提示 + 3 按钮(打包上链 ¥99 / 下载证据包 / 生成证据清单 HTML)
+- 物业管理员:
+  - `/admin/cases/{case_id}` 右栏 sticky「证据状态」小卡片 — 三态色边 + 总数 + CTA
+  - `/admin/billing/blockchain` 升级为「存证管理」双 tab — 计费视图(原)+ 风险敞口(新:本月新增 / 已强化 / 仅本地 + 大额未上链 Top 10)
+- 平台公开核验:`GET /api/v1/public/verify/{tx_hash}` 返回元数据 + 易保全官方核验 URL(借公信力)
+
+**后端入口(v0.8.0 新增)**
+
+- `POST /legal/cases/{lc_id}/attest` — 法务打包上链(`attest_case_only`,幂等)
+- `GET /legal/cases/{lc_id}/evidence-status` — 4 类细分聚合
+- `GET /legal/cases/{lc_id}/evidence-receipt?token=xxx` — HTML 证据清单(浏览器打印为 PDF)
+- `GET /admin/cases/{case_id}/evidence-status` — admin 徽章用,返回摘要
+- `GET /admin/blockchain/risk-overview?year_month=YYYY-MM` — 风险敞口 tab 数据源
+- `app.services.blockchain.mark_pending_attestation()` — L2 标记(零成本)
+- `app.api.supervisor_extras.annotate_risk_event` PATCH — L2 处置时自动 hook
+
+> 完整决策日志见 §22.12。
+
 ---
 
 ### 20.4 法务转化通道
@@ -3411,6 +3469,48 @@ app.youcuihuicui.com       ← 租户侧所有角色（物业公司管理员/主
 - 服务商督导(13000000011):看 15 项 nav + 跨多物业接案的升级/承诺/超期管理(scope 守卫)
 - 服务商催收员(work_mode=external):工作台看「服务商」徽章 + 培训案例库可浏览
 - 服务商 PM:dashboard 看「合作物业 Top 5」(原「租户」)+ Top 5 跳详情
+
+---
+
+### 22.12 v0.8.0 诉讼证据中心(2026-05-21)
+
+**背景**:产品讨论聚焦「区块链存证在前端如何体现 / 给哪些角色显示 / 内容是什么」。Phase 0 调研发现 `submit_attestation()` 当前**只在 `evidence_bundle.py` 一处被调用**(法务点「下载存证包」时)— 现有「按需上链」策略其实合理,只是 UI 没体现「证据状态」+ 缺「为何要上链」的法律语境提示。
+
+用户(2026-05-21)进一步收敛三个边界:
+1. 核心是**诉讼证据问题**,不是「记录催收过程」
+2. 受众**只给物业法务 + 物业管理员**(不打扰催收员/督导/业主)
+3. 法律上须区分「本地哈希(弱证据)vs 第三方存证(强证据)」
+
+**4 Wave 拆分**:
+
+| Wave | commit | 核心动作 |
+|---|---|---|
+| A 后端基础 | `b646592` | `mark_pending_attestation()`(L2 风险事件零成本标记)+ `attest_case_only()`(打包上链幂等)+ `GET /legal/cases/{id}/evidence-status` 聚合 + `GET /admin/blockchain/risk-overview` 风险敞口 + `GET /public/verify/{tx_hash}` 扩展 `ebaoquan_verify_url`(借易保全公信力)+ `supervisor_extras.py` PATCH 加 L2 自动 hook |
+| B 法务证据中心 | `af1ac20` | `EvidenceStatusPanel.tsx` 共享组件(4 类细分对比表 + 弱/强法律效力提示 + 「打包上链 ¥99」/「下载证据包」/「生成证据清单」3 按钮)+ `/legal/cases/[id]` 集成 + `GET /legal/cases/{id}/evidence-receipt` HTML 证据清单端点(封面 + 通话表 + 风险事件表 + 核验说明引最高法 2018 第 11 号文,浏览器「打印为 PDF」) |
+| C 物业 admin 视图 | `5ef00f6` | `EvidenceStatusBadge.tsx` 共享组件(三态外观 + CTA 智能分支)+ 集成到 `/admin/cases/[id]` 右栏 + `GET /admin/cases/{id}/evidence-status` admin 摘要端点 + `/admin/billing/blockchain` 升级双 tab(`BillingTab` 抽出 + `RiskExposureTab` 新建,3 KPI + 双色进度条 + Top 10 高风险表 + 「为什么要上链」帮助框)+ 菜单 「存证消费」→「存证管理」 |
+| D PRD 文档同步 | (本提交) | §20.3.5 法律效力分级 + 触发策略 + §22.12 本节 |
+
+**5 个关键决策**
+
+1. **L2 风险事件「先标记、不立即上链」(策略 1c)** — 候选 1a 是「立即调易保全 ¥5/单」(开销大且 99% 案件不进诉讼);1b 是「完全不存证」(法务打包时手工补);1c 是「写 BlockchainAttestation 行但 status='pending' / tx_hash=NULL / cost=NULL,法务打包时一并捞出」。选 1c 因:零成本 + 同等法律效力(司法链关心 hash 上链时刻而非数据生成时刻)+ 自动幂等(预占位避免重复扫描)。
+
+2. **受众收窄到法务 + 物业管理员** — 候选 2a 是全员看「区块链存证」徽章(用户决策前的方案);2b 是「只让法务看」(过度收窄,admin 无法判断风险敞口);2c 是「法务 + admin/PM/supervisor 三档可见性」(选定)。催收员/业主不暴露 — 避免「催收人员把上链当威胁话术」和「业主因恐慌支付,引发投诉」。
+
+3. **物业 admin 不直接触发上链** — 候选 3a 是「admin 案件详情加「上链」按钮」(权责越界);3b 是「admin 只看不动,转法务时勾「同时上链 ¥99」」(选定 — UI 已在 ConvertToLegalModal 落地;真正触发权归法务)。
+
+4. **公开核验 借易保全公信力(策略 C2)** — 候选 C1 是「自建核验页 + tx_hash 校验」(无第三方背书,对方律师质疑「平台自证」);C2 是「`/public/verify/{tx_hash}` 返回元数据 + 拼易保全官方核验 URL」(选定 — 律师/法庭在易保全官网查更可信)。
+
+5. **证据清单选 HTML 而非 PDF** — 候选 P1 是 `reportlab` 生成 PDF(+ 5MB 依赖 + 中文字体配置);P2 是 `weasyprint`(+ Cairo/Pango 系统依赖);P3 是纯 HTML 让浏览器「打印为 PDF」(选定 — 零新依赖 + 法律效力一致 + 法务在浏览器「另存为 PDF」一步到位)。
+
+**P0 缺口修复**(本期):
+- `BlockchainAttestation.status='pending'` 枚举此前**从未使用** — 现激活,L2 处置时由 `services/blockchain.py:mark_pending_attestation()` 写入
+- `public/verify` 返回的 `block_height` 字段此前 `int` 强类型 — 改 `int | None` 支持 pending/failed 行
+- L2 处置 PATCH 端点(`supervisor_extras.py`)此前不留存证痕迹 — 现自动 hook 写 pending 行 + 幂等检查(同 risk_event_id 已存在则跳过)
+
+**人工验收点**(全 push 完):
+- 物业法务(13000000006):案件详情看「证据状态」面板 → 点「打包上链 ¥99」→ 状态变绿 → 点「生成证据清单」浏览器开 HTML → 打印为 PDF
+- 物业管理员(13000000002):案件详情看右栏「证据状态」徽章(灰/黄/绿三态)→ 菜单「存证管理」切「风险敞口」tab → 看 Top 10 + 「查看案件 →」
+- 公开核验(无需登录):浏览器开 `/api/v1/public/verify/{真实 tx_hash}` → 返回元数据 + 易保全核验跳转链接
 
 ---
 
