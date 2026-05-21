@@ -287,7 +287,7 @@ export function LegalInternalOrderDetailPage() {
   }
 
   function submitEscalate() {
-    if (!confirm("确认升级到律所？升级后订单状态变为「已升级律所」，由 admin 撮合具体律所跟进。")) return;
+    if (!confirm("确认升级到律所？升级后订单状态变为「已升级律所」，由物业管理员撮合具体律所跟进。")) return;
     escalate(
       { url: `legal/internal-orders/${id}/escalate`, method: "post", values: {} },
       {

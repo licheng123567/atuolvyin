@@ -1,17 +1,16 @@
 // 1:1 还原 ui/admin.html#a-pool 公海管理
 // v1.6.5 — 服务端分页 + debounce 关键字搜索
 import {
-  useCustomMutation,
   useGo,
   useInvalidate,
   useList,
 } from "@refinedev/core";
 import { useState } from "react";
 import { PaginationBar } from "../../../components/ui/PaginationBar";
-import { SearchableSelect } from "../../../components/ui/SearchableSelect";
 import { SearchInput } from "../../../components/ui/SearchInput";
 import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
-import type { PaginatedResponse } from "../../../types";
+// v0.6.0 — 公海分配也改用右侧 Drawer
+import { AdminAssignDrawer } from "../../../components/admin/AdminAssignDrawer";
 
 const PAGE_SIZE = 20;
 
@@ -68,7 +67,6 @@ interface ProjectOption {
 export function AdminPoolPage() {
   const [page, setPage] = useState(1);
   const [assignFor, setAssignFor] = useState<number | null>(null);
-  const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
   const [keyword, setKeyword] = useState("");
   const [overdueFilter, setOverdueFilter] = useState("");
   const [projectFilter, setProjectFilter] = useState<number | "">("");
@@ -151,28 +149,13 @@ export function AdminPoolPage() {
   // TODO: once /admin/users exposes work_mode, filter to work_mode=internal for property-side assignment
   const agents = allUsers.filter((u) => u.role === "agent");
 
-  const { mutate: assign } = useCustomMutation();
-
-  const handleAssign = () => {
-    if (assignFor === null || selectedAgent === null) return;
-    assign(
-      {
-        url: "admin/cases/assign",
-        method: "post",
-        values: { case_ids: [assignFor], assign_to: selectedAgent },
-      },
-      {
-        onSuccess: () => {
-          setAssignFor(null);
-          setSelectedAgent(null);
-          void invalidate({
-            resource: "admin/cases",
-            invalidates: ["list"],
-          });
-        },
-        onError: () => alert("分配失败，请重试"),
-      },
-    );
+  // v0.6.0 — 分配逻辑下沉到 AdminAssignDrawer
+  const handleAssigned = () => {
+    setAssignFor(null);
+    void invalidate({
+      resource: "admin/cases",
+      invalidates: ["list"],
+    });
   };
 
   return (
@@ -385,68 +368,13 @@ export function AdminPoolPage() {
         </div>
       </div>
 
-      {/* Assign modal */}
+      {/* v0.6.0 — 分配右弹 Drawer(替换原中间居中 modal) */}
       {assignFor !== null && (
-        <div
-          className="modal-overlay"
-          onClick={() => {
-            setAssignFor(null);
-            setSelectedAgent(null);
-          }}
-        >
-          <div className="ds-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <span className="modal-title">分配案件</span>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={() => {
-                  setAssignFor(null);
-                  setSelectedAgent(null);
-                }}
-              >
-                ×
-              </button>
-            </div>
-            <div className="modal-body">
-              <div className="form-group">
-                <label className="form-label">
-                  选择催收员<span className="req">*</span>
-                </label>
-                {agents.length === 0 ? (
-                  <p style={{ fontSize: 13, color: "#9ca3af" }}>暂无可用催收员</p>
-                ) : (
-                  <SearchableSelect
-                    value={selectedAgent ?? ""}
-                    placeholder="搜索并选择催收员"
-                    onChange={(v) => setSelectedAgent(v === "" ? null : Number(v))}
-                    options={agents.map((a) => ({ value: a.id, label: a.name }))}
-                  />
-                )}
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button
-                type="button"
-                className="ds-btn ds-btn-secondary"
-                onClick={() => {
-                  setAssignFor(null);
-                  setSelectedAgent(null);
-                }}
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                className="ds-btn ds-btn-primary"
-                onClick={handleAssign}
-                disabled={selectedAgent === null}
-              >
-                确认分配
-              </button>
-            </div>
-          </div>
-        </div>
+        <AdminAssignDrawer
+          caseIds={[assignFor]}
+          onClose={() => setAssignFor(null)}
+          onAssigned={handleAssigned}
+        />
       )}
     </div>
   );

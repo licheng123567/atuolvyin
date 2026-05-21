@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from app.core.crypto import mask_phone
 from app.core.db import get_db
 from app.core.security import get_token_payload, require_roles, require_tenant_roles
+from app.models.blockchain_attestation import BlockchainAttestation
 from app.models.case import CollectionCase, OwnerProfile, Project
 from app.models.law_firm import LawFirm, LawFirmLawyer
 from app.models.legal_conversion import LegalConversionOrder, LegalServicePackage
@@ -32,6 +33,7 @@ from app.models.legal_document_template import (
     LegalDocumentTemplate,
 )
 from app.models.user import UserAccount
+from app.models.work import LegalCase
 from app.schemas.common import PaginatedResponse
 from app.schemas.legal_conversion import (
     CompleteOrderRequest,
@@ -41,6 +43,7 @@ from app.schemas.legal_conversion import (
     LegalConversionOrderOut,
     LegalServicePackageOut,
 )
+from app.schemas.billing import BlockchainAttestationItem
 from app.schemas.legal_doc_render import (
     LegalDocumentRenderOut,
     LegalDocumentTemplateOut,
@@ -679,3 +682,63 @@ async def list_doc_versions(
         .all()
     )
     return [LegalDocumentRenderOut.model_validate(r) for r in rows]
+
+
+# v0.6.0 — 法务转化订单详情页加「区块链存证」section
+@router.get(
+    "/legal-conversion-orders/{order_id}/attestations",
+    response_model=list[BlockchainAttestationItem],
+)
+async def list_order_attestations(
+    order_id: int,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*ADMIN_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[BlockchainAttestationItem]:
+    """返回该法务转化订单关联案件下所有 confirmed 区块链存证。
+
+    关联路径:LegalConversionOrder.case_id (CollectionCase.id) →
+    LegalCase WHERE legal_case.case_id = order.case_id →
+    BlockchainAttestation WHERE legal_case_id IN (LegalCase.id 集合)。
+    """
+    tenant_id = _require_tenant(payload)
+    order = _get_order_for_tenant(db, order_id=order_id, tenant_id=tenant_id)
+
+    legal_case_ids = (
+        db.execute(
+            select(LegalCase.id)
+            .where(LegalCase.tenant_id == tenant_id)
+            .where(LegalCase.case_id == order.case_id)
+        )
+        .scalars()
+        .all()
+    )
+
+    if not legal_case_ids:
+        return []
+
+    rows = (
+        db.execute(
+            select(BlockchainAttestation)
+            .where(BlockchainAttestation.tenant_id == tenant_id)
+            .where(BlockchainAttestation.legal_case_id.in_(legal_case_ids))
+            .where(BlockchainAttestation.status == "confirmed")
+            .order_by(BlockchainAttestation.submitted_at.desc())
+        )
+        .scalars()
+        .all()
+    )
+
+    return [
+        BlockchainAttestationItem(
+            id=r.id,
+            submitted_at=r.submitted_at,
+            case_id=r.legal_case_id,
+            data_type=r.data_type,
+            cost_amount=r.cost_amount,
+            tx_hash=r.tx_hash,
+            chain_provider=r.chain_provider,
+            status=r.status,
+        )
+        for r in rows
+    ]

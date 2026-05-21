@@ -1,10 +1,28 @@
 // 法务转化订单详情 — v1.5.7 + v0.5.5(业主信息卡 + 拆价 + 服务包内容)
 // admin 点列表行进详情,看到订单全貌 + 业主信息 + 关联案件 + 服务包内容 + 文书 + 时间线
 import { useCustom } from "@refinedev/core";
-import { ArrowLeft, Briefcase, FileText, Scale, User } from "lucide-react";
+import { ArrowLeft, Briefcase, ExternalLink, FileText, Scale, Shield, User } from "lucide-react";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { LegalDocumentModal } from "../../../components/legal-conversion/LegalDocumentModal";
+
+interface AttestationItem {
+  id: number;
+  submitted_at: string;
+  case_id: number | null;
+  data_type: string;
+  cost_amount: string | null;
+  tx_hash: string | null;
+  chain_provider: string;
+  status: string;
+}
+
+const DATA_TYPE_LABELS: Record<string, string> = {
+  call_recording: "通话录音",
+  transcript: "转写文本",
+  analysis: "AI 分析",
+  evidence_bundle: "证据包",
+};
 
 interface OrderDetail {
   id: number;
@@ -55,6 +73,14 @@ export function AdminLegalConversionDetailPage() {
     method: "get",
     queryOptions: { enabled: !!orderId },
   });
+
+  // v0.6.0 — 关联区块链存证(走 LegalCase → BlockchainAttestation 路径,后端 join)
+  const { query: attestQuery } = useCustom<AttestationItem[]>({
+    url: `admin/legal-conversion-orders/${orderId}/attestations`,
+    method: "get",
+    queryOptions: { enabled: !!orderId },
+  });
+  const attestations: AttestationItem[] = attestQuery.data?.data ?? [];
 
   const order = query.data?.data;
 
@@ -212,6 +238,94 @@ export function AdminLegalConversionDetailPage() {
               </div>
             </div>
           )}
+
+          {/* v0.6.0 — 区块链存证(关联本案件下所有 confirmed 上链记录) */}
+          <div className="ds-card" style={{ marginBottom: 16 }}>
+            <div
+              className="card-header"
+              style={{ display: "flex", alignItems: "center", gap: 6 }}
+            >
+              <Shield className="w-4 h-4 text-[var(--color-primary)]" />
+              <span className="card-title">区块链存证</span>
+              <span
+                style={{
+                  marginLeft: "auto",
+                  fontSize: 12,
+                  color: "var(--color-neutral-500)",
+                }}
+              >
+                共 {attestations.length} 条
+              </span>
+            </div>
+            <div className="card-body" style={{ padding: 16 }}>
+              {attestQuery.isLoading ? (
+                <div style={{ fontSize: 13, color: "var(--color-neutral-500)" }}>
+                  加载中…
+                </div>
+              ) : attestations.length === 0 ? (
+                <div style={{ fontSize: 13, color: "var(--color-neutral-500)" }}>
+                  本案件暂无上链存证。生成存证包后会自动上链(易保全 / mock),也可在
+                  「案件详情 → 下载存证包」时触发。
+                </div>
+              ) : (
+                <table style={{ width: "100%", fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: "var(--color-neutral-50)" }}>
+                      <th style={{ textAlign: "left", padding: "8px 10px" }}>时间</th>
+                      <th style={{ textAlign: "left", padding: "8px 10px" }}>类型</th>
+                      <th style={{ textAlign: "right", padding: "8px 10px" }}>金额</th>
+                      <th style={{ textAlign: "left", padding: "8px 10px" }}>链上凭证</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {attestations.map((a) => (
+                      <tr key={a.id} style={{ borderTop: "1px solid var(--color-neutral-100)" }}>
+                        <td style={{ padding: "6px 10px", fontSize: 12 }}>
+                          {new Date(a.submitted_at).toLocaleString("zh-CN")}
+                        </td>
+                        <td style={{ padding: "6px 10px" }}>
+                          {DATA_TYPE_LABELS[a.data_type] ?? a.data_type}
+                        </td>
+                        <td
+                          style={{
+                            padding: "6px 10px",
+                            textAlign: "right",
+                            fontFamily: "monospace",
+                          }}
+                        >
+                          {a.cost_amount ? `¥${a.cost_amount}` : "—"}
+                        </td>
+                        <td style={{ padding: "6px 10px", fontSize: 12 }}>
+                          {a.tx_hash ? (
+                            <a
+                              href={`/api/v1/public/verify/${a.tx_hash}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{
+                                color: "var(--color-primary)",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                            >
+                              <span style={{ fontFamily: "monospace" }}>
+                                {a.tx_hash.slice(0, 12)}…
+                              </span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          ) : (
+                            <span style={{ color: "var(--color-neutral-400)" }}>
+                              易保全 (无 hash)
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
 
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" className="ds-btn ds-btn-primary" onClick={() => setDocOpen(true)}>

@@ -10,6 +10,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 SettlementStatus = Literal["DRAFT", "CONFIRMED", "PAID", "DISPUTED"]
 DisputeStatus = Literal["open", "resolved", "rejected"]
+# v0.6.0 — 计费方式枚举(对应 SettlementStatement.billing_method 列)
+BillingMethod = Literal["monthly_fee", "per_case", "percent_of_recovered"]
 
 
 class SettlementOut(BaseModel):
@@ -28,6 +30,7 @@ class SettlementOut(BaseModel):
     payment_proof_url: str | None = None
     confirmed_at: datetime | None = None
     paid_at: datetime | None = None
+    billing_method: BillingMethod | None = None  # v0.6.0
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

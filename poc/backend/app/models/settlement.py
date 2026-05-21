@@ -25,9 +25,19 @@ class SettlementStatement(Base, TimestampMixin):
     confirmed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     paid_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
 
+    # v0.6.0 — 计费方式(对应物业 admin 看板「计费方式」列)
+    # monthly_fee:月度套餐费 / per_case:按案件计费 / percent_of_recovered:按回款比例分成
+    # NULL 兼容老数据;新建结算时按对应 ProviderTenantContract.contract_type 写入。
+    billing_method: Mapped[str | None] = mapped_column(sa.String(32))
+
     __table_args__ = (
         sa.CheckConstraint(
             "status IN ('DRAFT','CONFIRMED','PAID','DISPUTED')", name="ck_settlement_status"
+        ),
+        sa.CheckConstraint(
+            "billing_method IS NULL OR billing_method IN "
+            "('monthly_fee','per_case','percent_of_recovered')",
+            name="ck_settlement_billing_method",
         ),
     )
 

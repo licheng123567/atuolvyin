@@ -51,7 +51,7 @@ export const OFFER_TYPE_LABELS: Record<OfferType, string> = {
 
 export const STATUS_LABELS: Record<OfferStatus, string> = {
   pending_supervisor: "待督导审批",
-  pending_admin: "待 admin 审批",
+  pending_admin: "待物业管理员审批",
   approved: "已批准",
   rejected: "已拒绝",
   executed: "已执行",
@@ -108,16 +108,16 @@ const MOCK_OFFERS: DiscountOffer[] = [
     offer_type: "principal_discount", offer_type_label: "本金减免",
     original_amount: 12600, proposed_amount: 6300, discount_pct: 50,
     installment_months: null,
-    reason: "业主主张电梯故障 3 次的服务质量问题，要求减免 50%。需 admin 审批。",
+    reason: "业主主张电梯故障 3 次的服务质量问题，要求减免 50%。需物业管理员审批。",
     status: "pending_admin",
     approver_role_required: "admin",
-    current_approver_name: "物业 admin",
+    current_approver_name: "物业管理员",
     approved_by: null, approved_at: null, rejected_reason: null,
     expires_at: "2026-05-15",
     created_at: "2026-05-07 11:35",
     audit_trail: [
       { time: "2026-05-07 11:35", actor: "王芳芳", action: "发起减免申请（50%）" },
-      { time: "2026-05-07 16:00", actor: "督导小李", action: "转交 admin 审批（金额超督导权限）" },
+      { time: "2026-05-07 16:00", actor: "督导小李", action: "转交物业管理员审批（金额超督导权限）" },
     ],
   },
   {
@@ -220,10 +220,10 @@ export function escalateToAdmin(id: number, supervisorName: string, note: string
       ...o,
       status: "pending_admin",
       approver_role_required: "admin",
-      current_approver_name: "物业 admin",
+      current_approver_name: "物业管理员",
       audit_trail: [
         ...o.audit_trail,
-        { time: new Date().toISOString().slice(0, 19).replace("T", " "), actor: supervisorName, action: `转交 admin 审批${note ? "（" + note + "）" : ""}` },
+        { time: new Date().toISOString().slice(0, 19).replace("T", " "), actor: supervisorName, action: `转交物业管理员审批${note ? "（" + note + "）" : ""}` },
       ],
     };
   });
@@ -262,7 +262,7 @@ export function createOffer(input: {
   } else {
     status = "pending_admin";
     approver_role_required = "admin";
-    current_approver_name = "物业 admin";
+    current_approver_name = "物业管理员";
   }
   const now = new Date().toISOString().slice(0, 19).replace("T", " ");
   const expiresAt = new Date(Date.now() + 7 * 86400_000).toISOString().slice(0, 10);

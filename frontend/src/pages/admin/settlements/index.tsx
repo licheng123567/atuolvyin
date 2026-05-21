@@ -40,6 +40,17 @@ const STATUS_BADGE_CLASS: Record<SettlementStatus, string> = {
   DISPUTED: "ds-badge ds-badge-red",
 };
 
+// v0.6.0 — 后端枚举 → 用户可见中文文案(对应 SettlementStatement.billing_method)
+const BILLING_METHOD_LABELS: Record<string, string> = {
+  monthly_fee: "月度套餐费",
+  per_case: "按案件计费",
+  percent_of_recovered: "按回款比例分成",
+};
+function formatBillingMethod(method: string | null | undefined): string {
+  if (!method) return "—";
+  return BILLING_METHOD_LABELS[method] ?? method;
+}
+
 // ─── 「应发员工提成」类型 ───────────────────────────────────
 interface AgentCommissionItem {
   user_id: number;
@@ -197,7 +208,7 @@ function ProvidersTab() {
                 id: s.id,
                 provider_name: s.provider_name ?? "",
                 period: `${s.period_start.slice(0, 10)} ~ ${s.period_end.slice(0, 10)}`,
-                billing_method: s.billing_method ?? "",
+                billing_method: formatBillingMethod(s.billing_method),
                 total_amount: s.total_amount,
                 status: s.status,
                 confirmed_at: s.confirmed_at ?? "",
@@ -245,7 +256,7 @@ function ProvidersTab() {
                     <strong>{s.provider_name ?? "—"}</strong>
                   </td>
                   <td>{period}</td>
-                  <td>{s.billing_method ?? "—"}</td>
+                  <td>{formatBillingMethod(s.billing_method)}</td>
                   <td style={{ fontWeight: 700 }}>{formatAmount(s.total_amount)}</td>
                   <td>
                     <span className={STATUS_BADGE_CLASS[s.status] ?? "ds-badge ds-badge-gray"}>

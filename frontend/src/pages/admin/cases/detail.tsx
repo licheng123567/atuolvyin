@@ -1,27 +1,21 @@
 // 1:1 还原 ui/admin.html#a-case-detail 案件详情
 // v1.6.6 — 业主信息 / 项目基本情况 / 活动时间线 抽到 components/case/* 共享给 agent
-import { useCustomMutation, useGetIdentity, useGo, useInvalidate, useList, useOne } from "@refinedev/core";
+import { useGetIdentity, useGo, useInvalidate, useOne, useCustomMutation } from "@refinedev/core";
 import type { AuthUser } from "../../../providers/auth-provider";
 import { ArrowLeft, ClipboardList, CreditCard, Download, Scale, Users } from "lucide-react";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import type { UserRole } from "../../../types";
 import type { CaseDetailResponse } from "../../../types/case";
 import { ConvertToLegalModal } from "../../../components/legal-conversion/ConvertToLegalModal";
 import { ActivityTimeline } from "../../../components/case/ActivityTimeline";
 import { FollowUpNoteCard } from "../../../components/case/FollowUpNoteCard";
 import { OwnerInfoCard } from "../../../components/case/OwnerInfoCard";
 import { ProjectInfoCard } from "../../../components/case/ProjectInfoCard";
-import { SearchableSelect } from "../../../components/ui/SearchableSelect";
+// v0.6.0 — 分配/重新分配改用右侧 Drawer(原中间弹窗下拉太挤)
+import { AdminAssignDrawer } from "../../../components/admin/AdminAssignDrawer";
 import { WorkOrderCreateModal } from "../../../components/admin/WorkOrderCreateModal";
 import { PaymentLinkQrModal } from "../../../components/admin/PaymentLinkQrModal";
 import type { PaymentBreakdown } from "../../../components/admin/PaymentLinkQrModal";
-
-interface AdminUser {
-  id: number;
-  name: string;
-  role: UserRole;
-}
 
 export function AdminCaseDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -33,7 +27,6 @@ export function AdminCaseDetailPage() {
   const isPM = identity?.role === "project_manager";
 
   const [assignOpen, setAssignOpen] = useState(false);
-  const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
   const [convertOpen, setConvertOpen] = useState(false);
   const [workOrderOpen, setWorkOrderOpen] = useState(false);
   const [paymentLink, setPaymentLink] = useState<{
@@ -48,22 +41,7 @@ export function AdminCaseDetailPage() {
     queryOptions: { enabled: !!id },
   });
 
-  const isAdmin = identity?.role === "admin";
-
-  const { query: agentsQuery } = useList<AdminUser>({
-    resource: "admin/users",
-    pagination: { currentPage: 1, pageSize: 100 },
-    queryOptions: { enabled: isAdmin },
-  });
-
-  const agentsRaw = agentsQuery.data?.data;
-  const agentsAll: AdminUser[] = Array.isArray(agentsRaw)
-    ? (agentsRaw as AdminUser[])
-    : ((agentsRaw as unknown as { items?: AdminUser[] })?.items ?? []);
-  const agents = agentsAll.filter((u: AdminUser) => u.role === "agent");
-
-  const { mutate: assignCase, mutation: assignMutation } = useCustomMutation();
-  const assigning = assignMutation.isPending;
+  // v0.6.0 — 分配逻辑全部下沉到 AdminAssignDrawer,这里不再拉用户列表 / 调 admin/cases/assign
   const { mutate: sendPaymentLink, mutation: paymentLinkMutation } =
     useCustomMutation();
 
@@ -92,29 +70,6 @@ export function AdminCaseDetailPage() {
           });
         },
         onError: () => alert("生成缴费链接失败，请重试"),
-      },
-    );
-  };
-
-  const handleAssign = () => {
-    if (!selectedAgent || !detail) return;
-    assignCase(
-      {
-        url: "admin/cases/assign",
-        method: "post",
-        values: { case_ids: [detail.id], assign_to: selectedAgent },
-      },
-      {
-        onSuccess: () => {
-          setAssignOpen(false);
-          setSelectedAgent(null);
-          void invalidate({
-            resource: "admin/cases",
-            invalidates: ["detail", "list"],
-            id: detail.id,
-          });
-        },
-        onError: () => alert("分配失败，请重试"),
       },
     );
   };
@@ -263,61 +218,22 @@ export function AdminCaseDetailPage() {
         </div>
       </div>
 
-      {/* Assign Modal */}
+      {/* v0.6.0 — 分配 / 重新分配右弹 Drawer(替换原中间居中 modal) */}
       {assignOpen && (
-        <div className="modal-overlay" onClick={() => setAssignOpen(false)}>
-          <div className="ds-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <span className="modal-title">分配 / 重分配坐席</span>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={() => setAssignOpen(false)}
-              >
-                ×
-              </button>
-            </div>
-            <div className="modal-body">
-              {agents.length === 0 ? (
-                <p className="text-sm text-muted">暂无可用坐席</p>
-              ) : (
-                <div className="form-group">
-                  <label className="form-label">选择坐席</label>
-                  <SearchableSelect
-                    value={selectedAgent ?? ""}
-                    placeholder="搜索并选择坐席"
-                    onChange={(v) => setSelectedAgent(v === "" ? null : Number(v))}
-                    options={agents.map((a: AdminUser) => ({
-                      value: a.id,
-                      label: a.name,
-                      subtitle: "催收员",
-                    }))}
-                  />
-                </div>
-              )}
-            </div>
-            <div className="modal-footer">
-              <button
-                type="button"
-                className="ds-btn ds-btn-secondary"
-                onClick={() => {
-                  setAssignOpen(false);
-                  setSelectedAgent(null);
-                }}
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                className="ds-btn ds-btn-primary"
-                onClick={handleAssign}
-                disabled={!selectedAgent || assigning}
-              >
-                {assigning ? "分配中…" : "确认分配"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <AdminAssignDrawer
+          caseIds={[detail.id]}
+          ownerName={detail.owner?.name ?? undefined}
+          currentAssignedTo={detail.assigned_to ?? null}
+          onClose={() => setAssignOpen(false)}
+          onAssigned={() => {
+            setAssignOpen(false);
+            void invalidate({
+              resource: "admin/cases",
+              invalidates: ["detail", "list"],
+              id: detail.id,
+            });
+          }}
+        />
       )}
 
       {convertOpen && (

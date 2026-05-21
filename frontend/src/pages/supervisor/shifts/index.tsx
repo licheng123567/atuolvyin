@@ -124,9 +124,9 @@ export function SupervisorShiftsPage() {
         dismissKey="/supervisor/shifts"
         title="排班权责"
         bullets={[
-          <><strong>组长</strong>：唯一可编辑全员排班的督导（admin 标记 user_account.preferences.is_shift_lead = true）</>,
+          <><strong>组长</strong>：唯一可编辑全员排班的督导（物业管理员标记 user_account.preferences.is_shift_lead = true）</>,
           <><strong>普通督导</strong>：不能编辑别人的格子；可对自己已排的班次发起「调班申请」（顶班人在小程序确认后生效）</>,
-          <><strong>物业 admin</strong>：只读 + 审计（仅在出现空班次告警时介入）</>,
+          <><strong>物业管理员</strong>：只读 + 审计（仅在出现空班次告警时介入）</>,
           <><strong>三时段轮值</strong>：上午 9-12 / 下午 13-18 / 晚间 18-21（晚 21 后业主电话不打，无需值班）</>,
           <><strong>自动路由</strong>：风控告警 / 升级案件 / 承诺催付到期 都按当前时段值班人派单；非值班督导 App 不响</>,
         ]}
