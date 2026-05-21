@@ -55,9 +55,7 @@ def _record_failure(db: Session, config: SmsConfig, reason: str) -> None:
     db.commit()
 
 
-def send_otp_sms(
-    db: Session, *, phone: str, code: str, ttl_minutes: int = 5
-) -> SmsResult:
+def send_otp_sms(db: Session, *, phone: str, code: str, ttl_minutes: int = 5) -> SmsResult:
     """发送 OTP 验证码短信。永不抛异常 —— 统一返回 SmsResult。
 
     失败路径（包括 sms_center 分支的 API 错误）会调用 _record_failure，
@@ -66,9 +64,7 @@ def send_otp_sms(
     """
     backend = settings.sms_backend.lower()
     if backend == "mock":
-        logger.info(
-            "[SMS-mock] OTP → %s code=%s ttl=%dmin", _mask_phone(phone), code, ttl_minutes
-        )
+        logger.info("[SMS-mock] OTP → %s code=%s ttl=%dmin", _mask_phone(phone), code, ttl_minutes)
         return SmsResult(ok=True, batch_id="mock-otp")
 
     if backend != "sms_center":

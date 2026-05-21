@@ -207,9 +207,9 @@ def build_evidence_bundle_zip(
                     "key_segments": analysis.key_segments,
                     "needs_review": analysis.needs_review,
                 }
-                analysis_bytes = json.dumps(
-                    analysis_payload, ensure_ascii=False, indent=2
-                ).encode("utf-8")
+                analysis_bytes = json.dumps(analysis_payload, ensure_ascii=False, indent=2).encode(
+                    "utf-8"
+                )
                 _write(f"{call_dir}/analysis.json", analysis_bytes)
                 analysis_sha = files_index[-1]["sha256"]
             else:
@@ -245,9 +245,7 @@ def build_evidence_bundle_zip(
                         "call_id": call.id,
                         "case_id": case.id,
                         "data_type": _dtype,
-                        "started_at": call.started_at.isoformat()
-                        if call.started_at
-                        else None,
+                        "started_at": call.started_at.isoformat() if call.started_at else None,
                         "duration_sec": call.duration_sec,
                     },
                 )

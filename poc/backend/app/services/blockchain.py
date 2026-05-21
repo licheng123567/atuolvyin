@@ -100,9 +100,7 @@ def submit_attestation(
     now = datetime.now(UTC)
     config = _resolve_config(db)
 
-    use_ebaoquan = (
-        config is not None and config.provider == "ebaoquan" and config.is_active
-    )
+    use_ebaoquan = config is not None and config.provider == "ebaoquan" and config.is_active
 
     if not use_ebaoquan:
         # ── mock 分支（行为与历史一致）──

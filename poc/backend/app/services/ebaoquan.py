@@ -125,9 +125,7 @@ def query_evidence_detail(
             try:
                 preservation_id = int(pid)
             except (TypeError, ValueError):
-                logger.warning(
-                    "易保全 queryEvidenceDetail 返回非法 preservationId: %r", pid
-                )
+                logger.warning("易保全 queryEvidenceDetail 返回非法 preservationId: %r", pid)
         return EbaoquanDetailResult(ok=True, preservation_id=preservation_id)
 
     reason = str(data.get("message") or f"code={data.get('code')}")

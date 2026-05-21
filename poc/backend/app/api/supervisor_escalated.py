@@ -76,7 +76,9 @@ async def list_escalated_cases(
     # v1.7.0 — supervisor / admin / superadmin 是物业内部 / 平台角色，统一决策
     role = payload.get("role", "")
     contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
-    owner_phone_reveal = should_reveal_owner_phone(role=role, provider_id=payload.get("provider_id"), contract_active=contract_active)
+    owner_phone_reveal = should_reveal_owner_phone(
+        role=role, provider_id=payload.get("provider_id"), contract_active=contract_active
+    )
 
     items = []
     for case, owner, project_name, agent_name in rows:

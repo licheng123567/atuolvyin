@@ -3,6 +3,11 @@
 // 模块/组件初始化阶段会 silent-abort（无 JS error，无 beacon）。这个 stub
 // 只实现 mobile pages 实际用到的 5 个 hooks，全部用原生 fetch + useState。
 // vite.config 的 resolve.alias 只在 mobile build 走这里；PC dev 仍是真 Refine。
+//
+// 本文件是 library 风格 stub — 故意混合 hooks(useList/useOne/useCustom/
+// useGo/useGetIdentity)+ 组件(Refine/Authenticated)在同一文件,这是 Refine
+// v5 SDK 的对外约定,改不动。Fast Refresh 对 mobile bundle 无影响(WebView 不跑 HMR)。
+/* eslint-disable react-refresh/only-export-components */
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { useNavigate } from "react-router-dom"
 import { Bridge } from "./lib/jsBridge"
@@ -30,7 +35,10 @@ function useFetcher<T>(deps: unknown[], fetcher: () => Promise<T>): QueryState<T
   const [error, setError] = useState<Error | null>(null)
   const [tick, setTick] = useState(0)
   const fetcherRef = useRef(fetcher)
-  fetcherRef.current = fetcher
+  // React 19+:不允许在 render 阶段写 ref,必须在 effect 内同步最新闭包
+  useEffect(() => {
+    fetcherRef.current = fetcher
+  })
   useEffect(() => {
     let cancelled = false
     setLoading(true)

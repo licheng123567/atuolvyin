@@ -121,7 +121,14 @@ async def list_legal_cases(
     role = payload.get("role", "")
     contract_active = is_provider_contract_active(db, tenant_id, payload.get("provider_id"))
     items = [
-        _legal_to_out(lc, name, phone_enc, viewer_role=role, viewer_provider_id=payload.get("provider_id"), contract_active=contract_active)
+        _legal_to_out(
+            lc,
+            name,
+            phone_enc,
+            viewer_role=role,
+            viewer_provider_id=payload.get("provider_id"),
+            contract_active=contract_active,
+        )
         for lc, name, phone_enc in rows
     ]
     return PaginatedResponse(

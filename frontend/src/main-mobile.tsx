@@ -1,6 +1,10 @@
 // v2.2 — App-only entry (Android WebView 专用瘦 bundle)。
 // vite.config alias 已把 react-router-dom→v6, react-router→v6,
 // @refinedev/core→refine-mobile-stub.tsx。
+//
+// 入口文件不需要 Fast Refresh — 它通过 createRoot().render() 启动 app,
+// 不导出任何组件,本身不参与 HMR(任何改动都会全量刷新)。
+/* eslint-disable react-refresh/only-export-components */
 import { Component, StrictMode, useEffect, type ErrorInfo, type ReactNode } from "react"
 import { createRoot } from "react-dom/client"
 import { Refine } from "@refinedev/core"

@@ -502,7 +502,9 @@ async def list_cases(
     ).all()
 
     # v1.7.0 — admin/PM/supervisor 都属物业内部，永远明文；列表层一次决策复用
-    owner_phone_reveal = should_reveal_owner_phone(role=role, provider_id=payload.get("provider_id"))
+    owner_phone_reveal = should_reveal_owner_phone(
+        role=role, provider_id=payload.get("provider_id")
+    )
 
     return PaginatedResponse(
         items=[

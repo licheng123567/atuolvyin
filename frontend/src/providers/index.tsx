@@ -52,9 +52,12 @@ export const dataProvider: DataProvider = {
   ...baseProvider,
   getList: wrappedGetList,
   custom: async (params: Parameters<NonNullable<typeof baseProvider.custom>>[0]) => {
+    if (!baseProvider.custom) {
+      throw new Error("baseProvider.custom is not implemented");
+    }
     const url = params.url.startsWith("http")
       ? params.url
       : `${API_BASE_V1}/${params.url.replace(/^\/+/, "")}`;
-    return baseProvider.custom!({ ...params, url });
+    return baseProvider.custom({ ...params, url });
   },
 };
