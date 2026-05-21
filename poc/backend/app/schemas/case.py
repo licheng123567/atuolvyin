@@ -192,3 +192,6 @@ class CaseDetailResponse(BaseModel):
     legal_law_firm_name: str | None = None
     legal_lawyer_name: str | None = None
     legal_order_status: str | None = None
+    # v0.6.0 — 等审批的法务转化申请 ID(状态 pending/pending_admin);
+    # null=无;前端按此条件渲染「移交法务 vs 审批转法务」按钮。
+    pending_legal_conversion_request_id: int | None = None

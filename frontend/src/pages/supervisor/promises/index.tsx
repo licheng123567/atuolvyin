@@ -1,9 +1,13 @@
 // 承诺催付清单 — v1.5.7 ⭐⭐⭐
 // 业主在通话中承诺缴费 → AI 自动入清单 → 到期前 1 天提醒催收员回访
 // v1.6.5 — 加分页 + debounce 搜索
+// v0.6.0 — 催回访按钮实装(原 alert mock)→ 改用 SupervisorCaseActionModal,
+//          调通用 POST /supervisor/cases/{id}/urge 接口(与案件详情催办共用);
+//          删除「升级督导」按钮(语义错误 — 督导自己升级自己不通)
 import { CalendarClock, CheckCircle2, Clock, Eye, Phone } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { SupervisorCaseActionModal } from "../../../components/supervisor/SupervisorCaseActionModal";
 import { HelpPanel } from "../../../components/ui/HelpPanel";
 import { PaginationBar } from "../../../components/ui/PaginationBar";
 import { SearchInput } from "../../../components/ui/SearchInput";
@@ -64,6 +68,7 @@ export function SupervisorPromisesPage() {
   const [projectFilter, setProjectFilter] = useState<string>("全部项目");
   const [keyword, setKeyword] = useState("");
   const [page, setPage] = useState(1);
+  const [urgeCaseId, setUrgeCaseId] = useState<number | null>(null);  // v0.6.0
   const debouncedKw = useDebouncedValue(keyword, 300);
 
   const today = new Date().toISOString().slice(0, 10);
@@ -212,14 +217,15 @@ export function SupervisorPromisesPage() {
                 <td><span className={p.status_badge}>{p.status_label}</span></td>
                 <td>
                   <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                    {(p.status === "pending" || p.status === "due_today") && (
-                      <button type="button" className="ds-btn ds-btn-primary ds-btn-sm" onClick={() => alert(`已给催收员 ${p.agent} 发送回访任务`)}>
-                        <Phone className="w-3 h-3" /> 催回访
-                      </button>
-                    )}
-                    {p.status === "overdue" && (
-                      <button type="button" className="ds-btn ds-btn-secondary ds-btn-sm" onClick={() => alert(`已升级到督导队列`)}>
-                        升级督导
+                    {/* v0.6.0 — 催回访 / 超期 case 的「催办」合并为同一入口,
+                        都打开 SupervisorCaseActionModal type=urge */}
+                    {p.status !== "paid" && (
+                      <button
+                        type="button"
+                        className="ds-btn ds-btn-primary ds-btn-sm"
+                        onClick={() => setUrgeCaseId(p.id)}
+                      >
+                        <Phone className="w-3 h-3" /> 催办
                       </button>
                     )}
                     <button type="button" className="ds-btn ds-btn-ghost ds-btn-sm" onClick={() => navigate(`/supervisor/cases/${p.id}`)}>
@@ -238,6 +244,19 @@ export function SupervisorPromisesPage() {
           onPageChange={setPage}
         />
       </div>
+
+      {/* v0.6.0 — 催办 modal(复用案件详情同款) */}
+      {urgeCaseId !== null && (
+        <SupervisorCaseActionModal
+          caseId={urgeCaseId}
+          type="urge"
+          onClose={() => setUrgeCaseId(null)}
+          onDone={() => {
+            setUrgeCaseId(null);
+            alert("✓ 已写入案件时间线并通知催收员");
+          }}
+        />
+      )}
     </div>
   );
 }

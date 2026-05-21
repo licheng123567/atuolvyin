@@ -171,6 +171,14 @@ class CollectionCase(Base, TimestampMixin):
     # v1.4 — 欠费情况说明（导入时录入，让催收员一眼看到原因）
     notes: Mapped[str | None] = mapped_column(sa.Text)
 
+    # v0.6.0 — 升级案件介入处理:督导陪同监听标记
+    # 非 NULL 表示该案件在实时通话墙高亮 + 催收员拨号时督导自动收通知
+    shadow_supervisor_id: Mapped[int | None] = mapped_column(
+        sa.BigInteger, sa.ForeignKey("user_account.id"), nullable=True
+    )
+    # v0.6.0 — 「直接结案 / 标坏账」必填原因(stage='pending_close' 时设置,等物业管理员二审)
+    close_reason: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+
     __table_args__ = (
         sa.Index("idx_case_tenant_pool", "tenant_id", "pool_type"),
         sa.Index("idx_case_tenant_assigned", "tenant_id", "assigned_to"),

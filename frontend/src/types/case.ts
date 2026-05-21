@@ -78,4 +78,7 @@ export interface CaseDetailResponse {
   legal_law_firm_name?: string | null;
   legal_lawyer_name?: string | null;
   legal_order_status?: string | null;
+  // v0.6.0 — 案件下「等审批」的法务转化申请;null=无申请。
+  // 用于督导端「移交法务 / 审批转法务」按钮条件渲染。
+  pending_legal_conversion_request_id?: number | null;
 }

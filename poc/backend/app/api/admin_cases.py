@@ -233,6 +233,26 @@ def build_case_detail_response(
         legal_lawyer_name = legal_order.assigned_lawyer_name
         legal_order_status = legal_order.status
 
+    # v0.6.0 — 等审批的法务转化申请(状态 pending/pending_admin)。
+    # 用于督导端「移交法务 / 审批转法务」按钮条件渲染。
+    pending_legal_conversion_request_id: int | None = None
+    from app.models.legal_conversion import LegalConversionRequest
+
+    pending_req_id = (
+        db.execute(
+            select(LegalConversionRequest.id)
+            .where(
+                LegalConversionRequest.case_id == case_id,
+                LegalConversionRequest.status.in_(("pending", "pending_admin")),
+            )
+            .order_by(LegalConversionRequest.created_at.desc())
+        )
+        .scalars()
+        .first()
+    )
+    if pending_req_id is not None:
+        pending_legal_conversion_request_id = int(pending_req_id)
+
     # 手机号
     phone_plain = None
     if include_phone_plain:
@@ -328,6 +348,7 @@ def build_case_detail_response(
         legal_law_firm_name=legal_law_firm_name,
         legal_lawyer_name=legal_lawyer_name,
         legal_order_status=legal_order_status,
+        pending_legal_conversion_request_id=pending_legal_conversion_request_id,
     )
 
 

@@ -8,7 +8,6 @@ import {
   ClipboardList,
   CreditCard,
   Eye,
-  Headphones,
   Phone,
   Scale,
   Users,
@@ -30,6 +29,9 @@ import {
   type SupervisorActionType,
 } from "../../../components/supervisor/SupervisorCaseActionModal";
 import { SupervisorReassignModal } from "../../../components/supervisor/SupervisorReassignModal";
+// v0.6.0 — 法务转化按钮条件渲染:无申请→「移交法务」(督导直接转);有申请→「审批转法务」(本页内 modal)
+import { LegalConversionApprovalModal } from "../../../components/supervisor/LegalConversionApprovalModal";
+import { TransferLegalDirectModal } from "../../../components/supervisor/TransferLegalDirectModal";
 import type { AuthUser } from "../../../providers/auth-provider";
 import type { CaseDetailResponse } from "../../../types/case";
 
@@ -41,6 +43,9 @@ export function SupervisorCaseDetailPage() {
   // v0.5.4 — 督导动作弹窗 state
   const [actionType, setActionType] = useState<SupervisorActionType | null>(null);
   const [reassignOpen, setReassignOpen] = useState(false);
+  // v0.6.0 — 法务转化按钮(分两路:transfer-legal-direct / approve-existing-request)
+  const [transferLegalOpen, setTransferLegalOpen] = useState(false);
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   // v0.5.4 — Wave 6:督导也可发缴费链接 / 创建工单(后端守卫已含 supervisor)
   const [workOrderOpen, setWorkOrderOpen] = useState(false);
   const [paymentLink, setPaymentLink] = useState<{
@@ -190,28 +195,40 @@ export function SupervisorCaseDetailPage() {
                   发起减免
                 </button>
               )}
-              {detail.assigned_to && (
+              {/* v0.6.0 — 「介入处理」按钮去掉:升级案件页已统一处理(5 选项弹窗内嵌)。
+                  这里继续保留时入口重复,用户反馈混乱 — 让该入口只走「升级案件处理」页。 */}
+              {/* v0.6.0 — 条件渲染:无申请 → 督导直接「移交法务」;有申请 → 「审批转法务」 */}
+              {detail.pending_legal_conversion_request_id ? (
                 <button
                   type="button"
                   className="ds-btn ds-btn-secondary"
-                  style={{ width: "100%", justifyContent: "center" }}
-                  onClick={() => setActionType("intervene")}
-                  title="督导接管:写入案件时间线 + 通知催收员"
+                  style={{
+                    width: "100%",
+                    justifyContent: "center",
+                    color: "white",
+                    background: "#7e3af2",
+                    borderColor: "#7e3af2",
+                  }}
+                  onClick={() => setApprovalModalOpen(true)}
+                  title="案件下有催收员提交的法务转化申请,点击审批"
                 >
-                  <Headphones className="w-3.5 h-3.5" />
-                  介入处理
+                  <Scale className="w-3.5 h-3.5" />
+                  审批转法务
                 </button>
+              ) : (
+                detail.stage !== "legal" && (
+                  <button
+                    type="button"
+                    className="ds-btn ds-btn-secondary"
+                    style={{ width: "100%", justifyContent: "center" }}
+                    onClick={() => setTransferLegalOpen(true)}
+                    title="督导直接移交法务(跳过催收员申请-审批流;需填原因审计)"
+                  >
+                    <Scale className="w-3.5 h-3.5" />
+                    移交法务
+                  </button>
+                )
               )}
-              <button
-                type="button"
-                className="ds-btn ds-btn-secondary"
-                style={{ width: "100%", justifyContent: "center" }}
-                onClick={() => navigate("/supervisor/legal-conversion-approvals")}
-                title="去「法务转化审批」inbox 处理本案件相关的转法务申请"
-              >
-                <Scale className="w-3.5 h-3.5" />
-                法务转化审批
-              </button>
               {detail.assigned_to && (
                 <button
                   type="button"
@@ -234,18 +251,9 @@ export function SupervisorCaseDetailPage() {
                 <Phone className="w-3.5 h-3.5" />
                 催办
               </button>
-              {detail.assigned_to && (
-                <button
-                  type="button"
-                  className="ds-btn ds-btn-secondary"
-                  style={{ width: "100%", justifyContent: "center" }}
-                  onClick={() => setActionType("remind_callback")}
-                  title="提醒催收员对该案件做回访"
-                >
-                  <Phone className="w-3.5 h-3.5" />
-                  催回访
-                </button>
-              )}
+              {/* v0.6.0 — 「催回访」与上方「催办」语义重合,用户反馈合并,只保留「催办」。
+                  原 SupervisorCaseActionModal type="remind_callback" 后端独立 endpoint
+                  暂时保留(其他入口可能仍用),前端入口在此移除。 */}
               {/* v0.5.4 Wave 6 — 督导也可发缴费链接(后端守卫含 supervisor)*/}
               <button
                 type="button"
@@ -361,6 +369,34 @@ export function SupervisorCaseDetailPage() {
           breakdown={paymentLink.breakdown}
           sentTo={paymentLink.sent_to}
           onClose={() => setPaymentLink(null)}
+        />
+      )}
+
+      {/* v0.6.0 — 督导直接移交法务弹窗(无申请时) */}
+      {transferLegalOpen && (
+        <TransferLegalDirectModal
+          caseId={detail.id}
+          caseLabel={`${detail.owner.name} · #${detail.id}`}
+          onClose={() => setTransferLegalOpen(false)}
+          onDone={() => {
+            setTransferLegalOpen(false);
+            refresh();
+            alert("✓ 案件已直接移交法务");
+          }}
+        />
+      )}
+
+      {/* v0.6.0 — 审批催收员转法务申请(有申请时) */}
+      {approvalModalOpen && detail.pending_legal_conversion_request_id && (
+        <LegalConversionApprovalModal
+          requestId={detail.pending_legal_conversion_request_id}
+          caseLabel={`${detail.owner.name} · #${detail.id}`}
+          onClose={() => setApprovalModalOpen(false)}
+          onDone={() => {
+            setApprovalModalOpen(false);
+            refresh();
+            alert("✓ 审批已提交");
+          }}
         />
       )}
     </div>

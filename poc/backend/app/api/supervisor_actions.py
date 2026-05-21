@@ -318,3 +318,158 @@ def reassign(
         notified_user_id=body.target_user_id,
         new_assigned_to=body.target_user_id,
     )
+
+
+# v0.6.0 — 督导直接「移交法务」(无催收员申请时使用,绕过 LegalConversionRequest 审批环节)
+class TransferLegalBody(BaseModel):
+    """督导直接移交法务时必填原因 — 写入 audit log + case timeline。"""
+
+    reason: str = Field(..., min_length=1, max_length=2000)
+
+
+@router.post("/cases/{case_id}/transfer-legal", response_model=CaseActionOut)
+def transfer_legal_direct(
+    case_id: int,
+    body: TransferLegalBody,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> CaseActionOut:
+    """督导跳过申请-审批流,直接把案件移交法务。
+
+    适用场景:本案件无 LegalConversionRequest(pending/pending_admin)挂起。
+    若已有 pending 申请:返回 409,提示用「审批转法务」端点处理那个申请。
+
+    动作:
+      - case.stage → 'legal'
+      - 写 audit (case.supervisor_transfer_legal_direct,payload={reason})
+      - 给原催收员发通知「已直接转法务」
+    """
+    from app.models.legal_conversion import LegalConversionRequest
+    from sqlalchemy import select
+
+    tenant_id = _require_tenant(payload)
+    case = _load_case(db, case_id, tenant_id)
+    user_id = int(payload.get("user_id") or 0)
+    user = db.get(UserAccount, user_id)
+
+    # 不允许在已有 pending 申请的情况下越权直接转 — 防双轨
+    existing_req = db.execute(
+        select(LegalConversionRequest)
+        .where(
+            LegalConversionRequest.case_id == case_id,
+            LegalConversionRequest.status.in_(("pending", "pending_admin")),
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if existing_req is not None:
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail={
+                "code": "ERR_PENDING_REQUEST_EXISTS",
+                "message": (
+                    f"本案件已有等审批的法务转化申请 #{existing_req.id}, "
+                    "请去「审批转法务」处理,不要直接越权移交"
+                ),
+            },
+        )
+
+    if case.stage == "legal":
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail={"code": "ERR_ALREADY_LEGAL", "message": "案件已在法务阶段"},
+        )
+
+    old_stage = case.stage
+    case.stage = "legal"
+
+    log_audit(
+        db,
+        actor_user_id=user_id,
+        actor_role=str(payload.get("role") or ""),
+        tenant_id=tenant_id,
+        action="case.supervisor_transfer_legal_direct",
+        target_type="case",
+        target_id=case.id,
+        payload={"reason": body.reason, "old_stage": old_stage},
+    )
+
+    _notify_agent(
+        db,
+        tenant_id=tenant_id,
+        agent_user_id=case.assigned_to,
+        case_id=case.id,
+        supervisor_name=user.name if user else "督导",
+        action_label="案件已直接转法务",
+        note=body.reason,
+    )
+
+    db.commit()
+    return CaseActionOut(
+        case_id=case.id,
+        action="transfer_legal_direct",
+        note=body.reason,
+        notified_user_id=case.assigned_to,
+    )
+
+
+# v0.6.0 — 案件超期预警:释放回公海(被业主拉黑等情况)
+class ReleaseToPoolBody(BaseModel):
+    note: str | None = Field(None, max_length=2000)
+
+
+@router.post("/cases/{case_id}/release-to-pool", response_model=CaseActionOut)
+def release_to_pool(
+    case_id: int,
+    body: ReleaseToPoolBody,
+    payload: Annotated[dict, Depends(get_token_payload)],
+    _user: Annotated[UserAccount, Depends(require_tenant_roles(*SUPERVISOR_ROLES))],
+    db: Annotated[Session, Depends(get_db)],
+) -> CaseActionOut:
+    """督导把案件从私海释放回公海 — case.assigned_to = NULL + pool_type='public'。
+
+    适用场景:业主连续多通无接 / 拉黑 / 催收员长期无进展,释放让其他催收员尝试。
+    """
+    tenant_id = _require_tenant(payload)
+    case = _load_case(db, case_id, tenant_id)
+    user_id = int(payload.get("user_id") or 0)
+    user = db.get(UserAccount, user_id)
+
+    if case.pool_type == "public" and case.assigned_to is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail={"code": "ERR_ALREADY_PUBLIC", "message": "案件已在公海"},
+        )
+
+    old_agent = case.assigned_to
+    case.assigned_to = None
+    case.pool_type = "public"
+
+    log_audit(
+        db,
+        actor_user_id=user_id,
+        actor_role=str(payload.get("role") or ""),
+        tenant_id=tenant_id,
+        action="case.supervisor_release_to_pool",
+        target_type="case",
+        target_id=case.id,
+        payload={"old_assigned_to": old_agent, "note": body.note},
+    )
+    if old_agent:
+        _notify_agent(
+            db,
+            tenant_id=tenant_id,
+            agent_user_id=old_agent,
+            case_id=case.id,
+            supervisor_name=user.name if user else "督导",
+            action_label="案件已释放回公海",
+            note=body.note,
+        )
+
+    db.commit()
+    return CaseActionOut(
+        case_id=case.id,
+        action="release_to_pool",
+        note=body.note,
+        notified_user_id=old_agent,
+    )

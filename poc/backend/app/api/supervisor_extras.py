@@ -82,6 +82,7 @@ def list_risk_events(
             disposition_at=r.disposition_at,
             agent_user_id=u.id if u else None,
             agent_name=u.name if u else None,
+            handle_status=r.handle_status,  # v0.6.0
         )
         for r, c, u in rows
     ]
@@ -114,6 +115,9 @@ def annotate_risk_event(
     event.disposition_note = body.note
     event.disposition_by = user_id
     event.disposition_at = datetime.now(UTC)
+    # v0.6.0 — 若 body 带 handle_status,同步写入(支持转培训/转法务等处置类型)
+    if body.handle_status is not None:
+        event.handle_status = body.handle_status
     db.commit()
     db.refresh(event)
 
@@ -133,6 +137,7 @@ def annotate_risk_event(
         disposition_at=event.disposition_at,
         agent_user_id=agent.id if agent else None,
         agent_name=agent.name if agent else None,
+        handle_status=event.handle_status,
     )
 
 

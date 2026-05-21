@@ -1,11 +1,24 @@
-// 升级案件处理 — 1:1 还原 ui/supervisor.html#sv-escalated
-// v1.5.7 — 大额/疑难案件督导处置 + 介入/转法务/查看历史 实际链接
-// v1.6.4 — wire 真后端 + 简单分页（pageSize=20），无后端时 fallback mock
-import { useCustom } from "@refinedev/core";
-import { AlertCircle, ArrowUpRight, BadgePercent, ExternalLink, Phone, Search, X } from "lucide-react";
+// 升级案件处理 — v0.6.0 彻底重构(按用户描述)
+//
+// 用户反馈:外层 4 按钮重复(发起减免 / 转法务 / 查看历史 / 介入处理);
+// 介入处理弹窗模式 4 与「发起减免」重复;模式 2-3 是 mock alert 无后端。
+// 重构方案:
+//   外层只留 2 按钮:[介入处理] + [详情](原「查看历史」)
+//   介入处理弹窗内嵌 5 选项:
+//     ① 亲自致电业主(导航到案件详情拨号)
+//     ② 标记陪同监听 → POST /supervisor/escalated/{id}/mark-shadow-listening
+//     ③ 直接结案/标坏账(必填原因) → POST /supervisor/escalated/{id}/close-as-uncollectible
+//     ④ 发起减免/分期 → 打开 DiscountRequestModal
+//     ⑤ 转法务 → 打开 TransferLegalDirectModal(与案件详情页同款)
+import { useCustom, useCustomMutation } from "@refinedev/core";
+import {
+  AlertCircle, ArrowUpRight, BadgePercent,
+  ExternalLink, Headphones, Loader2, Phone, Scale, Search, X,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DiscountRequestModal } from "../../../components/discount/DiscountRequestModal";
+import { TransferLegalDirectModal } from "../../../components/supervisor/TransferLegalDirectModal";
 import { HelpPanel } from "../../../components/ui/HelpPanel";
 import { SUPERVISOR_PROJECT_FILTERS } from "../_shared/projectFilters";
 
@@ -55,18 +68,19 @@ const MOCK_CASES: EscalatedCase[] = [
   },
 ];
 
-type Action = "intervene" | "to_legal" | "history" | "discount" | null;
-
 export function SupervisorEscalatedPage() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [activeCase, setActiveCase] = useState<EscalatedCase | null>(null);
-  const [action, setAction] = useState<Action>(null);
+  // v0.6.0 — 介入处理统一一个 modal,内部 5 选项;额外 sub-modal:close / discount / transfer-legal
+  const [intervenOpen, setIntervenOpen] = useState(false);
+  const [closeTarget, setCloseTarget] = useState<EscalatedCase | null>(null);
+  const [discountTarget, setDiscountTarget] = useState<EscalatedCase | null>(null);
+  const [transferLegalTarget, setTransferLegalTarget] = useState<EscalatedCase | null>(null);
   const [projectFilter, setProjectFilter] = useState<string>("全部项目");
   const [keyword, setKeyword] = useState("");
-  const [discountTarget, setDiscountTarget] = useState<EscalatedCase | null>(null);  // v1.6.9
 
-  // v1.6.4 — 优先 wire 后端；查询失败或 0 条时 fallback 到 mock
+  // v1.6.4 — 优先 wire 后端;查询失败或 0 条时 fallback 到 mock
   const { query } = useCustom<EscalatedListResp>({
     url: "supervisor/escalated-cases",
     method: "get",
@@ -88,11 +102,6 @@ export function SupervisorEscalatedPage() {
       return true;
     });
   }, [cases, projectFilter, keyword]);
-
-  function openAction(c: EscalatedCase, a: Action) {
-    setActiveCase(c);
-    setAction(a);
-  }
 
   return (
     <div>
@@ -127,7 +136,7 @@ export function SupervisorEscalatedPage() {
 
       <HelpPanel
         tone="warn"
-        dismissKey="/supervisor/escalated"
+        dismissKey="/supervisor/escalated-v060"
         title="升级案件 4 类典型场景"
         bullets={[
           <><strong>金额超权</strong>：业主要求减免/分期超出催收员权限（&gt;¥10,000 或减免&gt;30%）</>,
@@ -137,10 +146,10 @@ export function SupervisorEscalatedPage() {
         ]}
         footer={
           <>
-            <strong>督导 3 个动作：</strong>
-            「介入处理」= 督导本人参与下一通通话（可监听 / 接管）；
-            「转法务」= 案件移交法务专员，进入律师函/诉讼流程；
-            「查看历史」= 跳到案件详情看完整通话+操作时间线。
+            <strong>v0.6.0 改版:</strong>外层只保留<strong>「介入处理」</strong>(打开 5
+            选项弹窗:亲自致电 / 陪同监听 / 直接结案 / 减免分期 / 转法务) +
+            <strong>「详情」</strong>(查看案件完整历史)。原外层「发起减免」「转法务」「查看历史」
+            已合并 / 重命名,避免重复。
           </>
         }
       />
@@ -157,13 +166,8 @@ export function SupervisorEscalatedPage() {
       {usingMock && (
         <div
           style={{
-            padding: "8px 12px",
-            background: "#fef3c7",
-            border: "1px solid #fde68a",
-            borderRadius: 6,
-            fontSize: 12,
-            color: "#78350f",
-            marginBottom: 8,
+            padding: "8px 12px", background: "#fef3c7", border: "1px solid #fde68a",
+            borderRadius: 6, fontSize: 12, color: "#78350f", marginBottom: 8,
           }}
         >
           ⓘ 后端无升级案件数据，当前展示 mock 演示数据
@@ -177,7 +181,6 @@ export function SupervisorEscalatedPage() {
               暂无符合条件的升级案件
             </div>
           )}
-          {/* v1.6.4 — 列表渲染（来自后端 + 客户端筛选 keyword/project）*/}
           {visible.map((c) => (
             <div
               key={c.id}
@@ -213,37 +216,22 @@ export function SupervisorEscalatedPage() {
                     催收员 <strong>{c.raised_by}</strong> 于 {c.raised_at} 升级
                   </div>
                 </div>
+                {/* v0.6.0 — 外层精简为 2 按钮 */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   <button
                     type="button"
                     className="ds-btn ds-btn-primary ds-btn-sm"
-                    onClick={() => openAction(c, "intervene")}
+                    onClick={() => { setActiveCase(c); setIntervenOpen(true); }}
                   >
+                    <Headphones className="w-3.5 h-3.5" />
                     介入处理
-                  </button>
-                  {/* v1.6.9 — 发起减免：业主谈判达成后督导一键提交减免申请 */}
-                  <button
-                    type="button"
-                    className="ds-btn ds-btn-secondary ds-btn-sm"
-                    style={{ color: "#b45309", borderColor: "#fcd34d" }}
-                    onClick={() => setDiscountTarget(c)}
-                    title="发起减免/分期/违约金减免，按金额自动判定走督导/物业管理员审批"
-                  >
-                    <BadgePercent className="w-3.5 h-3.5" /> 发起减免
-                  </button>
-                  <button
-                    type="button"
-                    className="ds-btn ds-btn-secondary ds-btn-sm"
-                    onClick={() => openAction(c, "to_legal")}
-                  >
-                    转法务
                   </button>
                   <button
                     type="button"
                     className="ds-btn ds-btn-ghost ds-btn-sm"
                     onClick={() => navigate(`/supervisor/cases/${c.id}`)}
                   >
-                    查看历史
+                    详情
                   </button>
                 </div>
               </div>
@@ -253,13 +241,9 @@ export function SupervisorEscalatedPage() {
         {!usingMock && totalPages > 1 && (
           <div
             style={{
-              padding: 12,
-              borderTop: "1px solid var(--color-neutral-100)",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              gap: 8,
-              fontSize: 13,
+              padding: 12, borderTop: "1px solid var(--color-neutral-100)",
+              display: "flex", justifyContent: "center", alignItems: "center",
+              gap: 8, fontSize: 13,
             }}
           >
             <button
@@ -285,97 +269,64 @@ export function SupervisorEscalatedPage() {
         )}
       </div>
 
-      {/* 介入处理 modal */}
-      {action === "intervene" && activeCase && (
-        <ActionModal
-          title={`介入处理：${activeCase.owner_name} / ${activeCase.building}`}
-          onClose={() => { setAction(null); setActiveCase(null); }}
-        >
-          <p style={{ fontSize: 13, color: "#374151", marginBottom: 12, lineHeight: 1.7 }}>
-            选择介入方式（操作会被审计记录到案件时间线）：
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <ActionRow
-              icon={<Phone className="w-4 h-4" />}
-              title="模式 1：督导亲自致电业主"
-              desc="督导本人直接拨打业主电话，由你完成本次沟通；催收员收到通知不再跟进"
-              onClick={() => { navigate(`/supervisor/cases/${activeCase.id}`); }}
-              actionLabel="去拨号 →"
-            />
-            <ActionRow
-              icon={<Phone className="w-4 h-4" />}
-              title="模式 2：陪同 + 监听下一通"
-              desc="将案件标为「督导陪同」，催收员下次拨打时督导自动收到通知，可在「实时通话墙」监听并随时强制接管"
-              onClick={() => { alert("已标记为督导陪同 — 催收员下次拨打时会通知你"); setAction(null); }}
-              actionLabel="标记陪同"
-            />
-            <ActionRow
-              icon={<ExternalLink className="w-4 h-4" />}
-              title="模式 3：直接结案 / 标坏账"
-              desc="评估后认为无回收价值，标记结案进入坏账清单，需物业管理员二次确认"
-              onClick={() => { alert("已提交物业管理员审批"); setAction(null); }}
-              actionLabel="提交审批"
-            />
-            {/* v1.6.9 — 模式 4：发起减免谈判（督导直接代催收员发起 offer）*/}
-            <ActionRow
-              icon={<BadgePercent className="w-4 h-4" />}
-              title="模式 4：发起减免 / 分期申请"
-              desc="业主明确「无力一次性缴清 / 服务异议 / 需分期」时，督导直接代催收员发起减免 offer，按金额自动决定督导/物业管理员审批"
-              onClick={() => {
-                setDiscountTarget(activeCase);
-                setAction(null);
-              }}
-              actionLabel="发起申请"
-            />
-          </div>
-        </ActionModal>
+      {/* v0.6.0 — 介入处理统一弹窗,5 个选项 */}
+      {intervenOpen && activeCase && (
+        <InterveneActionsModal
+          activeCase={activeCase}
+          onClose={() => { setIntervenOpen(false); setActiveCase(null); }}
+          onCall={() => navigate(`/supervisor/cases/${activeCase.id}`)}
+          onShadowMarked={() => {
+            setIntervenOpen(false);
+            setActiveCase(null);
+            void query.refetch();
+            alert("✓ 已标记为督导陪同 — 催收员下次拨打时会通知你");
+          }}
+          onPickClose={() => { setIntervenOpen(false); setCloseTarget(activeCase); }}
+          onPickDiscount={() => { setIntervenOpen(false); setDiscountTarget(activeCase); }}
+          onPickTransferLegal={() => { setIntervenOpen(false); setTransferLegalTarget(activeCase); }}
+        />
       )}
 
-      {/* 转法务 modal */}
-      {action === "to_legal" && activeCase && (
-        <ActionModal
-          title={`转法务：${activeCase.owner_name} / ${activeCase.building}`}
-          onClose={() => { setAction(null); setActiveCase(null); }}
-        >
-          <p style={{ fontSize: 13, color: "#374151", marginBottom: 12, lineHeight: 1.7 }}>
-            该案件将进入「法务转化」流程：
-          </p>
-          <ul style={{ fontSize: 13, paddingLeft: 20, marginBottom: 16, lineHeight: 1.8, color: "#374151" }}>
-            <li>案件状态变为 <code style={{ background: "#f3f4f6", padding: "1px 4px" }}>legal</code>（已转法务）</li>
-            <li>本租户绑定的法务对接人收到通知</li>
-            <li>跳到「法务转化」页选择服务包（律师函 / 立案诉讼 / 调解）</li>
-            <li>催收员私海移除该案件，不可再拨号</li>
-          </ul>
-          <div style={{ background: "#fffbeb", padding: 10, borderRadius: 6, fontSize: 12, color: "#78350f", marginBottom: 12 }}>
-            ⚠ 此操作不可逆 — 转法务后需法务对接人确认才能撤回
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-            <button type="button" className="ds-btn ds-btn-secondary" onClick={() => { setAction(null); setActiveCase(null); }}>
-              取消
-            </button>
-            <button
-              type="button"
-              className="ds-btn ds-btn-primary"
-              onClick={() => {
-                navigate(`/legal/orders`);
-              }}
-            >
-              进入法务订单 →
-            </button>
-          </div>
-        </ActionModal>
+      {/* ③ 直接结案 / 标坏账 — 必填原因 */}
+      {closeTarget && (
+        <CloseAsUncollectibleModal
+          activeCase={closeTarget}
+          onClose={() => { setCloseTarget(null); setActiveCase(null); }}
+          onDone={() => {
+            setCloseTarget(null);
+            setActiveCase(null);
+            void query.refetch();
+            alert("✓ 已提交物业管理员审批");
+          }}
+        />
       )}
 
-      {/* v1.6.9 — 减免申请 Modal */}
+      {/* ④ 减免申请 modal */}
       {discountTarget && (
         <DiscountRequestModal
           caseId={discountTarget.id}
           originalAmount={discountTarget.amount}
           ownerName={discountTarget.owner_name}
-          onClose={() => setDiscountTarget(null)}
+          onClose={() => { setDiscountTarget(null); setActiveCase(null); }}
           onSuccess={(offerId) => {
             setDiscountTarget(null);
+            setActiveCase(null);
             alert(`✓ 减免申请 #${offerId} 已提交`);
+          }}
+        />
+      )}
+
+      {/* ⑤ 直接转法务 — 复用案件详情页同款 modal */}
+      {transferLegalTarget && (
+        <TransferLegalDirectModal
+          caseId={transferLegalTarget.id}
+          caseLabel={`${transferLegalTarget.owner_name} / ${transferLegalTarget.building}`}
+          onClose={() => { setTransferLegalTarget(null); setActiveCase(null); }}
+          onDone={() => {
+            setTransferLegalTarget(null);
+            setActiveCase(null);
+            void query.refetch();
+            alert("✓ 案件已直接移交法务");
           }}
         />
       )}
@@ -383,17 +334,177 @@ export function SupervisorEscalatedPage() {
   );
 }
 
-function ActionModal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+// ────────────────────────────────────────────────────────────────
+// 介入处理 5 选项弹窗
+// ────────────────────────────────────────────────────────────────
+function InterveneActionsModal({
+  activeCase, onClose, onCall, onShadowMarked,
+  onPickClose, onPickDiscount, onPickTransferLegal,
+}: {
+  activeCase: EscalatedCase;
+  onClose: () => void;
+  onCall: () => void;
+  onShadowMarked: () => void;
+  onPickClose: () => void;
+  onPickDiscount: () => void;
+  onPickTransferLegal: () => void;
+}) {
+  const { mutate: markShadow, mutation: shadowMutation } = useCustomMutation();
+  const handleMarkShadow = () => {
+    markShadow(
+      {
+        url: `supervisor/escalated/${activeCase.id}/mark-shadow-listening`,
+        method: "post",
+        values: { note: null },
+      },
+      {
+        onSuccess: () => onShadowMarked(),
+        onError: (err) => {
+          alert(`标记失败:${(err as { message?: string }).message ?? "请重试"}`);
+        },
+      },
+    );
+  };
+
+  return (
+    <BasicModal
+      title={`介入处理:${activeCase.owner_name} / ${activeCase.building}`}
+      onClose={onClose}
+    >
+      <p style={{ fontSize: 13, color: "#374151", marginBottom: 12, lineHeight: 1.7 }}>
+        选择介入方式(操作会被审计记录到案件时间线):
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <ActionRow
+          icon={<Phone className="w-4 h-4" />}
+          title="① 督导亲自致电业主"
+          desc="督导本人直接拨打业主电话,由你完成本次沟通;催收员收到通知不再跟进"
+          actionLabel="去拨号 →"
+          onClick={onCall}
+        />
+        <ActionRow
+          icon={<Headphones className="w-4 h-4" />}
+          title="② 标记陪同 / 监听下一通"
+          desc="将案件标为「督导陪同」(case.shadow_supervisor_id 设为你),催收员下次拨打时督导自动收到通知,可在实时通话墙监听并随时强制接管"
+          actionLabel={shadowMutation.isPending ? "提交中…" : "标记陪同"}
+          actionPending={shadowMutation.isPending}
+          onClick={handleMarkShadow}
+        />
+        <ActionRow
+          icon={<ExternalLink className="w-4 h-4" />}
+          title="③ 直接结案 / 标坏账"
+          desc="评估后认为无回收价值,案件 stage 置为 pending_close(待物业管理员二审);需填写结案原因"
+          actionLabel="填写原因"
+          onClick={onPickClose}
+        />
+        <ActionRow
+          icon={<BadgePercent className="w-4 h-4" />}
+          title="④ 发起减免 / 分期申请"
+          desc="业主明确「无力一次性缴清 / 服务异议 / 需分期」时,督导代催收员发起减免 offer,按金额自动决定督导/物业管理员审批"
+          actionLabel="发起申请"
+          onClick={onPickDiscount}
+        />
+        <ActionRow
+          icon={<Scale className="w-4 h-4" />}
+          title="⑤ 转法务"
+          desc="案件移交法务专员,案件 stage → legal;若已有催收员转法务申请,请去案件详情走「审批转法务」"
+          actionLabel="移交法务"
+          onClick={onPickTransferLegal}
+        />
+      </div>
+    </BasicModal>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────
+// 直接结案 / 标坏账 — 必填原因
+// ────────────────────────────────────────────────────────────────
+function CloseAsUncollectibleModal({
+  activeCase, onClose, onDone,
+}: {
+  activeCase: EscalatedCase;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [reason, setReason] = useState("");
+  const { mutate, mutation } = useCustomMutation();
+
+  const handleSubmit = () => {
+    const trimmed = reason.trim();
+    if (!trimmed) return;
+    mutate(
+      {
+        url: `supervisor/escalated/${activeCase.id}/close-as-uncollectible`,
+        method: "post",
+        values: { reason: trimmed },
+      },
+      {
+        onSuccess: () => onDone(),
+        onError: (err) => {
+          alert(`提交失败:${(err as { message?: string }).message ?? "请重试"}`);
+        },
+      },
+    );
+  };
+
+  return (
+    <BasicModal
+      title={`直接结案 / 标坏账:${activeCase.owner_name} / ${activeCase.building}`}
+      onClose={onClose}
+    >
+      <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 mb-3">
+        提交后案件 stage → <strong>pending_close</strong>,等物业管理员二审。
+        审计日志留痕,可回溯。
+      </div>
+      <label className="block text-sm font-medium text-[var(--color-neutral-700)] mb-1">
+        结案原因 <span className="text-red-500">*</span>
+      </label>
+      <textarea
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        rows={4}
+        placeholder="必填,说明为何无回收价值(如:业主已搬离失联 6 个月 + 无资产 + 调查无可执行财产 = 评估为坏账)"
+        className="w-full px-3 py-2 text-sm border border-[var(--color-neutral-300)] rounded resize-none"
+        autoFocus
+      />
+      <div className="flex items-center justify-end gap-2 mt-3">
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-3 py-1.5 text-sm rounded border border-[var(--color-neutral-300)] text-[var(--color-neutral-700)] hover:bg-[var(--color-neutral-50)]"
+        >
+          取消
+        </button>
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={!reason.trim() || mutation.isPending}
+          className="px-4 py-1.5 text-sm rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 flex items-center gap-1.5"
+        >
+          {mutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+          提交审批
+        </button>
+      </div>
+    </BasicModal>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────
+// 基础 modal + ActionRow(本文件内部用)
+// ────────────────────────────────────────────────────────────────
+function BasicModal({
+  title, children, onClose,
+}: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}
       onClick={onClose}
     >
       <div
-        style={{ background: "white", borderRadius: 8, width: 540, maxWidth: "92%" }}
+        style={{ background: "white", borderRadius: 8, width: 580, maxWidth: "92%", maxHeight: "85vh", overflowY: "auto" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ padding: 16, borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ padding: 16, borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "white" }}>
           <span style={{ fontWeight: 600 }}>{title}</span>
           <button type="button" onClick={onClose} style={{ border: "none", background: "transparent", cursor: "pointer" }}>
             <X size={18} />
@@ -405,7 +516,16 @@ function ActionModal({ title, children, onClose }: { title: string; children: Re
   );
 }
 
-function ActionRow({ icon, title, desc, actionLabel, onClick }: { icon: React.ReactNode; title: string; desc: string; actionLabel: string; onClick: () => void }) {
+function ActionRow({
+  icon, title, desc, actionLabel, actionPending, onClick,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  desc: string;
+  actionLabel: string;
+  actionPending?: boolean;
+  onClick: () => void;
+}) {
   return (
     <div style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: 12, display: "flex", alignItems: "flex-start", gap: 10 }}>
       <div style={{ marginTop: 2, color: "var(--color-primary)" }}>{icon}</div>
@@ -413,7 +533,13 @@ function ActionRow({ icon, title, desc, actionLabel, onClick }: { icon: React.Re
         <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{title}</div>
         <div style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.6 }}>{desc}</div>
       </div>
-      <button type="button" className="ds-btn ds-btn-primary ds-btn-sm" onClick={onClick}>
+      <button
+        type="button"
+        className="ds-btn ds-btn-primary ds-btn-sm"
+        onClick={onClick}
+        disabled={actionPending}
+      >
+        {actionPending && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
         {actionLabel}
       </button>
     </div>

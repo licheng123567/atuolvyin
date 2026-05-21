@@ -1,9 +1,16 @@
 // 案件超期 / 失联报警 — v1.5.7 ⭐⭐
 // 防止案件烂在催收员私海：N 天未联系 / 连续失联 / 接触阻断 自动入此队列
 // v1.6.5 — 加分页 + debounce 搜索
-import { AlertTriangle, CheckCircle2, Phone, RefreshCw, UserX, X } from "lucide-react";
+// v0.6.0 — 催办/重派/释放公海统一走真实后端(原 alert mock):
+//          催办 → SupervisorCaseActionModal type=urge → POST /supervisor/cases/{id}/urge
+//          重派 → SupervisorReassignModal → POST /supervisor/cases/{id}/reassign
+//          释放公海 → POST /supervisor/cases/{id}/release-to-pool(本期新建)
+import { useCustomMutation } from "@refinedev/core";
+import { AlertTriangle, CheckCircle2, Loader2, Phone, RefreshCw, UserX, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { SupervisorCaseActionModal } from "../../../components/supervisor/SupervisorCaseActionModal";
+import { SupervisorReassignModal } from "../../../components/supervisor/SupervisorReassignModal";
 import { HelpPanel } from "../../../components/ui/HelpPanel";
 import { PaginationBar } from "../../../components/ui/PaginationBar";
 import { SearchInput } from "../../../components/ui/SearchInput";
@@ -41,7 +48,7 @@ const MOCK_ALERTS: CaseAlert[] = [
     days: 21, last_contact: "2026-04-17", project_name: "翠湖湾电梯专项整改" },
 ];
 
-const REASSIGN_TARGETS = ["李小红", "王芳芳", "陈明远", "张建华", "刘晓娟"];
+// v0.6.0 — 原 mock 重派候选列表移除,改由 SupervisorReassignModal 拉真实用户。
 
 type AlertTypeFilter = "all" | "stale" | "unreachable" | "blocked";
 
@@ -56,6 +63,8 @@ export function SupervisorCaseAlertsPage() {
   const debouncedKw = useDebouncedValue(keyword, 300);
   const [reassignTarget, setReassignTarget] = useState<CaseAlert | null>(null);
   const [confirmRelease, setConfirmRelease] = useState<CaseAlert | null>(null);
+  const [urgeTarget, setUrgeTarget] = useState<CaseAlert | null>(null);  // v0.6.0
+  const { mutate: releaseMutate, mutation: releaseMutation } = useCustomMutation();  // v0.6.0
 
   const filtered = useMemo(() => {
     const kw = debouncedKw.trim().toLowerCase();
@@ -69,23 +78,36 @@ export function SupervisorCaseAlertsPage() {
   const total = filtered.length;
   const visible = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  function handleUrge(a: CaseAlert) {
-    alert(`已给催收员 ${a.agent} 发送催办通知（业主：${a.owner} / ${a.building}）`);
-    setHandled((prev) => new Map(prev).set(a.id, "已催办"));
+  // v0.6.0 — 催办改用 SupervisorCaseActionModal(走真实 /supervisor/cases/{id}/urge)
+  function openUrge(a: CaseAlert) {
+    setUrgeTarget(a);
   }
 
-  function handleReassignConfirm(targetAgent: string) {
-    if (!reassignTarget) return;
-    alert(`已将 ${reassignTarget.owner} / ${reassignTarget.building} 重派给 ${targetAgent}`);
-    setAlerts((prev) => prev.filter((x) => x.id !== reassignTarget.id));
-    setReassignTarget(null);
-  }
+  // v0.6.0 — 重派改用 SupervisorReassignModal(走真实 /supervisor/cases/{id}/reassign)
+  // 不再走 mock 字符串列表;模态内部拉真实用户
 
+  // v0.6.0 — 释放公海改调真实后端 POST /supervisor/cases/{id}/release-to-pool
   function handleReleaseConfirm() {
     if (!confirmRelease) return;
-    alert(`已将 ${confirmRelease.owner} / ${confirmRelease.building} 释放回公海`);
-    setAlerts((prev) => prev.filter((x) => x.id !== confirmRelease.id));
-    setConfirmRelease(null);
+    const target = confirmRelease;
+    releaseMutate(
+      {
+        url: `supervisor/cases/${target.id}/release-to-pool`,
+        method: "post",
+        values: { note: null },
+      },
+      {
+        onSuccess: () => {
+          setAlerts((prev) => prev.filter((x) => x.id !== target.id));
+          setConfirmRelease(null);
+          alert(`✓ 已将 ${target.owner} / ${target.building} 释放回公海`);
+        },
+        onError: (err) => {
+          const msg = (err as { message?: string }).message ?? "请重试";
+          alert(`释放失败:${msg}`);
+        },
+      },
+    );
   }
 
   return (
@@ -188,7 +210,7 @@ export function SupervisorCaseAlertsPage() {
                   <td>
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                       {a.alert_type === "stale" && (
-                        <button type="button" className="ds-btn ds-btn-primary ds-btn-sm" onClick={() => handleUrge(a)} disabled={!!handledLabel}>
+                        <button type="button" className="ds-btn ds-btn-primary ds-btn-sm" onClick={() => openUrge(a)} disabled={!!handledLabel}>
                           <Phone className="w-3 h-3" /> 催办
                         </button>
                       )}
@@ -218,22 +240,42 @@ export function SupervisorCaseAlertsPage() {
         />
       </div>
 
-      {/* 重派 modal */}
-      {reassignTarget && (
-        <ReassignModal
-          target={reassignTarget}
-          onClose={() => setReassignTarget(null)}
-          onConfirm={handleReassignConfirm}
+      {/* v0.6.0 — 催办 modal(复用案件详情同款) */}
+      {urgeTarget && (
+        <SupervisorCaseActionModal
+          caseId={urgeTarget.id}
+          type="urge"
+          onClose={() => setUrgeTarget(null)}
+          onDone={() => {
+            setHandled((prev) => new Map(prev).set(urgeTarget.id, "已催办"));
+            setUrgeTarget(null);
+            alert("✓ 已写入案件时间线并通知催收员");
+          }}
         />
       )}
 
-      {/* 释放公海确认 */}
+      {/* v0.6.0 — 重派 modal:用 SupervisorReassignModal(真实拉本租户用户) */}
+      {reassignTarget && (
+        <SupervisorReassignModal
+          caseId={reassignTarget.id}
+          currentAssignedTo={null}
+          onClose={() => setReassignTarget(null)}
+          onDone={() => {
+            setAlerts((prev) => prev.filter((x) => x.id !== reassignTarget.id));
+            setReassignTarget(null);
+            alert("✓ 案件已重新分配,新催收员收到通知");
+          }}
+        />
+      )}
+
+      {/* 释放公海确认 — v0.6.0 接通真实后端 */}
       {confirmRelease && (
         <ConfirmModal
-          title={`释放回公海：${confirmRelease.owner} / ${confirmRelease.building}`}
-          message="该案件将从当前催收员私海移除，回到公海池等待重新分配。该操作将记入审计日志。"
-          confirmLabel="确认释放"
+          title={`释放回公海:${confirmRelease.owner} / ${confirmRelease.building}`}
+          message="该案件将从当前催收员私海移除,回到公海池等待重新分配。该操作将记入审计日志。"
+          confirmLabel={releaseMutation.isPending ? "提交中…" : "确认释放"}
           confirmDanger
+          confirmPending={releaseMutation.isPending}
           onClose={() => setConfirmRelease(null)}
           onConfirm={handleReleaseConfirm}
         />
@@ -242,41 +284,20 @@ export function SupervisorCaseAlertsPage() {
   );
 }
 
-function ReassignModal({ target, onClose, onConfirm }: { target: CaseAlert; onClose: () => void; onConfirm: (agent: string) => void }) {
-  const [agent, setAgent] = useState("");
-  const candidates = REASSIGN_TARGETS.filter((n) => n !== target.agent);
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }} onClick={onClose}>
-      <div style={{ background: "white", borderRadius: 8, width: 460, maxWidth: "92%" }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ padding: 16, borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontWeight: 600 }}>重派案件：{target.owner} / {target.building}</span>
-          <button type="button" onClick={onClose} style={{ border: "none", background: "transparent", cursor: "pointer" }}><X size={18} /></button>
-        </div>
-        <div style={{ padding: 16 }}>
-          <p style={{ fontSize: 13, color: "#374151", marginBottom: 12, lineHeight: 1.7 }}>
-            当前催收员：<strong>{target.agent}</strong>。该业主连续 5 通失联，建议改派给善于多次跟进的催收员。
-          </p>
-          <div className="form-group">
-            <label className="form-label">重派给<span className="req">*</span></label>
-            <select className="form-control" value={agent} onChange={(e) => setAgent(e.target.value)}>
-              <option value="">请选择催收员</option>
-              {candidates.map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </div>
-          <div style={{ background: "#fffbeb", padding: 10, borderRadius: 6, fontSize: 12, color: "#78350f" }}>
-            ⚠ 重派后原催收员将看到该案件已转出，新催收员收到通知；操作记入审计日志。
-          </div>
-        </div>
-        <div style={{ padding: 16, borderTop: "1px solid #e5e7eb", display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button type="button" className="ds-btn ds-btn-secondary" onClick={onClose}>取消</button>
-          <button type="button" className="ds-btn ds-btn-primary" disabled={!agent} onClick={() => onConfirm(agent)}>确认重派</button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// v0.6.0 — 原 ReassignModal(纯 mock 字符串列表)废弃,改用 SupervisorReassignModal
+// (拉真实用户 + 调真实端点)。
 
-function ConfirmModal({ title, message, confirmLabel, confirmDanger, onClose, onConfirm }: { title: string; message: string; confirmLabel: string; confirmDanger?: boolean; onClose: () => void; onConfirm: () => void }) {
+function ConfirmModal({
+  title, message, confirmLabel, confirmDanger, confirmPending, onClose, onConfirm,
+}: {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  confirmDanger?: boolean;
+  confirmPending?: boolean;  // v0.6.0
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }} onClick={onClose}>
       <div style={{ background: "white", borderRadius: 8, width: 440, maxWidth: "92%" }} onClick={(e) => e.stopPropagation()}>
@@ -286,13 +307,15 @@ function ConfirmModal({ title, message, confirmLabel, confirmDanger, onClose, on
         </div>
         <div style={{ padding: 16, fontSize: 13.5, color: "#374151", lineHeight: 1.7 }}>{message}</div>
         <div style={{ padding: 16, borderTop: "1px solid #e5e7eb", display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button type="button" className="ds-btn ds-btn-secondary" onClick={onClose}>取消</button>
+          <button type="button" className="ds-btn ds-btn-secondary" onClick={onClose} disabled={confirmPending}>取消</button>
           <button
             type="button"
             className="ds-btn ds-btn-primary"
             style={confirmDanger ? { background: "var(--color-danger)", borderColor: "var(--color-danger)" } : undefined}
             onClick={onConfirm}
+            disabled={confirmPending}
           >
+            {confirmPending && <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ marginRight: 6 }} />}
             {confirmLabel}
           </button>
         </div>

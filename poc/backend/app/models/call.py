@@ -120,6 +120,9 @@ class RiskEvent(Base, TimestampMixin):
     disposition_at: Mapped[datetime | None] = mapped_column(
         sa.DateTime(timezone=True), nullable=True
     )
+    # v0.6.0 — 督导处理状态(NULL=待处理)
+    # 枚举:resolved / escalated / transferred_training / transferred_legal
+    handle_status: Mapped[str | None] = mapped_column(sa.String(32), nullable=True)
 
 
 class SuggestionFeedback(Base):
